@@ -43,7 +43,7 @@ configuration screens during the show.
 
 ## Core screens
 
-### Status
+### Home
 
 Show:
 
@@ -56,9 +56,7 @@ Show:
 - storage path and available space if `recs` exposes it
 - last error from each connected program
 
-### Levels
-
-Show one compact indicator per recording channel.
+Home contains one compact indicator per recording channel.
 
 Use four states:
 

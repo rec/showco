@@ -1,0 +1,19 @@
+[project]
+name = "showco"
+version = "0.1.0"
+description = "Local show control for recs and twitcho"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+showco = "showco.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = ["B", "E", "F", "I"]
