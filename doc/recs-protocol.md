@@ -3,14 +3,12 @@
 This document describes the exact current messages and files that Showco uses to
 communicate with `recs`.
 
-The current Showco implementation reads the Recs daemon status file. It does not
-currently open the Recs GUI IPC endpoint, so it sends no live IPC messages to
-Recs.
+Showco reads the Recs daemon status file for low-rate status and connects to the
+Recs GUI IPC endpoint for control commands.
 
-The current `recs` daemon also exposes live GUI updates through a local GUI IPC
-endpoint. That protocol is documented below because it is the protocol Showco
-should use when it needs push updates or key-event support. Recs does not yet
-expose daemon commands for calibration, starting, or stopping recording.
+The current control command exposed by Recs is live noise-floor calibration.
+Recs does not expose GUI IPC commands for starting recording, stopping
+recording, or changing arbitrary recording configuration.
 
 ## Status file
 
@@ -122,18 +120,23 @@ Endpoint values:
 
 ## Messages sent from Showco to Recs
 
-Current Showco sends no messages to Recs. It only reads
-`~/.local/state/recs/status.json` or `%LOCALAPPDATA%\recs\status.json`.
-
-If Showco later opens the GUI IPC endpoint, the first live IPC message must be
-the GUI hello:
-
+The first live IPC message sent by Showco is the GUI hello:
 
 ```json
 {"type":"hello","role":"gui","version":1}
 ```
 
 Recs requires this hello before any other live IPC message.
+
+After the hello succeeds, Showco can ask Recs to calibrate per-device noise
+floors from the audio observed so far:
+
+```json
+{"type":"command","id":"c1","command":"calibrate"}
+```
+
+The `id` field is an arbitrary Showco-chosen string. Recs echoes the same `id`
+in the reply.
 
 Recs also accepts key event messages after the hello:
 
@@ -146,11 +149,6 @@ Showco does not currently send key events.
 
 ## Messages received by Showco from Recs
 
-Current Showco receives no live IPC messages from Recs. It reads the status file
-instead.
-
-If Showco later opens the GUI IPC endpoint, Recs sends the following messages.
-
 After a valid hello, Recs replies:
 
 ```json
@@ -161,6 +159,39 @@ Recs then sends live row updates:
 
 ```json
 {"type":"rows","rows":[{"device":"MacBook Pro Microphone","on":"active"}]}
+```
+
+Successful calibration reply:
+
+```json
+{
+  "type": "reply",
+  "id": "c1",
+  "ok": true,
+  "result": {
+    "measurements": {
+      "MacBook Pro Microphone - 1": 6.020599913279624,
+      "(all)": 6.020599913279624
+    },
+    "profiles": {
+      "MacBook Pro Microphone": {
+        "noise_floor": 12.0
+      }
+    },
+    "profiles_path": "/home/user/recs-profiles.json"
+  }
+}
+```
+
+Failure reply when no profiles file is configured:
+
+```json
+{
+  "type": "reply",
+  "id": "c1",
+  "ok": false,
+  "message": "Cannot calibrate noise floor without --profiles"
+}
 ```
 
 If Recs rejects a message, it sends:
@@ -179,10 +210,6 @@ The known current error for a version mismatch is:
 
 The current Recs daemon does not expose JSON messages for:
 
-- calibrating noise floors
 - starting recording
 - stopping recording
-- changing recording configuration
-
-Showco therefore displays the Recs calibration action as unavailable until Recs
-adds a command protocol for it.
+- changing arbitrary recording configuration

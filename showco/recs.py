@@ -4,7 +4,12 @@ import json
 import os
 import sys
 import time
+import uuid
 from pathlib import Path
+
+from recs.daemon.gui_backend import client_connection
+from recs.daemon.gui_protocol import Command, Error, Hello, Reply, parse_message
+from recs.daemon.models import DaemonMetadata
 
 from .models import ActionResult, ChannelLevel, RecsStatus, ServiceStatus
 
@@ -78,10 +83,38 @@ class RecsClient:
         )
 
     def calibrate(self) -> ActionResult:
-        return ActionResult(
-            ok=False,
-            message="recs does not currently expose a daemon calibration command",
-        )
+        metadata = self._metadata()
+        if metadata is None:
+            return ActionResult(False, f"{self.metadata_path} does not exist")
+
+        connection = client_connection(_endpoint(metadata.gui_endpoint))
+        try:
+            if not connection.write(
+                Hello(type="hello", role="gui").model_dump_json() + "\n"
+            ):
+                return ActionResult(False, "could not send recs hello")
+            if error := _expect_daemon_hello(_read_message(connection)):
+                return ActionResult(False, error)
+
+            message_id = str(uuid.uuid4())
+            if not connection.write(
+                Command(
+                    type="command",
+                    id=message_id,
+                    command="calibrate",
+                ).model_dump_json()
+                + "\n"
+            ):
+                return ActionResult(False, "could not send recs calibrate command")
+
+            return _calibration_result(_read_message(connection), message_id)
+        finally:
+            connection.close()
+
+    def _metadata(self) -> DaemonMetadata | None:
+        if not self.metadata_path.exists():
+            return None
+        return DaemonMetadata.model_validate_json(self.metadata_path.read_text())
 
 
 class RecsPaths:
@@ -106,6 +139,38 @@ def recs_paths(home: Path | None = None) -> RecsPaths:
         status=home / ".local/state/recs/status.json",
         gui_endpoint=str(home / ".local/state/recs/gui.sock"),
     )
+
+
+def _endpoint(endpoint: str) -> Path | str:
+    if endpoint == WINDOWS_PIPE:
+        return endpoint
+    return Path(endpoint)
+
+
+def _read_message(connection: object) -> object:
+    for line in connection.read_lines():
+        return parse_message(line)
+    return Error(type="error", message="recs closed the connection")
+
+
+def _expect_daemon_hello(message: object) -> str | None:
+    if isinstance(message, Error):
+        return message.message
+    if not isinstance(message, Hello) or message.role != "daemon":
+        return "recs did not send daemon hello"
+    return None
+
+
+def _calibration_result(message: object, message_id: str) -> ActionResult:
+    if isinstance(message, Error):
+        return ActionResult(False, message.message)
+    if not isinstance(message, Reply):
+        return ActionResult(False, "recs did not send calibration reply")
+    if message.id != message_id:
+        return ActionResult(False, "recs sent reply for a different command")
+    if message.ok:
+        return ActionResult(True, "recs calibration succeeded")
+    return ActionResult(False, message.message or "recs calibration failed")
 
 
 def channel_levels(rows: list[dict[str, object]]) -> list[ChannelLevel]:

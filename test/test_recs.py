@@ -3,8 +3,12 @@ from __future__ import annotations
 import json
 import time
 import unittest
+from collections.abc import Iterator
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest import mock
+
+from recs.daemon.models import DaemonMetadata, Platform
 
 from showco.recs import RecsClient, channel_levels, level_state
 
@@ -55,6 +59,59 @@ class RecsTests(unittest.TestCase):
             ].name,
             "1",
         )
+
+    def test_calibrate_sends_recs_protocol_command(self) -> None:
+        with TemporaryDirectory() as directory:
+            metadata = Path(directory) / "daemon.json"
+            metadata.write_text(
+                DaemonMetadata(
+                    executable=Path("/bin/recs"),
+                    platform=Platform.linux,
+                    gui_endpoint="/tmp/recs.sock",
+                ).model_dump_json()
+            )
+            connection = FakeRecsConnection(
+                [
+                    '{"type":"hello","role":"daemon","version":1}\n',
+                    '{"type":"reply","id":"c1","ok":true}\n',
+                ]
+            )
+            client = RecsClient(metadata_path=metadata)
+
+            with (
+                mock.patch("showco.recs.client_connection", return_value=connection),
+                mock.patch("showco.recs.uuid.uuid4", return_value="c1"),
+            ):
+                result = client.calibrate()
+
+        self.assertTrue(result.ok)
+        self.assertEqual(result.message, "recs calibration succeeded")
+        self.assertEqual(
+            [json.loads(message) for message in connection.sent],
+            [
+                {"type": "hello", "role": "gui", "version": 1},
+                {"type": "command", "id": "c1", "command": "calibrate"},
+            ],
+        )
+        self.assertTrue(connection.closed)
+
+
+class FakeRecsConnection:
+    def __init__(self, received: list[str]) -> None:
+        self.received = received
+        self.sent: list[str] = []
+        self.closed = False
+
+    def read_lines(self) -> Iterator[str]:
+        while self.received:
+            yield self.received.pop(0)
+
+    def write(self, message: str) -> bool:
+        self.sent.append(message)
+        return True
+
+    def close(self) -> None:
+        self.closed = True
 
 
 if __name__ == "__main__":
