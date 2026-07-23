@@ -48,6 +48,7 @@ class TwitchoClient:
             ffmpeg_alive=bool(status.get("ffmpeg_alive")),
             audio_seconds=_float(status.get("audio_seconds")),
             clipping=bool(status.get("clipping")),
+            output_bitrate_kbps=_float(status.get("output_bitrate_kbps")),
         )
 
     def action(self, command: str, **fields: object) -> ActionResult:

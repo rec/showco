@@ -6,6 +6,7 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import ClassVar
 
+from .mixer import MixerMonitor
 from .models import ActionResult, ShowStatus
 from .recs import RecsClient
 from .system import SystemMonitor
@@ -14,11 +15,16 @@ from .twitcho import TwitchoClient
 
 class ShowcoApp:
     def __init__(
-        self, recs: RecsClient, twitcho: TwitchoClient, system: SystemMonitor
+        self,
+        recs: RecsClient,
+        twitcho: TwitchoClient,
+        system: SystemMonitor,
+        mixer: MixerMonitor,
     ) -> None:
         self.recs = recs
         self.twitcho = twitcho
         self.system = system
+        self.mixer = mixer
         self.action_log: list[ActionResult] = []
 
     def status(self) -> ShowStatus:
@@ -26,6 +32,7 @@ class ShowcoApp:
             recs=self.recs.status(),
             twitcho=self.twitcho.status(),
             system=self.system.status(),
+            mixer=self.mixer.status(),
         )
 
     def run_action(self, form: dict[str, str]) -> ActionResult:
@@ -89,12 +96,14 @@ def make_server(
     recs: RecsClient | None = None,
     twitcho: TwitchoClient | None = None,
     system: SystemMonitor | None = None,
+    mixer: MixerMonitor | None = None,
 ) -> ThreadingHTTPServer:
     handler = type("ConfiguredShowcoHandler", (ShowcoHandler,), {})
     handler.app = ShowcoApp(
         recs or RecsClient(),
         twitcho or TwitchoClient(),
         system or SystemMonitor(),
+        mixer or MixerMonitor(),
     )
     return ThreadingHTTPServer((host, port), handler)
 
@@ -123,6 +132,8 @@ def home_page(status: ShowStatus) -> str:
           <p>recs: {_service_detail(recs.state, recs.last_error)}</p>
           <p>twitcho: {_service_detail(twitcho.state, twitcho.last_error)}</p>
           <p>Pi temperature: {_temperature(status)}</p>
+          <p>Twitch bitrate: {_bitrate(status)}</p>
+          <p>Mixer latency: {_mixer_latency(status)}</p>
           <p>Generated: {_time(status.generated_at)}</p>
         </section>
         """,
@@ -252,6 +263,18 @@ def _temperature(status: ShowStatus) -> str:
     if status.system.temperature_c is not None:
         return f"{status.system.temperature_c:.1f} °C"
     return status.system.temperature_error or "unknown"
+
+
+def _bitrate(status: ShowStatus) -> str:
+    if status.twitcho.output_bitrate_kbps is None:
+        return "unknown"
+    return f"{status.twitcho.output_bitrate_kbps:.0f} kbps"
+
+
+def _mixer_latency(status: ShowStatus) -> str:
+    if status.mixer.latency_ms is not None:
+        return f"{status.mixer.latency_ms:.1f} ms"
+    return status.mixer.error or "unknown"
 
 
 def _duration(seconds: float | None) -> str:

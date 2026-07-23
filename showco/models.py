@@ -49,6 +49,7 @@ class TwitchoStatus:
     ffmpeg_alive: bool = False
     audio_seconds: float | None = None
     clipping: bool = False
+    output_bitrate_kbps: float | None = None
 
 
 @dataclass(frozen=True)
@@ -58,8 +59,15 @@ class SystemStatus:
 
 
 @dataclass(frozen=True)
+class MixerStatus:
+    latency_ms: float | None = None
+    error: str | None = None
+
+
+@dataclass(frozen=True)
 class ShowStatus:
     recs: RecsStatus
     twitcho: TwitchoStatus
     system: SystemStatus = field(default_factory=SystemStatus)
+    mixer: MixerStatus = field(default_factory=MixerStatus)
     generated_at: float = field(default_factory=time.time)

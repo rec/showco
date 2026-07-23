@@ -18,6 +18,7 @@ class TwitchoTests(unittest.TestCase):
                     "ffmpeg_alive": True,
                     "audio_seconds": 12.0,
                     "clipping": False,
+                    "output_bitrate_kbps": 312.5,
                 },
             }
         )
@@ -28,6 +29,7 @@ class TwitchoTests(unittest.TestCase):
         self.assertEqual(status.stream_state, "streaming")
         self.assertTrue(status.muted)
         self.assertEqual(status.audio_seconds, 12.0)
+        self.assertEqual(status.output_bitrate_kbps, 312.5)
 
     def test_status_reports_failed_command(self) -> None:
         client = FakeTwitchoClient(

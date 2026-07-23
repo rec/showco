@@ -3,9 +3,11 @@ from __future__ import annotations
 import math
 import time
 
+from .mixer import MixerMonitor
 from .models import (
     ActionResult,
     ChannelLevel,
+    MixerStatus,
     RecsStatus,
     ServiceStatus,
     SystemStatus,
@@ -60,6 +62,7 @@ class RehearsalTwitchoClient(TwitchoClient):
             ffmpeg_alive=not self.stopped,
             audio_seconds=0.0 if self.stopped else time.time() - self.started_at,
             clipping=False,
+            output_bitrate_kbps=310.0 if not self.stopped else 0.0,
         )
 
     def action(self, command: str, **fields: object) -> ActionResult:
@@ -76,6 +79,11 @@ class RehearsalTwitchoClient(TwitchoClient):
 class RehearsalSystemMonitor(SystemMonitor):
     def status(self) -> SystemStatus:
         return SystemStatus(temperature_c=48.5)
+
+
+class RehearsalMixerMonitor(MixerMonitor):
+    def status(self) -> MixerStatus:
+        return MixerStatus(latency_ms=4.2)
 
 
 def rehearsal_channels(elapsed: float) -> list[ChannelLevel]:

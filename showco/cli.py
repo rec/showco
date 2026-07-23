@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import argparse
 
+from .mixer import MixerMonitor
 from .rehearsal import (
+    RehearsalMixerMonitor,
     RehearsalRecsClient,
     RehearsalSystemMonitor,
     RehearsalTwitchoClient,
@@ -14,6 +16,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run the Showco web UI")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=17_352)
+    parser.add_argument("--mixer-host")
+    parser.add_argument("--mixer-port", type=int)
+    parser.add_argument("--mixer-protocol", choices=["tcp", "udp"], default="tcp")
     parser.add_argument(
         "--rehearsal",
         action="store_true",
@@ -28,10 +33,19 @@ def main(argv: list[str] | None = None) -> int:
             recs=RehearsalRecsClient(),
             twitcho=RehearsalTwitchoClient(),
             system=RehearsalSystemMonitor(),
+            mixer=RehearsalMixerMonitor(),
         )
         print(f"showco rehearsal listening on http://{args.host}:{args.port}")
     else:
-        server = make_server(args.host, args.port)
+        server = make_server(
+            args.host,
+            args.port,
+            mixer=MixerMonitor(
+                host=args.mixer_host,
+                port=args.mixer_port,
+                protocol=args.mixer_protocol,
+            ),
+        )
         print(f"showco listening on http://{args.host}:{args.port}")
     try:
         server.serve_forever()

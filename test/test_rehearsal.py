@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 
 from showco.rehearsal import (
+    RehearsalMixerMonitor,
     RehearsalRecsClient,
     RehearsalSystemMonitor,
     RehearsalTwitchoClient,
@@ -31,6 +32,7 @@ class RehearsalTests(unittest.TestCase):
         self.assertTrue(mute.ok)
         self.assertTrue(stop.ok)
         self.assertTrue(muted.muted)
+        self.assertEqual(muted.output_bitrate_kbps, 310.0)
         self.assertEqual(stopped.stream_state, "stopped")
 
     def test_rehearsal_system_reports_temperature(self) -> None:
@@ -38,6 +40,12 @@ class RehearsalTests(unittest.TestCase):
 
         self.assertEqual(status.temperature_c, 48.5)
         self.assertIsNone(status.temperature_error)
+
+    def test_rehearsal_mixer_reports_latency(self) -> None:
+        status = RehearsalMixerMonitor().status()
+
+        self.assertEqual(status.latency_ms, 4.2)
+        self.assertIsNone(status.error)
 
 
 if __name__ == "__main__":
