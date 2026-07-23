@@ -43,6 +43,12 @@ ip addr
 df -h
 ```
 
+## Automated provisioning
+
+Use `doc/provisioning.md` and the files in `showco/provisioning/` to prepare a
+cloud-init first-boot setup. That path should become the normal way to build a
+repeatable show-box SD card once the remaining service commands are finalized.
+
 ## System packages
 
 Install the base tools:

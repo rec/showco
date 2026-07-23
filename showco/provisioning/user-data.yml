@@ -1,0 +1,46 @@
+#cloud-config
+hostname: recs-stage
+manage_etc_hosts: true
+
+users:
+  - name: show
+    gecos: Show User
+    groups: [adm, audio, dialout, plugdev, sudo, video]
+    shell: /bin/bash
+    lock_passwd: false
+    # Replace this before booting. Prefer an SSH key and a strong password hash.
+    passwd: "$y$j9T$REPLACE_WITH_REAL_PASSWORD_HASH"
+    ssh_authorized_keys:
+      - "ssh-ed25519 REPLACE_WITH_REAL_PUBLIC_KEY show"
+
+ssh_pwauth: false
+
+package_update: true
+package_upgrade: false
+packages:
+  - alsa-utils
+  - ca-certificates
+  - curl
+  - ffmpeg
+  - git
+  - python3
+  - python3-venv
+  - rsync
+  - sudo
+
+write_files:
+  - path: /etc/showco-provisioning.env
+    permissions: "0644"
+    content: |
+      SHOW_USER=show
+      CODE_DIR=/home/show/code
+      RECS_REPO=https://github.com/rec/recs.git
+      TWITCHO_REPO=https://github.com/rec/twitcho.git
+      SHOWCO_REPO=https://github.com/rec/showco.git
+
+runcmd:
+  - [bash, -lc, "mkdir -p /opt/showco-provisioning"]
+  - [bash, -lc, "cp /boot/firmware/pi-first-boot.sh /opt/showco-provisioning/pi-first-boot.sh || cp /boot/pi-first-boot.sh /opt/showco-provisioning/pi-first-boot.sh"]
+  - [bash, /opt/showco-provisioning/pi-first-boot.sh]
+
+final_message: "showco first-boot provisioning finished after $UPTIME seconds"
