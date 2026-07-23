@@ -10,7 +10,14 @@ from showco.models import (
     SystemStatus,
     TwitchoStatus,
 )
-from showco.server import home_page
+from showco.rehearsal import (
+    RehearsalMixerMonitor,
+    RehearsalRecsClient,
+    RehearsalSystemMonitor,
+    RehearsalTwitchoClient,
+    RehearsalTwitchoSupervisor,
+)
+from showco.server import ShowcoApp, actions_page, home_page
 
 
 class ServerTests(unittest.TestCase):
@@ -54,6 +61,27 @@ class ServerTests(unittest.TestCase):
         self.assertIn("312 kbps", html)
         self.assertIn("Mixer latency", html)
         self.assertIn("4.2 ms", html)
+
+    def test_actions_page_has_twitch_restart_button(self) -> None:
+        html = actions_page([])
+
+        self.assertIn("Restart Twitch", html)
+        self.assertIn('value="twitcho-restart"', html)
+
+    def test_twitch_restart_action_uses_supervisor(self) -> None:
+        supervisor = RehearsalTwitchoSupervisor()
+        app = ShowcoApp(
+            RehearsalRecsClient(),
+            RehearsalTwitchoClient(),
+            RehearsalSystemMonitor(),
+            RehearsalMixerMonitor(),
+            supervisor,
+        )
+
+        result = app.run_action({"action": "twitcho-restart"})
+
+        self.assertTrue(result.ok)
+        self.assertEqual(supervisor.restart_count, 1)
 
 
 if __name__ == "__main__":

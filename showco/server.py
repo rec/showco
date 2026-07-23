@@ -3,6 +3,7 @@ from __future__ import annotations
 import html
 import time
 import urllib.parse
+from dataclasses import replace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import ClassVar
 
@@ -11,6 +12,7 @@ from .models import ActionResult, ShowStatus
 from .recs import RecsClient
 from .system import SystemMonitor
 from .twitcho import TwitchoClient
+from .twitcho_supervisor import TwitchoSupervisorLike
 
 
 class ShowcoApp:
@@ -20,17 +22,22 @@ class ShowcoApp:
         twitcho: TwitchoClient,
         system: SystemMonitor,
         mixer: MixerMonitor,
+        twitcho_supervisor: TwitchoSupervisorLike | None = None,
     ) -> None:
         self.recs = recs
         self.twitcho = twitcho
         self.system = system
         self.mixer = mixer
+        self.twitcho_supervisor = twitcho_supervisor
         self.action_log: list[ActionResult] = []
 
     def status(self) -> ShowStatus:
+        twitcho = self.twitcho.status()
+        if self.twitcho_supervisor and not twitcho.service.fresh:
+            twitcho = replace(twitcho, service=self.twitcho_supervisor.status())
         return ShowStatus(
             recs=self.recs.status(),
-            twitcho=self.twitcho.status(),
+            twitcho=twitcho,
             system=self.system.status(),
             mixer=self.mixer.status(),
         )
@@ -39,6 +46,11 @@ class ShowcoApp:
         action = form.get("action", "")
         if action == "recs-calibrate":
             result = self.recs.calibrate()
+        elif action == "twitcho-restart":
+            if self.twitcho_supervisor:
+                result = self.twitcho_supervisor.restart()
+            else:
+                result = ActionResult(False, "twitcho supervisor is not configured")
         elif action in TWITCHO_ACTIONS:
             result = self.twitcho.action(
                 TWITCHO_ACTIONS[action], **_twitcho_fields(form)
@@ -47,6 +59,14 @@ class ShowcoApp:
             result = ActionResult(False, f"unknown action {action}")
         self.action_log = [result, *self.action_log[:9]]
         return result
+
+    def start(self) -> None:
+        if self.twitcho_supervisor:
+            self.twitcho_supervisor.start()
+
+    def close(self) -> None:
+        if self.twitcho_supervisor:
+            self.twitcho_supervisor.close()
 
 
 class ShowcoHandler(BaseHTTPRequestHandler):
@@ -89,6 +109,14 @@ class ShowcoHandler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
 
+class ShowcoServer(ThreadingHTTPServer):
+    app: ShowcoApp
+
+    def server_close(self) -> None:
+        self.app.close()
+        super().server_close()
+
+
 def make_server(
     host: str,
     port: int,
@@ -97,15 +125,21 @@ def make_server(
     twitcho: TwitchoClient | None = None,
     system: SystemMonitor | None = None,
     mixer: MixerMonitor | None = None,
+    twitcho_supervisor: TwitchoSupervisorLike | None = None,
 ) -> ThreadingHTTPServer:
     handler = type("ConfiguredShowcoHandler", (ShowcoHandler,), {})
-    handler.app = ShowcoApp(
+    app = ShowcoApp(
         recs or RecsClient(),
         twitcho or TwitchoClient(),
         system or SystemMonitor(),
         mixer or MixerMonitor(),
+        twitcho_supervisor,
     )
-    return ThreadingHTTPServer((host, port), handler)
+    handler.app = app
+    server = ShowcoServer((host, port), handler)
+    server.app = app
+    app.start()
+    return server
 
 
 def home_page(status: ShowStatus) -> str:
@@ -147,6 +181,7 @@ def actions_page(action_log: list[ActionResult]) -> str:
         f"""
         <section class="actions">
           {button("recs-calibrate", "Calibrate noise floor")}
+          {button("twitcho-restart", "Restart Twitch")}
           {button("twitcho-mute", "Mute Twitch")}
           {button("twitcho-unmute", "Unmute Twitch")}
           {button("twitcho-stop", "Stop Twitch", confirm=True)}

@@ -63,8 +63,7 @@ The cloud-init configuration should:
 - leave obvious TODO placeholders where final service commands are not decided
 
 The current files deliberately stop short of installing final systemd services,
-because we have not yet committed exact service commands or config-file formats
-for all three programs.
+because we have not yet committed exact service commands or config-file formats.
 
 ## Idempotency
 
@@ -123,8 +122,8 @@ show-box installer:
 - SSH public key
 - temporary first-boot network, if any
 - final `recs` daemon install command
-- final `twitcho` command or config path
-- final `showco` command or config path
+- final Twitcho config path passed to Showco
+- final `showco` command
 - X18 wired Ethernet address
 - mixer probe port and protocol
 - external recording mount point

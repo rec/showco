@@ -51,7 +51,7 @@ Provisioning completed.
 Next manual steps:
 
 1. Fill final recs, twitcho, and showco config values.
-2. Install user-level systemd services.
+2. Install recs and showco user-level systemd services.
 3. Configure the final Pi access point.
 4. Confirm the X18 USB device name.
 5. Run the acceptance tests in showco/doc/acceptance-tests.md.

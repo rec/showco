@@ -89,17 +89,18 @@ Pass criteria:
 
 Pass criteria:
 
-- Twitcho starts as a service.
+- Showco starts Twitcho when launched with `--twitcho-config`.
 - Showco reports Twitcho connected.
 - Twitcho audio seconds increase while streaming.
 - Twitcho mute produces silence in the stream path.
 - Twitcho stop terminates the streaming process cleanly.
+- Restart Twitch starts a fresh Twitcho attempt from Showco.
 
 Commands:
 
 ```bash
-systemctl --user status twitcho
-journalctl --user -u twitcho --since "10 minutes ago"
+systemctl --user status showco
+journalctl --user -u showco --since "10 minutes ago"
 ```
 
 ## 7. Twitch API side effects

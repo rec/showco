@@ -1,11 +1,11 @@
 # Raspberry Pi setup
 
 This is the field setup document for the Raspberry Pi show box. It assumes the
-Pi will run three local programs:
+Pi will run two top-level local services:
 
 - `recs`, the recorder daemon.
-- `twitcho`, the Twitch streamer.
-- `showco`, the local control UI.
+- `showco`, the local control UI, which starts and supervises `twitcho` when
+  Twitch streaming is configured.
 
 The first goal is repeatability. Do not improvise on show day. If a step is not
 confirmed before the Pi goes into the case, mark it as unknown and test it.
@@ -187,10 +187,9 @@ This is separate from USB audio. Audio still comes over USB.
 
 ## Service startup
 
-Install one user-level systemd service per program:
+Install one user-level systemd service for each top-level program:
 
 - `recs.service`
-- `twitcho.service`
 - `showco.service`
 
 The expected startup order is:
@@ -198,8 +197,7 @@ The expected startup order is:
 1. storage mounted
 2. network configured
 3. `recs`
-4. `twitcho`
-5. `showco`
+4. `showco`, which starts `twitcho` if `--twitcho-config` is set
 
 Showco must still start if Recs or Twitcho is unavailable, because it reports
 those failures in the UI.
@@ -208,12 +206,10 @@ Useful commands:
 
 ```bash
 systemctl --user status recs
-systemctl --user status twitcho
 systemctl --user status showco
 journalctl --user -u recs -f
-journalctl --user -u twitcho -f
 journalctl --user -u showco -f
-systemctl --user restart recs twitcho showco
+systemctl --user restart recs showco
 ```
 
 ## Rehearsal mode

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 from .mixer import MixerMonitor
 from .rehearsal import (
@@ -8,8 +9,10 @@ from .rehearsal import (
     RehearsalRecsClient,
     RehearsalSystemMonitor,
     RehearsalTwitchoClient,
+    RehearsalTwitchoSupervisor,
 )
 from .server import make_server
+from .twitcho_supervisor import TwitchoSupervisor
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -19,6 +22,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--mixer-host")
     parser.add_argument("--mixer-port", type=int)
     parser.add_argument("--mixer-protocol", choices=["tcp", "udp"], default="tcp")
+    parser.add_argument(
+        "--twitcho-config",
+        type=Path,
+        help="start and supervise Twitcho with this config file",
+    )
+    parser.add_argument(
+        "--twitcho-restart-policy",
+        choices=["internal", "external"],
+        default="external",
+        help="restart policy for the supervised Twitcho process",
+    )
     parser.add_argument(
         "--rehearsal",
         action="store_true",
@@ -34,9 +48,16 @@ def main(argv: list[str] | None = None) -> int:
             twitcho=RehearsalTwitchoClient(),
             system=RehearsalSystemMonitor(),
             mixer=RehearsalMixerMonitor(),
+            twitcho_supervisor=RehearsalTwitchoSupervisor(),
         )
         print(f"showco rehearsal listening on http://{args.host}:{args.port}")
     else:
+        twitcho_supervisor = None
+        if args.twitcho_config:
+            twitcho_supervisor = TwitchoSupervisor(
+                args.twitcho_config,
+                policy=args.twitcho_restart_policy,
+            )
         server = make_server(
             args.host,
             args.port,
@@ -45,6 +66,7 @@ def main(argv: list[str] | None = None) -> int:
                 port=args.mixer_port,
                 protocol=args.mixer_protocol,
             ),
+            twitcho_supervisor=twitcho_supervisor,
         )
         print(f"showco listening on http://{args.host}:{args.port}")
     try:

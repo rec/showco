@@ -76,6 +76,26 @@ class RehearsalTwitchoClient(TwitchoClient):
         return ActionResult(True, f"rehearsal twitcho {command} succeeded")
 
 
+class RehearsalTwitchoSupervisor:
+    def __init__(self) -> None:
+        self.restart_count = 0
+
+    def start(self) -> None:
+        return
+
+    def restart(self) -> ActionResult:
+        self.restart_count += 1
+        return ActionResult(
+            True, f"rehearsal twitcho restart {self.restart_count} requested"
+        )
+
+    def close(self) -> None:
+        return
+
+    def status(self) -> ServiceStatus:
+        return ServiceStatus(name="twitcho", state="running")
+
+
 class RehearsalSystemMonitor(SystemMonitor):
     def status(self) -> SystemStatus:
         return SystemStatus(temperature_c=48.5)

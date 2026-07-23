@@ -86,7 +86,9 @@ Destructive or show-ending actions should require confirmation.
 ## Communication model
 
 Showco should not import `recs` or `twitcho` internals. It should communicate
-over local protocols so each program can restart independently.
+over local protocols so each program can restart independently. Showco may
+start and supervise Twitcho as a child process, but all stream control still
+goes through Twitcho's local control protocol.
 
 Use one adapter per service:
 
@@ -253,8 +255,7 @@ These preferences should be local files, not a database.
 ## Open questions
 
 - What exact Recs control messages will be stable enough for Showco?
-- Should Showco launch `recs` and `twitcho`, or only connect to already-running
-  daemons?
+- What should the final Showco service command pass as the Twitcho config path?
 - Should the Raspberry Pi access point setup live in Showco docs or in separate
   deployment scripts?
 - How much local configuration should be editable from the UI during a show?
