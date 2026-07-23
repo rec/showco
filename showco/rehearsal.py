@@ -8,9 +8,11 @@ from .models import (
     ChannelLevel,
     RecsStatus,
     ServiceStatus,
+    SystemStatus,
     TwitchoStatus,
 )
 from .recs import RecsClient
+from .system import SystemMonitor
 from .twitcho import TwitchoClient
 
 
@@ -69,6 +71,11 @@ class RehearsalTwitchoClient(TwitchoClient):
         elif command == "stop":
             self.stopped = True
         return ActionResult(True, f"rehearsal twitcho {command} succeeded")
+
+
+class RehearsalSystemMonitor(SystemMonitor):
+    def status(self) -> SystemStatus:
+        return SystemStatus(temperature_c=48.5)
 
 
 def rehearsal_channels(elapsed: float) -> list[ChannelLevel]:

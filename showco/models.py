@@ -52,7 +52,14 @@ class TwitchoStatus:
 
 
 @dataclass(frozen=True)
+class SystemStatus:
+    temperature_c: float | None = None
+    temperature_error: str | None = None
+
+
+@dataclass(frozen=True)
 class ShowStatus:
     recs: RecsStatus
     twitcho: TwitchoStatus
+    system: SystemStatus = field(default_factory=SystemStatus)
     generated_at: float = field(default_factory=time.time)

@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import unittest
 
-from showco.rehearsal import RehearsalRecsClient, RehearsalTwitchoClient
+from showco.rehearsal import (
+    RehearsalRecsClient,
+    RehearsalSystemMonitor,
+    RehearsalTwitchoClient,
+)
 
 
 class RehearsalTests(unittest.TestCase):
@@ -28,6 +32,12 @@ class RehearsalTests(unittest.TestCase):
         self.assertTrue(stop.ok)
         self.assertTrue(muted.muted)
         self.assertEqual(stopped.stream_state, "stopped")
+
+    def test_rehearsal_system_reports_temperature(self) -> None:
+        status = RehearsalSystemMonitor().status()
+
+        self.assertEqual(status.temperature_c, 48.5)
+        self.assertIsNone(status.temperature_error)
 
 
 if __name__ == "__main__":

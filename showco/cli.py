@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import argparse
 
-from .rehearsal import RehearsalRecsClient, RehearsalTwitchoClient
+from .rehearsal import (
+    RehearsalRecsClient,
+    RehearsalSystemMonitor,
+    RehearsalTwitchoClient,
+)
 from .server import make_server
 
 
@@ -23,6 +27,7 @@ def main(argv: list[str] | None = None) -> int:
             args.port,
             recs=RehearsalRecsClient(),
             twitcho=RehearsalTwitchoClient(),
+            system=RehearsalSystemMonitor(),
         )
         print(f"showco rehearsal listening on http://{args.host}:{args.port}")
     else:

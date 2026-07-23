@@ -8,17 +8,25 @@ from typing import ClassVar
 
 from .models import ActionResult, ShowStatus
 from .recs import RecsClient
+from .system import SystemMonitor
 from .twitcho import TwitchoClient
 
 
 class ShowcoApp:
-    def __init__(self, recs: RecsClient, twitcho: TwitchoClient) -> None:
+    def __init__(
+        self, recs: RecsClient, twitcho: TwitchoClient, system: SystemMonitor
+    ) -> None:
         self.recs = recs
         self.twitcho = twitcho
+        self.system = system
         self.action_log: list[ActionResult] = []
 
     def status(self) -> ShowStatus:
-        return ShowStatus(recs=self.recs.status(), twitcho=self.twitcho.status())
+        return ShowStatus(
+            recs=self.recs.status(),
+            twitcho=self.twitcho.status(),
+            system=self.system.status(),
+        )
 
     def run_action(self, form: dict[str, str]) -> ActionResult:
         action = form.get("action", "")
@@ -80,9 +88,14 @@ def make_server(
     *,
     recs: RecsClient | None = None,
     twitcho: TwitchoClient | None = None,
+    system: SystemMonitor | None = None,
 ) -> ThreadingHTTPServer:
     handler = type("ConfiguredShowcoHandler", (ShowcoHandler,), {})
-    handler.app = ShowcoApp(recs or RecsClient(), twitcho or TwitchoClient())
+    handler.app = ShowcoApp(
+        recs or RecsClient(),
+        twitcho or TwitchoClient(),
+        system or SystemMonitor(),
+    )
     return ThreadingHTTPServer((host, port), handler)
 
 
@@ -109,6 +122,7 @@ def home_page(status: ShowStatus) -> str:
           <h2>Health</h2>
           <p>recs: {_service_detail(recs.state, recs.last_error)}</p>
           <p>twitcho: {_service_detail(twitcho.state, twitcho.last_error)}</p>
+          <p>Pi temperature: {_temperature(status)}</p>
           <p>Generated: {_time(status.generated_at)}</p>
         </section>
         """,
@@ -232,6 +246,12 @@ def _streaming_text(status: ShowStatus) -> str:
 
 def _service_detail(state: str, error: str | None) -> str:
     return f"{state}: {error}" if error else state
+
+
+def _temperature(status: ShowStatus) -> str:
+    if status.system.temperature_c is not None:
+        return f"{status.system.temperature_c:.1f} °C"
+    return status.system.temperature_error or "unknown"
 
 
 def _duration(seconds: float | None) -> str:
