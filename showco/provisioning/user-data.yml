@@ -1,17 +1,16 @@
 #cloud-config
-hostname: recs-stage
+hostname: @HOSTNAME@
 manage_etc_hosts: true
 
 users:
-  - name: show
+  - name: @SHOW_USER@
     gecos: Show User
     groups: [adm, audio, dialout, plugdev, sudo, video]
     shell: /bin/bash
     lock_passwd: false
-    # Replace this before booting. Prefer an SSH key and a strong password hash.
-    passwd: "$y$j9T$REPLACE_WITH_REAL_PASSWORD_HASH"
+    passwd: "@PASSWORD_HASH@"
     ssh_authorized_keys:
-      - "ssh-ed25519 REPLACE_WITH_REAL_PUBLIC_KEY show"
+      - "@SSH_PUBLIC_KEY@"
 
 ssh_pwauth: false
 
@@ -32,11 +31,11 @@ write_files:
   - path: /etc/showco-provisioning.env
     permissions: "0644"
     content: |
-      SHOW_USER=show
-      CODE_DIR=/home/show/code
-      RECS_REPO=https://github.com/rec/recs.git
-      TWITCHO_REPO=https://github.com/rec/twitcho.git
-      SHOWCO_REPO=https://github.com/rec/showco.git
+      SHOW_USER=@SHOW_USER@
+      CODE_DIR=/home/@SHOW_USER@/code
+      RECS_REPO=@RECS_REPO@
+      TWITCHO_REPO=@TWITCHO_REPO@
+      SHOWCO_REPO=@SHOWCO_REPO@
 
 runcmd:
   - [bash, -lc, "mkdir -p /opt/showco-provisioning"]

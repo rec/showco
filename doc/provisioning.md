@@ -15,30 +15,34 @@ showco/provisioning/user-data.yml
 showco/provisioning/network-config.yml
 showco/provisioning/meta-data.yml
 showco/provisioning/pi-first-boot.sh
+showco/provisioning/provision-pi-card.sh
 ```
 
-## First-boot model
+## Single command
 
-The intended flow is:
+After flashing Raspberry Pi OS Lite and mounting the boot partition on the Mac,
+run one command:
 
-1. Flash Raspberry Pi OS Lite.
-2. Mount the boot partition on the Mac.
-3. Copy or adapt the files from `showco/provisioning/` onto that boot
-   partition using cloud-init's expected names:
-   - `user-data.yml` -> `user-data`
-   - `network-config.yml` -> `network-config`
-   - `meta-data.yml` -> `meta-data`
-   - `pi-first-boot.sh` -> `pi-first-boot.sh`
-4. Edit placeholder values before booting:
-   - hostname
-   - username
-   - password hash or SSH key
-   - temporary first-boot Wi-Fi, if used
-   - repository URLs or branch names, if needed
-5. Boot the Pi.
-6. `cloud-init` runs `pi-first-boot.sh`.
-7. Reboot once after provisioning.
-8. Run the acceptance tests.
+```bash
+showco/provisioning/provision-pi-card.sh \
+  --boot /Volumes/bootfs \
+  --ssh-key-file ~/.ssh/id_ed25519.pub \
+  --password-hash '$y$j9T$REPLACE_WITH_REAL_PASSWORD_HASH' \
+  --wifi-ssid 'REPLACE_WITH_TEMPORARY_FIRST_BOOT_WIFI_SSID' \
+  --wifi-password 'REPLACE_WITH_TEMPORARY_FIRST_BOOT_WIFI_PASSWORD'
+```
+
+The script writes:
+
+- `user-data`
+- `network-config`
+- `meta-data`
+- `pi-first-boot.sh`
+
+to the mounted boot partition using cloud-init's expected filenames.
+
+Then eject the card, boot the Pi, wait for cloud-init to finish, reboot once,
+and run the acceptance tests.
 
 The first boot can use a temporary local Wi-Fi client configuration just to get
 SSH access. The final field configuration is still the Pi access point plus
@@ -100,6 +104,7 @@ Before relying on it:
 
 ```bash
 bash -n showco/provisioning/pi-first-boot.sh
+bash -n showco/provisioning/provision-pi-card.sh
 ```
 
 Then, once the Pi arrives:

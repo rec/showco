@@ -1,2 +1,2 @@
 instance-id: recs-stage-001
-local-hostname: recs-stage
+local-hostname: @HOSTNAME@

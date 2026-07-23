@@ -3,12 +3,12 @@ ethernets:
   eth0:
     dhcp4: false
     addresses:
-      - 10.43.0.1/24
+      - @ETH_ADDRESS@
     optional: true
 wifis:
   wlan0:
     optional: true
     dhcp4: true
     access-points:
-      "REPLACE_WITH_TEMPORARY_FIRST_BOOT_WIFI_SSID":
-        password: "REPLACE_WITH_TEMPORARY_FIRST_BOOT_WIFI_PASSWORD"
+      "@WIFI_SSID@":
+        password: "@WIFI_PASSWORD@"
