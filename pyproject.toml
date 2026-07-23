@@ -5,10 +5,12 @@ description = "Local show control for recs and twitcho"
 requires-python = ">=3.11"
 dependencies = [
     "recs",
+    "twitcho",
 ]
 
 [tool.uv.sources]
 recs = { path = "../recs", editable = true }
+twitcho = { path = "../twitcho", editable = true }
 
 [project.scripts]
 showco = "showco.cli:main"
