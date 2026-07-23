@@ -57,7 +57,7 @@ class TwitchoClient:
             return ActionResult(True, f"twitcho {command} succeeded")
         return ActionResult(False, result.message)
 
-    def command(self, command: str, **fields: object) -> "TwitchoReply":
+    def command(self, command: str, **fields: object) -> TwitchoReply:
         message = {"type": "command", "id": str(uuid.uuid4()), "command": command}
         message.update(fields)
         try:
