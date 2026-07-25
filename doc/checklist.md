@@ -17,8 +17,6 @@ Assumptions:
 - DHCP range for devices connected to the Pi Wi-Fi.
 - Ethernet subnet between the Pi and the X18.
 - X18 wired Ethernet IP address.
-- Whether the tablet controls the X18 through the Pi network.
-- Whether to buy an additional Wi-Fi dongle for Twitch internet access.
 - Whether Twitch is enabled when there is no reliable internet.
 - Twitch account to use for the show.
 - Where the Twitch stream key and API token will be stored.
@@ -28,26 +26,17 @@ Assumptions:
 - Default Twitch tags.
 - Standard chat messages.
 - Standard stream marker descriptions.
-- Where the tablet will sit or mount during the show.
 - Showco URL bookmark name and location on the tablet.
 - Normal setup sequence before a show.
-- Who presses calibration.
-- When calibration is pressed.
-- Whether Twitch starts before doors, at downbeat, or manually.
 - What to do if Twitcho fails.
 - What to do if Recs fails.
 - What to do if the Pi network fails.
 - Labels for the ports and cables used during setup.
-- Minimum successful soak-test duration.
-- Maximum acceptable Pi temperature.
-- Acceptable Twitch bitrate.
-- Acceptable mixer-control latency.
+- Final recording directory path.
 
 ## Things I need to discover
 
 - X18 USB device name as seen by Linux.
-- Exact Recs input selection flags for the X18.
-- Final recording directory path.
 - Whether the tablet can control the X18 through the Pi network.
 - Whether local Wi-Fi can support the mixer, tablet, and Mac rehearsal setup.
 - Whether the Pi access point can support the tablet and mixer control reliably.
