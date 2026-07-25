@@ -1,0 +1,37 @@
+[network]
+pi_access_point_ssid = "showbox"
+pi_wifi_ip_address = "10.42.0.1"
+pi_wifi_dhcp_start = "10.42.0.50"
+pi_wifi_dhcp_end = "10.42.0.200"
+pi_x18_ethernet_subnet = "10.43.0.0/24"
+x18_wired_ethernet_ip_address = "10.43.0.18"
+showco_port = 17352
+
+[twitch]
+account = "loopopenloop"
+default_stream_title = "openLoop, broadcasting live from Rouen"
+default_category = "Music"
+default_tags = ["Live Music", "Music", "Performance"]
+standard_chat_messages = [
+    "Stream starting soon.",
+    "Thanks for listening.",
+]
+standard_stream_marker_descriptions = [
+    "show start",
+    "song start",
+    "song end",
+    "set break",
+    "show end",
+]
+id = "1523431675"
+oauth_token_scopes = [
+    "channel:manage:broadcast",
+    "chat:edit",
+    "chat:read",
+    "clips:edit",
+    "moderation:read",
+    "moderator:manage:announcements",
+]
+
+[audio]
+x18_usb_device_name = "X18/XR18"
