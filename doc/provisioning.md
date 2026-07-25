@@ -20,8 +20,7 @@ showco/provisioning/provision-pi-card.sh
 
 ## Single command
 
-After flashing Raspberry Pi OS Lite and mounting the boot partition on the Mac,
-run one command:
+After flashing Raspberry Pi OS Lite, either pass the mounted boot partition:
 
 ```bash
 showco/provisioning/provision-pi-card.sh \
@@ -31,6 +30,21 @@ showco/provisioning/provision-pi-card.sh \
   --wifi-ssid 'REPLACE_WITH_TEMPORARY_FIRST_BOOT_WIFI_SSID' \
   --wifi-password 'REPLACE_WITH_TEMPORARY_FIRST_BOOT_WIFI_PASSWORD'
 ```
+
+Or pass the imaged SD card disk before mounting it yourself:
+
+```bash
+showco/provisioning/provision-pi-card.sh \
+  --disk /dev/disk4 \
+  --ssh-key-file ~/.ssh/id_ed25519.pub \
+  --password-hash '$y$j9T$REPLACE_WITH_REAL_PASSWORD_HASH' \
+  --wifi-ssid 'REPLACE_WITH_TEMPORARY_FIRST_BOOT_WIFI_SSID' \
+  --wifi-password 'REPLACE_WITH_TEMPORARY_FIRST_BOOT_WIFI_PASSWORD'
+```
+
+Use `diskutil list` to identify the SD card disk. The script mounts the disk's
+partitions, looks for exactly one Raspberry Pi boot partition, and fails if it
+does not find the expected `config.txt` and `cmdline.txt` structure.
 
 The script writes:
 
