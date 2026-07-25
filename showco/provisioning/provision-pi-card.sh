@@ -4,6 +4,8 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
+  showco/provisioning/provision-pi-card.sh
+
   showco/provisioning/provision-pi-card.sh \
     --boot /Volumes/bootfs \
     --ssh-key-file ~/.ssh/id_ed25519.pub \
@@ -19,12 +21,14 @@ Usage:
     --wifi-password PASSWORD
 
 Options:
+  --config PATH                default: doc/config.toml
+  --secrets PATH               default: doc/secrets.toml
   --boot PATH                  mounted Raspberry Pi boot partition
   --disk DISK                  imaged Raspberry Pi SD card disk, mounted if needed
   --ssh-key-file PATH          public SSH key to install for the show user
-  --password-hash HASH         Linux password hash for the show user
-  --wifi-ssid SSID             temporary first-boot Wi-Fi SSID
-  --wifi-password PASSWORD     temporary first-boot Wi-Fi password
+  --password-hash HASH         Linux password hash for the show user, default: locked password login
+  --wifi-ssid SSID             temporary first-boot Wi-Fi SSID, default: network.pi_access_point_ssid
+  --wifi-password PASSWORD     temporary first-boot Wi-Fi password, default: network.pi_access_point_password
   --hostname NAME              default: recs-stage
   --user NAME                  default: show
   --eth-address CIDR           default: 10.43.0.1/24
@@ -48,10 +52,68 @@ script_dir() {
   pwd
 }
 
+repo_root() {
+  cd "$(script_dir)/../.." >/dev/null
+  pwd
+}
+
+expand_path() {
+  case "$1" in
+    "~/"*) printf '%s/%s\n' "$HOME" "${1#"~/"}" ;;
+    *) printf '%s\n' "$1" ;;
+  esac
+}
+
 require_value() {
   local name=$1
   local value=$2
   [[ -n "$value" ]] || die "$name is required"
+}
+
+toml_value() {
+  local file=$1
+  local path=$2
+  [[ -f "$file" ]] || return 0
+
+  local python=(python3)
+  if ! python3 - <<'PY' >/dev/null 2>&1; then
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli
+PY
+    command -v uv >/dev/null || die "Python 3.11+, tomli, or uv is required to read $file"
+    python=(uv --directory "$(repo_root)" run python)
+  fi
+
+  "${python[@]}" - "$file" "$path" <<'PY'
+import sys
+from pathlib import Path
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
+
+data: object = tomllib.loads(Path(sys.argv[1]).read_text())
+for part in sys.argv[2].split("."):
+    if not isinstance(data, dict) or part not in data:
+        raise SystemExit(0)
+    data = data[part]
+
+if isinstance(data, list):
+    print(" ".join(str(v) for v in data))
+elif data is not None:
+    print(data)
+PY
+}
+
+use_default() {
+  local name=$1
+  local value=$2
+  if [[ -z "${!name}" && -n "$value" && "$value" != TODO ]]; then
+    printf -v "$name" '%s' "$value"
+  fi
 }
 
 copy_template() {
@@ -77,7 +139,7 @@ disk_partitions() {
 import plistlib
 import sys
 
-data = plistlib.load(sys.stdin.buffer)
+data = plistlib.loads(sys.stdin.buffer.read())
 for disk in data.get("AllDisksAndPartitions", []):
     for partition in disk.get("Partitions", []):
         if identifier := partition.get("DeviceIdentifier"):
@@ -91,7 +153,7 @@ mount_point() {
 import plistlib
 import sys
 
-data = plistlib.load(sys.stdin.buffer)
+data = plistlib.loads(sys.stdin.buffer.read())
 print(data.get("MountPoint") or "")
 '
 }
@@ -101,30 +163,80 @@ is_raspberry_pi_boot() {
   [[ -f "$path/config.txt" && -f "$path/cmdline.txt" ]] || return 1
 }
 
-find_boot_on_disk() {
+boot_matches_on_disk() {
   local disk=$1
   local partitions=()
   local line
   while IFS= read -r line; do
     partitions+=("$line")
   done < <(disk_partitions "$disk")
-  [[ ${#partitions[@]} -gt 0 ]] || die "Cannot find partitions on $disk"
+  [[ ${#partitions[@]} -gt 0 ]] || return 0
 
-  local matches=()
   local partition mount
   for partition in "${partitions[@]}"; do
     diskutil mount "$partition" >/dev/null 2>&1 || true
     mount=$(mount_point "$partition")
     if [[ -n "$mount" ]] && is_raspberry_pi_boot "$mount"; then
-      matches+=("$mount")
+      printf '%s\n' "$mount"
     fi
   done
+}
+
+find_boot_on_disk() {
+  local disk=$1
+  local matches=()
+  local line
+  while IFS= read -r line; do
+    matches+=("$line")
+  done < <(boot_matches_on_disk "$disk")
 
   if [[ ${#matches[@]} -eq 0 ]]; then
     die "Could not find a Raspberry Pi boot partition on $disk"
   fi
   if [[ ${#matches[@]} -gt 1 ]]; then
     die "Found multiple Raspberry Pi boot partitions on $disk: ${matches[*]}"
+  fi
+  printf '%s\n' "${matches[0]}"
+}
+
+all_external_disks() {
+  command -v diskutil >/dev/null || die "diskutil is required to auto-detect the Raspberry Pi boot partition"
+  local disk
+  while IFS= read -r disk; do
+    if diskutil info -plist "$disk" | python3 -c '
+import plistlib
+import sys
+
+data = plistlib.loads(sys.stdin.buffer.read())
+if not data.get("Internal", True):
+    print("external")
+' | grep -q external; then
+      printf '%s\n' "$disk"
+    fi
+  done < <(diskutil list -plist | python3 -c '
+import plistlib
+import sys
+
+data = plistlib.loads(sys.stdin.buffer.read())
+for identifier in data.get("WholeDisks", []):
+    print(f"/dev/{identifier}")
+')
+}
+
+find_boot_automatically() {
+  local matches=()
+  local disk match
+  while IFS= read -r disk; do
+    while IFS= read -r match; do
+      matches+=("$match")
+    done < <(boot_matches_on_disk "$disk")
+  done < <(all_external_disks)
+
+  if [[ ${#matches[@]} -eq 0 ]]; then
+    die "Could not auto-detect a Raspberry Pi boot partition. Use --boot or --disk."
+  fi
+  if [[ ${#matches[@]} -gt 1 ]]; then
+    die "Found multiple Raspberry Pi boot partitions: ${matches[*]}. Use --boot."
   fi
   printf '%s\n' "${matches[0]}"
 }
@@ -137,10 +249,12 @@ validate_boot() {
   fi
 }
 
+config_file=$(repo_root)/doc/config.toml
+secrets_file=$(repo_root)/doc/secrets.toml
 boot=
 disk=
-ssh_key_file=
-password_hash=
+ssh_key_file=~/.ssh/id_ed25519.pub
+password_hash='*'
 wifi_ssid=
 wifi_password=
 hostname=recs-stage
@@ -152,6 +266,14 @@ showco_repo=https://github.com/rec/showco.git
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --config)
+      config_file=$2
+      shift 2
+      ;;
+    --secrets)
+      secrets_file=$2
+      shift 2
+      ;;
     --boot)
       boot=$2
       shift 2
@@ -210,11 +332,21 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+config_file=$(expand_path "$config_file")
+secrets_file=$(expand_path "$secrets_file")
+ssh_key_file=$(expand_path "$ssh_key_file")
+
+use_default wifi_ssid "$(toml_value "$config_file" network.pi_access_point_ssid)"
+use_default wifi_password "$(toml_value "$secrets_file" network.pi_access_point_password)"
+
 if [[ -n "$boot" && -n "$disk" ]]; then
   die "Use --boot or --disk, not both"
 fi
 if [[ -n "$disk" ]]; then
   boot=$(find_boot_on_disk "$disk")
+fi
+if [[ -z "$boot" ]]; then
+  boot=$(find_boot_automatically)
 fi
 require_value --boot "$boot"
 require_value --ssh-key-file "$ssh_key_file"
