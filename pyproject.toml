@@ -1,7 +1,7 @@
 [project]
 name = "showco"
 version = "0.1.0"
-description = "Local show control for recs and twitcho"
+description = "🎪 Local show control for recs and twitcho 🎪"
 requires-python = ">=3.10"
 dependencies = [
     "recs",
