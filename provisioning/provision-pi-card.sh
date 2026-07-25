@@ -53,7 +53,7 @@ script_dir() {
 }
 
 repo_root() {
-  cd "$(script_dir)/../.." >/dev/null
+  cd "$(script_dir)/.." >/dev/null
   pwd
 }
 
@@ -163,6 +163,15 @@ is_raspberry_pi_boot() {
   [[ -f "$path/config.txt" && -f "$path/cmdline.txt" ]] || return 1
 }
 
+mounted_boot_matches() {
+  local volume
+  for volume in /Volumes/bootfs /Volumes/boot /Volumes/BOOT; do
+    if [[ -d "$volume" ]] && is_raspberry_pi_boot "$volume"; then
+      printf '%s\n' "$volume"
+    fi
+  done
+}
+
 boot_matches_on_disk() {
   local disk=$1
   local partitions=()
@@ -226,6 +235,18 @@ for identifier in data.get("WholeDisks", []):
 find_boot_automatically() {
   local matches=()
   local disk match
+  while IFS= read -r match; do
+    matches+=("$match")
+  done < <(mounted_boot_matches)
+
+  if [[ ${#matches[@]} -eq 1 ]]; then
+    printf '%s\n' "${matches[0]}"
+    return
+  fi
+  if [[ ${#matches[@]} -gt 1 ]]; then
+    die "Found multiple Raspberry Pi boot partitions: ${matches[*]}. Use --boot."
+  fi
+
   while IFS= read -r disk; do
     while IFS= read -r match; do
       matches+=("$match")

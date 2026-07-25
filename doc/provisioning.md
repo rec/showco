@@ -31,10 +31,11 @@ The script reads local defaults from:
 - `doc/config.toml`
 - `doc/secrets.toml`
 
-It uses `~/.ssh/id_ed25519.pub` as the default SSH public key, auto-detects
-exactly one external Raspberry Pi boot partition, and fails if the attached
-disk layout is ambiguous or not recognized. Password SSH login is locked by
-default; SSH key login is the intended access path.
+It uses `~/.ssh/id_ed25519.pub` as the default SSH public key. It first checks
+common mounted Raspberry Pi boot volume names such as `/Volumes/bootfs`, then
+falls back to auto-detecting exactly one external Raspberry Pi boot partition.
+It fails if the attached disk layout is ambiguous or not recognized. Password
+SSH login is locked by default; SSH key login is the intended access path.
 
 If auto-detection is not enough, pass the mounted boot partition:
 
