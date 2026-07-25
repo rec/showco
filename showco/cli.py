@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
+from .git_pull import main as git_pull_main
 from .mixer import MixerMonitor
 from .rehearsal import (
     RehearsalMixerMonitor,
@@ -16,6 +18,10 @@ from .twitcho_supervisor import TwitchoSupervisor
 
 
 def main(argv: list[str] | None = None) -> int:
+    arguments = sys.argv[1:] if argv is None else argv
+    if arguments[:1] == ["git-pull"]:
+        return git_pull_main(arguments[1:])
+
     parser = argparse.ArgumentParser(description="Run the Showco web UI")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=17_352)
@@ -38,7 +44,7 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="run with simulated recs and twitcho services",
     )
-    args = parser.parse_args(argv)
+    args = parser.parse_args(arguments)
 
     if args.rehearsal:
         server = make_server(
