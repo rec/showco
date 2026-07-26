@@ -5,7 +5,9 @@ import os
 import sys
 import time
 import uuid
+from collections.abc import Iterator
 from pathlib import Path
+from typing import Protocol
 
 from recs.daemon.gui_backend import client_connection
 from recs.daemon.gui_protocol import Command, Error, Hello, Reply, parse_message
@@ -124,6 +126,14 @@ class RecsPaths:
         self.gui_endpoint = gui_endpoint
 
 
+class RecsConnection(Protocol):
+    def read_lines(self) -> Iterator[str]: ...
+
+    def write(self, message: str) -> bool: ...
+
+    def close(self) -> None: ...
+
+
 def recs_paths(home: Path | None = None) -> RecsPaths:
     home = home or Path.home()
     if sys.platform == "win32":
@@ -147,7 +157,7 @@ def _endpoint(endpoint: str) -> Path | str:
     return Path(endpoint)
 
 
-def _read_message(connection: object) -> object:
+def _read_message(connection: RecsConnection) -> object:
     for line in connection.read_lines():
         return parse_message(line)
     return Error(type="error", message="recs closed the connection")
@@ -206,7 +216,15 @@ def _connection_state(updated_at: float | None, stale_after_seconds: float) -> s
 def _rows(value: object) -> list[dict[str, object]]:
     if not isinstance(value, list):
         return []
-    return [r for r in value if isinstance(r, dict)]
+    rows: list[dict[str, object]] = []
+    for r in value:
+        if isinstance(r, dict):
+            row: dict[str, object] = {}
+            for k, v in r.items():
+                if isinstance(k, str):
+                    row[k] = v
+            rows.append(row)
+    return rows
 
 
 def _string(value: object) -> str | None:

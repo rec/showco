@@ -4,6 +4,7 @@ import json
 import socket
 import uuid
 from collections.abc import Mapping
+from typing import Protocol
 
 from .models import ActionResult, ServiceStatus, TwitchoStatus
 
@@ -32,11 +33,12 @@ class TwitchoClient:
             return TwitchoStatus(
                 service=ServiceStatus("twitcho", "offline", result.message)
             )
-        status = result.payload.get("status")
-        if not isinstance(status, dict):
+        value = result.payload.get("status")
+        if not isinstance(value, dict):
             return TwitchoStatus(
                 service=ServiceStatus("twitcho", "error", "status reply missing status")
             )
+        status = dict(value)
         return TwitchoStatus(
             service=ServiceStatus(
                 name="twitcho",
@@ -58,7 +60,11 @@ class TwitchoClient:
         return ActionResult(False, result.message)
 
     def command(self, command: str, **fields: object) -> TwitchoReply:
-        message = {"type": "command", "id": str(uuid.uuid4()), "command": command}
+        message: dict[str, object] = {
+            "type": "command",
+            "id": str(uuid.uuid4()),
+            "command": command,
+        }
         message.update(fields)
         try:
             reply = self._exchange(message)
@@ -94,11 +100,15 @@ class TwitchoReply:
         self.payload = payload
 
 
+class LineReader(Protocol):
+    def readline(self) -> str: ...
+
+
 def _write(sock: socket.socket, message: Mapping[str, object]) -> None:
     sock.sendall(json.dumps(message, separators=(",", ":")).encode() + b"\n")
 
 
-def _read_object(reader: object) -> dict[str, object]:
+def _read_object(reader: LineReader) -> dict[str, object]:
     line = reader.readline()
     if not line:
         raise ConnectionError("connection closed")

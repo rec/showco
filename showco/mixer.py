@@ -32,6 +32,8 @@ class MixerMonitor:
         return MixerStatus(error=f"unknown mixer probe protocol {self.protocol}")
 
     def tcp_status(self) -> MixerStatus:
+        if self.host is None or self.port is None:
+            return MixerStatus(error="mixer probe not configured")
         start = time.monotonic()
         try:
             with socket.create_connection(
@@ -42,6 +44,8 @@ class MixerMonitor:
             return MixerStatus(error=f"mixer TCP probe failed: {e}")
 
     def udp_status(self) -> MixerStatus:
+        if self.host is None or self.port is None:
+            return MixerStatus(error="mixer probe not configured")
         start = time.monotonic()
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             sock.settimeout(self.timeout_seconds)
