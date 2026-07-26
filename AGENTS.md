@@ -42,9 +42,9 @@ client-side tooling unless the user explicitly asks for that direction.
   contacting local services.
 - Do not add retries, background tasks, broad compatibility paths, or new
   abstractions unless the existing failure mode or user request justifies them.
-- Do not store secrets in the repository. Treat `doc/secrets.env` and
-  `scripts/twitch-oauth/` as local operational material unless the user
-  explicitly scopes work there.
+- Do not store secrets in the repository unless the user explicitly scopes work
+  to a private/unpushable branch. Treat `scripts/secrets.env` as secret
+  operational material.
 
 ## Testing
 
