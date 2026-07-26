@@ -182,6 +182,15 @@ Decide whether the Pi or X18 owns DHCP. The simplest deterministic version is:
 - X18 has a static address on the same subnet.
 - the tablet reaches the X18 through the Pi network if routing is configured.
 
+Showco can optionally start a read-only OSC recorder for the X18:
+
+```bash
+showco --x18-host 10.43.0.18 --x18-log-dir ~/recordings
+```
+
+The recorder writes `x18-<timestamp>.jsonl` files and keeps an `/xremote`
+subscription alive so tablet control changes are visible to the Pi.
+
 This is separate from USB audio. Audio still comes over USB.
 
 ## Service startup

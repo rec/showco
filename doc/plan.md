@@ -19,8 +19,9 @@ Twitch itself, or control the mixer. It speaks to:
   title-card behavior.
 - Future programs, such as lighting control, through the same adapter pattern.
 
-Mixer control is intentionally out of scope for now. MIDI is the better control
-path for that use case.
+Mixer control is intentionally out of scope for now. Showco may start a
+read-only X18 OSC recorder subprocess for audit and replay, but it should not
+send mixer control changes.
 
 ## User interface
 
@@ -246,7 +247,7 @@ These preferences should be local files, not a database.
 
 - full Twitch chat client
 - Twitch polls or predictions
-- mixer control
+- mixer control, beyond read-only OSC recording
 - direct audio processing
 - database-backed history
 - cloud service dependency

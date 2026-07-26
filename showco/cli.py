@@ -15,12 +15,17 @@ from .rehearsal import (
 )
 from .server import make_server
 from .twitcho_supervisor import TwitchoSupervisor
+from .x18_osc import X18_OSC_PORT
+from .x18_osc import main as x18_record_main
+from .x18_recorder_supervisor import X18RecorderSupervisor
 
 
 def main(argv: list[str] | None = None) -> int:
     arguments = sys.argv[1:] if argv is None else argv
     if arguments[:1] == ["git-pull"]:
         return git_pull_main(arguments[1:])
+    if arguments[:1] == ["x18-record"]:
+        return x18_record_main(arguments[1:])
 
     parser = argparse.ArgumentParser(description="Run the Showco web UI")
     parser.add_argument("--host", default="127.0.0.1")
@@ -28,6 +33,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--mixer-host")
     parser.add_argument("--mixer-port", type=int)
     parser.add_argument("--mixer-protocol", choices=["tcp", "udp"], default="tcp")
+    parser.add_argument(
+        "--x18-host",
+        help="start a read-only X18 OSC recorder subprocess for this mixer host",
+    )
+    parser.add_argument("--x18-port", type=int, default=X18_OSC_PORT)
+    parser.add_argument("--x18-log-dir", type=Path, default=Path("."))
     parser.add_argument(
         "--twitcho-config",
         type=Path,
@@ -45,6 +56,7 @@ def main(argv: list[str] | None = None) -> int:
         help="run with simulated recs and twitcho services",
     )
     args = parser.parse_args(arguments)
+    x18_recorder = None
 
     if args.rehearsal:
         server = make_server(
@@ -75,10 +87,19 @@ def main(argv: list[str] | None = None) -> int:
             twitcho_supervisor=twitcho_supervisor,
         )
         print(f"showco listening on http://{args.host}:{args.port}")
+    if args.x18_host:
+        x18_recorder = X18RecorderSupervisor(
+            args.x18_host,
+            port=args.x18_port,
+            log_dir=args.x18_log_dir,
+        )
+        x18_recorder.start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         print("Interrupted")
     finally:
         server.server_close()
+        if x18_recorder:
+            x18_recorder.close()
     return 0
