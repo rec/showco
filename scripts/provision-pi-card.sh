@@ -4,16 +4,16 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  showco/provisioning/provision-pi-card.sh
+  showco/scripts/provision-pi-card.sh
 
-  showco/provisioning/provision-pi-card.sh \
+  showco/scripts/provision-pi-card.sh \
     --boot /Volumes/bootfs \
     --ssh-key-file ~/.ssh/id_ed25519.pub \
     --password-hash '$y$j9T$...' \
     --wifi-ssid NAME \
     --wifi-password PASSWORD
 
-  showco/provisioning/provision-pi-card.sh \
+  showco/scripts/provision-pi-card.sh \
     --disk /dev/disk4 \
     --ssh-key-file ~/.ssh/id_ed25519.pub \
     --password-hash '$y$j9T$...' \
@@ -21,8 +21,8 @@ Usage:
     --wifi-password PASSWORD
 
 Options:
-  --config PATH                default: doc/config.env
-  --secrets PATH               default: doc/secrets.env
+  --config PATH                default: scripts/config.env
+  --secrets PATH               default: scripts/secrets.env
   --boot PATH                  mounted Raspberry Pi boot partition
   --disk DISK                  imaged Raspberry Pi SD card disk, mounted if needed
   --ssh-key-file PATH          public SSH key to install for the show user
@@ -240,8 +240,8 @@ validate_boot() {
   fi
 }
 
-config_file=$(repo_root)/doc/config.env
-secrets_file=$(repo_root)/doc/secrets.env
+config_file=$(script_dir)/config.env
+secrets_file=$(script_dir)/secrets.env
 boot=
 disk=
 ssh_key_file=~/.ssh/id_ed25519.pub
@@ -328,7 +328,7 @@ secrets_file=$(expand_path "$secrets_file")
 ssh_key_file=$(expand_path "$ssh_key_file")
 
 use_default wifi_ssid "$(env_value "$config_file" SHOWCO_PI_ACCESS_POINT_SSID)"
-use_default wifi_password "$(env_value "$secrets_file" SHOWCO_PI_ACCESS_POINT_PASSWORD)"
+use_default wifi_password "$(env_value "$secrets_file" SHOWCO_PI_PASSWORD)"
 
 if [[ -n "$boot" && -n "$disk" ]]; then
   die "Use --boot or --disk, not both"
