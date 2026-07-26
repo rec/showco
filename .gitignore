@@ -150,6 +150,8 @@ activemq-data/
 # Environments
 .env
 .envrc
+doc/secrets.env
+doc/secrets.toml
 .venv
 env/
 venv/

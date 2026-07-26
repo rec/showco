@@ -21,14 +21,14 @@ Usage:
     --wifi-password PASSWORD
 
 Options:
-  --config PATH                default: doc/config.toml
-  --secrets PATH               default: doc/secrets.toml
+  --config PATH                default: doc/config.env
+  --secrets PATH               default: doc/secrets.env
   --boot PATH                  mounted Raspberry Pi boot partition
   --disk DISK                  imaged Raspberry Pi SD card disk, mounted if needed
   --ssh-key-file PATH          public SSH key to install for the show user
   --password-hash HASH         Linux password hash for the show user, default: locked password login
-  --wifi-ssid SSID             temporary first-boot Wi-Fi SSID, default: network.pi_access_point_ssid
-  --wifi-password PASSWORD     temporary first-boot Wi-Fi password, default: network.pi_access_point_password
+  --wifi-ssid SSID             temporary first-boot Wi-Fi SSID, default: SHOWCO_PI_ACCESS_POINT_SSID
+  --wifi-password PASSWORD     temporary first-boot Wi-Fi password, default: SHOWCO_PI_ACCESS_POINT_PASSWORD
   --hostname NAME              default: recs-stage
   --user NAME                  default: show
   --eth-address CIDR           default: 10.43.0.1/24
@@ -70,42 +70,12 @@ require_value() {
   [[ -n "$value" ]] || die "$name is required"
 }
 
-toml_value() {
+env_value() {
   local file=$1
-  local path=$2
+  local name=$2
   [[ -f "$file" ]] || return 0
 
-  local python=(python3)
-  if ! python3 - <<'PY' >/dev/null 2>&1; then
-try:
-    import tomllib
-except ModuleNotFoundError:
-    import tomli
-PY
-    command -v uv >/dev/null || die "Python 3.11+, tomli, or uv is required to read $file"
-    python=(uv --directory "$(repo_root)" run python)
-  fi
-
-  "${python[@]}" - "$file" "$path" <<'PY'
-import sys
-from pathlib import Path
-
-try:
-    import tomllib
-except ModuleNotFoundError:
-    import tomli as tomllib
-
-data: object = tomllib.loads(Path(sys.argv[1]).read_text())
-for part in sys.argv[2].split("."):
-    if not isinstance(data, dict) or part not in data:
-        raise SystemExit(0)
-    data = data[part]
-
-if isinstance(data, list):
-    print(" ".join(str(v) for v in data))
-elif data is not None:
-    print(data)
-PY
+  bash -c 'source "$1"; printf "%s\n" "${!2-}"' bash "$file" "$name"
 }
 
 use_default() {
@@ -270,8 +240,8 @@ validate_boot() {
   fi
 }
 
-config_file=$(repo_root)/doc/config.toml
-secrets_file=$(repo_root)/doc/secrets.toml
+config_file=$(repo_root)/doc/config.env
+secrets_file=$(repo_root)/doc/secrets.env
 boot=
 disk=
 ssh_key_file=~/.ssh/id_ed25519.pub
@@ -357,8 +327,8 @@ config_file=$(expand_path "$config_file")
 secrets_file=$(expand_path "$secrets_file")
 ssh_key_file=$(expand_path "$ssh_key_file")
 
-use_default wifi_ssid "$(toml_value "$config_file" network.pi_access_point_ssid)"
-use_default wifi_password "$(toml_value "$secrets_file" network.pi_access_point_password)"
+use_default wifi_ssid "$(env_value "$config_file" SHOWCO_PI_ACCESS_POINT_SSID)"
+use_default wifi_password "$(env_value "$secrets_file" SHOWCO_PI_ACCESS_POINT_PASSWORD)"
 
 if [[ -n "$boot" && -n "$disk" ]]; then
   die "Use --boot or --disk, not both"

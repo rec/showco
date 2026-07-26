@@ -28,8 +28,15 @@ showco/provisioning/provision-pi-card.sh
 
 The script reads local defaults from:
 
-- `doc/config.toml`
-- `doc/secrets.toml`
+- `doc/config.env`
+- `doc/secrets.env`
+
+`doc/config.env` is committed. `doc/secrets.env` is local and ignored. It should
+define:
+
+```bash
+SHOWCO_PI_ACCESS_POINT_PASSWORD="REPLACE_WITH_TEMPORARY_FIRST_BOOT_WIFI_PASSWORD"
+```
 
 It uses `~/.ssh/id_ed25519.pub` as the default SSH public key. It first checks
 common mounted Raspberry Pi boot volume names such as `/Volumes/bootfs`, then
