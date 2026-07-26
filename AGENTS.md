@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Showco is a small Python 3.10 show-control web UI for coordinating local
+Showco is a small Python 3.11 show-control web UI for coordinating local
 recording with `recs`, Twitch streaming with `twitcho`, mixer reachability, and
 Raspberry Pi health checks.
 

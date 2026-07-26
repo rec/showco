@@ -4,7 +4,7 @@ import base64
 import io
 import json
 import unittest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from showco.x18_osc import (
@@ -33,7 +33,7 @@ class X18OscTests(unittest.TestCase):
         )
 
     def test_log_path_uses_x18_timestamp_name(self) -> None:
-        timestamp = datetime(2026, 7, 26, 12, 34, 56, tzinfo=timezone.utc)
+        timestamp = datetime(2026, 7, 26, 12, 34, 56, tzinfo=UTC)
 
         self.assertEqual(
             log_path(Path("/logs"), timestamp),

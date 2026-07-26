@@ -6,7 +6,7 @@ import json
 import socket
 import struct
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import BinaryIO
 
@@ -42,7 +42,7 @@ def padding(length: int) -> int:
 
 
 def log_path(log_dir: Path, timestamp: datetime | None = None) -> Path:
-    timestamp = timestamp or datetime.now(timezone.utc)
+    timestamp = timestamp or datetime.now(UTC)
     return log_dir / f"x18-{timestamp.strftime('%Y%m%dT%H%M%SZ')}.jsonl"
 
 
