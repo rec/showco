@@ -46,9 +46,8 @@ df -h
 ## Automated provisioning
 
 Use `doc/provisioning.md` and the single command
-`showco/scripts/provision-pi-card.sh ...` to prepare a cloud-init
-first-boot setup. That path should become the normal way to build a repeatable
-show-box SD card once the remaining service commands are finalized.
+`showco/scripts/provision-pi.sh ...` after the Pi is reachable over SSH. This
+is the normal way to build or update a repeatable show-box machine.
 
 ## System packages
 
