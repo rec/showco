@@ -5,17 +5,19 @@ flashed Raspberry Pi OS Lite card boot into a known, repeatable show-box state
 with minimal manual work.
 
 Only Markdown documentation belongs in `doc/`. The cloud-init files and setup
-script live in `showco/provisioning/`.
+script live in `showco/scripts/`.
 
 ## Files
 
 ```text
 doc/provisioning.md
-showco/provisioning/user-data.yml
-showco/provisioning/network-config.yml
-showco/provisioning/meta-data.yml
-showco/provisioning/pi-first-boot.sh
-showco/provisioning/provision-pi-card.sh
+showco/scripts/config.env
+showco/scripts/secrets.env
+showco/scripts/user-data.yml
+showco/scripts/network-config.yml
+showco/scripts/meta-data.yml
+showco/scripts/pi-first-boot.sh
+showco/scripts/provision-pi-card.sh
 ```
 
 ## Single command
@@ -23,16 +25,16 @@ showco/provisioning/provision-pi-card.sh
 After flashing Raspberry Pi OS Lite, run:
 
 ```bash
-showco/provisioning/provision-pi-card.sh
+showco/scripts/provision-pi-card.sh
 ```
 
 The script reads local defaults from:
 
-- `doc/config.env`
-- `doc/secrets.env`
+- `scripts/config.env`
+- `scripts/secrets.env`
 
-`doc/config.env` is committed. `doc/secrets.env` is local and ignored. It should
-define:
+`scripts/config.env` contains non-secret operational values. `scripts/secrets.env`
+contains secret operational values such as:
 
 ```bash
 SHOWCO_PI_ACCESS_POINT_PASSWORD="REPLACE_WITH_TEMPORARY_FIRST_BOOT_WIFI_PASSWORD"
@@ -47,7 +49,7 @@ SSH login is locked by default; SSH key login is the intended access path.
 If auto-detection is not enough, pass the mounted boot partition:
 
 ```bash
-showco/provisioning/provision-pi-card.sh \
+showco/scripts/provision-pi-card.sh \
   --boot /Volumes/bootfs \
   --ssh-key-file ~/.ssh/id_ed25519.pub \
   --password-hash '$y$j9T$REPLACE_WITH_REAL_PASSWORD_HASH' \
@@ -58,7 +60,7 @@ showco/provisioning/provision-pi-card.sh \
 Or pass the imaged SD card disk before mounting it yourself:
 
 ```bash
-showco/provisioning/provision-pi-card.sh \
+showco/scripts/provision-pi-card.sh \
   --disk /dev/disk4 \
   --ssh-key-file ~/.ssh/id_ed25519.pub \
   --password-hash '$y$j9T$REPLACE_WITH_REAL_PASSWORD_HASH' \
@@ -117,9 +119,9 @@ If a later version installs services, it should continue to be rerunnable:
 
 ## Secrets
 
-Do not commit real secrets.
+Do not commit real secrets to a pushable branch.
 
-Do not commit:
+Do not publish:
 
 - real login password hashes
 - private SSH keys
@@ -128,8 +130,9 @@ Do not commit:
 - real Wi-Fi passwords, unless the repository is private and the risk is
   accepted deliberately
 
-Use placeholders in committed files and fill real values only on the local SD
-card or in a private ignored overlay file.
+Use placeholders on shared branches. Keep real values only on the local SD card,
+in a private ignored overlay file, or on a private/unpushable branch used for
+local builds.
 
 ## Validation before the Pi arrives
 
@@ -140,8 +143,8 @@ the actual Raspberry Pi OS image.
 Before relying on it:
 
 ```bash
-bash -n showco/provisioning/pi-first-boot.sh
-bash -n showco/provisioning/provision-pi-card.sh
+bash -n showco/scripts/pi-first-boot.sh
+bash -n showco/scripts/provision-pi-card.sh
 ```
 
 Then, once the Pi arrives:
