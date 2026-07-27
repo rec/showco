@@ -48,19 +48,8 @@ showco_pi_host = "recs-stage.local"
 showco_pi_ssh_port = "22"
 ```
 
-Use optional `showco_pi_hostname`, or the `--hostname` command-line option, only
-when the Pi should be renamed.
-
-Add secret connection values to `showco/provision/secrets.toml` only if
-password login is needed:
-
-```toml
-showco_pi_password = "..."
-```
-
-Prefer key-based SSH when it is already configured. Password support should be
-for first setup only and should not introduce a new dependency unless the script
-cannot reasonably do the job without one.
+Set the Pi hostname in Raspberry Pi Imager and use that same name for
+`showco_pi_host`. Provisioning uses key-based SSH only.
 
 Keep existing show-box values in `showco/provision/config.toml` and
 `showco/provision/secrets.toml`. Reuse them rather than creating duplicate
@@ -150,15 +139,6 @@ Start with key-based SSH:
 ssh "${showco_pi_user:-$USER}@$showco_pi_host"
 ```
 
-If password login is required, use one of these approaches:
-
-1. Ask the operator to run the script in a terminal and type the SSH password
-   interactively.
-2. Add `sshpass` only after explicit approval, because it is a new dependency
-   and stores password material in process arguments or environment.
-
-Do not silently add `sshpass`.
-
 ## File transfer
 
 Prefer standard SSH tooling:
@@ -200,7 +180,7 @@ boot unless a separate SD-card provisioning path is explicitly retained.
 
 1. Added `showco_pi_host`, `showco_pi_ssh_port`, and optional `showco_pi_user` to
    `showco/provision/config.toml`.
-2. Added `showco_pi_password` to `showco/provision/secrets.toml`.
+2. Provisioning uses key-based SSH only.
 3. Created `showco provision`.
 4. Moved reusable setup commands out of `scripts/pi-first-boot.sh` into the new
    remote script path.

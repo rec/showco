@@ -65,19 +65,6 @@ Fix:
 - Do not mask the original provisioning failure if cleanup also fails.
 - Add tests around injected SSH/SCP runners rather than contacting SSH.
 
-## P1: Provisioning silently ignores configured password when `sshpass` is absent
-
-`showco/provision/provision.py:375-380` uses `sshpass` only when it is present.
-If `showco_pi_password` is configured but `sshpass` is missing, the script falls
-back to plain `ssh` without warning, which can hang or prompt unexpectedly.
-
-Fix:
-
-- If `showco_pi_password` is set and `sshpass` is missing, exit with a clear
-  message before the first SSH command.
-- Keep key-based SSH behavior unchanged when no password is configured.
-- Add tests for password-without-sshpass and key-based mode.
-
 ## P2: Twitcho supervision does not expose process spawn failures very well
 
 `showco/twitcho/supervisor.py:101-131` restarts after `OSError`, but the service
@@ -187,6 +174,6 @@ Fix:
 1. Fix command-failure handling in network configuration.
 2. Harden Recs action/status exception handling.
 3. Harden Twitch OAuth error handling.
-4. Make provisioning cleanup and password behavior explicit.
+4. Make provisioning cleanup explicit.
 5. Address the service-supervision and X18 recorder resilience items.
 6. Leave P3 cleanup until it blocks adjacent work.

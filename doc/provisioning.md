@@ -48,10 +48,8 @@ environment variable. It is an error if neither is set.
 Set the Raspberry Pi hostname in Raspberry Pi Imager before first boot. Use that
 same name for `showco_pi_host`, including `.local` when connecting by mDNS.
 
-`showco/provision/secrets.toml` contains secret operational values. `showco_pi_password`
-is optional. Key-based SSH is preferred; if `sshpass` is already installed and
-`showco_pi_password` is set, the script can use it. Otherwise SSH may prompt
-interactively.
+`showco/provision/secrets.toml` contains secret operational values. Provisioning
+uses key-based SSH only.
 
 Wi-Fi passwords belong in `showco/provision/secrets.toml`:
 

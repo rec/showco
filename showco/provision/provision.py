@@ -367,7 +367,6 @@ class Config:
         is_x18_wired: bool,
         showco_x18_host: str,
         audio_x18_usb_device_name: str,
-        password: str,
     ) -> None:
         self.host = host
         self.user = user
@@ -379,7 +378,6 @@ class Config:
         self.is_x18_wired = is_x18_wired
         self.showco_x18_host = showco_x18_host
         self.audio_x18_usb_device_name = audio_x18_usb_device_name
-        self.password = password
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -575,7 +573,6 @@ def config_from_args(args: argparse.Namespace, env: dict[str, object]) -> Config
         is_x18_wired=is_x18_wired,
         showco_x18_host=showco_x18_host,
         audio_x18_usb_device_name=string_value(env, "audio_x18_usb_device_name"),
-        password=string_value(env, "showco_pi_password"),
     )
 
 
@@ -628,48 +625,33 @@ def remote_command(config: Config, remote_script: str) -> str:
 
 def run_ssh(config: Config, target: str, command: str) -> None:
     run(
-        config,
         ["ssh", "-t", "-p", config.port, target, command],
-        ["sshpass", "-e", "ssh", "-t", "-p", config.port, target, command],
     )
 
 
 def run_scp(config: Config, source: Path, target: str) -> None:
     run(
-        config,
         ["scp", "-P", config.port, str(source), target],
-        ["sshpass", "-e", "scp", "-P", config.port, str(source), target],
     )
 
 
 def capture_ssh(config: Config, target: str, command: str) -> str:
     completed = run(
-        config,
         ["ssh", "-p", config.port, target, command],
-        ["sshpass", "-e", "ssh", "-p", config.port, target, command],
         capture_output=True,
     )
     return completed.stdout.strip()
 
 
 def run(
-    config: Config,
     command: list[str],
-    sshpass_command: list[str],
     *,
     capture_output: bool = False,
 ) -> subprocess.CompletedProcess[str]:
-    env = None
-    if config.password and config.password != "TODO":
-        if not shutil.which("sshpass"):
-            sys.exit("ERROR: showco_pi_password requires sshpass to be installed.")
-        env = os.environ | {"SSHPASS": config.password}
-        command = sshpass_command
     return subprocess.run(
         command,
         capture_output=capture_output,
         check=True,
-        env=env,
         text=True,
     )
 

@@ -52,36 +52,14 @@ class ProvisionTests(unittest.TestCase):
         self.assertIs(error.exception, original_error)
         self.assertEqual(run_ssh.call_args_list[-1].args[2], "rm -f /tmp/remote.sh")
 
-    def test_configured_password_requires_sshpass(self) -> None:
-        config = provision.config_from_args(
-            args(), values(is_x18_wired=False, showco_pi_password="password")
-        )
-        with (
-            mock.patch("showco.provision.provision.shutil.which", return_value=None),
-            mock.patch("showco.provision.provision.subprocess.run") as run,
-            self.assertRaises(SystemExit) as error,
-        ):
-            provision.run(config, ["ssh"], ["sshpass", "-e", "ssh"])
-
-        self.assertEqual(
-            str(error.exception),
-            "ERROR: showco_pi_password requires sshpass to be installed.",
-        )
-        run.assert_not_called()
-
-    def test_key_based_ssh_does_not_require_sshpass(self) -> None:
-        config = provision.config_from_args(args(), values(is_x18_wired=False))
-        with (
-            mock.patch("showco.provision.provision.shutil.which", return_value=None),
-            mock.patch("showco.provision.provision.subprocess.run") as run,
-        ):
-            provision.run(config, ["ssh"], ["sshpass", "-e", "ssh"])
+    def test_run_uses_key_based_ssh_command(self) -> None:
+        with mock.patch("showco.provision.provision.subprocess.run") as run:
+            provision.run(["ssh"])
 
         run.assert_called_once_with(
             ["ssh"],
             capture_output=False,
             check=True,
-            env=None,
             text=True,
         )
 
