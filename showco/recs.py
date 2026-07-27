@@ -52,6 +52,14 @@ class RecsClient:
                     last_error=f"invalid status JSON: {e.msg}",
                 )
             )
+        except OSError as e:
+            return RecsStatus(
+                service=ServiceStatus(
+                    name="recs",
+                    state="error",
+                    last_error=f"could not read status JSON: {e}",
+                )
+            )
 
         if not isinstance(data, dict):
             return RecsStatus(
@@ -85,11 +93,17 @@ class RecsClient:
         )
 
     def calibrate(self) -> ActionResult:
-        metadata = self._metadata()
+        try:
+            metadata = self._metadata()
+        except (OSError, ValueError) as e:
+            return ActionResult(False, f"could not read recs metadata: {e}")
         if metadata is None:
             return ActionResult(False, f"{self.metadata_path} does not exist")
 
-        connection = client_connection(_endpoint(metadata.gui_endpoint))
+        try:
+            connection = client_connection(_endpoint(metadata.gui_endpoint))
+        except OSError as e:
+            return ActionResult(False, f"could not connect to recs: {e}")
         try:
             if not connection.write(
                 Hello(type="hello", role="gui").model_dump_json() + "\n"
@@ -110,6 +124,8 @@ class RecsClient:
                 return ActionResult(False, "could not send recs calibrate command")
 
             return _calibration_result(_read_message(connection), message_id)
+        except (OSError, ValueError) as e:
+            return ActionResult(False, f"recs calibration failed: {e}")
         finally:
             connection.close()
 
