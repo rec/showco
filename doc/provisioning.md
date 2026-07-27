@@ -74,6 +74,9 @@ The script:
 - creates code, config, state, and recording directories
 - clones or updates `recs`, `twitcho`, and `showco`
 - runs `uv sync` in each checkout
+- enables lingering for the show user so user services start at boot
+- installs and starts the `recs` user service
+- installs and starts the `showco` user service
 - writes `~/PROVISIONING-NEXT-STEPS.txt`
 
 The script is intended to be rerunnable. Existing git checkouts are updated with
@@ -81,12 +84,8 @@ The script is intended to be rerunnable. Existing git checkouts are updated with
 
 ## What this does not do yet
 
-The current script deliberately stops short of installing final systemd
-services, because exact service commands and config-file formats are not fully
-settled.
-
-It also does not configure the final access point or external recording mount.
-Those remain explicit follow-up steps.
+The current script does not configure the final access point or external
+recording mount. Those remain explicit follow-up steps.
 
 ## Secrets
 
@@ -119,14 +118,11 @@ bash -n showco/scripts/3-validate-token.sh
 Do not run `scripts/provision-pi.sh` as a routine verification step. It mutates a
 real Raspberry Pi.
 
-## Open decisions before service installation
+## Open decisions
 
-The provisioning flow needs these final values before it can become a complete
-show-box installer:
+The provisioning flow still needs these final values before it can become a
+complete show-box installer:
 
-- final `recs` daemon install command
-- final Twitcho config path passed to Showco
-- final `showco` command
-- X18 wired Ethernet address
+- final Twitcho config contents
 - mixer probe port and protocol
 - external recording mount point

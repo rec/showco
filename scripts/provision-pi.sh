@@ -102,6 +102,76 @@ sync_repo() {
     bash -lc "cd '$path' && uv sync"
 }
 
+showco_args() {
+  local args=(
+    --host 0.0.0.0
+    --port "$SHOWCO_PORT"
+  )
+  if [[ -n "$SHOWCO_X18_HOST" && "$SHOWCO_X18_HOST" != TODO ]]; then
+    args+=(
+      --mixer-host "$SHOWCO_X18_HOST"
+      --x18-host "$SHOWCO_X18_HOST"
+      --x18-log-dir "/home/$SHOW_USER/recordings"
+    )
+  fi
+  if [[ -f "/home/$SHOW_USER/.config/twitcho/config.json" ]]; then
+    args+=(--twitcho-config "/home/$SHOW_USER/.config/twitcho/config.json")
+  fi
+  printf '%q ' "${args[@]}"
+}
+
+user_systemctl() {
+  local uid
+  uid=$(id -u "$SHOW_USER")
+  sudo -H -u "$SHOW_USER" \
+    env XDG_RUNTIME_DIR="/run/user/$uid" \
+    systemctl --user "$@"
+}
+
+install_recs_service() {
+  local quoted_args=
+  local uid
+  local args=()
+  uid=$(id -u "$SHOW_USER")
+  if [[ -n "$AUDIO_X18_USB_DEVICE_NAME" && "$AUDIO_X18_USB_DEVICE_NAME" != TODO ]]; then
+    args+=(--include "$AUDIO_X18_USB_DEVICE_NAME")
+  fi
+  if [[ ${#args[@]} -gt 0 ]]; then
+    quoted_args=$(printf '%q ' "${args[@]}")
+  fi
+  sudo -H -u "$SHOW_USER" \
+    env XDG_RUNTIME_DIR="/run/user/$uid" \
+    PATH="/home/$SHOW_USER/code/recs/.venv/bin:/home/$SHOW_USER/.local/bin:$PATH" \
+    bash -lc "cd '$CODE_DIR/recs' && uv run recs daemon install $quoted_args"
+}
+
+install_showco_service() {
+  local service_dir="/home/$SHOW_USER/.config/systemd/user"
+  local service_file="$service_dir/showco.service"
+  local command="/home/$SHOW_USER/code/showco/.venv/bin/showco $(showco_args)"
+
+  sudo -H -u "$SHOW_USER" mkdir -p "$service_dir"
+  sudo -H -u "$SHOW_USER" tee "$service_file" >/dev/null <<SERVICE
+[Unit]
+Description=showco local show control
+After=default.target recs.service
+
+[Service]
+ExecStart=$command
+Restart=always
+RestartSec=5
+WorkingDirectory=/home/$SHOW_USER/code/showco
+StandardOutput=append:%h/.local/state/showco/showco.out.log
+StandardError=append:%h/.local/state/showco/showco.err.log
+
+[Install]
+WantedBy=default.target
+SERVICE
+  user_systemctl daemon-reload
+  user_systemctl enable showco.service
+  user_systemctl restart showco.service
+}
+
 phase() {
   printf '\n==> %s\n' "$1"
 }
@@ -139,6 +209,7 @@ main() {
     "/home/$SHOW_USER/.config/showco" \
     "/home/$SHOW_USER/.config/twitcho" \
     "/home/$SHOW_USER/.local/state/recs" \
+    "/home/$SHOW_USER/.local/state/showco" \
     "/home/$SHOW_USER/.local/state/twitcho" \
     "/home/$SHOW_USER/recordings"
 
@@ -150,17 +221,25 @@ main() {
   sync_repo twitcho "$TWITCHO_REPO"
   sync_repo showco "$SHOWCO_REPO"
 
+  phase "enabling user service autostart"
+  sudo loginctl enable-linger "$SHOW_USER"
+
+  phase "installing recs service"
+  install_recs_service
+
+  phase "installing showco service"
+  install_showco_service
+
   phase "writing next steps"
   cat >/tmp/PROVISIONING-NEXT-STEPS.txt <<'TEXT'
 Provisioning completed.
 
 Next manual steps:
 
-1. Fill final recs, twitcho, and showco config values.
-2. Install recs and showco user-level systemd services.
-3. Configure the final Pi access point.
-4. Confirm the X18 USB device name.
-5. Run the acceptance tests in showco/doc/acceptance-tests.md.
+1. Fill final twitcho config values if Twitch streaming is required.
+2. Configure the final Pi access point.
+3. Confirm the X18 USB device name.
+4. Run the acceptance tests in showco/doc/acceptance-tests.md.
 TEXT
   sudo install -o "$SHOW_USER" -g "$SHOW_USER" -m 0644 \
     /tmp/PROVISIONING-NEXT-STEPS.txt \
@@ -180,6 +259,9 @@ pi_port=
 recs_repo=
 twitcho_repo=
 showco_repo=
+showco_port=
+showco_x18_host=
+audio_x18_usb_device_name=
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -239,6 +321,9 @@ pi_port=${pi_port:-${SHOWCO_PI_SSH_PORT:-22}}
 recs_repo=${recs_repo:-${RECS_REPO:-}}
 twitcho_repo=${twitcho_repo:-${TWITCHO_REPO:-}}
 showco_repo=${showco_repo:-${SHOWCO_REPO:-}}
+showco_port=${showco_port:-${SHOWCO_PORT:-17352}}
+showco_x18_host=${showco_x18_host:-${SHOWCO_X18_WIRED_ETHERNET_IP_ADDRESS:-}}
+audio_x18_usb_device_name=${audio_x18_usb_device_name:-${AUDIO_X18_USB_DEVICE_NAME:-}}
 
 require_value SHOWCO_PI_HOST "$pi_host"
 require_value SHOWCO_PI_USER "$pi_user"
@@ -246,6 +331,7 @@ require_value SHOWCO_PI_SSH_PORT "$pi_port"
 require_value RECS_REPO "$recs_repo"
 require_value TWITCHO_REPO "$twitcho_repo"
 require_value SHOWCO_REPO "$showco_repo"
+require_value SHOWCO_PORT "$showco_port"
 
 ssh_target="$pi_user@$pi_host"
 remote_script=/tmp/showco-provision-pi.sh
@@ -271,6 +357,12 @@ remote_command="$(
   quote_env TWITCHO_REPO "$twitcho_repo"
   printf ' '
   quote_env SHOWCO_REPO "$showco_repo"
+  printf ' '
+  quote_env SHOWCO_PORT "$showco_port"
+  printf ' '
+  quote_env SHOWCO_X18_HOST "$showco_x18_host"
+  printf ' '
+  quote_env AUDIO_X18_USB_DEVICE_NAME "$audio_x18_usb_device_name"
   printf ' bash %q' "$remote_script"
 )"
 ssh_command "$remote_command"

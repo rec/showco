@@ -195,7 +195,7 @@ This is separate from USB audio. Audio still comes over USB.
 
 ## Service startup
 
-Install one user-level systemd service for each top-level program:
+Provisioning installs one user-level systemd service for each top-level program:
 
 - `recs.service`
 - `showco.service`
@@ -206,6 +206,9 @@ The expected startup order is:
 2. network configured
 3. `recs`
 4. `showco`, which starts `twitcho` if `--twitcho-config` is set
+
+The provisioning script enables lingering for the show user so these user
+services start at boot without an interactive login.
 
 Showco must still start if Recs or Twitcho is unavailable, because it reports
 those failures in the UI.
