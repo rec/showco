@@ -48,6 +48,9 @@ showco_pi_host = "recs-stage.local"
 showco_pi_ssh_port = "22"
 ```
 
+Use optional `showco_pi_hostname`, or the `--hostname` command-line option, only
+when the Pi should be renamed.
+
 Add secret connection values to `scripts/secrets.toml` only if password login is
 needed:
 

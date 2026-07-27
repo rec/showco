@@ -42,6 +42,9 @@ showco_repo = "git@github.com:rec/showco.git"
 If `showco_pi_user` is omitted, the provisioning script uses the local `USER`
 environment variable. It is an error if neither is set.
 
+Set `showco_pi_hostname`, or pass `--hostname`, only when configuring a machine
+whose hostname should change. Leave it unset to keep the current hostname.
+
 `scripts/secrets.toml` contains secret operational values. `showco_pi_password`
 is optional. Key-based SSH is preferred; if `sshpass` is already installed and
 `showco_pi_password` is set, the script can use it. Otherwise SSH may prompt
@@ -93,6 +96,7 @@ Or override the connection on the command line:
 ```bash
 showco/scripts/provision-pi.py \
   --host recs-stage.local \
+  --hostname bertrand \
   --port 22
 ```
 
@@ -108,6 +112,7 @@ The script:
 
 - checks the remote system with `uname`, `id`, `sudo`, and `apt-get`
 - copies a temporary provisioning script to the Pi
+- sets the hostname, if configured
 - installs base packages
 - installs `uv` for the configured user if needed
 - creates code, config, state, and recording directories
