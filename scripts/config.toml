@@ -5,7 +5,6 @@ twitcho_enabled = false
 private_wifi_ssid = "showbox"
 external_wifi_ssid = ""
 SHOWCO_PI_HOST = "recs-stage.local"
-SHOWCO_PI_USER = "tom"
 SHOWCO_PI_SSH_PORT = "22"
 SHOWCO_PI_WIFI_IP_ADDRESS = "10.42.0.1"
 SHOWCO_PI_WIFI_DHCP_START = "10.42.0.50"

@@ -45,7 +45,6 @@ Add non-secret connection values to `scripts/config.toml`:
 
 ```toml
 SHOWCO_PI_HOST = "recs-stage.local"
-SHOWCO_PI_USER = "tom"
 SHOWCO_PI_SSH_PORT = "22"
 ```
 
@@ -68,7 +67,7 @@ Reuse them rather than creating duplicate names.
 `scripts/provision-pi.py` should:
 
 1. Read `scripts/config.toml` and `scripts/secrets.toml`.
-2. Require `SHOWCO_PI_HOST` and `SHOWCO_PI_USER`.
+2. Require `SHOWCO_PI_HOST` and either `SHOWCO_PI_USER` or `USER`.
 3. Build one SSH target from those values.
 4. Run a cheap remote preflight:
    - `uname -a`
@@ -144,7 +143,7 @@ operations. For example:
 Start with key-based SSH:
 
 ```bash
-ssh "$SHOWCO_PI_USER@$SHOWCO_PI_HOST"
+ssh "${SHOWCO_PI_USER:-$USER}@$SHOWCO_PI_HOST"
 ```
 
 If password login is required, use one of these approaches:
@@ -195,7 +194,7 @@ boot unless a separate SD-card provisioning path is explicitly retained.
 
 ## Completed migration steps
 
-1. Added `SHOWCO_PI_HOST`, `SHOWCO_PI_USER`, and `SHOWCO_PI_SSH_PORT` to
+1. Added `SHOWCO_PI_HOST`, `SHOWCO_PI_SSH_PORT`, and optional `SHOWCO_PI_USER` to
    `scripts/config.toml`.
 2. Added `SHOWCO_PI_PASSWORD` to `scripts/secrets.toml`.
 3. Created `scripts/provision-pi.py`.

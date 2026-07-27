@@ -73,7 +73,8 @@ verified on the Pi.
 
 ## Users and directories
 
-Use one normal user for the show programs. The examples below call it `tom`.
+Use one normal user for the show programs. By default, the provisioning script
+uses the local `USER` environment variable as the Pi user name.
 
 Create directories:
 

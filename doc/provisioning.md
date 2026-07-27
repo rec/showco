@@ -33,12 +33,14 @@ twitcho_enabled = false
 private_wifi_ssid = "showbox"
 external_wifi_ssid = ""
 SHOWCO_PI_HOST = "recs-stage.local"
-SHOWCO_PI_USER = "tom"
 SHOWCO_PI_SSH_PORT = "22"
 RECS_REPO = "git@github.com:rec/recs.git"
 TWITCHO_REPO = "git@github.com:rec/twitcho.git"
 SHOWCO_REPO = "git@github.com:rec/showco.git"
 ```
+
+If `SHOWCO_PI_USER` is omitted, the provisioning script uses the local `USER`
+environment variable. It is an error if neither is set.
 
 `scripts/secrets.toml` contains secret operational values. `SHOWCO_PI_PASSWORD`
 is optional. Key-based SSH is preferred; if `sshpass` is already installed and
@@ -91,14 +93,13 @@ Or override the connection on the command line:
 ```bash
 showco/scripts/provision-pi.py \
   --host recs-stage.local \
-  --user tom \
   --port 22
 ```
 
 Before running the provisioning script, this should work:
 
 ```bash
-ssh tom@recs-stage.local
+ssh "$USER@recs-stage.local"
 ```
 
 ## What the script does

@@ -268,7 +268,7 @@ def parse_args() -> argparse.Namespace:
         help="default: scripts/secrets.toml",
     )
     parser.add_argument("--host", help="default: SHOWCO_PI_HOST")
-    parser.add_argument("--user", help="default: SHOWCO_PI_USER")
+    parser.add_argument("--user", help="default: SHOWCO_PI_USER, then USER")
     parser.add_argument("--port", help="default: SHOWCO_PI_SSH_PORT")
     parser.add_argument("--recs-repo", help="default: RECS_REPO")
     parser.add_argument("--twitcho-repo", help="default: TWITCHO_REPO")
@@ -278,7 +278,12 @@ def parse_args() -> argparse.Namespace:
 
 def config_from_args(args: argparse.Namespace, env: dict[str, str]) -> Config:
     host = value_or_env(args.host, env, "SHOWCO_PI_HOST")
-    user = value_or_env(args.user, env, "SHOWCO_PI_USER")
+    user = value_or_env(
+        args.user,
+        env,
+        "SHOWCO_PI_USER",
+        default=os.environ.get("USER", ""),
+    )
     port = value_or_env(args.port, env, "SHOWCO_PI_SSH_PORT", default="22")
     recs_repo = value_or_env(args.recs_repo, env, "RECS_REPO")
     twitcho_repo = value_or_env(args.twitcho_repo, env, "TWITCHO_REPO")
@@ -287,7 +292,7 @@ def config_from_args(args: argparse.Namespace, env: dict[str, str]) -> Config:
 
     return Config(
         host=require_value("SHOWCO_PI_HOST", host),
-        user=require_value("SHOWCO_PI_USER", user),
+        user=require_value("SHOWCO_PI_USER or USER", user),
         port=require_value("SHOWCO_PI_SSH_PORT", port),
         recs_repo=require_value("RECS_REPO", recs_repo),
         twitcho_repo=require_value("TWITCHO_REPO", twitcho_repo),
