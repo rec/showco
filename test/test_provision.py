@@ -109,6 +109,13 @@ class ProvisionTests(unittest.TestCase):
 
         self.assertIn('ssh-keygen -y -f "$HOME/.ssh/id_ed25519"', command)
 
+    def test_remote_github_key_command_does_not_run_gh_on_pi(self) -> None:
+        config = provision.config_from_args(args(), values(is_x18_wired=False))
+        command = provision.remote_github_key_command(config)
+
+        self.assertNotIn("gh ", command)
+        self.assertNotIn("gh\n", command)
+
     def test_remote_script_configures_external_storage_mounts(self) -> None:
         self.assertIn("exfatprogs", provision.REMOTE_SCRIPT)
         self.assertIn('phase "configuring storage mounts"', provision.REMOTE_SCRIPT)
@@ -152,6 +159,20 @@ class ProvisionTests(unittest.TestCase):
         self.assertEqual(run.call_args.args[0][:3], ["gh", "ssh-key", "add"])
         self.assertEqual(
             run.call_args.args[0][-2:], ["--title", "showco recs-stage.local"]
+        )
+
+    def test_ensure_github_account_key_requires_local_gh(self) -> None:
+        config = provision.config_from_args(args(), values(is_x18_wired=False))
+        with (
+            mock.patch("showco.provision.provision.shutil.which", return_value=None),
+            self.assertRaises(SystemExit) as error,
+        ):
+            provision.ensure_github_account_key(config, "tom@recs-stage.local")
+
+        self.assertEqual(
+            str(error.exception),
+            "ERROR: gh is required on the provisioning machine "
+            "to add the Pi SSH key to GitHub.",
         )
 
     def test_ensure_github_account_key_skips_existing_key(self) -> None:

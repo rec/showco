@@ -488,7 +488,10 @@ def provision_remote(
 
 def ensure_github_account_key(config: Config, ssh_target: str) -> None:
     if not shutil.which("gh"):
-        sys.exit("ERROR: gh is required to add the Pi SSH key to GitHub.")
+        sys.exit(
+            "ERROR: gh is required on the provisioning machine "
+            "to add the Pi SSH key to GitHub."
+        )
     print("Creating or reusing Raspberry Pi GitHub SSH key...")
     public_key = capture_ssh(config, ssh_target, remote_github_key_command(config))
     if not public_key.startswith("ssh-ed25519 "):
