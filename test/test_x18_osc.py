@@ -93,10 +93,41 @@ class X18OscTests(unittest.TestCase):
             ],
         )
 
+    def test_supervisor_close_clears_process_reference(self) -> None:
+        supervisor = X18RecorderSupervisor(
+            "10.43.0.18",
+            port=10_024,
+            log_dir=Path("/logs"),
+            python="/python",
+        )
+        process = FakeProcess()
+        supervisor.process = process
+
+        supervisor.close()
+
+        self.assertIsNone(supervisor.process)
+        self.assertTrue(process.terminated)
+
 
 class BrokenSocket:
     def sendto(self, data: bytes, target: tuple[str, int]) -> None:
         raise OSError("network unreachable")
+
+
+class FakeProcess:
+    def __init__(self) -> None:
+        self.terminated = False
+        self.returncode: int | None = None
+
+    def poll(self) -> int | None:
+        return self.returncode
+
+    def terminate(self) -> None:
+        self.terminated = True
+
+    def wait(self, timeout: int | None = None) -> int:
+        self.returncode = 0
+        return self.returncode
 
 
 if __name__ == "__main__":
