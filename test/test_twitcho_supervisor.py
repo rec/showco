@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import subprocess
+import threading
 import unittest
 from pathlib import Path
 
@@ -31,6 +33,36 @@ class TwitchoSupervisorTests(unittest.TestCase):
     def test_unknown_policy_is_rejected(self) -> None:
         with self.assertRaises(ValueError):
             restart_delay("bad", 0)
+
+    def test_spawn_failure_is_preserved_while_retrying(self) -> None:
+        calls = 0
+        second_spawn_started = threading.Event()
+        finish_second_spawn = threading.Event()
+
+        def run_process(command: list[str]) -> subprocess.Popen[bytes]:
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise OSError("first spawn failed")
+            second_spawn_started.set()
+            finish_second_spawn.wait(1)
+            raise OSError("second spawn failed")
+
+        supervisor = TwitchoSupervisor(
+            Path("twitcho.json"),
+            policy="external",
+            run_process=run_process,
+        )
+        supervisor.start()
+        try:
+            self.assertTrue(second_spawn_started.wait(1))
+            status = supervisor.status()
+
+            self.assertEqual(status.state, "starting")
+            self.assertEqual(status.last_error, "first spawn failed")
+        finally:
+            finish_second_spawn.set()
+            supervisor.close()
 
 
 if __name__ == "__main__":
