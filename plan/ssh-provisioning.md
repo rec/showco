@@ -26,7 +26,7 @@ after the card leaves the development machine.
 
 ## Target flow
 
-Use the SSH-based script `scripts/provision-pi.sh`.
+Use the SSH-based script `scripts/provision-pi.py`.
 
 The operator flow should be:
 
@@ -34,7 +34,7 @@ The operator flow should be:
 2. Make sure it is reachable over SSH.
 3. Put connection and show-box values in `scripts/config.env` and
    `scripts/secrets.env`.
-4. Run `scripts/provision-pi.sh`.
+4. Run `scripts/provision-pi.py`.
 5. Watch all setup output locally while the script runs commands over SSH.
 
 The script should not require direct access to the SD card.
@@ -65,9 +65,9 @@ Reuse them rather than creating duplicate names.
 
 ## Script behavior
 
-`scripts/provision-pi.sh` should:
+`scripts/provision-pi.py` should:
 
-1. Source `scripts/config.env` and `scripts/secrets.env`.
+1. Read `scripts/config.env` and `scripts/secrets.env`.
 2. Require `SHOWCO_PI_HOST` and `SHOWCO_PI_USER`.
 3. Build one SSH target from those values.
 4. Run a cheap remote preflight:
@@ -171,8 +171,7 @@ Do not introduce Python SSH libraries or async code.
 For the implementation task, run:
 
 ```bash
-bash -n scripts/provision-pi.sh
-python -m py_compile scripts/twitch-auth.py
+python -m py_compile scripts/provision-pi.py scripts/twitch-auth.py
 git diff --check
 ```
 
@@ -199,7 +198,7 @@ boot unless a separate SD-card provisioning path is explicitly retained.
 1. Added `SHOWCO_PI_HOST`, `SHOWCO_PI_USER`, and `SHOWCO_PI_SSH_PORT` to
    `scripts/config.env`.
 2. Added `SHOWCO_PI_PASSWORD` to `scripts/secrets.env`.
-3. Created `scripts/provision-pi.sh`.
+3. Created `scripts/provision-pi.py`.
 4. Moved reusable setup commands out of `scripts/pi-first-boot.sh` into the new
    remote script path.
 5. Deleted `scripts/provision-pi-card.sh`.

@@ -14,7 +14,7 @@ an SD card.
 doc/provisioning.md
 showco/scripts/config.env
 showco/scripts/secrets.env
-showco/scripts/provision-pi.sh
+showco/scripts/provision-pi.py
 ```
 
 ## Configuration
@@ -45,13 +45,13 @@ interactively.
 After confirming SSH works, run:
 
 ```bash
-showco/scripts/provision-pi.sh
+showco/scripts/provision-pi.py
 ```
 
 Or override the connection on the command line:
 
 ```bash
-showco/scripts/provision-pi.sh \
+showco/scripts/provision-pi.py \
   --host recs-stage.local \
   --user show \
   --port 22
@@ -109,11 +109,10 @@ local builds.
 Before relying on script changes:
 
 ```bash
-bash -n showco/scripts/provision-pi.sh
-python -m py_compile showco/scripts/twitch-auth.py
+python -m py_compile showco/scripts/provision-pi.py showco/scripts/twitch-auth.py
 ```
 
-Do not run `scripts/provision-pi.sh` as a routine verification step. It mutates a
+Do not run `scripts/provision-pi.py` as a routine verification step. It mutates a
 real Raspberry Pi.
 
 ## Open decisions
