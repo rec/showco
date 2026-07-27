@@ -164,6 +164,29 @@ class NetworkConfigTests(unittest.TestCase):
             ],
         )
 
+    def test_detects_wifi_interfaces_with_escaped_nmcli_delimiters(self) -> None:
+        commands: list[list[str]] = []
+
+        def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+            commands.append(list(command))
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                "wl\\:an0:wifi:connected\neth0:ethernet:connected\n",
+                "",
+            )
+
+        output = StringIO()
+
+        configure_network(
+            network_config(is_x18_wired=False),
+            dry_run=True,
+            run_command=run_command,
+            output=output,
+        )
+
+        self.assertIn("ifname wl:an0", output.getvalue())
+
     def test_x18_wired_can_be_disabled(self) -> None:
         commands = network_commands(
             network_config(
