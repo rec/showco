@@ -22,12 +22,14 @@ class NetworkConfigTests(unittest.TestCase):
 
         self.assertEqual(select_topology(config, True), NetworkTopology.PRIVATE)
 
-    def test_default_topology_with_usb_and_external_network_is_mixed(self) -> None:
+    def test_default_topology_with_second_wifi_and_external_network_is_mixed(
+        self,
+    ) -> None:
         config = network_config(external_wifi_ssid="Venue")
 
         self.assertEqual(select_topology(config, True), NetworkTopology.MIXED)
 
-    def test_default_topology_without_usb_and_without_twitcho_is_private(self) -> None:
+    def test_default_topology_without_second_wifi_and_twitcho_is_private(self) -> None:
         config = network_config(external_wifi_ssid="Venue")
 
         self.assertEqual(select_topology(config, False), NetworkTopology.PRIVATE)
@@ -43,11 +45,11 @@ class NetworkConfigTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             select_topology(config, False)
 
-    def test_swap_wifi_makes_usb_interface_primary(self) -> None:
+    def test_swap_wifi_makes_second_interface_primary(self) -> None:
         assignment = assign_wifi(
             [
-                WifiInterface("wlan0", usb=False),
-                WifiInterface("wlan1", usb=True),
+                WifiInterface("wlan0"),
+                WifiInterface("wlan1"),
             ],
             swap_wifi=True,
         )
@@ -64,8 +66,8 @@ class NetworkConfigTests(unittest.TestCase):
             network_config(network_topology=NetworkTopology.PRIVATE),
             assign_wifi(
                 [
-                    WifiInterface("wlan0", usb=False),
-                    WifiInterface("wlan1", usb=True),
+                    WifiInterface("wlan0"),
+                    WifiInterface("wlan1"),
                 ],
                 swap_wifi=False,
             ),

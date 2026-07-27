@@ -62,8 +62,9 @@ showco network-config
 ```
 
 The network tool detects Wi-Fi interfaces with NetworkManager. By default, the
-internal Wi-Fi is primary and an optional USB Wi-Fi adapter is secondary. Set
-`swap_wifi = true` to make the USB adapter primary when one is present.
+first Wi-Fi interface is primary and an optional second Wi-Fi interface is
+secondary. Set `swap_wifi = true` to make the second interface primary when one
+is present.
 
 `network_topology` may be empty, `public`, `private`, or `mixed`:
 
@@ -75,7 +76,7 @@ internal Wi-Fi is primary and an optional USB Wi-Fi adapter is secondary. Set
   connects to the external network.
 
 When `network_topology` is empty, the tool selects it from the configured
-external network, USB Wi-Fi presence, and `twitcho_enabled`.
+external network, second Wi-Fi presence, and `twitcho_enabled`.
 
 ## Single command
 

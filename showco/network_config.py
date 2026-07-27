@@ -35,7 +35,6 @@ class NetworkConfig:
 @dataclass(frozen=True)
 class WifiInterface:
     name: str
-    usb: bool = False
 
 
 @dataclass(frozen=True)
@@ -77,13 +76,12 @@ def configure_network(
     *,
     dry_run: bool = False,
     run_command: RunCommand | None = None,
-    sys_class_net: Path = Path("/sys/class/net"),
     output: TextIO = sys.stdout,
 ) -> int:
     run_command = run_command or run
-    interfaces = detect_wifi_interfaces(run_command, sys_class_net)
+    interfaces = detect_wifi_interfaces(run_command)
     assignment = assign_wifi(interfaces, config.swap_wifi)
-    topology = select_topology(config, any(i.usb for i in interfaces))
+    topology = select_topology(config, assignment.secondary is not None)
     commands = network_commands(config, assignment, topology)
     for command in commands:
         print(shell_command(command), file=output)
@@ -121,7 +119,6 @@ def config_from_values(values: dict[str, object]) -> NetworkConfig:
 
 def detect_wifi_interfaces(
     run_command: RunCommand,
-    sys_class_net: Path = Path("/sys/class/net"),
 ) -> list[WifiInterface]:
     completed = run_command(["nmcli", "-t", "-f", "DEVICE,TYPE", "device", "status"])
     if completed.returncode != 0:
@@ -131,34 +128,28 @@ def detect_wifi_interfaces(
         fields = line.split(":")
         if len(fields) >= 2 and fields[1] == "wifi":
             names.append(fields[0])
-    return [
-        WifiInterface(name, usb=is_usb_interface(name, sys_class_net)) for name in names
-    ]
+    return [WifiInterface(name) for name in names]
 
 
 def assign_wifi(interfaces: list[WifiInterface], swap_wifi: bool) -> WifiAssignment:
     if not interfaces:
         sys.exit("ERROR: No Wi-Fi interfaces found")
-    usb = [i for i in interfaces if i.usb]
-    internal = [i for i in interfaces if not i.usb]
-    primary = usb[0] if swap_wifi and usb else interfaces[0]
-    remaining = [i for i in interfaces if i.name != primary.name]
-    secondary = remaining[0] if remaining else None
-    if not swap_wifi and internal:
-        primary = internal[0]
-        remaining = [i for i in interfaces if i.name != primary.name]
-        secondary = remaining[0] if remaining else None
+    ordered = list(interfaces)
+    if swap_wifi and len(ordered) > 1:
+        ordered[0], ordered[1] = ordered[1], ordered[0]
+    primary = ordered[0]
+    secondary = ordered[1] if len(ordered) > 1 else None
     return WifiAssignment(primary, secondary)
 
 
-def select_topology(config: NetworkConfig, has_usb_wifi: bool) -> NetworkTopology:
+def select_topology(config: NetworkConfig, has_second_wifi: bool) -> NetworkTopology:
     if config.network_topology is not None:
         return config.network_topology
     if not config.external_wifi_ssid:
         if config.twitcho_enabled:
             sys.exit("ERROR: external_wifi_ssid is required when twitcho is enabled")
         return NetworkTopology.PRIVATE
-    if has_usb_wifi:
+    if has_second_wifi:
         return NetworkTopology.MIXED
     if config.twitcho_enabled:
         return NetworkTopology.PUBLIC
@@ -267,14 +258,6 @@ def string_value(
     if not isinstance(value, str):
         sys.exit(f"ERROR: {name} must be a string")
     return os.path.expandvars(value)
-
-
-def is_usb_interface(name: str, sys_class_net: Path) -> bool:
-    device = sys_class_net / name / "device"
-    try:
-        return "/usb" in str(device.resolve())
-    except OSError:
-        return False
 
 
 def shell_command(command: Sequence[str]) -> str:
