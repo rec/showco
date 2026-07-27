@@ -1,4 +1,5 @@
 showco_pi_access_point_ssid = "showbox"
+is_x18_wired = true
 swap_wifi = false
 network_topology = ""
 twitcho_enabled = false

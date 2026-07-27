@@ -214,6 +214,7 @@ class Config:
         twitcho_repo: str,
         showco_repo: str,
         showco_port: str,
+        is_x18_wired: bool,
         showco_x18_host: str,
         audio_x18_usb_device_name: str,
         password: str,
@@ -226,6 +227,7 @@ class Config:
         self.twitcho_repo = twitcho_repo
         self.showco_repo = showco_repo
         self.showco_port = showco_port
+        self.is_x18_wired = is_x18_wired
         self.showco_x18_host = showco_x18_host
         self.audio_x18_usb_device_name = audio_x18_usb_device_name
         self.password = password
@@ -294,7 +296,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def config_from_args(args: argparse.Namespace, env: dict[str, str]) -> Config:
+def config_from_args(args: argparse.Namespace, env: dict[str, object]) -> Config:
     host = value_or_env(args.host, env, "showco_pi_host")
     user = value_or_env(
         args.user,
@@ -307,7 +309,14 @@ def config_from_args(args: argparse.Namespace, env: dict[str, str]) -> Config:
     recs_repo = value_or_env(args.recs_repo, env, "recs_repo")
     twitcho_repo = value_or_env(args.twitcho_repo, env, "twitcho_repo")
     showco_repo = value_or_env(args.showco_repo, env, "showco_repo")
-    showco_port = env.get("showco_port", "17352")
+    showco_port = string_value(env, "showco_port", default="17352")
+    is_x18_wired = bool_value(env, "is_x18_wired", default=True)
+    showco_x18_host = ""
+    if is_x18_wired:
+        showco_x18_host = require_value(
+            "showco_x18_wired_ethernet_ip_address",
+            string_value(env, "showco_x18_wired_ethernet_ip_address"),
+        )
 
     return Config(
         host=require_value("showco_pi_host", host),
@@ -318,26 +327,43 @@ def config_from_args(args: argparse.Namespace, env: dict[str, str]) -> Config:
         twitcho_repo=require_value("twitcho_repo", twitcho_repo),
         showco_repo=require_value("showco_repo", showco_repo),
         showco_port=require_value("showco_port", showco_port),
-        showco_x18_host=env.get("showco_x18_wired_ethernet_ip_address", ""),
-        audio_x18_usb_device_name=env.get("audio_x18_usb_device_name", ""),
-        password=env.get("showco_pi_password", ""),
+        is_x18_wired=is_x18_wired,
+        showco_x18_host=showco_x18_host,
+        audio_x18_usb_device_name=string_value(env, "audio_x18_usb_device_name"),
+        password=string_value(env, "showco_pi_password"),
     )
 
 
 def value_or_env(
     value: str | None,
-    env: dict[str, str],
+    env: dict[str, object],
     name: str,
     *,
     default: str = "",
 ) -> str:
-    return value or env.get(name, default)
+    if value:
+        return value
+    return string_value(env, name, default=default)
 
 
 def require_value(name: str, value: str) -> str:
     if value and value != "TODO":
         return value
     sys.exit(f"ERROR: {name} is required")
+
+
+def bool_value(values: dict[str, object], name: str, *, default: bool) -> bool:
+    value = values.get(name, default)
+    if isinstance(value, bool):
+        return value
+    sys.exit(f"ERROR: {name} must be a boolean")
+
+
+def string_value(values: dict[str, object], name: str, *, default: str = "") -> str:
+    value = values.get(name, default)
+    if isinstance(value, str):
+        return os.path.expandvars(value)
+    sys.exit(f"ERROR: {name} must be a string")
 
 
 def remote_command(config: Config, remote_script: str) -> str:
@@ -380,11 +406,11 @@ def run(config: Config, command: list[str], sshpass_command: list[str]) -> None:
     subprocess.run(command, check=True, env=env)
 
 
-def read_toml(path: Path) -> dict[str, str]:
+def read_toml(path: Path) -> dict[str, object]:
     path = path.expanduser()
     if not path.exists():
         return {}
-    values: dict[str, str] = {}
+    values: dict[str, object] = {}
     try:
         parsed = tomllib.loads(path.read_text())
     except tomllib.TOMLDecodeError as e:
@@ -392,6 +418,8 @@ def read_toml(path: Path) -> dict[str, str]:
     for name, value in parsed.items():
         if isinstance(value, str):
             values[name] = os.path.expandvars(value)
+        elif isinstance(value, bool):
+            values[name] = value
     return values
 
 

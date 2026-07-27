@@ -13,6 +13,7 @@ from showco.network_config import (
     configure_network,
     network_commands,
     select_topology,
+    x18_pi_ethernet_address,
 )
 
 
@@ -77,6 +78,21 @@ class NetworkConfigTests(unittest.TestCase):
         self.assertEqual(
             commands,
             [
+                [
+                    "sh",
+                    "-c",
+                    "\n".join(
+                        [
+                            "nmcli connection show showco-x18 >/dev/null 2>&1 || "
+                            "nmcli connection add type ethernet ifname eth0 "
+                            "con-name showco-x18",
+                            "nmcli connection modify showco-x18 ifname eth0 "
+                            "ipv4.method manual ipv4.addresses 10.43.0.1/24 "
+                            "ipv6.method disabled connection.autoconnect yes",
+                            "nmcli connection up showco-x18",
+                        ]
+                    ),
+                ],
                 ["nmcli", "radio", "wifi", "on"],
                 [
                     "nmcli",
@@ -117,10 +133,30 @@ class NetworkConfigTests(unittest.TestCase):
             [["nmcli", "-t", "-f", "DEVICE,TYPE", "device", "status"]],
         )
         self.assertIn("nmcli radio wifi on", output.getvalue())
+        self.assertIn("nmcli connection up showco-x18", output.getvalue())
+
+    def test_x18_wired_can_be_disabled(self) -> None:
+        commands = network_commands(
+            network_config(
+                is_x18_wired=False,
+                network_topology=NetworkTopology.PRIVATE,
+            ),
+            assign_wifi([WifiInterface("wlan0")], swap_wifi=False),
+            NetworkTopology.PRIVATE,
+        )
+
+        self.assertEqual(commands[0], ["nmcli", "radio", "wifi", "on"])
+
+    def test_x18_pi_ethernet_address_uses_first_subnet_host(self) -> None:
+        self.assertEqual(
+            x18_pi_ethernet_address("10.43.0.0/24"),
+            "10.43.0.1/24",
+        )
 
 
 def network_config(
     *,
+    is_x18_wired: bool = True,
     swap_wifi: bool = False,
     network_topology: NetworkTopology | None = None,
     twitcho_enabled: bool = False,
@@ -128,8 +164,10 @@ def network_config(
     private_wifi_password: str = "",
     external_wifi_ssid: str = "",
     external_wifi_password: str = "",
+    x18_ethernet_subnet: str = "10.43.0.0/24",
 ) -> NetworkConfig:
     return NetworkConfig(
+        is_x18_wired=is_x18_wired,
         swap_wifi=swap_wifi,
         network_topology=network_topology,
         twitcho_enabled=twitcho_enabled,
@@ -137,6 +175,7 @@ def network_config(
         private_wifi_password=private_wifi_password,
         external_wifi_ssid=external_wifi_ssid,
         external_wifi_password=external_wifi_password,
+        x18_ethernet_subnet=x18_ethernet_subnet,
     )
 
 
