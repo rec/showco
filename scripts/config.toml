@@ -1,4 +1,9 @@
 SHOWCO_PI_ACCESS_POINT_SSID = "showbox"
+swap_wifi = false
+network_topology = ""
+twitcho_enabled = false
+private_wifi_ssid = "showbox"
+external_wifi_ssid = ""
 SHOWCO_PI_HOST = "recs-stage.local"
 SHOWCO_PI_USER = "show"
 SHOWCO_PI_SSH_PORT = "22"

@@ -49,6 +49,9 @@ Use `doc/provisioning.md` and the single command
 `showco/scripts/provision-pi.py ...` after the Pi is reachable over SSH. This
 is the normal way to build or update a repeatable show-box machine.
 
+After provisioning, run `showco network-config --dry-run` on the Pi to inspect
+the Wi-Fi plan, then run `showco network-config` to apply it.
+
 ## System packages
 
 Install the base tools:

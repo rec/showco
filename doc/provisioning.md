@@ -27,6 +27,11 @@ The script reads defaults from:
 `scripts/config.toml` contains non-secret operational values, including:
 
 ```toml
+swap_wifi = false
+network_topology = ""
+twitcho_enabled = false
+private_wifi_ssid = "showbox"
+external_wifi_ssid = ""
 SHOWCO_PI_HOST = "recs-stage.local"
 SHOWCO_PI_USER = "show"
 SHOWCO_PI_SSH_PORT = "22"
@@ -39,6 +44,38 @@ SHOWCO_REPO = "git@github.com:rec/showco.git"
 is optional. Key-based SSH is preferred; if `sshpass` is already installed and
 `SHOWCO_PI_PASSWORD` is set, the script can use it. Otherwise SSH may prompt
 interactively.
+
+Wi-Fi passwords belong in `scripts/secrets.toml`:
+
+```toml
+private_wifi_password = "..."
+external_wifi_password = "..."
+```
+
+## Network configuration
+
+After provisioning, run the network configuration tool on the Pi:
+
+```bash
+showco network-config --dry-run
+showco network-config
+```
+
+The network tool detects Wi-Fi interfaces with NetworkManager. By default, the
+internal Wi-Fi is primary and an optional USB Wi-Fi adapter is secondary. Set
+`swap_wifi = true` to make the USB adapter primary when one is present.
+
+`network_topology` may be empty, `public`, `private`, or `mixed`:
+
+- `public`: the primary Wi-Fi connects to the external network; secondary Wi-Fi
+  is disconnected.
+- `private`: the primary Wi-Fi provides the show network for the tablet and X18;
+  secondary Wi-Fi is disconnected.
+- `mixed`: the primary Wi-Fi provides the show network, and the secondary Wi-Fi
+  connects to the external network.
+
+When `network_topology` is empty, the tool selects it from the configured
+external network, USB Wi-Fi presence, and `twitcho_enabled`.
 
 ## Single command
 

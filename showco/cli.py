@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .git_pull import main as git_pull_main
 from .mixer import MixerMonitor
+from .network_config import main as network_config_main
 from .rehearsal import (
     RehearsalMixerMonitor,
     RehearsalRecsClient,
@@ -26,6 +27,8 @@ def main(argv: list[str] | None = None) -> int:
         return git_pull_main(arguments[1:])
     if arguments[:1] == ["x18-record"]:
         return x18_record_main(arguments[1:])
+    if arguments[:1] == ["network-config"]:
+        return network_config_main(arguments[1:])
 
     parser = argparse.ArgumentParser(description="Run the Showco web UI")
     parser.add_argument("--host", default="127.0.0.1")
