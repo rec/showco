@@ -135,6 +135,35 @@ class NetworkConfigTests(unittest.TestCase):
         self.assertIn("nmcli radio wifi on", output.getvalue())
         self.assertIn("nmcli connection up showco-x18", output.getvalue())
 
+    def test_configuration_stops_when_command_fails(self) -> None:
+        commands: list[list[str]] = []
+
+        def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+            commands.append(list(command))
+            if command == ["nmcli", "radio", "wifi", "on"]:
+                return subprocess.CompletedProcess(command, 10, "", "radio failed")
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                "wlan0:wifi:connected\n",
+                "",
+            )
+
+        with self.assertRaisesRegex(SystemExit, "radio failed"):
+            configure_network(
+                network_config(is_x18_wired=False),
+                dry_run=False,
+                run_command=run_command,
+            )
+
+        self.assertEqual(
+            commands,
+            [
+                ["nmcli", "-t", "-f", "DEVICE,TYPE", "device", "status"],
+                ["nmcli", "radio", "wifi", "on"],
+            ],
+        )
+
     def test_x18_wired_can_be_disabled(self) -> None:
         commands = network_commands(
             network_config(
