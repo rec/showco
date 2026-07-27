@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 from pathlib import Path
 
 REMOTE_SCRIPT = r"""#!/usr/bin/env bash
@@ -215,8 +216,8 @@ class Config:
 
 def main() -> int:
     args = parse_args()
-    env = read_env(args.config)
-    env |= read_env(args.secrets)
+    env = read_toml(args.config)
+    env |= read_toml(args.secrets)
     config = config_from_args(args, env)
     ssh_target = f"{config.user}@{config.host}"
     remote_script = "/tmp/showco-provision-pi.sh"
@@ -257,14 +258,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--config",
         type=Path,
-        default=script_dir() / "config.env",
-        help="default: scripts/config.env",
+        default=script_dir() / "config.toml",
+        help="default: scripts/config.toml",
     )
     parser.add_argument(
         "--secrets",
         type=Path,
-        default=script_dir() / "secrets.env",
-        help="default: scripts/secrets.env",
+        default=script_dir() / "secrets.toml",
+        help="default: scripts/secrets.toml",
     )
     parser.add_argument("--host", help="default: SHOWCO_PI_HOST")
     parser.add_argument("--user", help="default: SHOWCO_PI_USER")
@@ -353,25 +354,19 @@ def run(config: Config, command: list[str], sshpass_command: list[str]) -> None:
     subprocess.run(command, check=True, env=env)
 
 
-def read_env(path: Path) -> dict[str, str]:
+def read_toml(path: Path) -> dict[str, str]:
     path = path.expanduser()
     if not path.exists():
         return {}
     values: dict[str, str] = {}
-    for line in path.read_text().splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
-            continue
-        name, separator, value = stripped.partition("=")
-        if not separator:
-            continue
-        if not value:
-            values[name] = ""
-            continue
-        parsed = shlex.split(value, comments=False, posix=True)
-        if len(parsed) != 1:
-            sys.exit(f"ERROR: Cannot parse {path}: {line}")
-        values[name] = os.path.expandvars(parsed[0])
+    try:
+        parsed = tomllib.loads(path.read_text())
+    except tomllib.TOMLDecodeError as e:
+        sys.exit(f"ERROR: Cannot parse {path}: {e}")
+    for name, value in parsed.items():
+        if not isinstance(value, str):
+            sys.exit(f"ERROR: {path}: {name} must be a string")
+        values[name] = os.path.expandvars(value)
     return values
 
 

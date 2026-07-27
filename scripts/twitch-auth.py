@@ -5,8 +5,8 @@ import argparse
 import json
 import os
 import secrets
-import shlex
 import sys
+import tomllib
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -23,14 +23,14 @@ def main() -> int:
     parser.add_argument(
         "--config",
         type=Path,
-        default=script_dir() / "config.env",
-        help="path to config.env",
+        default=script_dir() / "config.toml",
+        help="path to config.toml",
     )
     parser.add_argument(
         "--secrets",
         type=Path,
-        default=script_dir() / "secrets.env",
-        help="path to secrets.env",
+        default=script_dir() / "secrets.toml",
+        help="path to secrets.toml",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("authorize-url", help="open the Twitch authorization URL")
@@ -38,11 +38,11 @@ def main() -> int:
     subparsers.add_parser("validate-token", help="validate the saved access token")
     args = parser.parse_args()
 
-    config = read_env(args.config)
+    config = read_toml(args.config)
     if args.command == "authorize-url":
         return authorize_url(args.config, config)
     if args.command == "exchange-code":
-        secrets_env = read_env(args.secrets)
+        secrets_env = read_toml(args.secrets)
         return exchange_code(config | secrets_env)
     if args.command == "validate-token":
         return validate_token(config)
@@ -54,7 +54,7 @@ def authorize_url(config_path: Path, config: dict[str, str]) -> int:
     redirect_uri = require_value(config, "TWITCH_REDIRECT_URI", config_path)
     scopes = require_value(config, "TWITCH_SCOPES", config_path)
     state = secrets.token_urlsafe(24)
-    write_env_value(config_path, "TWITCH_STATE", state)
+    write_toml_value(config_path, "TWITCH_STATE", state)
     params = {
         "response_type": "code",
         "client_id": client_id,
@@ -67,7 +67,7 @@ def authorize_url(config_path: Path, config: dict[str, str]) -> int:
     webbrowser.open(url)
     print(
         "After approving it, copy the full localhost callback URL from the browser\n"
-        "address bar and paste it into TWITCH_CALLBACK_URL_OR_CODE in secrets.env."
+        "address bar and paste it into TWITCH_CALLBACK_URL_OR_CODE in secrets.toml."
     )
     return 0
 
@@ -148,43 +148,31 @@ def request_text(request: urllib.request.Request) -> str:
         return e.read().decode()
 
 
-def read_env(path: Path) -> dict[str, str]:
+def read_toml(path: Path) -> dict[str, str]:
     if not path.exists():
         return {}
     values: dict[str, str] = {}
-    for line in path.read_text().splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
-            continue
-        name, separator, value = stripped.partition("=")
-        if not separator:
-            continue
-        parsed = shlex.split(value, comments=False, posix=True)
-        if len(parsed) != 1:
-            sys.exit(f"Cannot parse {path}: {line}")
-        values[name] = os.path.expandvars(parsed[0])
+    try:
+        parsed = tomllib.loads(path.read_text())
+    except tomllib.TOMLDecodeError as e:
+        sys.exit(f"Cannot parse {path}: {e}")
+    for name, value in parsed.items():
+        if not isinstance(value, str):
+            sys.exit(f"{path}: {name} must be a string")
+        values[name] = os.path.expandvars(value)
     return values
 
 
-def write_env_value(path: Path, name: str, value: str) -> None:
+def write_toml_value(path: Path, name: str, value: str) -> None:
     lines = path.read_text().splitlines() if path.exists() else []
-    replacement = f'{name}="{double_quote_value(value)}"'
+    replacement = f"{name} = {json.dumps(value)}"
     for i, line in enumerate(lines):
-        if line.startswith(f"{name}="):
+        if line.startswith(f"{name} ="):
             lines[i] = replacement
             break
     else:
         lines.append(replacement)
     path.write_text("\n".join(lines) + "\n")
-
-
-def double_quote_value(value: str) -> str:
-    return (
-        value.replace("\\", "\\\\")
-        .replace('"', '\\"')
-        .replace("$", "\\$")
-        .replace("`", "\\`")
-    )
 
 
 def require_value(env: dict[str, str], name: str, path: Path | None = None) -> str:

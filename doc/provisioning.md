@@ -12,8 +12,8 @@ an SD card.
 
 ```text
 doc/provisioning.md
-showco/scripts/config.env
-showco/scripts/secrets.env
+showco/scripts/config.toml
+showco/scripts/secrets.toml
 showco/scripts/provision-pi.py
 ```
 
@@ -21,21 +21,21 @@ showco/scripts/provision-pi.py
 
 The script reads defaults from:
 
-- `scripts/config.env`
-- `scripts/secrets.env`
+- `scripts/config.toml`
+- `scripts/secrets.toml`
 
-`scripts/config.env` contains non-secret operational values, including:
+`scripts/config.toml` contains non-secret operational values, including:
 
-```bash
-SHOWCO_PI_HOST="recs-stage.local"
-SHOWCO_PI_USER="show"
-SHOWCO_PI_SSH_PORT="22"
-RECS_REPO="git@github.com:rec/recs.git"
-TWITCHO_REPO="git@github.com:rec/twitcho.git"
-SHOWCO_REPO="git@github.com:rec/showco.git"
+```toml
+SHOWCO_PI_HOST = "recs-stage.local"
+SHOWCO_PI_USER = "show"
+SHOWCO_PI_SSH_PORT = "22"
+RECS_REPO = "git@github.com:rec/recs.git"
+TWITCHO_REPO = "git@github.com:rec/twitcho.git"
+SHOWCO_REPO = "git@github.com:rec/showco.git"
 ```
 
-`scripts/secrets.env` contains secret operational values. `SHOWCO_PI_PASSWORD`
+`scripts/secrets.toml` contains secret operational values. `SHOWCO_PI_PASSWORD`
 is optional. Key-based SSH is preferred; if `sshpass` is already installed and
 `SHOWCO_PI_PASSWORD` is set, the script can use it. Otherwise SSH may prompt
 interactively.

@@ -43,7 +43,7 @@ client-side tooling unless the user explicitly asks for that direction.
 - Do not add retries, background tasks, broad compatibility paths, or new
   abstractions unless the existing failure mode or user request justifies them.
 - Do not store secrets in the repository unless the user explicitly scopes work
-  to a private/unpushable branch. Treat `scripts/secrets.env` as secret
+  to a private/unpushable branch. Treat `scripts/secrets.toml` as secret
   operational material.
 
 ## Testing

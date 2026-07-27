@@ -15,7 +15,7 @@ that is already reachable.
 The previous script was `scripts/provision-pi-card.sh`. It:
 
 - finds or mounts a Raspberry Pi boot partition
-- reads defaults from `scripts/config.env` and `scripts/secrets.env`
+- reads defaults from `scripts/config.toml` and `scripts/secrets.toml`
 - writes `user-data`, `network-config`, `meta-data`, and `pi-first-boot.sh`
   directly to the card
 - relies on cloud-init first-boot behavior to run the setup later
@@ -32,8 +32,8 @@ The operator flow should be:
 
 1. Build or choose a Raspberry Pi OS Lite machine.
 2. Make sure it is reachable over SSH.
-3. Put connection and show-box values in `scripts/config.env` and
-   `scripts/secrets.env`.
+3. Put connection and show-box values in `scripts/config.toml` and
+   `scripts/secrets.toml`.
 4. Run `scripts/provision-pi.py`.
 5. Watch all setup output locally while the script runs commands over SSH.
 
@@ -41,33 +41,33 @@ The script should not require direct access to the SD card.
 
 ## Environment values
 
-Add non-secret connection values to `scripts/config.env`:
+Add non-secret connection values to `scripts/config.toml`:
 
-```bash
-SHOWCO_PI_HOST="recs-stage.local"
-SHOWCO_PI_USER="show"
-SHOWCO_PI_SSH_PORT="22"
+```toml
+SHOWCO_PI_HOST = "recs-stage.local"
+SHOWCO_PI_USER = "show"
+SHOWCO_PI_SSH_PORT = "22"
 ```
 
-Add secret connection values to `scripts/secrets.env` only if password login is
+Add secret connection values to `scripts/secrets.toml` only if password login is
 needed:
 
-```bash
-SHOWCO_PI_PASSWORD="..."
+```toml
+SHOWCO_PI_PASSWORD = "..."
 ```
 
 Prefer key-based SSH when it is already configured. Password support should be
 for first setup only and should not introduce a new dependency unless the script
 cannot reasonably do the job without one.
 
-Keep existing show-box values in `scripts/config.env` and `scripts/secrets.env`.
+Keep existing show-box values in `scripts/config.toml` and `scripts/secrets.toml`.
 Reuse them rather than creating duplicate names.
 
 ## Script behavior
 
 `scripts/provision-pi.py` should:
 
-1. Read `scripts/config.env` and `scripts/secrets.env`.
+1. Read `scripts/config.toml` and `scripts/secrets.toml`.
 2. Require `SHOWCO_PI_HOST` and `SHOWCO_PI_USER`.
 3. Build one SSH target from those values.
 4. Run a cheap remote preflight:
@@ -196,8 +196,8 @@ boot unless a separate SD-card provisioning path is explicitly retained.
 ## Completed migration steps
 
 1. Added `SHOWCO_PI_HOST`, `SHOWCO_PI_USER`, and `SHOWCO_PI_SSH_PORT` to
-   `scripts/config.env`.
-2. Added `SHOWCO_PI_PASSWORD` to `scripts/secrets.env`.
+   `scripts/config.toml`.
+2. Added `SHOWCO_PI_PASSWORD` to `scripts/secrets.toml`.
 3. Created `scripts/provision-pi.py`.
 4. Moved reusable setup commands out of `scripts/pi-first-boot.sh` into the new
    remote script path.
