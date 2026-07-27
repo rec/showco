@@ -172,9 +172,7 @@ For the implementation task, run:
 
 ```bash
 bash -n scripts/provision-pi.sh
-bash -n scripts/1-authorize-url.sh
-bash -n scripts/2-exchange-code.sh
-bash -n scripts/3-validate-token.sh
+python -m py_compile scripts/twitch-auth.py
 git diff --check
 ```
 

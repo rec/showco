@@ -110,9 +110,7 @@ Before relying on script changes:
 
 ```bash
 bash -n showco/scripts/provision-pi.sh
-bash -n showco/scripts/1-authorize-url.sh
-bash -n showco/scripts/2-exchange-code.sh
-bash -n showco/scripts/3-validate-token.sh
+python -m py_compile showco/scripts/twitch-auth.py
 ```
 
 Do not run `scripts/provision-pi.sh` as a routine verification step. It mutates a
