@@ -22,6 +22,12 @@ install_uv() {
   curl -LsSf https://astral.sh/uv/install.sh | sudo -H -u "$SHOW_USER" sh
 }
 
+configure_locale() {
+  sudo sed -i 's/^# *en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen
+  sudo locale-gen en_US.UTF-8
+  sudo update-locale LANG=en_US.UTF-8 LC_CTYPE=en_US.UTF-8
+}
+
 sync_repo() {
   local name=$1
   local url=$2
@@ -131,6 +137,7 @@ main() {
     libegl1
     libportaudio2
     libsndfile1
+    locales
     openssh-client
     python3
     python3-venv
@@ -141,6 +148,9 @@ main() {
   printf '  %s\n' "${packages[@]}"
   sudo apt-get update
   sudo apt-get install -y "${packages[@]}"
+
+  phase "configuring locale"
+  configure_locale
 
   phase "creating directories"
   sudo mkdir -p "$CODE_DIR"
