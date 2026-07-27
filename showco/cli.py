@@ -6,10 +6,9 @@ from typing import Annotated, Literal
 
 import tyro
 
-from .git_pull import main as git_pull_main
+from . import git_pull, network_config
 from .mixer import MixerMonitor
-from .network_config import main as network_config_main
-from .provision.provision import main as provision_main
+from .provision import provision
 from .rehearsal import (
     RehearsalMixerMonitor,
     RehearsalRecsClient,
@@ -18,11 +17,8 @@ from .rehearsal import (
     RehearsalTwitchoSupervisor,
 )
 from .server import make_server
-from .twitcho.auth import main as twitcho_auth_main
-from .twitcho.supervisor import TwitchoSupervisor
-from .x18.osc import X18_OSC_PORT
-from .x18.osc import main as x18_record_main
-from .x18.recorder_supervisor import X18RecorderSupervisor
+from .twitcho import auth, supervisor
+from .x18 import osc, recorder_supervisor
 
 
 def run_web_ui(
@@ -37,7 +33,7 @@ def run_web_ui(
             help="start a read-only X18 OSC recorder subprocess for this mixer host"
         ),
     ] = None,
-    x18_port: int = X18_OSC_PORT,
+    x18_port: int = osc.X18_OSC_PORT,
     x18_log_dir: Path = Path("."),
     twitcho_config: Annotated[
         Path | None,
@@ -68,7 +64,7 @@ def run_web_ui(
     else:
         twitcho_supervisor = None
         if twitcho_config:
-            twitcho_supervisor = TwitchoSupervisor(
+            twitcho_supervisor = supervisor.TwitchoSupervisor(
                 twitcho_config,
                 policy=twitcho_restart_policy,
             )
@@ -84,7 +80,7 @@ def run_web_ui(
         )
         print(f"showco listening on http://{host}:{port}")
     if x18_host:
-        x18_recorder = X18RecorderSupervisor(
+        x18_recorder = recorder_supervisor.X18RecorderSupervisor(
             x18_host,
             port=x18_port,
             log_dir=x18_log_dir,
@@ -109,9 +105,9 @@ def main(argv: list[str] | None = None) -> int:
     if arguments[:1] == ["run"]:
         return run_command(arguments[1:])
     if arguments[:1] == ["provision"]:
-        return provision_main(arguments[1:])
+        return provision.main(arguments[1:])
     if arguments[:1] == ["twitcho"]:
-        return twitcho_auth_main(arguments[1:])
+        return auth.main(arguments[1:])
     print(f"unknown command: {arguments[0]}", file=sys.stderr)
     print("Usage: showco {run,provision,twitcho} ...", file=sys.stderr)
     return 2
@@ -119,11 +115,11 @@ def main(argv: list[str] | None = None) -> int:
 
 def run_command(arguments: list[str]) -> int:
     if arguments[:1] == ["git-pull"]:
-        return git_pull_main(arguments[1:])
+        return git_pull.main(arguments[1:])
     if arguments[:1] == ["x18-record"]:
-        return x18_record_main(arguments[1:])
+        return osc.main(arguments[1:])
     if arguments[:1] == ["network-config"]:
-        return network_config_main(arguments[1:])
+        return network_config.main(arguments[1:])
     return tyro.cli(
         run_web_ui,
         args=arguments,
