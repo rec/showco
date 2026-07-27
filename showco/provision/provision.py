@@ -250,24 +250,43 @@ def main(argv: list[str] | None = None) -> int:
         local_script = Path(fp.name)
         fp.write(REMOTE_SCRIPT)
     try:
-        print(f"Checking SSH connection to {ssh_target}...")
-        run_ssh(
-            config,
-            ssh_target,
-            "set -e; uname -a; id; command -v sudo; command -v apt-get",
-        )
-
-        print("Copying provisioning script...")
-        run_scp(config, local_script, f"{ssh_target}:{remote_script}")
-
-        print(f"Running provisioning on {ssh_target}...")
-        run_ssh(config, ssh_target, remote_command(config, remote_script))
-        run_ssh(config, ssh_target, f"rm -f {shlex.quote(remote_script)}")
+        provision_remote(config, ssh_target, local_script, remote_script)
     finally:
         local_script.unlink(missing_ok=True)
 
     print(f"Provisioned {ssh_target}.")
     return 0
+
+
+def provision_remote(
+    config: Config, ssh_target: str, local_script: Path, remote_script: str
+) -> None:
+    uploaded = False
+    print(f"Checking SSH connection to {ssh_target}...")
+    run_ssh(
+        config,
+        ssh_target,
+        "set -e; uname -a; id; command -v sudo; command -v apt-get",
+    )
+
+    try:
+        print("Copying provisioning script...")
+        run_scp(config, local_script, f"{ssh_target}:{remote_script}")
+        uploaded = True
+
+        print(f"Running provisioning on {ssh_target}...")
+        run_ssh(config, ssh_target, remote_command(config, remote_script))
+    finally:
+        if uploaded:
+            try:
+                run_ssh(config, ssh_target, f"rm -f {shlex.quote(remote_script)}")
+            except subprocess.CalledProcessError as e:
+                if sys.exc_info()[0] is None:
+                    raise
+                print(
+                    f"WARNING: Could not remove remote provisioning script: {e}",
+                    file=sys.stderr,
+                )
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -400,7 +419,9 @@ def run_scp(config: Config, source: Path, target: str) -> None:
 
 def run(config: Config, command: list[str], sshpass_command: list[str]) -> None:
     env = None
-    if config.password and config.password != "TODO" and shutil.which("sshpass"):
+    if config.password and config.password != "TODO":
+        if not shutil.which("sshpass"):
+            sys.exit("ERROR: showco_pi_password requires sshpass to be installed.")
         env = os.environ | {"SSHPASS": config.password}
         command = sshpass_command
     subprocess.run(command, check=True, env=env)
