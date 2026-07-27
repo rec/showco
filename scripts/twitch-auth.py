@@ -157,9 +157,8 @@ def read_toml(path: Path) -> dict[str, str]:
     except tomllib.TOMLDecodeError as e:
         sys.exit(f"Cannot parse {path}: {e}")
     for name, value in parsed.items():
-        if not isinstance(value, str):
-            sys.exit(f"{path}: {name} must be a string")
-        values[name] = os.path.expandvars(value)
+        if isinstance(value, str):
+            values[name] = os.path.expandvars(value)
     return values
 
 

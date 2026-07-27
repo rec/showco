@@ -33,7 +33,7 @@ twitcho_enabled = false
 private_wifi_ssid = "showbox"
 external_wifi_ssid = ""
 SHOWCO_PI_HOST = "recs-stage.local"
-SHOWCO_PI_USER = "show"
+SHOWCO_PI_USER = "tom"
 SHOWCO_PI_SSH_PORT = "22"
 RECS_REPO = "git@github.com:rec/recs.git"
 TWITCHO_REPO = "git@github.com:rec/twitcho.git"
@@ -91,14 +91,14 @@ Or override the connection on the command line:
 ```bash
 showco/scripts/provision-pi.py \
   --host recs-stage.local \
-  --user show \
+  --user tom \
   --port 22
 ```
 
 Before running the provisioning script, this should work:
 
 ```bash
-ssh show@recs-stage.local
+ssh tom@recs-stage.local
 ```
 
 ## What the script does
@@ -108,11 +108,11 @@ The script:
 - checks the remote system with `uname`, `id`, `sudo`, and `apt-get`
 - copies a temporary provisioning script to the Pi
 - installs base packages
-- installs `uv` for the show user if needed
+- installs `uv` for the configured user if needed
 - creates code, config, state, and recording directories
 - clones or updates `recs`, `twitcho`, and `showco`
 - runs `uv sync` in each checkout
-- enables lingering for the show user so user services start at boot
+- enables lingering for the configured user so user services start at boot
 - installs and starts the `recs` user service
 - installs and starts the `showco` user service
 - writes `~/PROVISIONING-NEXT-STEPS.txt`

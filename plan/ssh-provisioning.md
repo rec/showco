@@ -45,7 +45,7 @@ Add non-secret connection values to `scripts/config.toml`:
 
 ```toml
 SHOWCO_PI_HOST = "recs-stage.local"
-SHOWCO_PI_USER = "show"
+SHOWCO_PI_USER = "tom"
 SHOWCO_PI_SSH_PORT = "22"
 ```
 
@@ -100,8 +100,8 @@ The remote script should:
    - `python3-venv`
    - `rsync`
    - `sudo`
-2. Install `uv` for the show user if missing.
-3. Create the show user if needed, or reuse the logged-in user when that is the
+2. Install `uv` for the configured user if missing.
+3. Create the configured user if needed, or reuse the logged-in user when that is the
    configured user.
 4. Create:
    - `~/code`

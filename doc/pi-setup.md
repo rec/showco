@@ -73,7 +73,7 @@ verified on the Pi.
 
 ## Users and directories
 
-Use one normal user for the show programs. The examples below call it `show`.
+Use one normal user for the show programs. The examples below call it `tom`.
 
 Create directories:
 
@@ -210,7 +210,7 @@ The expected startup order is:
 3. `recs`
 4. `showco`, which starts `twitcho` if `--twitcho-config` is set
 
-The provisioning script enables lingering for the show user so these user
+The provisioning script enables lingering for the configured user so these user
 services start at boot without an interactive login.
 
 Showco must still start if Recs or Twitcho is unavailable, because it reports
