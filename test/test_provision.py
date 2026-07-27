@@ -132,6 +132,13 @@ class ProvisionTests(unittest.TestCase):
 
         self.assertIn('} >&2\ncat "$HOME/.ssh/id_ed25519.pub"', command)
 
+    def test_remote_script_configures_external_storage_mounts(self) -> None:
+        self.assertIn("exfatprogs", provision.REMOTE_SCRIPT)
+        self.assertIn('phase "configuring storage mounts"', provision.REMOTE_SCRIPT)
+        self.assertIn("lsblk -f", provision.REMOTE_SCRIPT)
+        self.assertIn("UUID=%s %s %s %s 0 2", provision.REMOTE_SCRIPT)
+        self.assertIn('target="/mnt/$name"', provision.REMOTE_SCRIPT)
+
     def test_ensure_github_account_key_adds_new_key(self) -> None:
         config = provision.config_from_args(
             args(), values(is_x18_wired=False, showco_pi_hostname="bertrand")

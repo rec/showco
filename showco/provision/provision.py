@@ -28,6 +28,127 @@ configure_locale() {
   sudo update-locale LANG=en_US.UTF-8 LC_CTYPE=en_US.UTF-8
 }
 
+home_disk() {
+  local source
+  local disk
+  source=$(findmnt -n -o SOURCE --target "/home/$SHOW_USER" 2>/dev/null || true)
+  if [[ -z "$source" ]]; then
+    source=$(findmnt -n -o SOURCE --target /)
+  fi
+  disk=$(lsblk -no PKNAME "$source" 2>/dev/null | head -n1 || true)
+  if [[ -n "$disk" ]]; then
+    printf '/dev/%s\n' "$disk"
+  else
+    readlink -f "$source"
+  fi
+}
+
+mounted_non_home_storage_exists() {
+  local home
+  local source
+  local disk
+  local target
+  home=$(home_disk)
+  while read -r source target; do
+    disk=$(lsblk -no PKNAME "$source" 2>/dev/null | head -n1 || true)
+    if [[ -z "$disk" ]]; then
+      continue
+    fi
+    if [[ -n "$disk" ]]; then
+      disk="/dev/$disk"
+    fi
+    if [[ -n "$disk" && "$disk" != "$home" ]]; then
+      printf 'Found mounted non-home disk at %s: %s\n' "$target" "$source"
+      return 0
+    fi
+  done < <(findmnt -rn -o SOURCE,TARGET)
+  return 1
+}
+
+mount_name() {
+  local device=$1
+  local label=$2
+  local name
+  name=${label:-$(basename "$device")}
+  name=$(printf '%s' "$name" | tr -cs '[:alnum:]._-' '_' | sed 's/^_*//;s/_*$//')
+  if [[ -z "$name" ]]; then
+    name=$(basename "$device")
+  fi
+  printf '%s\n' "$name"
+}
+
+fstab_options() {
+  local fstype=$1
+  local uid
+  local gid
+  uid=$(id -u "$SHOW_USER")
+  gid=$(id -g "$SHOW_USER")
+  case "$fstype" in
+    exfat|vfat)
+      printf 'defaults,nofail,x-systemd.device-timeout=10,uid=%s,gid=%s,umask=002\n' \
+        "$uid" "$gid"
+      ;;
+    *)
+      printf 'defaults,nofail,x-systemd.device-timeout=10\n'
+      ;;
+  esac
+}
+
+configure_storage_mounts() {
+  local home
+  local line
+  local device
+  local fstype
+  local label
+  local uuid
+  local mountpoint
+  local disk
+  local name
+  local target
+  local options
+
+  if mounted_non_home_storage_exists; then
+    printf 'Leaving existing mounted non-home storage unchanged.\n'
+    return
+  fi
+
+  printf 'No mounted non-home storage found. Looking for unmounted disks:\n'
+  lsblk -f
+  home=$(home_disk)
+  while IFS= read -r line; do
+    unset NAME FSTYPE LABEL UUID MOUNTPOINT
+    eval "$line"
+    device=${NAME:-}
+    fstype=${FSTYPE:-}
+    label=${LABEL:-}
+    uuid=${UUID:-}
+    mountpoint=${MOUNTPOINT:-}
+    if [[ -z "$device" || -z "$fstype" || -z "$uuid" || -n "$mountpoint" ]]; then
+      continue
+    fi
+    disk=$(lsblk -no PKNAME "$device" 2>/dev/null | head -n1 || true)
+    if [[ -n "$disk" ]]; then
+      disk="/dev/$disk"
+    else
+      disk=$(readlink -f "$device")
+    fi
+    if [[ "$disk" == "$home" ]]; then
+      continue
+    fi
+    name=$(mount_name "$device" "$label")
+    target="/mnt/$name"
+    options=$(fstab_options "$fstype")
+    sudo mkdir -p "$target"
+    if ! grep -q "UUID=$uuid " /etc/fstab; then
+      printf 'UUID=%s %s %s %s 0 2\n' "$uuid" "$target" "$fstype" "$options" \
+        | sudo tee -a /etc/fstab >/dev/null
+    fi
+    sudo mount "$target"
+    sudo chown "$SHOW_USER:$SHOW_USER" "$target" 2>/dev/null || true
+    printf 'Mounted %s at %s\n' "$device" "$target"
+  done < <(lsblk -Ppn -o NAME,FSTYPE,LABEL,UUID,MOUNTPOINT)
+}
+
 sync_repo() {
   local name=$1
   local url=$2
@@ -143,6 +264,7 @@ main() {
     python3-venv
     rsync
     sudo
+    exfatprogs
   )
   printf 'Installing packages:\n'
   printf '  %s\n' "${packages[@]}"
@@ -163,6 +285,9 @@ main() {
     "/home/$SHOW_USER/.local/state/showco" \
     "/home/$SHOW_USER/.local/state/twitcho" \
     "/home/$SHOW_USER/recordings"
+
+  phase "configuring storage mounts"
+  configure_storage_mounts
 
   phase "installing uv"
   install_uv
