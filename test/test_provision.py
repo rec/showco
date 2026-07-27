@@ -103,12 +103,28 @@ class ProvisionTests(unittest.TestCase):
 
         self.assertIn('} >&2\ncat "$HOME/.ssh/id_ed25519.pub"', command)
 
+    def test_remote_github_key_command_regenerates_missing_public_key(self) -> None:
+        config = provision.config_from_args(args(), values(is_x18_wired=False))
+        command = provision.remote_github_key_command(config)
+
+        self.assertIn('ssh-keygen -y -f "$HOME/.ssh/id_ed25519"', command)
+
     def test_remote_script_configures_external_storage_mounts(self) -> None:
         self.assertIn("exfatprogs", provision.REMOTE_SCRIPT)
         self.assertIn('phase "configuring storage mounts"', provision.REMOTE_SCRIPT)
         self.assertIn("lsblk -f", provision.REMOTE_SCRIPT)
         self.assertIn("UUID=%s %s %s %s 0 2", provision.REMOTE_SCRIPT)
-        self.assertIn('target="/mnt/$name"', provision.REMOTE_SCRIPT)
+        self.assertIn("fstab_mountpoint_for_uuid()", provision.REMOTE_SCRIPT)
+        self.assertIn("mount_target_for_disk()", provision.REMOTE_SCRIPT)
+        self.assertIn('target="/mnt/$name-$suffix"', provision.REMOTE_SCRIPT)
+
+    def test_remote_script_preserves_broken_checkouts_for_reruns(self) -> None:
+        self.assertIn("prepare_checkout_path()", provision.REMOTE_SCRIPT)
+        self.assertIn("Moving non-git checkout aside", provision.REMOTE_SCRIPT)
+        self.assertIn('sudo mv "$path" "$backup"', provision.REMOTE_SCRIPT)
+
+    def test_remote_script_reinstalls_broken_uv(self) -> None:
+        self.assertIn("uv --version", provision.REMOTE_SCRIPT)
 
     def test_remote_script_writes_provisioning_report(self) -> None:
         self.assertIn('phase "writing provisioning report"', provision.REMOTE_SCRIPT)

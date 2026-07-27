@@ -16,7 +16,7 @@ set -euo pipefail
 
 install_uv() {
   if sudo -H -u "$SHOW_USER" env PATH="/home/$SHOW_USER/.local/bin:$PATH" \
-    bash -lc "command -v uv >/dev/null 2>&1"; then
+    bash -lc "uv --version >/dev/null 2>&1"; then
     return
   fi
   curl -LsSf https://astral.sh/uv/install.sh | sudo -H -u "$SHOW_USER" sh
@@ -94,6 +94,38 @@ fstab_options() {
   esac
 }
 
+fstab_mountpoint_for_uuid() {
+  local uuid=$1
+  awk -v source="UUID=$uuid" '$1 == source {print $2; exit}' /etc/fstab
+}
+
+mountpoint_is_in_fstab() {
+  local target=$1
+  awk -v target="$target" '$2 == target {found=1} END {exit !found}' /etc/fstab
+}
+
+mount_target_for_disk() {
+  local uuid=$1
+  local name=$2
+  local existing
+  local target
+  local suffix
+
+  existing=$(fstab_mountpoint_for_uuid "$uuid")
+  if [[ -n "$existing" ]]; then
+    printf '%s\n' "$existing"
+    return
+  fi
+
+  target="/mnt/$name"
+  suffix=2
+  while mountpoint_is_in_fstab "$target"; do
+    target="/mnt/$name-$suffix"
+    suffix=$((suffix + 1))
+  done
+  printf '%s\n' "$target"
+}
+
 configure_storage_mounts() {
   local home
   local line
@@ -136,10 +168,10 @@ configure_storage_mounts() {
       continue
     fi
     name=$(mount_name "$device" "$label")
-    target="/mnt/$name"
+    target=$(mount_target_for_disk "$uuid" "$name")
     options=$(fstab_options "$fstype")
     sudo mkdir -p "$target"
-    if ! grep -q "UUID=$uuid " /etc/fstab; then
+    if [[ -z "$(fstab_mountpoint_for_uuid "$uuid")" ]]; then
       printf 'UUID=%s %s %s %s 0 2\n' "$uuid" "$target" "$fstype" "$options" \
         | sudo tee -a /etc/fstab >/dev/null
     fi
@@ -149,11 +181,28 @@ configure_storage_mounts() {
   done < <(lsblk -Ppn -o NAME,FSTYPE,LABEL,UUID,MOUNTPOINT)
 }
 
+prepare_checkout_path() {
+  local path=$1
+  local backup
+
+  if [[ ! -e "$path" || -d "$path/.git" ]]; then
+    return
+  fi
+
+  backup="$path.broken.$(date +%Y%m%dT%H%M%S)"
+  while [[ -e "$backup" ]]; do
+    backup="$backup.$RANDOM"
+  done
+  printf 'Moving non-git checkout aside: %s -> %s\n' "$path" "$backup"
+  sudo mv "$path" "$backup"
+}
+
 sync_repo() {
   local name=$1
   local url=$2
   local path="$CODE_DIR/$name"
 
+  prepare_checkout_path "$path"
   if [[ -d "$path/.git" ]]; then
     sudo -H -u "$SHOW_USER" git -C "$path" fetch --all --prune
     sudo -H -u "$SHOW_USER" git -C "$path" pull --ff-only
@@ -505,6 +554,10 @@ def remote_github_key_command(config: Config) -> str:
             'if [ ! -f "$HOME/.ssh/id_ed25519" ]; then',
             "  ssh-keygen -t ed25519 -N '' "
             f'-C {comment} -f "$HOME/.ssh/id_ed25519" >/dev/null',
+            "fi",
+            'chmod 600 "$HOME/.ssh/id_ed25519"',
+            'if [ ! -f "$HOME/.ssh/id_ed25519.pub" ]; then',
+            '  ssh-keygen -y -f "$HOME/.ssh/id_ed25519" > "$HOME/.ssh/id_ed25519.pub"',
             "fi",
             'touch "$HOME/.ssh/known_hosts"',
             'chmod 600 "$HOME/.ssh/known_hosts"',
