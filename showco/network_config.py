@@ -134,10 +134,31 @@ def detect_wifi_interfaces(
         sys.exit(completed.stderr.strip() or "ERROR: nmcli device status failed")
     names = []
     for line in completed.stdout.splitlines():
-        fields = line.split(":")
+        fields = split_nmcli_terse_fields(line)
         if len(fields) >= 2 and fields[1] == "wifi":
             names.append(fields[0])
     return [WifiInterface(name) for name in names]
+
+
+def split_nmcli_terse_fields(line: str) -> list[str]:
+    fields: list[str] = []
+    current: list[str] = []
+    escaped = False
+    for c in line:
+        if escaped:
+            current.append(c)
+            escaped = False
+        elif c == "\\":
+            escaped = True
+        elif c == ":":
+            fields.append("".join(current))
+            current = []
+        else:
+            current.append(c)
+    if escaped:
+        current.append("\\")
+    fields.append("".join(current))
+    return fields
 
 
 def assign_wifi(interfaces: list[WifiInterface], swap_wifi: bool) -> WifiAssignment:
