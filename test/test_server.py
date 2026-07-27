@@ -83,6 +83,22 @@ class ServerTests(unittest.TestCase):
         self.assertTrue(result.ok)
         self.assertEqual(supervisor.restart_count, 1)
 
+    def test_action_log_keeps_ten_most_recent_results(self) -> None:
+        app = ShowcoApp(
+            RehearsalRecsClient(),
+            RehearsalTwitchoClient(),
+            RehearsalSystemMonitor(),
+            RehearsalMixerMonitor(),
+        )
+
+        for i in range(12):
+            app.run_action({"action": f"unknown-{i}"})
+
+        messages = [r.message for r in app.recent_actions()]
+        self.assertEqual(len(messages), 10)
+        self.assertEqual(messages[0], "unknown action unknown-11")
+        self.assertEqual(messages[-1], "unknown action unknown-2")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import threading
 import time
 import urllib.parse
 from dataclasses import replace
@@ -30,6 +31,7 @@ class ShowcoApp:
         self.mixer = mixer
         self.twitcho_supervisor = twitcho_supervisor
         self.action_log: list[ActionResult] = []
+        self.action_log_lock = threading.Lock()
 
     def status(self) -> ShowStatus:
         twitcho = self.twitcho.status()
@@ -57,8 +59,13 @@ class ShowcoApp:
             )
         else:
             result = ActionResult(False, f"unknown action {action}")
-        self.action_log = [result, *self.action_log[:9]]
+        with self.action_log_lock:
+            self.action_log = [result, *self.action_log[:9]]
         return result
+
+    def recent_actions(self) -> list[ActionResult]:
+        with self.action_log_lock:
+            return list(self.action_log)
 
     def start(self) -> None:
         if self.twitcho_supervisor:
@@ -77,7 +84,7 @@ class ShowcoHandler(BaseHTTPRequestHandler):
             self._html(home_page(self.app.status()))
             return
         if self.path == "/actions":
-            self._html(actions_page(self.app.action_log))
+            self._html(actions_page(self.app.recent_actions()))
             return
         self.send_error(404)
 
