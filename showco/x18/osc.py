@@ -168,8 +168,30 @@ class X18OscRecorder:
     def send_xremote(self, sock: socket.socket, output: BinaryIO) -> None:
         data = xremote_message()
         target = (self.host, self.port)
-        sock.sendto(data, target)
+        try:
+            sock.sendto(data, target)
+        except OSError as e:
+            self.write_error(output, "out", target, str(e))
+            return
         self.write_datagram(output, "out", data, target=target)
+
+    def write_error(
+        self,
+        output: BinaryIO,
+        direction: str,
+        target: tuple[str, int],
+        error: str,
+    ) -> None:
+        record: dict[str, object] = {
+            "time": time.time(),
+            "monotonic": time.monotonic(),
+            "direction": direction,
+            "kind": "error",
+            "target": [target[0], target[1]],
+            "error": error,
+        }
+        output.write(json.dumps(record, separators=(",", ":")).encode() + b"\n")
+        output.flush()
 
     def write_datagram(
         self,
