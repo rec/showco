@@ -235,6 +235,34 @@ SERVICE
   user_systemctl restart showco.service
 }
 
+write_provisioning_report() {
+  local report="/tmp/SHOWCO-PROVISIONING-REPORT.txt"
+  {
+    printf 'Showco provisioning report\n'
+    date -Is
+    printf '\nDisks discovered:\n'
+    lsblk -f || true
+    printf '\nMounted filesystems:\n'
+    findmnt -rn -o SOURCE,TARGET,FSTYPE,OPTIONS || true
+    printf '\nWi-Fi interfaces discovered:\n'
+    if command -v nmcli >/dev/null 2>&1; then
+      nmcli device status | awk '$2 == "wifi" {print}'
+    else
+      printf 'nmcli not installed\n'
+    fi
+    printf '\nWi-Fi device details:\n'
+    if command -v iw >/dev/null 2>&1; then
+      iw dev || true
+    else
+      printf 'iw not installed\n'
+    fi
+  } | tee "$report"
+  sudo install -o "$SHOW_USER" -g "$SHOW_USER" -m 0644 \
+    "$report" \
+    "/home/$SHOW_USER/PROVISIONING-REPORT.txt"
+  rm -f "$report"
+}
+
 phase() {
   printf '\n==> %s\n' "$1"
 }
@@ -305,6 +333,9 @@ main() {
 
   phase "installing showco service"
   install_showco_service
+
+  phase "writing provisioning report"
+  write_provisioning_report
 
   phase "writing next steps"
   cat >/tmp/PROVISIONING-NEXT-STEPS.txt <<'TEXT'

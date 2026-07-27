@@ -139,6 +139,14 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn("UUID=%s %s %s %s 0 2", provision.REMOTE_SCRIPT)
         self.assertIn('target="/mnt/$name"', provision.REMOTE_SCRIPT)
 
+    def test_remote_script_writes_provisioning_report(self) -> None:
+        self.assertIn('phase "writing provisioning report"', provision.REMOTE_SCRIPT)
+        self.assertIn("Disks discovered:", provision.REMOTE_SCRIPT)
+        self.assertIn("Wi-Fi interfaces discovered:", provision.REMOTE_SCRIPT)
+        self.assertIn("nmcli device status", provision.REMOTE_SCRIPT)
+        self.assertIn("iw dev", provision.REMOTE_SCRIPT)
+        self.assertIn("PROVISIONING-REPORT.txt", provision.REMOTE_SCRIPT)
+
     def test_ensure_github_account_key_adds_new_key(self) -> None:
         config = provision.config_from_args(
             args(), values(is_x18_wired=False, showco_pi_hostname="bertrand")
