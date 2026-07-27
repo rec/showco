@@ -509,25 +509,55 @@ def ensure_github_account_key(config: Config, ssh_target: str) -> None:
         key_file = Path(fp.name)
         fp.write(public_key + "\n")
     try:
-        subprocess.run(
-            ["gh", "ssh-key", "add", str(key_file), "--title", title],
-            check=True,
-        )
+        add_github_key(key_file, title)
     finally:
         key_file.unlink(missing_ok=True)
 
 
+def add_github_key(key_file: Path, title: str) -> None:
+    try:
+        subprocess.run(
+            ["gh", "ssh-key", "add", str(key_file), "--title", title],
+            capture_output=True,
+            check=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as e:
+        sys.exit(
+            gh_error_message(
+                "Could not add the Pi SSH key to GitHub from the provisioning machine.",
+                e,
+            )
+        )
+
+
 def github_key_exists(public_key: str) -> bool:
-    completed = subprocess.run(
-        ["gh", "api", "user/keys", "--jq", ".[].key"],
-        capture_output=True,
-        check=True,
-        text=True,
-    )
+    try:
+        completed = subprocess.run(
+            ["gh", "api", "user/keys", "--jq", ".[].key"],
+            capture_output=True,
+            check=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as e:
+        sys.exit(
+            gh_error_message(
+                "Could not list GitHub SSH keys from the provisioning machine.",
+                e,
+            )
+        )
     key = github_key_material(public_key)
     return any(
         github_key_material(line) == key for line in completed.stdout.splitlines()
     )
+
+
+def gh_error_message(message: str, error: subprocess.CalledProcessError) -> str:
+    details = (error.stderr or error.stdout or "").strip()
+    result = f"ERROR: {message} Run `gh auth status` on this machine."
+    if details:
+        result += f"\ngh said: {details}"
+    return result
 
 
 def github_key_material(public_key: str) -> str:
