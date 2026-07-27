@@ -31,6 +31,7 @@ class X18RecorderSupervisor:
     def close(self) -> None:
         process = self.process
         if not process or process.poll() is not None:
+            self.process = None
             return
         process.terminate()
         try:
@@ -38,6 +39,7 @@ class X18RecorderSupervisor:
         except subprocess.TimeoutExpired:
             process.kill()
             process.wait()
+        self.process = None
 
     def command(self) -> list[str]:
         return [
