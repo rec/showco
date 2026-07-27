@@ -12,7 +12,7 @@ from .models import ActionResult, ShowStatus
 from .recs import RecsClient
 from .system import SystemMonitor
 from .twitcho import TwitchoClient
-from .twitcho_supervisor import TwitchoSupervisorLike
+from .twitcho.supervisor import TwitchoSupervisorLike
 
 
 class ShowcoApp:

@@ -19,10 +19,10 @@ from .rehearsal import (
 )
 from .server import make_server
 from .twitcho.auth import main as twitcho_auth_main
-from .twitcho_supervisor import TwitchoSupervisor
-from .x18_osc import X18_OSC_PORT
-from .x18_osc import main as x18_record_main
-from .x18_recorder_supervisor import X18RecorderSupervisor
+from .twitcho.supervisor import TwitchoSupervisor
+from .x18.osc import X18_OSC_PORT
+from .x18.osc import main as x18_record_main
+from .x18.recorder_supervisor import X18RecorderSupervisor
 
 
 def run_web_ui(

@@ -7,7 +7,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
 
-from .models import ActionResult, ServiceStatus
+from ..models import ActionResult, ServiceStatus
 
 EXTERNAL_RESTART_DELAYS = [0.2, 1.0, 10.0, 20.0]
 

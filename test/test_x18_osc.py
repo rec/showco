@@ -7,14 +7,14 @@ import unittest
 from datetime import UTC, datetime
 from pathlib import Path
 
-from showco.x18_osc import (
+from showco.x18.osc import (
     X18OscRecorder,
     decode_osc,
     log_path,
     osc_string,
     xremote_message,
 )
-from showco.x18_recorder_supervisor import X18RecorderSupervisor
+from showco.x18.recorder_supervisor import X18RecorderSupervisor
 
 
 class X18OscTests(unittest.TestCase):
