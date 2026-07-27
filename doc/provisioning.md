@@ -45,8 +45,8 @@ showco_repo = "git@github.com:rec/showco.git"
 If `showco_pi_user` is omitted, the provisioning script uses the local `USER`
 environment variable. It is an error if neither is set.
 
-Set `showco_pi_hostname`, or pass `--hostname`, only when configuring a machine
-whose hostname should change. Leave it unset to keep the current hostname.
+Set the Raspberry Pi hostname in Raspberry Pi Imager before first boot. Use that
+same name for `showco_pi_host`, including `.local` when connecting by mDNS.
 
 `showco/provision/secrets.toml` contains secret operational values. `showco_pi_password`
 is optional. Key-based SSH is preferred; if `sshpass` is already installed and
@@ -103,8 +103,7 @@ Or override the connection on the command line:
 
 ```bash
 showco provision \
-  --host recs-stage.local \
-  --hostname bertrand \
+  --host bertrand.local \
   --port 22
 ```
 
@@ -120,7 +119,6 @@ The script:
 
 - checks the remote system with `uname`, `id`, `sudo`, and `apt-get`
 - copies a temporary provisioning script to the Pi
-- sets the hostname, if configured
 - installs base packages
 - configures `en_US.UTF-8` as the system locale
 - installs `uv` for the configured user if needed
@@ -134,11 +132,6 @@ The script:
 
 The script is intended to be rerunnable. Existing git checkouts are updated with
 `fetch --all --prune` and `pull --ff-only`.
-
-## What this does not do yet
-
-The current script does not configure the final access point or external
-recording mount. Those remain explicit follow-up steps.
 
 ## Secrets
 
@@ -175,4 +168,3 @@ complete show-box installer:
 
 - final Twitcho config contents
 - mixer probe port and protocol
-- external recording mount point
