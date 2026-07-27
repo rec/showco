@@ -114,6 +114,7 @@ The script:
 - copies a temporary provisioning script to the Pi
 - sets the hostname, if configured
 - installs base packages
+- configures `en_US.UTF-8` as the system locale
 - installs `uv` for the configured user if needed
 - creates code, config, state, and recording directories
 - clones or updates `recs`, `twitcho`, and `showco`

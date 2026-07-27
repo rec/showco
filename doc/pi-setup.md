@@ -62,10 +62,14 @@ sudo apt install -y \
   alsa-utils \
   ffmpeg \
   git \
+  locales \
   python3 \
   python3-venv \
   rsync
 ```
+
+Provisioning also generates `en_US.UTF-8` and applies it with
+`update-locale LANG=en_US.UTF-8 LC_CTYPE=en_US.UTF-8`.
 
 Install `uv` using the current official installer before building the final
 image. Record the exact command used in the project notes after it has been
