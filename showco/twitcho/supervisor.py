@@ -102,7 +102,6 @@ class TwitchoSupervisor:
         while not self.stop_requested.is_set():
             with self.lock:
                 self.state = "starting"
-                self.last_error = None
             try:
                 process = self.run_process(self.command())
             except OSError as e:
@@ -113,6 +112,7 @@ class TwitchoSupervisor:
             with self.lock:
                 self.process = process
                 self.state = "running"
+                self.last_error = None
 
             return_code = self._wait_for_process(process)
             if self.stop_requested.is_set():
