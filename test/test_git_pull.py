@@ -10,12 +10,12 @@ from showco.git_pull import update_programs
 
 
 class GitPullTests(unittest.TestCase):
-    def test_restarts_recs_even_when_pull_fails(self) -> None:
+    def test_skips_restarts_when_pull_fails(self) -> None:
         commands: list[list[str]] = []
 
         def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
             commands.append(list(command))
-            if command[:3] == ["git", "-C", "/code/recs"]:
+            if command[:3] == ["git", "-C", "/code/twitcho"]:
                 return subprocess.CompletedProcess(command, 1, "", "network down\n")
             return subprocess.CompletedProcess(command, 0, "", "")
 
@@ -24,9 +24,9 @@ class GitPullTests(unittest.TestCase):
         )
 
         self.assertEqual(result, 1)
-        self.assertIn(["git", "-C", "/code/recs", "pull"], commands)
-        self.assertIn(["systemctl", "--user", "restart", "recs"], commands)
-        self.assertIn(["systemctl", "--user", "restart", "showco"], commands)
+        self.assertIn(["git", "-C", "/code/twitcho", "pull"], commands)
+        self.assertNotIn(["systemctl", "--user", "restart", "recs"], commands)
+        self.assertNotIn(["systemctl", "--user", "restart", "showco"], commands)
 
     def test_pulls_twitcho_without_managing_a_twitcho_service(self) -> None:
         commands: list[list[str]] = []
