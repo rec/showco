@@ -268,6 +268,7 @@ def provision_remote(
         ssh_target,
         "set -e; uname -a; id; command -v sudo; command -v apt-get",
     )
+    ensure_github_account_key(config, ssh_target)
 
     try:
         print("Copying provisioning script...")
@@ -287,6 +288,90 @@ def provision_remote(
                     f"WARNING: Could not remove remote provisioning script: {e}",
                     file=sys.stderr,
                 )
+
+
+def ensure_github_account_key(config: Config, ssh_target: str) -> None:
+    if not shutil.which("gh"):
+        sys.exit("ERROR: gh is required to add the Pi SSH key to GitHub.")
+    print("Creating or reusing Raspberry Pi GitHub SSH key...")
+    public_key = capture_ssh(config, ssh_target, remote_github_key_command(config))
+    if not public_key.startswith("ssh-ed25519 "):
+        sys.exit(f"ERROR: Unexpected SSH public key from {ssh_target}: {public_key}")
+    title = github_key_title(config)
+    if github_key_exists(public_key):
+        print(f"GitHub SSH key already exists: {title}")
+        return
+    with tempfile.NamedTemporaryFile(
+        "w",
+        delete=False,
+        prefix="showco-pi-github-key.",
+        suffix=".pub",
+    ) as fp:
+        key_file = Path(fp.name)
+        fp.write(public_key + "\n")
+    try:
+        subprocess.run(
+            ["gh", "ssh-key", "add", str(key_file), "--title", title],
+            check=True,
+        )
+    finally:
+        key_file.unlink(missing_ok=True)
+
+
+def github_key_exists(public_key: str) -> bool:
+    completed = subprocess.run(
+        ["gh", "api", "user/keys", "--jq", ".[].key"],
+        capture_output=True,
+        check=True,
+        text=True,
+    )
+    key = github_key_material(public_key)
+    return any(
+        github_key_material(line) == key for line in completed.stdout.splitlines()
+    )
+
+
+def github_key_material(public_key: str) -> str:
+    fields = public_key.split()
+    if len(fields) < 2:
+        return public_key
+    return " ".join(fields[:2])
+
+
+def github_key_title(config: Config) -> str:
+    name = (
+        config.hostname
+        if config.hostname and config.hostname != "TODO"
+        else config.host
+    )
+    return f"showco {name}"
+
+
+def remote_github_key_command(config: Config) -> str:
+    comment = shlex.quote(github_key_title(config))
+    return "\n".join(
+        [
+            "set -e",
+            "{",
+            "if ! command -v ssh-keygen >/dev/null 2>&1 || "
+            "! command -v ssh-keyscan >/dev/null 2>&1; then",
+            "  sudo apt-get update",
+            "  sudo apt-get install -y openssh-client",
+            "fi",
+            'mkdir -p "$HOME/.ssh"',
+            'chmod 700 "$HOME/.ssh"',
+            'if [ ! -f "$HOME/.ssh/id_ed25519" ]; then',
+            "  ssh-keygen -t ed25519 -N '' "
+            f'-C {comment} -f "$HOME/.ssh/id_ed25519" >/dev/null',
+            "fi",
+            'touch "$HOME/.ssh/known_hosts"',
+            'chmod 600 "$HOME/.ssh/known_hosts"',
+            'ssh-keygen -F github.com -f "$HOME/.ssh/known_hosts" >/dev/null 2>&1 '
+            '|| ssh-keyscan github.com >> "$HOME/.ssh/known_hosts"',
+            "} >&2",
+            'cat "$HOME/.ssh/id_ed25519.pub"',
+        ]
+    )
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -417,14 +502,36 @@ def run_scp(config: Config, source: Path, target: str) -> None:
     )
 
 
-def run(config: Config, command: list[str], sshpass_command: list[str]) -> None:
+def capture_ssh(config: Config, target: str, command: str) -> str:
+    completed = run(
+        config,
+        ["ssh", "-p", config.port, target, command],
+        ["sshpass", "-e", "ssh", "-p", config.port, target, command],
+        capture_output=True,
+    )
+    return completed.stdout.strip()
+
+
+def run(
+    config: Config,
+    command: list[str],
+    sshpass_command: list[str],
+    *,
+    capture_output: bool = False,
+) -> subprocess.CompletedProcess[str]:
     env = None
     if config.password and config.password != "TODO":
         if not shutil.which("sshpass"):
             sys.exit("ERROR: showco_pi_password requires sshpass to be installed.")
         env = os.environ | {"SSHPASS": config.password}
         command = sshpass_command
-    subprocess.run(command, check=True, env=env)
+    return subprocess.run(
+        command,
+        capture_output=capture_output,
+        check=True,
+        env=env,
+        text=True,
+    )
 
 
 def read_toml(path: Path) -> dict[str, object]:
