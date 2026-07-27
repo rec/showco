@@ -45,6 +45,16 @@ class RecsTests(unittest.TestCase):
 
         self.assertEqual(status.service.state, "offline")
 
+    def test_reports_status_read_failure_as_error(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "status.json"
+            path.write_text("{}")
+            with mock.patch.object(Path, "read_text", side_effect=OSError("gone")):
+                status = RecsClient(status_path=path).status()
+
+        self.assertEqual(status.service.state, "error")
+        self.assertIn("gone", status.service.last_error or "")
+
     def test_level_state_uses_four_display_states(self) -> None:
         self.assertEqual(level_state(None), "silent")
         self.assertEqual(level_state(0.0), "silent")
@@ -94,6 +104,39 @@ class RecsTests(unittest.TestCase):
             ],
         )
         self.assertTrue(connection.closed)
+
+    def test_calibrate_reports_invalid_metadata(self) -> None:
+        with TemporaryDirectory() as directory:
+            metadata = Path(directory) / "daemon.json"
+            metadata.write_text("not json")
+
+            result = RecsClient(metadata_path=metadata).calibrate()
+
+        self.assertFalse(result.ok)
+        self.assertIn("could not read recs metadata", result.message)
+
+    def test_calibrate_reports_connection_failure(self) -> None:
+        with TemporaryDirectory() as directory:
+            metadata = Path(directory) / "daemon.json"
+            metadata.write_text(
+                DaemonMetadata(
+                    executable=Path("/bin/recs"),
+                    platform=Platform.linux,
+                    gui_endpoint="/tmp/recs.sock",
+                ).model_dump_json()
+            )
+            client = RecsClient(metadata_path=metadata)
+
+            with mock.patch(
+                "showco.recs.client_connection",
+                side_effect=OSError("connection refused"),
+            ):
+                result = client.calibrate()
+
+        self.assertFalse(result.ok)
+        self.assertEqual(
+            result.message, "could not connect to recs: connection refused"
+        )
 
 
 class FakeRecsConnection:
