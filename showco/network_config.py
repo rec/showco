@@ -108,7 +108,7 @@ def config_from_values(values: dict[str, object]) -> NetworkConfig:
         private_wifi_ssid=string_value(
             values,
             "private_wifi_ssid",
-            legacy_name="SHOWCO_PI_ACCESS_POINT_SSID",
+            legacy_name="showco_pi_access_point_ssid",
             default="showbox",
         ),
         private_wifi_password=string_value(values, "private_wifi_password"),

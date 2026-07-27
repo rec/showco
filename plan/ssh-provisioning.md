@@ -44,15 +44,15 @@ The script should not require direct access to the SD card.
 Add non-secret connection values to `scripts/config.toml`:
 
 ```toml
-SHOWCO_PI_HOST = "recs-stage.local"
-SHOWCO_PI_SSH_PORT = "22"
+showco_pi_host = "recs-stage.local"
+showco_pi_ssh_port = "22"
 ```
 
 Add secret connection values to `scripts/secrets.toml` only if password login is
 needed:
 
 ```toml
-SHOWCO_PI_PASSWORD = "..."
+showco_pi_password = "..."
 ```
 
 Prefer key-based SSH when it is already configured. Password support should be
@@ -67,7 +67,7 @@ Reuse them rather than creating duplicate names.
 `scripts/provision-pi.py` should:
 
 1. Read `scripts/config.toml` and `scripts/secrets.toml`.
-2. Require `SHOWCO_PI_HOST` and either `SHOWCO_PI_USER` or `USER`.
+2. Require `showco_pi_host` and either `showco_pi_user` or `USER`.
 3. Build one SSH target from those values.
 4. Run a cheap remote preflight:
    - `uname -a`
@@ -133,7 +133,7 @@ Do not keep two active provisioning paths. The intended path should be SSH.
 If any cloud-config values are still needed, translate them into direct SSH
 operations. For example:
 
-- `hostname` becomes `sudo hostnamectl set-hostname "$SHOWCO_PI_HOSTNAME"`
+- `hostname` becomes `sudo hostnamectl set-hostname "$showco_pi_hostname"`
 - package lists become remote `apt-get install`
 - `write_files` becomes SSH heredoc or uploaded file content
 - `runcmd` becomes explicit remote script phases
@@ -143,7 +143,7 @@ operations. For example:
 Start with key-based SSH:
 
 ```bash
-ssh "${SHOWCO_PI_USER:-$USER}@$SHOWCO_PI_HOST"
+ssh "${showco_pi_user:-$USER}@$showco_pi_host"
 ```
 
 If password login is required, use one of these approaches:
@@ -194,9 +194,9 @@ boot unless a separate SD-card provisioning path is explicitly retained.
 
 ## Completed migration steps
 
-1. Added `SHOWCO_PI_HOST`, `SHOWCO_PI_SSH_PORT`, and optional `SHOWCO_PI_USER` to
+1. Added `showco_pi_host`, `showco_pi_ssh_port`, and optional `showco_pi_user` to
    `scripts/config.toml`.
-2. Added `SHOWCO_PI_PASSWORD` to `scripts/secrets.toml`.
+2. Added `showco_pi_password` to `scripts/secrets.toml`.
 3. Created `scripts/provision-pi.py`.
 4. Moved reusable setup commands out of `scripts/pi-first-boot.sh` into the new
    remote script path.

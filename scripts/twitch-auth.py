@@ -50,11 +50,11 @@ def main() -> int:
 
 
 def authorize_url(config_path: Path, config: dict[str, str]) -> int:
-    client_id = require_value(config, "TWITCH_CLIENT_ID", config_path)
-    redirect_uri = require_value(config, "TWITCH_REDIRECT_URI", config_path)
-    scopes = require_value(config, "TWITCH_SCOPES", config_path)
+    client_id = require_value(config, "twitch_client_id", config_path)
+    redirect_uri = require_value(config, "twitch_redirect_uri", config_path)
+    scopes = require_value(config, "twitch_scopes", config_path)
     state = secrets.token_urlsafe(24)
-    write_toml_value(config_path, "TWITCH_STATE", state)
+    write_toml_value(config_path, "twitch_state", state)
     params = {
         "response_type": "code",
         "client_id": client_id,
@@ -67,17 +67,17 @@ def authorize_url(config_path: Path, config: dict[str, str]) -> int:
     webbrowser.open(url)
     print(
         "After approving it, copy the full localhost callback URL from the browser\n"
-        "address bar and paste it into TWITCH_CALLBACK_URL_OR_CODE in secrets.toml."
+        "address bar and paste it into twitch_callback_url_or_code in secrets.toml."
     )
     return 0
 
 
 def exchange_code(env: dict[str, str]) -> int:
-    client_id = require_value(env, "TWITCH_CLIENT_ID")
-    client_secret = require_value(env, "TWITCH_CLIENT_SECRET")
-    redirect_uri = require_value(env, "TWITCH_REDIRECT_URI")
-    callback = require_value(env, "TWITCH_CALLBACK_URL_OR_CODE")
-    config_dir = Path(require_value(env, "TWITCH_CONFIG_DIR")).expanduser()
+    client_id = require_value(env, "twitch_client_id")
+    client_secret = require_value(env, "twitch_client_secret")
+    redirect_uri = require_value(env, "twitch_redirect_uri")
+    callback = require_value(env, "twitch_callback_url_or_code")
+    config_dir = Path(require_value(env, "twitch_config_dir")).expanduser()
     config_dir.mkdir(parents=True, exist_ok=True)
     response_file = config_dir / "oauth-response.json"
     data = urllib.parse.urlencode(
@@ -116,7 +116,7 @@ def exchange_code(env: dict[str, str]) -> int:
 
 
 def validate_token(config: dict[str, str]) -> int:
-    config_dir = Path(require_value(config, "TWITCH_CONFIG_DIR")).expanduser()
+    config_dir = Path(require_value(config, "twitch_config_dir")).expanduser()
     token_file = config_dir / "oauth-token"
     if not token_file.exists():
         message = (

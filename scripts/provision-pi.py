@@ -267,40 +267,40 @@ def parse_args() -> argparse.Namespace:
         default=script_dir() / "secrets.toml",
         help="default: scripts/secrets.toml",
     )
-    parser.add_argument("--host", help="default: SHOWCO_PI_HOST")
-    parser.add_argument("--user", help="default: SHOWCO_PI_USER, then USER")
-    parser.add_argument("--port", help="default: SHOWCO_PI_SSH_PORT")
-    parser.add_argument("--recs-repo", help="default: RECS_REPO")
-    parser.add_argument("--twitcho-repo", help="default: TWITCHO_REPO")
-    parser.add_argument("--showco-repo", help="default: SHOWCO_REPO")
+    parser.add_argument("--host", help="default: showco_pi_host")
+    parser.add_argument("--user", help="default: showco_pi_user, then USER")
+    parser.add_argument("--port", help="default: showco_pi_ssh_port")
+    parser.add_argument("--recs-repo", help="default: recs_repo")
+    parser.add_argument("--twitcho-repo", help="default: twitcho_repo")
+    parser.add_argument("--showco-repo", help="default: showco_repo")
     return parser.parse_args()
 
 
 def config_from_args(args: argparse.Namespace, env: dict[str, str]) -> Config:
-    host = value_or_env(args.host, env, "SHOWCO_PI_HOST")
+    host = value_or_env(args.host, env, "showco_pi_host")
     user = value_or_env(
         args.user,
         env,
-        "SHOWCO_PI_USER",
+        "showco_pi_user",
         default=os.environ.get("USER", ""),
     )
-    port = value_or_env(args.port, env, "SHOWCO_PI_SSH_PORT", default="22")
-    recs_repo = value_or_env(args.recs_repo, env, "RECS_REPO")
-    twitcho_repo = value_or_env(args.twitcho_repo, env, "TWITCHO_REPO")
-    showco_repo = value_or_env(args.showco_repo, env, "SHOWCO_REPO")
-    showco_port = env.get("SHOWCO_PORT", "17352")
+    port = value_or_env(args.port, env, "showco_pi_ssh_port", default="22")
+    recs_repo = value_or_env(args.recs_repo, env, "recs_repo")
+    twitcho_repo = value_or_env(args.twitcho_repo, env, "twitcho_repo")
+    showco_repo = value_or_env(args.showco_repo, env, "showco_repo")
+    showco_port = env.get("showco_port", "17352")
 
     return Config(
-        host=require_value("SHOWCO_PI_HOST", host),
-        user=require_value("SHOWCO_PI_USER or USER", user),
-        port=require_value("SHOWCO_PI_SSH_PORT", port),
-        recs_repo=require_value("RECS_REPO", recs_repo),
-        twitcho_repo=require_value("TWITCHO_REPO", twitcho_repo),
-        showco_repo=require_value("SHOWCO_REPO", showco_repo),
-        showco_port=require_value("SHOWCO_PORT", showco_port),
-        showco_x18_host=env.get("SHOWCO_X18_WIRED_ETHERNET_IP_ADDRESS", ""),
-        audio_x18_usb_device_name=env.get("AUDIO_X18_USB_DEVICE_NAME", ""),
-        password=env.get("SHOWCO_PI_PASSWORD", ""),
+        host=require_value("showco_pi_host", host),
+        user=require_value("showco_pi_user or USER", user),
+        port=require_value("showco_pi_ssh_port", port),
+        recs_repo=require_value("recs_repo", recs_repo),
+        twitcho_repo=require_value("twitcho_repo", twitcho_repo),
+        showco_repo=require_value("showco_repo", showco_repo),
+        showco_port=require_value("showco_port", showco_port),
+        showco_x18_host=env.get("showco_x18_wired_ethernet_ip_address", ""),
+        audio_x18_usb_device_name=env.get("audio_x18_usb_device_name", ""),
+        password=env.get("showco_pi_password", ""),
     )
 
 
