@@ -89,7 +89,7 @@ def configure_network(
     for command in commands:
         print(shell_command(command), file=output)
         if not dry_run:
-            run_command(command)
+            check_command_result(run_command(command))
     return 0
 
 
@@ -318,6 +318,16 @@ def shlex_quote(value: str) -> str:
 
 def run(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(command, capture_output=True, check=False, text=True)
+
+
+def check_command_result(completed: subprocess.CompletedProcess[str]) -> None:
+    if completed.returncode == 0:
+        return
+    output = f"{completed.stdout}{completed.stderr}".strip()
+    message = f"ERROR: command failed: {shell_command(completed.args)}"
+    if output:
+        message = f"{message}\n{output}"
+    sys.exit(message)
 
 
 def default_config_path() -> Path:
