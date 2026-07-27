@@ -60,12 +60,13 @@ def update_programs(
                 run_command,
             )
         )
-    results.extend(
-        [
-            _run_service_step("recs", "restart", run_command),
-            _run_service_step("showco", "restart", run_command),
-        ]
-    )
+    if all(r.ok for r in results):
+        results.extend(
+            [
+                _run_service_step("recs", "restart", run_command),
+                _run_service_step("showco", "restart", run_command),
+            ]
+        )
 
     failures = sum(not r.ok for r in results)
     for result in results:
