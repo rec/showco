@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from showco.twitcho_supervisor import TwitchoSupervisor, restart_delay
+from showco.twitcho.supervisor import TwitchoSupervisor, restart_delay
 
 
 class TwitchoSupervisorTests(unittest.TestCase):
