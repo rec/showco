@@ -32,19 +32,19 @@ network_topology = ""
 twitcho_enabled = false
 private_wifi_ssid = "showbox"
 external_wifi_ssid = ""
-SHOWCO_PI_HOST = "recs-stage.local"
-SHOWCO_PI_SSH_PORT = "22"
-RECS_REPO = "git@github.com:rec/recs.git"
-TWITCHO_REPO = "git@github.com:rec/twitcho.git"
-SHOWCO_REPO = "git@github.com:rec/showco.git"
+showco_pi_host = "recs-stage.local"
+showco_pi_ssh_port = "22"
+recs_repo = "git@github.com:rec/recs.git"
+twitcho_repo = "git@github.com:rec/twitcho.git"
+showco_repo = "git@github.com:rec/showco.git"
 ```
 
-If `SHOWCO_PI_USER` is omitted, the provisioning script uses the local `USER`
+If `showco_pi_user` is omitted, the provisioning script uses the local `USER`
 environment variable. It is an error if neither is set.
 
-`scripts/secrets.toml` contains secret operational values. `SHOWCO_PI_PASSWORD`
+`scripts/secrets.toml` contains secret operational values. `showco_pi_password`
 is optional. Key-based SSH is preferred; if `sshpass` is already installed and
-`SHOWCO_PI_PASSWORD` is set, the script can use it. Otherwise SSH may prompt
+`showco_pi_password` is set, the script can use it. Otherwise SSH may prompt
 interactively.
 
 Wi-Fi passwords belong in `scripts/secrets.toml`:
