@@ -184,16 +184,19 @@ firewall is simple and private.
 
 Use the Pi Ethernet jack for the X18 control network.
 
-Decide whether the Pi or X18 owns DHCP. The simplest deterministic version is:
+By default, `is_x18_wired = true`, so `showco run network-config` configures the
+Pi Ethernet jack as a static X18 control link. The simplest deterministic
+version is:
 
-- Pi Ethernet has a static address.
+- Pi Ethernet uses the first usable address in
+  `showco_pi_x18_ethernet_subnet`.
 - X18 has a static address on the same subnet.
 - the tablet reaches the X18 through the Pi network if routing is configured.
 
 Showco can optionally start a read-only OSC recorder for the X18:
 
 ```bash
-showco --x18-host 10.43.0.18 --x18-log-dir ~/recordings
+showco run --x18-host 10.43.0.18 --x18-log-dir ~/recordings
 ```
 
 The recorder writes `x18-<timestamp>.jsonl` files and keeps an `/xremote`

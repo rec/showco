@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import enum
+import ipaddress
 import os
 import shlex
 import subprocess
@@ -23,6 +24,7 @@ class NetworkTopology(enum.StrEnum):
 
 @dataclass(frozen=True)
 class NetworkConfig:
+    is_x18_wired: bool
     swap_wifi: bool
     network_topology: NetworkTopology | None
     twitcho_enabled: bool
@@ -30,6 +32,7 @@ class NetworkConfig:
     private_wifi_password: str
     external_wifi_ssid: str
     external_wifi_password: str
+    x18_ethernet_subnet: str
 
 
 @dataclass(frozen=True)
@@ -102,6 +105,7 @@ def read_toml(path: Path) -> dict[str, object]:
 
 def config_from_values(values: dict[str, object]) -> NetworkConfig:
     return NetworkConfig(
+        is_x18_wired=bool_value(values, "is_x18_wired", default=True),
         swap_wifi=bool_value(values, "swap_wifi", default=False),
         network_topology=topology_value(values.get("network_topology")),
         twitcho_enabled=bool_value(values, "twitcho_enabled", default=False),
@@ -114,6 +118,11 @@ def config_from_values(values: dict[str, object]) -> NetworkConfig:
         private_wifi_password=string_value(values, "private_wifi_password"),
         external_wifi_ssid=string_value(values, "external_wifi_ssid"),
         external_wifi_password=string_value(values, "external_wifi_password"),
+        x18_ethernet_subnet=string_value(
+            values,
+            "showco_pi_x18_ethernet_subnet",
+            default="10.43.0.0/24",
+        ),
     )
 
 
@@ -165,7 +174,10 @@ def network_commands(
         sys.exit("ERROR: mixed network topology requires a secondary Wi-Fi interface")
     if topology in (NetworkTopology.PUBLIC, NetworkTopology.MIXED):
         require_external_network(config)
-    commands = [["nmcli", "radio", "wifi", "on"]]
+    commands = []
+    if config.is_x18_wired:
+        commands.append(x18_ethernet_command(config))
+    commands.append(["nmcli", "radio", "wifi", "on"])
     if topology == NetworkTopology.PUBLIC:
         commands.append(external_wifi_command(config, assignment.primary))
         if assignment.secondary:
@@ -218,6 +230,42 @@ def external_wifi_command(config: NetworkConfig, interface: WifiInterface) -> li
 
 def disconnect_command(interface: WifiInterface) -> list[str]:
     return ["nmcli", "device", "disconnect", interface.name]
+
+
+def x18_ethernet_command(config: NetworkConfig) -> list[str]:
+    connection = "showco-x18"
+    interface = "eth0"
+    address = x18_pi_ethernet_address(config.x18_ethernet_subnet)
+    script = "\n".join(
+        [
+            f"nmcli connection show {shlex_quote(connection)} >/dev/null 2>&1 || "
+            "nmcli connection add "
+            f"type ethernet ifname {shlex_quote(interface)} "
+            f"con-name {shlex_quote(connection)}",
+            "nmcli connection modify "
+            f"{shlex_quote(connection)} "
+            f"ifname {shlex_quote(interface)} "
+            "ipv4.method manual "
+            f"ipv4.addresses {shlex_quote(address)} "
+            "ipv6.method disabled "
+            "connection.autoconnect yes",
+            f"nmcli connection up {shlex_quote(connection)}",
+        ]
+    )
+    return ["sh", "-c", script]
+
+
+def x18_pi_ethernet_address(subnet: str) -> str:
+    try:
+        network = ipaddress.ip_network(subnet, strict=False)
+    except ValueError:
+        sys.exit("ERROR: showco_pi_x18_ethernet_subnet must be a valid IP subnet")
+    hosts = network.hosts()
+    try:
+        address = next(hosts)
+    except StopIteration:
+        sys.exit("ERROR: showco_pi_x18_ethernet_subnet has no usable host address")
+    return f"{address}/{network.prefixlen}"
 
 
 def require_external_network(config: NetworkConfig) -> None:

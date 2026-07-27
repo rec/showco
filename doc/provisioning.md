@@ -28,12 +28,15 @@ The script reads defaults from:
 
 ```toml
 swap_wifi = false
+is_x18_wired = true
 network_topology = ""
 twitcho_enabled = false
 private_wifi_ssid = "showbox"
 external_wifi_ssid = ""
 showco_pi_host = "recs-stage.local"
 showco_pi_ssh_port = "22"
+showco_pi_x18_ethernet_subnet = "10.43.0.0/24"
+showco_x18_wired_ethernet_ip_address = "10.43.0.18"
 recs_repo = "git@github.com:rec/recs.git"
 twitcho_repo = "git@github.com:rec/twitcho.git"
 showco_repo = "git@github.com:rec/showco.git"
@@ -70,6 +73,11 @@ The network tool detects Wi-Fi interfaces with NetworkManager. By default, the
 first Wi-Fi interface is primary and an optional second Wi-Fi interface is
 secondary. Set `swap_wifi = true` to make the second interface primary when one
 is present.
+
+When `is_x18_wired = true`, the network tool also configures the Pi Ethernet
+jack as the X18 control link. It uses the first usable address in
+`showco_pi_x18_ethernet_subnet` for the Pi and expects the X18 at
+`showco_x18_wired_ethernet_ip_address`.
 
 `network_topology` may be empty, `public`, `private`, or `mixed`:
 
