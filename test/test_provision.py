@@ -161,6 +161,35 @@ class ProvisionTests(unittest.TestCase):
             run.call_args.args[0][-2:], ["--title", "showco recs-stage.local"]
         )
 
+    def test_ensure_github_account_key_reports_add_failure(self) -> None:
+        config = provision.config_from_args(args(), values(is_x18_wired=False))
+        public_key = "ssh-ed25519 AAAATEST showco recs-stage.local"
+        add_error = subprocess.CalledProcessError(
+            1,
+            ["gh", "ssh-key", "add"],
+            stderr="not logged in",
+        )
+        with (
+            mock.patch("showco.provision.provision.shutil.which", return_value="/gh"),
+            mock.patch(
+                "showco.provision.provision.capture_ssh", return_value=public_key
+            ),
+            mock.patch(
+                "showco.provision.provision.github_key_exists", return_value=False
+            ),
+            mock.patch(
+                "showco.provision.provision.subprocess.run", side_effect=add_error
+            ),
+            self.assertRaises(SystemExit) as error,
+        ):
+            provision.ensure_github_account_key(config, "tom@recs-stage.local")
+
+        self.assertIn(
+            "Could not add the Pi SSH key to GitHub from the provisioning machine.",
+            str(error.exception),
+        )
+        self.assertIn("gh said: not logged in", str(error.exception))
+
     def test_ensure_github_account_key_requires_local_gh(self) -> None:
         config = provision.config_from_args(args(), values(is_x18_wired=False))
         with (
@@ -205,6 +234,27 @@ class ProvisionTests(unittest.TestCase):
             exists = provision.github_key_exists("ssh-ed25519 AAAATEST showco bertrand")
 
         self.assertTrue(exists)
+
+    def test_github_key_exists_reports_local_gh_failure(self) -> None:
+        gh_error = subprocess.CalledProcessError(
+            1,
+            ["gh", "api", "user/keys"],
+            stderr="authentication required",
+        )
+        with (
+            mock.patch(
+                "showco.provision.provision.subprocess.run", side_effect=gh_error
+            ),
+            self.assertRaises(SystemExit) as error,
+        ):
+            provision.github_key_exists("ssh-ed25519 AAAATEST showco bertrand")
+
+        self.assertIn(
+            "Could not list GitHub SSH keys from the provisioning machine.",
+            str(error.exception),
+        )
+        self.assertIn("Run `gh auth status` on this machine.", str(error.exception))
+        self.assertIn("gh said: authentication required", str(error.exception))
 
 
 def args() -> argparse.Namespace:
