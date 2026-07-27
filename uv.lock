@@ -757,6 +757,7 @@ source = { editable = "." }
 dependencies = [
     { name = "recs" },
     { name = "twitcho" },
+    { name = "tyro" },
 ]
 
 [package.dev-dependencies]
@@ -768,6 +769,7 @@ dev = [
 requires-dist = [
     { name = "recs", editable = "../recs" },
     { name = "twitcho", editable = "../twitcho" },
+    { name = "tyro", specifier = ">=1.0.15" },
 ]
 
 [package.metadata.requires-dev]
