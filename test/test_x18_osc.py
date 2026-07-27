@@ -56,6 +56,18 @@ class X18OscTests(unittest.TestCase):
             [{"path": "/xremote", "types": "", "args": []}],
         )
 
+    def test_send_xremote_records_send_error(self) -> None:
+        output = io.BytesIO()
+        recorder = X18OscRecorder("10.43.0.18", log_dir=Path("/logs"))
+
+        recorder.send_xremote(BrokenSocket(), output)
+
+        record = json.loads(output.getvalue().decode())
+        self.assertEqual(record["direction"], "out")
+        self.assertEqual(record["kind"], "error")
+        self.assertEqual(record["target"], ["10.43.0.18", 10_024])
+        self.assertEqual(record["error"], "network unreachable")
+
     def test_supervisor_command_runs_recorder_subcommand(self) -> None:
         supervisor = X18RecorderSupervisor(
             "10.43.0.18",
@@ -80,6 +92,11 @@ class X18OscTests(unittest.TestCase):
                 "/logs",
             ],
         )
+
+
+class BrokenSocket:
+    def sendto(self, data: bytes, target: tuple[str, int]) -> None:
+        raise OSError("network unreachable")
 
 
 if __name__ == "__main__":
