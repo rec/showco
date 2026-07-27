@@ -111,17 +111,25 @@ main() {
   id "$SHOW_USER" >/dev/null
 
   phase "installing base packages"
-  sudo apt-get update
-  sudo apt-get install -y \
-    alsa-utils \
-    ca-certificates \
-    curl \
-    ffmpeg \
-    git \
-    python3 \
-    python3-venv \
-    rsync \
+  packages=(
+    alsa-utils
+    ca-certificates
+    curl
+    ffmpeg
+    git
+    libegl1
+    libportaudio2
+    libsndfile1
+    openssh-client
+    python3
+    python3-venv
+    rsync
     sudo
+  )
+  printf 'Installing packages:\n'
+  printf '  %s\n' "${packages[@]}"
+  sudo apt-get update
+  sudo apt-get install -y "${packages[@]}"
 
   phase "creating directories"
   sudo mkdir -p "$CODE_DIR"
