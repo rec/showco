@@ -9,6 +9,7 @@ import tyro
 from .git_pull import main as git_pull_main
 from .mixer import MixerMonitor
 from .network_config import main as network_config_main
+from .provision.provision import main as provision_main
 from .rehearsal import (
     RehearsalMixerMonitor,
     RehearsalRecsClient,
@@ -17,6 +18,7 @@ from .rehearsal import (
     RehearsalTwitchoSupervisor,
 )
 from .server import make_server
+from .twitcho.auth import main as twitcho_auth_main
 from .twitcho_supervisor import TwitchoSupervisor
 from .x18_osc import X18_OSC_PORT
 from .x18_osc import main as x18_record_main
@@ -101,13 +103,27 @@ def run_web_ui(
 
 def main(argv: list[str] | None = None) -> int:
     arguments = sys.argv[1:] if argv is None else argv
+    if not arguments or arguments[:1] in (["-h"], ["--help"]):
+        print("Usage: showco {run,provision,twitcho} ...")
+        return 0
+    if arguments[:1] == ["run"]:
+        return run_command(arguments[1:])
+    if arguments[:1] == ["provision"]:
+        return provision_main(arguments[1:])
+    if arguments[:1] == ["twitcho"]:
+        return twitcho_auth_main(arguments[1:])
+    print(f"unknown command: {arguments[0]}", file=sys.stderr)
+    print("Usage: showco {run,provision,twitcho} ...", file=sys.stderr)
+    return 2
+
+
+def run_command(arguments: list[str]) -> int:
     if arguments[:1] == ["git-pull"]:
         return git_pull_main(arguments[1:])
     if arguments[:1] == ["x18-record"]:
         return x18_record_main(arguments[1:])
     if arguments[:1] == ["network-config"]:
         return network_config_main(arguments[1:])
-
     return tyro.cli(
         run_web_ui,
         args=arguments,

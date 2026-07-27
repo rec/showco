@@ -6,7 +6,7 @@ import uuid
 from collections.abc import Mapping
 from typing import Protocol
 
-from .models import ActionResult, ServiceStatus, TwitchoStatus
+from ..models import ActionResult, ServiceStatus, TwitchoStatus
 
 CONTROL_HOST = "127.0.0.1"
 CONTROL_PORT = 17_351

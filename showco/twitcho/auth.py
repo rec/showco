@@ -18,25 +18,25 @@ TWITCH_TOKEN_URL = "https://id.twitch.tv/oauth2/token"
 TWITCH_VALIDATE_URL = "https://id.twitch.tv/oauth2/validate"
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Manage Showco Twitch OAuth tokens")
     parser.add_argument(
         "--config",
         type=Path,
-        default=script_dir() / "config.toml",
+        default=provision_dir() / "config.toml",
         help="path to config.toml",
     )
     parser.add_argument(
         "--secrets",
         type=Path,
-        default=script_dir() / "secrets.toml",
+        default=provision_dir() / "secrets.toml",
         help="path to secrets.toml",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("authorize-url", help="open the Twitch authorization URL")
     subparsers.add_parser("exchange-code", help="exchange callback code for tokens")
     subparsers.add_parser("validate-token", help="validate the saved access token")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     config = read_toml(args.config)
     if args.command == "authorize-url":
@@ -111,7 +111,7 @@ def exchange_code(env: dict[str, str]) -> int:
     if response.get("refresh_token"):
         print(f"Saved refresh token to {config_dir / 'refresh-token'}")
     print()
-    print("Run twitch-auth.py validate-token next.")
+    print("Run showco twitcho validate-token next.")
     return 0
 
 
@@ -120,7 +120,7 @@ def validate_token(config: dict[str, str]) -> int:
     token_file = config_dir / "oauth-token"
     if not token_file.exists():
         message = (
-            f"No access token at {token_file}. Run twitch-auth.py exchange-code first."
+            f"No access token at {token_file}. Run showco twitcho exchange-code first."
         )
         sys.exit(message)
     token = token_file.read_text().strip()
@@ -183,8 +183,8 @@ def require_value(env: dict[str, str], name: str, path: Path | None = None) -> s
     sys.exit(f"Edit {path} and set {name} first.")
 
 
-def script_dir() -> Path:
-    return Path(__file__).resolve().parent
+def provision_dir() -> Path:
+    return Path(__file__).resolve().parent.parent / "provision"
 
 
 if __name__ == "__main__":

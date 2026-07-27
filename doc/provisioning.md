@@ -12,19 +12,19 @@ an SD card.
 
 ```text
 doc/provisioning.md
-showco/scripts/config.toml
-showco/scripts/secrets.toml
-showco/scripts/provision-pi.py
+showco/provision/config.toml
+showco/provision/secrets.toml
+showco/provision/provision.py
 ```
 
 ## Configuration
 
 The script reads defaults from:
 
-- `scripts/config.toml`
-- `scripts/secrets.toml`
+- `showco/provision/config.toml`
+- `showco/provision/secrets.toml`
 
-`scripts/config.toml` contains non-secret operational values, including:
+`showco/provision/config.toml` contains non-secret operational values, including:
 
 ```toml
 swap_wifi = false
@@ -45,12 +45,12 @@ environment variable. It is an error if neither is set.
 Set `showco_pi_hostname`, or pass `--hostname`, only when configuring a machine
 whose hostname should change. Leave it unset to keep the current hostname.
 
-`scripts/secrets.toml` contains secret operational values. `showco_pi_password`
+`showco/provision/secrets.toml` contains secret operational values. `showco_pi_password`
 is optional. Key-based SSH is preferred; if `sshpass` is already installed and
 `showco_pi_password` is set, the script can use it. Otherwise SSH may prompt
 interactively.
 
-Wi-Fi passwords belong in `scripts/secrets.toml`:
+Wi-Fi passwords belong in `showco/provision/secrets.toml`:
 
 ```toml
 private_wifi_password = "..."
@@ -62,8 +62,8 @@ external_wifi_password = "..."
 After provisioning, run the network configuration tool on the Pi:
 
 ```bash
-showco network-config --dry-run
-showco network-config
+showco run network-config --dry-run
+showco run network-config
 ```
 
 The network tool detects Wi-Fi interfaces with NetworkManager. By default, the
@@ -88,13 +88,13 @@ external network, second Wi-Fi presence, and `twitcho_enabled`.
 After confirming SSH works, run:
 
 ```bash
-showco/scripts/provision-pi.py
+showco provision
 ```
 
 Or override the connection on the command line:
 
 ```bash
-showco/scripts/provision-pi.py \
+showco provision \
   --host recs-stage.local \
   --hostname bertrand \
   --port 22
@@ -154,10 +154,10 @@ local builds.
 Before relying on script changes:
 
 ```bash
-python -m py_compile showco/scripts/provision-pi.py showco/scripts/twitch-auth.py
+python -m py_compile showco/provision/provision.py showco/twitcho/auth.py
 ```
 
-Do not run `scripts/provision-pi.py` as a routine verification step. It mutates a
+Do not run `showco provision` as a routine verification step. It mutates a
 real Raspberry Pi.
 
 ## Open decisions
