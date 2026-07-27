@@ -271,11 +271,6 @@ main() {
   phase "checking user"
   id "$SHOW_USER" >/dev/null
 
-  if [[ -n "$SHOWCO_PI_HOSTNAME" && "$SHOWCO_PI_HOSTNAME" != TODO ]]; then
-    phase "setting hostname"
-    sudo hostnamectl set-hostname "$SHOWCO_PI_HOSTNAME"
-  fi
-
   phase "installing base packages"
   packages=(
     alsa-utils
@@ -365,7 +360,6 @@ class Config:
         host: str,
         user: str,
         port: str,
-        hostname: str,
         recs_repo: str,
         twitcho_repo: str,
         showco_repo: str,
@@ -378,7 +372,6 @@ class Config:
         self.host = host
         self.user = user
         self.port = port
-        self.hostname = hostname
         self.recs_repo = recs_repo
         self.twitcho_repo = twitcho_repo
         self.showco_repo = showco_repo
@@ -495,12 +488,7 @@ def github_key_material(public_key: str) -> str:
 
 
 def github_key_title(config: Config) -> str:
-    name = (
-        config.hostname
-        if config.hostname and config.hostname != "TODO"
-        else config.host
-    )
-    return f"showco {name}"
+    return f"showco {config.host}"
 
 
 def remote_github_key_command(config: Config) -> str:
@@ -549,7 +537,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--host", help="default: showco_pi_host")
     parser.add_argument("--user", help="default: showco_pi_user, then USER")
     parser.add_argument("--port", help="default: showco_pi_ssh_port")
-    parser.add_argument("--hostname", help="default: showco_pi_hostname")
     parser.add_argument("--recs-repo", help="default: recs_repo")
     parser.add_argument("--twitcho-repo", help="default: twitcho_repo")
     parser.add_argument("--showco-repo", help="default: showco_repo")
@@ -565,7 +552,6 @@ def config_from_args(args: argparse.Namespace, env: dict[str, object]) -> Config
         default=os.environ.get("USER", ""),
     )
     port = value_or_env(args.port, env, "showco_pi_ssh_port", default="22")
-    hostname = value_or_env(args.hostname, env, "showco_pi_hostname")
     recs_repo = value_or_env(args.recs_repo, env, "recs_repo")
     twitcho_repo = value_or_env(args.twitcho_repo, env, "twitcho_repo")
     showco_repo = value_or_env(args.showco_repo, env, "showco_repo")
@@ -582,7 +568,6 @@ def config_from_args(args: argparse.Namespace, env: dict[str, object]) -> Config
         host=require_value("showco_pi_host", host),
         user=require_value("showco_pi_user or USER", user),
         port=require_value("showco_pi_ssh_port", port),
-        hostname=hostname,
         recs_repo=require_value("recs_repo", recs_repo),
         twitcho_repo=require_value("twitcho_repo", twitcho_repo),
         showco_repo=require_value("showco_repo", showco_repo),
@@ -629,7 +614,6 @@ def string_value(values: dict[str, object], name: str, *, default: str = "") -> 
 def remote_command(config: Config, remote_script: str) -> str:
     values = {
         "SHOW_USER": config.user,
-        "SHOWCO_PI_HOSTNAME": config.hostname,
         "CODE_DIR": f"/home/{config.user}/code",
         "RECS_REPO": config.recs_repo,
         "TWITCHO_REPO": config.twitcho_repo,

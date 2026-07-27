@@ -114,14 +114,7 @@ class ProvisionTests(unittest.TestCase):
 
         self.assertEqual(calls, ["github", "scp"])
 
-    def test_github_key_title_uses_hostname(self) -> None:
-        config = provision.config_from_args(
-            args(), values(is_x18_wired=False, showco_pi_hostname="bertrand")
-        )
-
-        self.assertEqual(provision.github_key_title(config), "showco bertrand")
-
-    def test_github_key_title_uses_host_without_hostname(self) -> None:
+    def test_github_key_title_uses_host(self) -> None:
         config = provision.config_from_args(args(), values(is_x18_wired=False))
 
         self.assertEqual(provision.github_key_title(config), "showco recs-stage.local")
@@ -148,10 +141,8 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn("PROVISIONING-REPORT.txt", provision.REMOTE_SCRIPT)
 
     def test_ensure_github_account_key_adds_new_key(self) -> None:
-        config = provision.config_from_args(
-            args(), values(is_x18_wired=False, showco_pi_hostname="bertrand")
-        )
-        public_key = "ssh-ed25519 AAAATEST showco bertrand"
+        config = provision.config_from_args(args(), values(is_x18_wired=False))
+        public_key = "ssh-ed25519 AAAATEST showco recs-stage.local"
         with (
             mock.patch("showco.provision.provision.shutil.which", return_value="/gh"),
             mock.patch(
@@ -165,7 +156,9 @@ class ProvisionTests(unittest.TestCase):
             provision.ensure_github_account_key(config, "tom@recs-stage.local")
 
         self.assertEqual(run.call_args.args[0][:3], ["gh", "ssh-key", "add"])
-        self.assertEqual(run.call_args.args[0][-2:], ["--title", "showco bertrand"])
+        self.assertEqual(
+            run.call_args.args[0][-2:], ["--title", "showco recs-stage.local"]
+        )
 
     def test_ensure_github_account_key_skips_existing_key(self) -> None:
         config = provision.config_from_args(args(), values(is_x18_wired=False))
@@ -204,7 +197,6 @@ def args() -> argparse.Namespace:
         host=None,
         user=None,
         port=None,
-        hostname=None,
         recs_repo=None,
         twitcho_repo=None,
         showco_repo=None,
