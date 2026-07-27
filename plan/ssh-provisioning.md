@@ -15,7 +15,7 @@ that is already reachable.
 The previous script was `scripts/provision-pi-card.sh`. It:
 
 - finds or mounts a Raspberry Pi boot partition
-- reads defaults from `scripts/config.toml` and `scripts/secrets.toml`
+- reads defaults from `showco/provision/config.toml` and `showco/provision/secrets.toml`
 - writes `user-data`, `network-config`, `meta-data`, and `pi-first-boot.sh`
   directly to the card
 - relies on cloud-init first-boot behavior to run the setup later
@@ -26,22 +26,22 @@ after the card leaves the development machine.
 
 ## Target flow
 
-Use the SSH-based script `scripts/provision-pi.py`.
+Use the SSH-based script `showco provision`.
 
 The operator flow should be:
 
 1. Build or choose a Raspberry Pi OS Lite machine.
 2. Make sure it is reachable over SSH.
-3. Put connection and show-box values in `scripts/config.toml` and
-   `scripts/secrets.toml`.
-4. Run `scripts/provision-pi.py`.
+3. Put connection and show-box values in `showco/provision/config.toml` and
+   `showco/provision/secrets.toml`.
+4. Run `showco provision`.
 5. Watch all setup output locally while the script runs commands over SSH.
 
 The script should not require direct access to the SD card.
 
 ## Environment values
 
-Add non-secret connection values to `scripts/config.toml`:
+Add non-secret connection values to `showco/provision/config.toml`:
 
 ```toml
 showco_pi_host = "recs-stage.local"
@@ -51,8 +51,8 @@ showco_pi_ssh_port = "22"
 Use optional `showco_pi_hostname`, or the `--hostname` command-line option, only
 when the Pi should be renamed.
 
-Add secret connection values to `scripts/secrets.toml` only if password login is
-needed:
+Add secret connection values to `showco/provision/secrets.toml` only if
+password login is needed:
 
 ```toml
 showco_pi_password = "..."
@@ -62,14 +62,15 @@ Prefer key-based SSH when it is already configured. Password support should be
 for first setup only and should not introduce a new dependency unless the script
 cannot reasonably do the job without one.
 
-Keep existing show-box values in `scripts/config.toml` and `scripts/secrets.toml`.
-Reuse them rather than creating duplicate names.
+Keep existing show-box values in `showco/provision/config.toml` and
+`showco/provision/secrets.toml`. Reuse them rather than creating duplicate
+names.
 
 ## Script behavior
 
-`scripts/provision-pi.py` should:
+`showco provision` should:
 
-1. Read `scripts/config.toml` and `scripts/secrets.toml`.
+1. Read `showco/provision/config.toml` and `showco/provision/secrets.toml`.
 2. Require `showco_pi_host` and either `showco_pi_user` or `USER`.
 3. Build one SSH target from those values.
 4. Run a cheap remote preflight:
@@ -173,7 +174,7 @@ Do not introduce Python SSH libraries or async code.
 For the implementation task, run:
 
 ```bash
-python -m py_compile scripts/provision-pi.py scripts/twitch-auth.py
+python -m py_compile showco/provision/provision.py showco/twitcho/auth.py
 git diff --check
 ```
 
@@ -198,9 +199,9 @@ boot unless a separate SD-card provisioning path is explicitly retained.
 ## Completed migration steps
 
 1. Added `showco_pi_host`, `showco_pi_ssh_port`, and optional `showco_pi_user` to
-   `scripts/config.toml`.
-2. Added `showco_pi_password` to `scripts/secrets.toml`.
-3. Created `scripts/provision-pi.py`.
+   `showco/provision/config.toml`.
+2. Added `showco_pi_password` to `showco/provision/secrets.toml`.
+3. Created `showco provision`.
 4. Moved reusable setup commands out of `scripts/pi-first-boot.sh` into the new
    remote script path.
 5. Deleted `scripts/provision-pi-card.sh`.

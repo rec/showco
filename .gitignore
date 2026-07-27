@@ -222,5 +222,5 @@ doc/checklist.toml
 backup
 
 # Our secrets
-scripts/secrets.env
-scripts/secrets.toml
+showco/provision/secrets.env
+showco/provision/secrets.toml

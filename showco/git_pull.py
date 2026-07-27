@@ -84,10 +84,10 @@ def _run_service_step(service: str, step: str, run_command: RunCommand) -> StepR
 
 def main(argv: list[str] | None = None) -> int:
     if argv in (["-h"], ["--help"]):
-        print("Usage: showco git-pull")
+        print("Usage: showco run git-pull")
         return 0
     if argv:
-        print("showco git-pull takes no arguments", file=sys.stderr)
+        print("showco run git-pull takes no arguments", file=sys.stderr)
         return 2
     return update_programs()
 

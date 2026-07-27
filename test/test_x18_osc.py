@@ -70,6 +70,7 @@ class X18OscTests(unittest.TestCase):
                 "/python",
                 "-m",
                 "showco",
+                "run",
                 "x18-record",
                 "--host",
                 "10.43.0.18",

@@ -44,6 +44,7 @@ class X18RecorderSupervisor:
             self.python,
             "-m",
             "showco",
+            "run",
             "x18-record",
             "--host",
             self.host,

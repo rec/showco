@@ -90,7 +90,7 @@ install_recs_service() {
 install_showco_service() {
   local service_dir="/home/$SHOW_USER/.config/systemd/user"
   local service_file="$service_dir/showco.service"
-  local command="/home/$SHOW_USER/code/showco/.venv/bin/showco $(showco_args)"
+  local command="/home/$SHOW_USER/code/showco/.venv/bin/showco run $(showco_args)"
 
   sudo -H -u "$SHOW_USER" mkdir -p "$service_dir"
   sudo -H -u "$SHOW_USER" tee "$service_file" >/dev/null <<SERVICE
@@ -231,8 +231,8 @@ class Config:
         self.password = password
 
 
-def main() -> int:
-    args = parse_args()
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
     env = read_toml(args.config)
     env |= read_toml(args.secrets)
     config = config_from_args(args, env)
@@ -268,7 +268,7 @@ def main() -> int:
     return 0
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Provision a reachable Raspberry Pi over SSH"
     )
@@ -276,13 +276,13 @@ def parse_args() -> argparse.Namespace:
         "--config",
         type=Path,
         default=script_dir() / "config.toml",
-        help="default: scripts/config.toml",
+        help="default: showco/provision/config.toml",
     )
     parser.add_argument(
         "--secrets",
         type=Path,
         default=script_dir() / "secrets.toml",
-        help="default: scripts/secrets.toml",
+        help="default: showco/provision/secrets.toml",
     )
     parser.add_argument("--host", help="default: showco_pi_host")
     parser.add_argument("--user", help="default: showco_pi_user, then USER")
@@ -291,7 +291,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--recs-repo", help="default: recs_repo")
     parser.add_argument("--twitcho-repo", help="default: twitcho_repo")
     parser.add_argument("--showco-repo", help="default: showco_repo")
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 def config_from_args(args: argparse.Namespace, env: dict[str, str]) -> Config:

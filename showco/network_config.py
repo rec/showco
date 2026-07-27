@@ -49,13 +49,13 @@ def main(argv: list[str] | None = None) -> int:
         "--config",
         type=Path,
         default=default_config_path(),
-        help="default: scripts/config.toml",
+        help="default: showco/provision/config.toml",
     )
     parser.add_argument(
         "--secrets",
         type=Path,
         default=default_secrets_path(),
-        help="default: scripts/secrets.toml",
+        help="default: showco/provision/secrets.toml",
     )
     parser.add_argument(
         "--dry-run",
@@ -273,15 +273,15 @@ def run(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
 
 
 def default_config_path() -> Path:
-    return repo_root() / "scripts/config.toml"
+    return provision_dir() / "config.toml"
 
 
 def default_secrets_path() -> Path:
-    return repo_root() / "scripts/secrets.toml"
+    return provision_dir() / "secrets.toml"
 
 
-def repo_root() -> Path:
-    return Path(__file__).resolve().parent.parent
+def provision_dir() -> Path:
+    return Path(__file__).resolve().parent / "provision"
 
 
 if __name__ == "__main__":
