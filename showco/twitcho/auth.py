@@ -18,6 +18,12 @@ TWITCH_TOKEN_URL = "https://id.twitch.tv/oauth2/token"
 TWITCH_VALIDATE_URL = "https://id.twitch.tv/oauth2/validate"
 
 
+class HttpResponse:
+    def __init__(self, status: int, text: str) -> None:
+        self.status = status
+        self.text = text
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Manage Showco Twitch OAuth tokens")
     parser.add_argument(
@@ -90,9 +96,23 @@ def exchange_code(env: dict[str, str]) -> int:
         }
     ).encode()
     request = urllib.request.Request(TWITCH_TOKEN_URL, data=data, method="POST")
-    response_text = request_text(request)
-    response_file.write_text(response_text + "\n")
-    response = json.loads(response_text)
+    http_response = request_http(request)
+    response_file.write_text(http_response.text + "\n")
+    try:
+        response = json.loads(http_response.text)
+    except json.JSONDecodeError:
+        print(
+            "Twitch returned non-JSON token response. "
+            f"Response saved to {response_file}"
+        )
+        return 1
+    if http_response.status < 200 or http_response.status >= 300:
+        print(
+            f"Twitch token request failed with HTTP {http_response.status}. "
+            f"Response saved to {response_file}"
+        )
+        print(json.dumps(response, indent=2))
+        return 1
 
     if "access_token" not in response:
         message = (
@@ -128,7 +148,14 @@ def validate_token(config: dict[str, str]) -> int:
         TWITCH_VALIDATE_URL,
         headers={"Authorization": f"OAuth {token}"},
     )
-    print(json.dumps(json.loads(request_text(request)), indent=4))
+    http_response = request_http(request)
+    if http_response.status < 200 or http_response.status >= 300:
+        sys.exit(f"Twitch token validation failed with HTTP {http_response.status}.")
+    try:
+        response = json.loads(http_response.text)
+    except json.JSONDecodeError:
+        sys.exit("Twitch returned non-JSON token validation response.")
+    print(json.dumps(response, indent=4))
     return 0
 
 
@@ -140,12 +167,12 @@ def callback_code(value: str) -> str:
     return value
 
 
-def request_text(request: urllib.request.Request) -> str:
+def request_http(request: urllib.request.Request) -> HttpResponse:
     try:
         with urllib.request.urlopen(request) as response:
-            return response.read().decode()
+            return HttpResponse(response.status, response.read().decode())
     except urllib.error.HTTPError as e:
-        return e.read().decode()
+        return HttpResponse(e.code, e.read().decode())
 
 
 def read_toml(path: Path) -> dict[str, str]:
