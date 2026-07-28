@@ -143,8 +143,6 @@ def config_errors(config: Config) -> list[str]:
         errors.append("- networks.external.wifi.external.name is required")
     if not private.password or private.password == "TODO":
         errors.append("- networks.internal.wifi.private.password is required")
-    if not external.password or external.password == "TODO":
-        errors.append("- networks.external.wifi.external.password is required")
     return errors
 
 

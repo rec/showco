@@ -286,10 +286,6 @@ configure_network() {
     printf 'Skipping network configuration: networks.internal.wifi.private.password is not set.\n'
     return
   fi
-  if [[ -z "$EXTERNAL_WIFI_PASSWORD" || "$EXTERNAL_WIFI_PASSWORD" == TODO ]]; then
-    printf 'Skipping network configuration: networks.external.wifi.external.password is not set.\n'
-    return
-  fi
 
   config_file=$(mktemp)
   secrets_file=$(mktemp)
