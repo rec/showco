@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Protocol
 
 from pydantic import BaseModel
+from recs.cfg.track_names import DeviceTrackNames
 from recs.daemon.gui_backend import client_connection
 from recs.daemon.gui_protocol import Command, Error, Hello, Reply, parse_message
 from recs.daemon.models import DaemonMetadata
@@ -94,6 +95,106 @@ class RecsClient:
         )
 
     def calibrate(self) -> ActionResult:
+        message_id = str(uuid.uuid4())
+        reply = self._send_command(
+            Command(
+                type="command",
+                id=message_id,
+                command="calibrate",
+            ),
+            send_error="could not send recs calibrate command",
+            failure_prefix="recs calibration failed",
+            reply_name="calibration",
+        )
+        if isinstance(reply, ActionResult):
+            return reply
+        if reply.ok:
+            return ActionResult(ok=True, message="recs calibration succeeded")
+        return ActionResult(
+            ok=False, message=reply.message or "recs calibration failed"
+        )
+
+    def set_track_name(
+        self, device: str, channel: str, track_name: str
+    ) -> ActionResult:
+        device = device.strip()
+        channel = channel.strip()
+        track_name = track_name.strip()
+        if not device:
+            return ActionResult(ok=False, message="recs track name device is missing")
+        if not channel:
+            return ActionResult(ok=False, message="recs track name channel is missing")
+
+        track_names = self.track_names()
+        if isinstance(track_names, ActionResult):
+            return track_names
+        channel_number = track_channel(device, channel, track_names)
+        if channel_number is None:
+            return ActionResult(
+                ok=False,
+                message=f"could not resolve recs channel {channel} for {device}",
+            )
+
+        updated = replace_track_name(track_names, device, channel_number, track_name)
+        message_id = str(uuid.uuid4())
+        reply = self._send_command(
+            Command(
+                type="command",
+                id=message_id,
+                command="set_track_names",
+                track_names=updated,
+            ),
+            send_error="could not send recs track name command",
+            failure_prefix="recs track name update failed",
+            reply_name="track name",
+        )
+        if isinstance(reply, ActionResult):
+            return reply
+        if reply.ok:
+            if track_name:
+                return ActionResult(
+                    ok=True, message=f"recs track name set to {track_name}"
+                )
+            return ActionResult(
+                ok=True, message=f"recs track name cleared for {channel}"
+            )
+        return ActionResult(
+            ok=False,
+            message=reply.message or "recs track name update failed",
+        )
+
+    def track_names(self) -> DeviceTrackNames | ActionResult:
+        message_id = str(uuid.uuid4())
+        reply = self._send_command(
+            Command(
+                type="command",
+                id=message_id,
+                command="get_track_names",
+            ),
+            send_error="could not send recs track name request",
+            failure_prefix="recs track name request failed",
+            reply_name="track name",
+        )
+        if isinstance(reply, ActionResult):
+            return reply
+        if not reply.ok:
+            return ActionResult(
+                ok=False,
+                message=reply.message or "recs track name request failed",
+            )
+        track_names = result_track_names(reply.result)
+        if track_names is None:
+            return ActionResult(ok=False, message="recs sent invalid track names")
+        return track_names
+
+    def _send_command(
+        self,
+        command: Command,
+        *,
+        send_error: str,
+        failure_prefix: str,
+        reply_name: str,
+    ) -> Reply | ActionResult:
         try:
             metadata = self._metadata()
         except (OSError, ValueError) as e:
@@ -115,22 +216,12 @@ class RecsClient:
             if error := _expect_daemon_hello(_read_message(connection)):
                 return ActionResult(ok=False, message=error)
 
-            message_id = str(uuid.uuid4())
-            if not connection.write(
-                Command(
-                    type="command",
-                    id=message_id,
-                    command="calibrate",
-                ).model_dump_json(exclude_none=True)
-                + "\n"
-            ):
-                return ActionResult(
-                    ok=False, message="could not send recs calibrate command"
-                )
+            if not connection.write(command.model_dump_json(exclude_none=True) + "\n"):
+                return ActionResult(ok=False, message=send_error)
 
-            return _calibration_result(_read_message(connection), message_id)
+            return _command_reply(_read_message(connection), command.id, reply_name)
         except (OSError, ValueError) as e:
-            return ActionResult(ok=False, message=f"recs calibration failed: {e}")
+            return ActionResult(ok=False, message=f"{failure_prefix}: {e}")
         finally:
             connection.close()
 
@@ -191,26 +282,78 @@ def _expect_daemon_hello(message: object) -> str | None:
     return None
 
 
-def _calibration_result(message: object, message_id: str) -> ActionResult:
+def _command_reply(
+    message: object, message_id: str, reply_name: str
+) -> Reply | ActionResult:
     if isinstance(message, Error):
         return ActionResult(ok=False, message=message.message)
     if not isinstance(message, Reply):
-        return ActionResult(ok=False, message="recs did not send calibration reply")
+        return ActionResult(ok=False, message=f"recs did not send {reply_name} reply")
     if message.id != message_id:
         return ActionResult(ok=False, message="recs sent reply for a different command")
-    if message.ok:
-        return ActionResult(ok=True, message="recs calibration succeeded")
-    return ActionResult(ok=False, message=message.message or "recs calibration failed")
+    return message
+
+
+def result_track_names(result: dict[str, object] | None) -> DeviceTrackNames | None:
+    if result is None:
+        return None
+    value = result.get("track_names")
+    if not isinstance(value, dict):
+        return None
+    track_names: DeviceTrackNames = {}
+    for k, v in value.items():
+        if not isinstance(k, str) or not isinstance(v, dict):
+            return None
+        names: dict[str, int] = {}
+        for name, channel in v.items():
+            if not isinstance(name, str) or not isinstance(channel, int):
+                return None
+            names[name] = channel
+        track_names[k] = names
+    return track_names
+
+
+def track_channel(
+    device: str, channel: str, track_names: DeviceTrackNames
+) -> int | None:
+    first, _, _ = channel.partition("-")
+    if first.isdigit():
+        return int(first)
+    value = track_names.get(device, {}).get(channel)
+    if isinstance(value, int):
+        return value
+    return None
+
+
+def replace_track_name(
+    track_names: DeviceTrackNames,
+    device: str,
+    channel: int,
+    track_name: str,
+) -> DeviceTrackNames:
+    updated = {k: dict(v) for k, v in track_names.items()}
+    names = updated.setdefault(device, {})
+    for name, value in list(names.items()):
+        if value == channel:
+            del names[name]
+    if track_name:
+        names[track_name] = channel
+    return updated
 
 
 def channel_levels(rows: list[dict[str, object]]) -> list[ChannelLevel]:
     channels = []
+    device = ""
     for row in rows:
+        if isinstance(name := row.get("device"), str):
+            device = name
         if not isinstance(name := row.get("channel"), str):
             continue
         signal = _float(row.get("signal"))
         channels.append(
-            ChannelLevel(name=name, state=level_state(signal), signal=signal)
+            ChannelLevel(
+                name=name, state=level_state(signal), device=device, signal=signal
+            )
         )
     return channels
 

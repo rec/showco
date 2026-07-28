@@ -24,6 +24,7 @@ class ServiceStatus(BaseModel, frozen=True):
 class ChannelLevel(BaseModel, frozen=True):
     name: str
     state: str
+    device: str = ""
     signal: float | None = None
 
 
