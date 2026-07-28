@@ -13,6 +13,8 @@ from pathlib import Path
 import tyro
 from pydantic import BaseModel
 
+import showco
+
 PROVISION_DIR = Path(__file__).resolve().parent
 REMOTE_SCRIPT_TEMPLATE = "provision_locally.tmpl.sh"
 REMOTE_SCRIPT = (PROVISION_DIR / REMOTE_SCRIPT_TEMPLATE).read_text()
@@ -134,7 +136,7 @@ def ensure_github_account_key(config: Config, ssh_target: str) -> None:
 
 def add_github_key(key_file: Path, title: str) -> None:
     try:
-        subprocess.run(
+        showco.run(
             ["gh", "ssh-key", "add", str(key_file), "--title", title],
             capture_output=True,
             check=True,
@@ -151,7 +153,7 @@ def add_github_key(key_file: Path, title: str) -> None:
 
 def github_key_exists(public_key: str) -> bool:
     try:
-        completed = subprocess.run(
+        completed = showco.run(
             ["gh", "api", "user/keys", "--jq", ".[].key"],
             capture_output=True,
             check=True,
@@ -324,7 +326,7 @@ def run(
     *,
     capture_output: bool = False,
 ) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
+    return showco.run(
         command,
         capture_output=capture_output,
         check=True,
