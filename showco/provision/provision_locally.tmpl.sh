@@ -312,6 +312,7 @@ main() {
     alsa-utils
     ca-certificates
     curl
+    emacs
     ffmpeg
     git
     libegl1
