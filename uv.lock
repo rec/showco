@@ -755,6 +755,7 @@ name = "showco"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "pydantic" },
     { name = "recs" },
     { name = "twitcho" },
     { name = "tyro" },
@@ -767,6 +768,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "pydantic", specifier = ">=2.13.4" },
     { name = "recs", editable = "../recs" },
     { name = "twitcho", editable = "../twitcho" },
     { name = "tyro", specifier = ">=1.0.15" },
