@@ -27,26 +27,45 @@ The script reads defaults from:
 `showco/provision/config.toml` contains non-secret operational values, including:
 
 ```toml
+[network]
+host = "recs-stage.local"
+web_port = 17352
 swap_wifi = false
-is_x18_wired = true
-network_topology = ""
-twitcho_enabled = false
-private_wifi_ssid = "showbox"
-external_wifi_ssid = ""
-showco_pi_host = "recs-stage.local"
-showco_pi_ssh_port = "22"
-showco_pi_x18_ethernet_subnet = "10.43.0.0/24"
-showco_x18_wired_ethernet_ip_address = "10.43.0.18"
-recs_repo = "git@github.com:rec/recs.git"
-twitcho_repo = "git@github.com:rec/twitcho.git"
-showco_repo = "git@github.com:rec/showco.git"
+topology = ""
+
+[networks.internal.wired.x18]
+name = "x18"
+ip_address = "10.43.0.18"
+subnet = "10.43.0.0/24"
+
+[networks.internal.wifi.private]
+name = "showbox"
+ip_address = "10.42.0.1"
+dhcp_start = "10.42.0.50"
+dhcp_end = "10.42.0.200"
+
+[networks.external.wifi.external]
+name = "Venue WiFi"
+
+[twitch]
+enabled = false
+
+[git.recs]
+url = "git@github.com:rec/recs.git"
+
+[git.twitcho]
+url = "git@github.com:rec/twitcho.git"
+
+[git.showco]
+url = "git@github.com:rec/showco.git"
 ```
 
-If `showco_pi_user` is omitted, the provisioning script uses the local `USER`
-environment variable. It is an error if neither is set.
+If `network.user` is omitted, the provisioning script uses the local `USER`
+environment variable. It is an error if neither is set. The SSH port defaults to
+22; override it with `showco provision --port 2222` when needed.
 
 Set the Raspberry Pi hostname in Raspberry Pi Imager before first boot. Use that
-same name for `showco_pi_host`, including `.local` when connecting by mDNS.
+same name for `network.host`, including `.local` when connecting by mDNS.
 
 `showco/provision/secrets.toml` contains secret operational values. Provisioning
 uses key-based SSH only.
@@ -54,8 +73,11 @@ uses key-based SSH only.
 Wi-Fi passwords belong in `showco/provision/secrets.toml`:
 
 ```toml
-private_wifi_password = "..."
-external_wifi_password = "..."
+[networks.internal.wifi.private]
+password = "..."
+
+[networks.external.wifi.external]
+password = "..."
 ```
 
 ## Network configuration
@@ -69,15 +91,15 @@ showco run network-config
 
 The network tool detects Wi-Fi interfaces with NetworkManager. By default, the
 first Wi-Fi interface is primary and an optional second Wi-Fi interface is
-secondary. Set `swap_wifi = true` to make the second interface primary when one
-is present.
+secondary. Set `network.swap_wifi = true` to make the second interface primary
+when one is present.
 
-When `is_x18_wired = true`, the network tool also configures the Pi Ethernet
-jack as the X18 control link. It uses the first usable address in
-`showco_pi_x18_ethernet_subnet` for the Pi and expects the X18 at
-`showco_x18_wired_ethernet_ip_address`.
+When `[networks.internal.wired.x18]` is present, the network tool also
+configures the Pi Ethernet jack as the X18 control link. It uses the first
+usable address in `networks.internal.wired.x18.subnet` for the Pi and expects
+the X18 at `networks.internal.wired.x18.ip_address`.
 
-`network_topology` may be empty, `public`, `private`, or `mixed`:
+`network.topology` may be empty, `public`, `private`, or `mixed`:
 
 - `public`: the primary Wi-Fi connects to the external network; secondary Wi-Fi
   is disconnected.
@@ -86,8 +108,8 @@ jack as the X18 control link. It uses the first usable address in
 - `mixed`: the primary Wi-Fi provides the show network, and the secondary Wi-Fi
   connects to the external network.
 
-When `network_topology` is empty, the tool selects it from the configured
-external network, second Wi-Fi presence, and `twitcho_enabled`.
+When `network.topology` is empty, the tool selects it from the configured
+external network, second Wi-Fi presence, and `twitch.enabled`.
 
 ## Single command
 

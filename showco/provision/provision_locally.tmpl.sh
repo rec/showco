@@ -279,15 +279,15 @@ configure_network() {
   local status
 
   if [[ -z "$EXTERNAL_WIFI_SSID" || "$EXTERNAL_WIFI_SSID" == TODO ]]; then
-    printf 'Skipping network configuration: external_wifi_ssid is not set.\n'
+    printf 'Skipping network configuration: networks.external.wifi.external.name is not set.\n'
     return
   fi
   if [[ -z "$PRIVATE_WIFI_PASSWORD" || "$PRIVATE_WIFI_PASSWORD" == TODO ]]; then
-    printf 'Skipping network configuration: private_wifi_password is not set.\n'
+    printf 'Skipping network configuration: networks.internal.wifi.private.password is not set.\n'
     return
   fi
   if [[ -z "$EXTERNAL_WIFI_PASSWORD" || "$EXTERNAL_WIFI_PASSWORD" == TODO ]]; then
-    printf 'Skipping network configuration: external_wifi_password is not set.\n'
+    printf 'Skipping network configuration: networks.external.wifi.external.password is not set.\n'
     return
   fi
 
