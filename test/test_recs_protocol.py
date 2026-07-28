@@ -97,11 +97,11 @@ class RecsProtocolTests(unittest.TestCase):
         listener = FakeListener()
         server.clients = [listener]
 
-        server.broadcast([{"device": "Mic"}])
+        server.broadcast([{"device": "Mic"}], [])
 
         self.assertEqual(
             [json.loads(message) for message in listener.messages],
-            [{"type": "rows", "rows": [{"device": "Mic"}]}],
+            [{"type": "rows", "rows": [{"device": "Mic"}], "errors": []}],
         )
 
 
