@@ -232,8 +232,8 @@ install_recs_service() {
   local uid
   local args=()
   uid=$(id -u "$SHOW_USER")
-  if [[ -n "$AUDIO_X18_USB_DEVICE_NAME" && "$AUDIO_X18_USB_DEVICE_NAME" != TODO ]]; then
-    args+=(--include "$AUDIO_X18_USB_DEVICE_NAME")
+  if [[ -n "$X18_USB_DEVICE_NAME" && "$X18_USB_DEVICE_NAME" != TODO ]]; then
+    args+=(--include "$X18_USB_DEVICE_NAME")
   fi
   if [[ ${#args[@]} -gt 0 ]]; then
     quoted_args=$(printf '%q ' "${args[@]}")

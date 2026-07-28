@@ -31,7 +31,7 @@ class Config(BaseModel, frozen=True):
     showco_port: str
     is_x18_wired: bool
     showco_x18_host: str
-    audio_x18_usb_device_name: str
+    x18_usb_device_name: str
 
 
 class ProvisionOptions(BaseModel, frozen=True):
@@ -250,7 +250,7 @@ def config_from_args(args: ProvisionOptions, env: dict[str, object]) -> Config:
         showco_port=require_value("showco_port", showco_port),
         is_x18_wired=is_x18_wired,
         showco_x18_host=showco_x18_host,
-        audio_x18_usb_device_name=string_value(env, "audio_x18_usb_device_name"),
+        x18_usb_device_name=string_value(env, "x18_usb_device_name"),
     )
 
 
@@ -295,7 +295,7 @@ def remote_command(config: Config, remote_script: str) -> str:
         "SHOWCO_REPO": config.showco_repo,
         "SHOWCO_PORT": config.showco_port,
         "SHOWCO_X18_HOST": config.showco_x18_host,
-        "AUDIO_X18_USB_DEVICE_NAME": config.audio_x18_usb_device_name,
+        "X18_USB_DEVICE_NAME": config.x18_usb_device_name,
     }
     assignments = [f"{k}={shlex.quote(v)}" for k, v in values.items()]
     return " ".join([*assignments, "bash", shlex.quote(remote_script)])
