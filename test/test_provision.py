@@ -318,6 +318,13 @@ class ProvisionTests(unittest.TestCase):
         self.assertLess(update, upgrade)
         self.assertLess(upgrade, install)
 
+    def test_remote_script_exports_locale_before_package_updates(self) -> None:
+        export = provision.REMOTE_SCRIPT.index("export LC_CTYPE=en_US.UTF-8")
+        update = provision.REMOTE_SCRIPT.index("sudo apt-get update")
+
+        self.assertIn("unset LC_ALL", provision.REMOTE_SCRIPT)
+        self.assertLess(export, update)
+
     def test_read_toml_preserves_string_lists(self) -> None:
         with TemporaryDirectory() as directory:
             path = Path(directory) / "config.toml"

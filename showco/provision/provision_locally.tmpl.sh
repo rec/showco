@@ -13,6 +13,9 @@ configure_locale() {
   sudo sed -i 's/^# *en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen
   sudo locale-gen en_US.UTF-8
   sudo update-locale LANG=en_US.UTF-8 LC_CTYPE=en_US.UTF-8
+  export LANG=en_US.UTF-8
+  export LC_CTYPE=en_US.UTF-8
+  unset LC_ALL
 }
 
 home_disk() {
