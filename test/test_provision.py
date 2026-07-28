@@ -154,6 +154,30 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn("iw dev", provision.REMOTE_SCRIPT)
         self.assertIn("PROVISIONING-REPORT.txt", provision.REMOTE_SCRIPT)
 
+    def test_remote_script_configures_network(self) -> None:
+        self.assertIn('phase "configuring network"', provision.REMOTE_SCRIPT)
+        self.assertIn("configure_network()", provision.REMOTE_SCRIPT)
+        self.assertIn("uv run showco run network-config", provision.REMOTE_SCRIPT)
+        self.assertIn("Skipping network configuration", provision.REMOTE_SCRIPT)
+
+    def test_remote_command_passes_network_config(self) -> None:
+        config = provision.config_from_args(
+            args(),
+            values(
+                is_x18_wired=False,
+                external_wifi_ssid="Venue",
+                external_wifi_password="venue password",
+                private_wifi_password="private password",
+            ),
+        )
+
+        command = provision.remote_command(config, "/tmp/provision.sh")
+
+        self.assertIn("EXTERNAL_WIFI_SSID=Venue", command)
+        self.assertIn("EXTERNAL_WIFI_PASSWORD='venue password'", command)
+        self.assertIn("PRIVATE_WIFI_PASSWORD='private password'", command)
+        self.assertIn("IS_X18_WIRED=false", command)
+
     def test_ensure_github_account_key_adds_new_key(self) -> None:
         config = provision.config_from_args(args(), values(is_x18_wired=False))
         public_key = "ssh-ed25519 AAAATEST showco recs-stage.local"

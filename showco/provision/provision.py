@@ -30,6 +30,14 @@ class Config(BaseModel, frozen=True):
     showco_repo: str
     showco_port: str
     is_x18_wired: bool
+    swap_wifi: bool
+    network_topology: str
+    twitcho_enabled: bool
+    private_wifi_ssid: str
+    private_wifi_password: str
+    external_wifi_ssid: str
+    external_wifi_password: str
+    showco_pi_x18_ethernet_subnet: str
     showco_x18_host: str
     x18_usb_device_name: str
 
@@ -249,6 +257,23 @@ def config_from_args(args: ProvisionOptions, env: dict[str, object]) -> Config:
         showco_repo=require_value("showco_repo", showco_repo),
         showco_port=require_value("showco_port", showco_port),
         is_x18_wired=is_x18_wired,
+        swap_wifi=bool_value(env, "swap_wifi", default=False),
+        network_topology=string_value(env, "network_topology"),
+        twitcho_enabled=bool_value(env, "twitcho_enabled", default=False),
+        private_wifi_ssid=string_value(
+            env,
+            "private_wifi_ssid",
+            legacy_name="showco_pi_access_point_ssid",
+            default="showbox",
+        ),
+        private_wifi_password=string_value(env, "private_wifi_password"),
+        external_wifi_ssid=string_value(env, "external_wifi_ssid"),
+        external_wifi_password=string_value(env, "external_wifi_password"),
+        showco_pi_x18_ethernet_subnet=string_value(
+            env,
+            "showco_pi_x18_ethernet_subnet",
+            default="10.43.0.0/24",
+        ),
         showco_x18_host=showco_x18_host,
         x18_usb_device_name=string_value(env, "x18_usb_device_name"),
     )
@@ -279,11 +304,25 @@ def bool_value(values: dict[str, object], name: str, *, default: bool) -> bool:
     sys.exit(f"ERROR: {name} must be a boolean")
 
 
-def string_value(values: dict[str, object], name: str, *, default: str = "") -> str:
-    value = values.get(name, default)
+def string_value(
+    values: dict[str, object],
+    name: str,
+    *,
+    legacy_name: str | None = None,
+    default: str = "",
+) -> str:
+    value = values.get(name)
+    if value is None and legacy_name:
+        value = values.get(legacy_name)
+    if value is None:
+        value = default
     if isinstance(value, str):
         return os.path.expandvars(value)
     sys.exit(f"ERROR: {name} must be a string")
+
+
+def shell_bool(value: bool) -> str:
+    return "true" if value else "false"
 
 
 def remote_command(config: Config, remote_script: str) -> str:
@@ -294,6 +333,15 @@ def remote_command(config: Config, remote_script: str) -> str:
         "TWITCHO_REPO": config.twitcho_repo,
         "SHOWCO_REPO": config.showco_repo,
         "SHOWCO_PORT": config.showco_port,
+        "IS_X18_WIRED": shell_bool(config.is_x18_wired),
+        "SWAP_WIFI": shell_bool(config.swap_wifi),
+        "NETWORK_TOPOLOGY": config.network_topology,
+        "TWITCHO_ENABLED": shell_bool(config.twitcho_enabled),
+        "PRIVATE_WIFI_SSID": config.private_wifi_ssid,
+        "PRIVATE_WIFI_PASSWORD": config.private_wifi_password,
+        "EXTERNAL_WIFI_SSID": config.external_wifi_ssid,
+        "EXTERNAL_WIFI_PASSWORD": config.external_wifi_password,
+        "SHOWCO_PI_X18_ETHERNET_SUBNET": config.showco_pi_x18_ethernet_subnet,
         "SHOWCO_X18_HOST": config.showco_x18_host,
         "X18_USB_DEVICE_NAME": config.x18_usb_device_name,
     }

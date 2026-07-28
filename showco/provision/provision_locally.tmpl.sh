@@ -201,6 +201,75 @@ sync_repo() {
     bash -lc "cd '$path' && uv sync"
 }
 
+toml_string() {
+  local value=$1
+  value=${value//\\/\\\\}
+  value=${value//\"/\\\"}
+  value=${value//$'\n'/\\n}
+  printf '"%s"' "$value"
+}
+
+write_toml_string() {
+  local name=$1
+  local value=$2
+  printf '%s = ' "$name"
+  toml_string "$value"
+  printf '\n'
+}
+
+write_network_config_files() {
+  local config_file=$1
+  local secrets_file=$2
+
+  {
+    printf 'is_x18_wired = %s\n' "$IS_X18_WIRED"
+    printf 'swap_wifi = %s\n' "$SWAP_WIFI"
+    write_toml_string network_topology "$NETWORK_TOPOLOGY"
+    printf 'twitcho_enabled = %s\n' "$TWITCHO_ENABLED"
+    write_toml_string private_wifi_ssid "$PRIVATE_WIFI_SSID"
+    write_toml_string external_wifi_ssid "$EXTERNAL_WIFI_SSID"
+    write_toml_string showco_pi_x18_ethernet_subnet \
+      "$SHOWCO_PI_X18_ETHERNET_SUBNET"
+  } >"$config_file"
+  {
+    write_toml_string private_wifi_password "$PRIVATE_WIFI_PASSWORD"
+    write_toml_string external_wifi_password "$EXTERNAL_WIFI_PASSWORD"
+  } >"$secrets_file"
+  sudo chown "$SHOW_USER:$SHOW_USER" "$config_file" "$secrets_file"
+  sudo chmod 600 "$config_file" "$secrets_file"
+}
+
+configure_network() {
+  local config_file
+  local secrets_file
+  local status
+
+  if [[ -z "$EXTERNAL_WIFI_SSID" || "$EXTERNAL_WIFI_SSID" == TODO ]]; then
+    printf 'Skipping network configuration: external_wifi_ssid is not set.\n'
+    return
+  fi
+  if [[ -z "$PRIVATE_WIFI_PASSWORD" || "$PRIVATE_WIFI_PASSWORD" == TODO ]]; then
+    printf 'Skipping network configuration: private_wifi_password is not set.\n'
+    return
+  fi
+  if [[ -z "$EXTERNAL_WIFI_PASSWORD" || "$EXTERNAL_WIFI_PASSWORD" == TODO ]]; then
+    printf 'Skipping network configuration: external_wifi_password is not set.\n'
+    return
+  fi
+
+  config_file=$(mktemp)
+  secrets_file=$(mktemp)
+  write_network_config_files "$config_file" "$secrets_file"
+  set +e
+  sudo -H -u "$SHOW_USER" env PATH="/home/$SHOW_USER/.local/bin:$PATH" \
+    bash -lc \
+      "cd '$CODE_DIR/showco' && uv run showco run network-config --config '$config_file' --secrets '$secrets_file'"
+  status=$?
+  set -e
+  rm -f "$config_file" "$secrets_file"
+  return "$status"
+}
+
 showco_args() {
   local args=(
     --host 0.0.0.0
@@ -319,6 +388,7 @@ main() {
     libportaudio2
     libsndfile1
     locales
+    network-manager
     openssh-client
     python3
     python3-venv
@@ -376,7 +446,7 @@ Provisioning completed.
 Next manual steps:
 
 1. Fill final twitcho config values if Twitch streaming is required.
-2. Configure the final Pi access point.
+2. Fill Wi-Fi password values and rerun provisioning if network configuration was skipped.
 3. Confirm the X18 USB device name.
 4. Run the acceptance tests in showco/doc/acceptance-tests.md.
 TEXT
@@ -384,6 +454,9 @@ TEXT
     /tmp/PROVISIONING-NEXT-STEPS.txt \
     "/home/$SHOW_USER/PROVISIONING-NEXT-STEPS.txt"
   rm -f /tmp/PROVISIONING-NEXT-STEPS.txt
+
+  phase "configuring network"
+  configure_network
 }
 
 main "$@"
