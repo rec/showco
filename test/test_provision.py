@@ -116,6 +116,15 @@ class ProvisionTests(unittest.TestCase):
         self.assertNotIn("gh ", command)
         self.assertNotIn("gh\n", command)
 
+    def test_remote_github_key_command_is_loaded_from_template_file(self) -> None:
+        config = provision.config_from_args(args(), values(is_x18_wired=False))
+        template = provision.script_dir() / provision.REMOTE_GITHUB_KEY_TEMPLATE
+
+        self.assertEqual(
+            provision.remote_github_key_command(config),
+            template.read_text().replace("{comment}", "'showco recs-stage.local'"),
+        )
+
     def test_remote_script_is_loaded_from_template_file(self) -> None:
         template = provision.script_dir() / provision.REMOTE_SCRIPT_TEMPLATE
 

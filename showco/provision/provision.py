@@ -15,6 +15,7 @@ from pydantic import BaseModel
 
 REMOTE_SCRIPT_TEMPLATE = "provision_locally.tmpl.sh"
 REMOTE_SCRIPT = (Path(__file__).resolve().parent / REMOTE_SCRIPT_TEMPLATE).read_text()
+REMOTE_GITHUB_KEY_TEMPLATE = "remote_github_key.tmpl.sh"
 
 
 class Config(BaseModel, frozen=True):
@@ -174,33 +175,8 @@ def github_key_title(config: Config) -> str:
 
 def remote_github_key_command(config: Config) -> str:
     comment = shlex.quote(github_key_title(config))
-    return "\n".join(
-        [
-            "set -e",
-            "{",
-            "if ! command -v ssh-keygen >/dev/null 2>&1 || "
-            "! command -v ssh-keyscan >/dev/null 2>&1; then",
-            "  sudo apt-get update",
-            "  sudo apt-get install -y openssh-client",
-            "fi",
-            'mkdir -p "$HOME/.ssh"',
-            'chmod 700 "$HOME/.ssh"',
-            'if [ ! -f "$HOME/.ssh/id_ed25519" ]; then',
-            "  ssh-keygen -t ed25519 -N '' "
-            f'-C {comment} -f "$HOME/.ssh/id_ed25519" >/dev/null',
-            "fi",
-            'chmod 600 "$HOME/.ssh/id_ed25519"',
-            'if [ ! -f "$HOME/.ssh/id_ed25519.pub" ]; then',
-            '  ssh-keygen -y -f "$HOME/.ssh/id_ed25519" > "$HOME/.ssh/id_ed25519.pub"',
-            "fi",
-            'touch "$HOME/.ssh/known_hosts"',
-            'chmod 600 "$HOME/.ssh/known_hosts"',
-            'ssh-keygen -F github.com -f "$HOME/.ssh/known_hosts" >/dev/null 2>&1 '
-            '|| ssh-keyscan github.com >> "$HOME/.ssh/known_hosts"',
-            "} >&2",
-            'cat "$HOME/.ssh/id_ed25519.pub"',
-        ]
-    )
+    template = script_dir() / REMOTE_GITHUB_KEY_TEMPLATE
+    return template.read_text().replace("{comment}", comment)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
