@@ -9,6 +9,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Protocol
 
+from pydantic import BaseModel
 from recs.daemon.gui_backend import client_connection
 from recs.daemon.gui_protocol import Command, Error, Hello, Reply, parse_message
 from recs.daemon.models import DaemonMetadata
@@ -96,21 +97,23 @@ class RecsClient:
         try:
             metadata = self._metadata()
         except (OSError, ValueError) as e:
-            return ActionResult(False, f"could not read recs metadata: {e}")
+            return ActionResult(ok=False, message=f"could not read recs metadata: {e}")
         if metadata is None:
-            return ActionResult(False, f"{self.metadata_path} does not exist")
+            return ActionResult(
+                ok=False, message=f"{self.metadata_path} does not exist"
+            )
 
         try:
             connection = client_connection(_endpoint(metadata.gui_endpoint))
         except OSError as e:
-            return ActionResult(False, f"could not connect to recs: {e}")
+            return ActionResult(ok=False, message=f"could not connect to recs: {e}")
         try:
             if not connection.write(
                 Hello(type="hello", role="gui").model_dump_json() + "\n"
             ):
-                return ActionResult(False, "could not send recs hello")
+                return ActionResult(ok=False, message="could not send recs hello")
             if error := _expect_daemon_hello(_read_message(connection)):
-                return ActionResult(False, error)
+                return ActionResult(ok=False, message=error)
 
             message_id = str(uuid.uuid4())
             if not connection.write(
@@ -121,11 +124,13 @@ class RecsClient:
                 ).model_dump_json()
                 + "\n"
             ):
-                return ActionResult(False, "could not send recs calibrate command")
+                return ActionResult(
+                    ok=False, message="could not send recs calibrate command"
+                )
 
             return _calibration_result(_read_message(connection), message_id)
         except (OSError, ValueError) as e:
-            return ActionResult(False, f"recs calibration failed: {e}")
+            return ActionResult(ok=False, message=f"recs calibration failed: {e}")
         finally:
             connection.close()
 
@@ -135,11 +140,10 @@ class RecsClient:
         return DaemonMetadata.model_validate_json(self.metadata_path.read_text())
 
 
-class RecsPaths:
-    def __init__(self, metadata: Path, status: Path, gui_endpoint: str) -> None:
-        self.metadata = metadata
-        self.status = status
-        self.gui_endpoint = gui_endpoint
+class RecsPaths(BaseModel, frozen=True):
+    metadata: Path
+    status: Path
+    gui_endpoint: str
 
 
 class RecsConnection(Protocol):
@@ -189,14 +193,14 @@ def _expect_daemon_hello(message: object) -> str | None:
 
 def _calibration_result(message: object, message_id: str) -> ActionResult:
     if isinstance(message, Error):
-        return ActionResult(False, message.message)
+        return ActionResult(ok=False, message=message.message)
     if not isinstance(message, Reply):
-        return ActionResult(False, "recs did not send calibration reply")
+        return ActionResult(ok=False, message="recs did not send calibration reply")
     if message.id != message_id:
-        return ActionResult(False, "recs sent reply for a different command")
+        return ActionResult(ok=False, message="recs sent reply for a different command")
     if message.ok:
-        return ActionResult(True, "recs calibration succeeded")
-    return ActionResult(False, message.message or "recs calibration failed")
+        return ActionResult(ok=True, message="recs calibration succeeded")
+    return ActionResult(ok=False, message=message.message or "recs calibration failed")
 
 
 def channel_levels(rows: list[dict[str, object]]) -> list[ChannelLevel]:

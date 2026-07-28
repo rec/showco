@@ -24,8 +24,10 @@ class ServerTests(unittest.TestCase):
     def test_home_page_has_two_screen_navigation(self) -> None:
         html = home_page(
             ShowStatus(
-                recs=RecsStatus(service=ServiceStatus("recs", "connected")),
-                twitcho=TwitchoStatus(service=ServiceStatus("twitcho", "offline")),
+                recs=RecsStatus(service=ServiceStatus(name="recs", state="connected")),
+                twitcho=TwitchoStatus(
+                    service=ServiceStatus(name="twitcho", state="offline")
+                ),
             )
         )
 
@@ -36,8 +38,10 @@ class ServerTests(unittest.TestCase):
     def test_home_page_shows_pi_temperature(self) -> None:
         html = home_page(
             ShowStatus(
-                recs=RecsStatus(service=ServiceStatus("recs", "connected")),
-                twitcho=TwitchoStatus(service=ServiceStatus("twitcho", "connected")),
+                recs=RecsStatus(service=ServiceStatus(name="recs", state="connected")),
+                twitcho=TwitchoStatus(
+                    service=ServiceStatus(name="twitcho", state="connected")
+                ),
                 system=SystemStatus(temperature_c=52.75),
             )
         )
@@ -48,9 +52,9 @@ class ServerTests(unittest.TestCase):
     def test_home_page_shows_bitrate_and_mixer_latency(self) -> None:
         html = home_page(
             ShowStatus(
-                recs=RecsStatus(service=ServiceStatus("recs", "connected")),
+                recs=RecsStatus(service=ServiceStatus(name="recs", state="connected")),
                 twitcho=TwitchoStatus(
-                    service=ServiceStatus("twitcho", "connected"),
+                    service=ServiceStatus(name="twitcho", state="connected"),
                     output_bitrate_kbps=312.5,
                 ),
                 mixer=MixerStatus(latency_ms=4.25),

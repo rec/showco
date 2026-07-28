@@ -49,8 +49,8 @@ class NetworkConfigTests(unittest.TestCase):
     def test_swap_wifi_makes_second_interface_primary(self) -> None:
         assignment = assign_wifi(
             [
-                WifiInterface("wlan0"),
-                WifiInterface("wlan1"),
+                WifiInterface(name="wlan0"),
+                WifiInterface(name="wlan1"),
             ],
             swap_wifi=True,
         )
@@ -67,8 +67,8 @@ class NetworkConfigTests(unittest.TestCase):
             network_config(network_topology=NetworkTopology.PRIVATE),
             assign_wifi(
                 [
-                    WifiInterface("wlan0"),
-                    WifiInterface("wlan1"),
+                    WifiInterface(name="wlan0"),
+                    WifiInterface(name="wlan1"),
                 ],
                 swap_wifi=False,
             ),
@@ -193,7 +193,7 @@ class NetworkConfigTests(unittest.TestCase):
                 is_x18_wired=False,
                 network_topology=NetworkTopology.PRIVATE,
             ),
-            assign_wifi([WifiInterface("wlan0")], swap_wifi=False),
+            assign_wifi([WifiInterface(name="wlan0")], swap_wifi=False),
             NetworkTopology.PRIVATE,
         )
 

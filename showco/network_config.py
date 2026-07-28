@@ -9,9 +9,10 @@ import subprocess
 import sys
 import tomllib
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
 from pathlib import Path
 from typing import TextIO
+
+from pydantic import BaseModel
 
 RunCommand = Callable[[Sequence[str]], subprocess.CompletedProcess[str]]
 
@@ -22,8 +23,7 @@ class NetworkTopology(enum.StrEnum):
     MIXED = enum.auto()
 
 
-@dataclass(frozen=True)
-class NetworkConfig:
+class NetworkConfig(BaseModel, frozen=True):
     is_x18_wired: bool
     swap_wifi: bool
     network_topology: NetworkTopology | None
@@ -35,13 +35,11 @@ class NetworkConfig:
     x18_ethernet_subnet: str
 
 
-@dataclass(frozen=True)
-class WifiInterface:
+class WifiInterface(BaseModel, frozen=True):
     name: str
 
 
-@dataclass(frozen=True)
-class WifiAssignment:
+class WifiAssignment(BaseModel, frozen=True):
     primary: WifiInterface
     secondary: WifiInterface | None
 
@@ -137,7 +135,7 @@ def detect_wifi_interfaces(
         fields = split_nmcli_terse_fields(line)
         if len(fields) >= 2 and fields[1] == "wifi":
             names.append(fields[0])
-    return [WifiInterface(name) for name in names]
+    return [WifiInterface(name=name) for name in names]
 
 
 def split_nmcli_terse_fields(line: str) -> list[str]:
@@ -169,7 +167,7 @@ def assign_wifi(interfaces: list[WifiInterface], swap_wifi: bool) -> WifiAssignm
         ordered[0], ordered[1] = ordered[1], ordered[0]
     primary = ordered[0]
     secondary = ordered[1] if len(ordered) > 1 else None
-    return WifiAssignment(primary, secondary)
+    return WifiAssignment(primary=primary, secondary=secondary)
 
 
 def select_topology(config: NetworkConfig, has_second_wifi: bool) -> NetworkTopology:

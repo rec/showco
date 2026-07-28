@@ -4,9 +4,10 @@ import os
 import subprocess
 import sys
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
 from pathlib import Path
 from typing import TextIO
+
+from pydantic import BaseModel
 
 RunCommand = Callable[
     [Sequence[str]],
@@ -14,14 +15,12 @@ RunCommand = Callable[
 ]
 
 
-@dataclass(frozen=True)
-class Program:
+class Program(BaseModel, frozen=True):
     name: str
     directory: Path
 
 
-@dataclass(frozen=True)
-class StepResult:
+class StepResult(BaseModel, frozen=True):
     program: str
     step: str
     command: list[str]
@@ -42,9 +41,9 @@ def update_programs(
     code_dir = code_dir or Path.home() / "code"
     run_command = run_command or _run_command
     programs = [
-        Program("recs", code_dir / "recs"),
-        Program("twitcho", code_dir / "twitcho"),
-        Program("showco", code_dir / "showco"),
+        Program(name="recs", directory=code_dir / "recs"),
+        Program(name="twitcho", directory=code_dir / "twitcho"),
+        Program(name="showco", directory=code_dir / "showco"),
     ]
     results = [
         _run_service_step("recs", "stop", run_command),
@@ -99,15 +98,27 @@ def _run_step(
     try:
         completed = run_command(command)
     except FileNotFoundError as e:
-        return StepResult(program, step, command, 127, str(e))
+        return StepResult(
+            program=program,
+            step=step,
+            command=command,
+            returncode=127,
+            output=str(e),
+        )
     except subprocess.TimeoutExpired as e:
-        return StepResult(program, step, command, 124, _timeout_output(e))
+        return StepResult(
+            program=program,
+            step=step,
+            command=command,
+            returncode=124,
+            output=_timeout_output(e),
+        )
     return StepResult(
-        program,
-        step,
-        command,
-        completed.returncode,
-        f"{completed.stdout}{completed.stderr}",
+        program=program,
+        step=step,
+        command=command,
+        returncode=completed.returncode,
+        output=f"{completed.stdout}{completed.stderr}",
     )
 
 

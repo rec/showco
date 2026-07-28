@@ -43,7 +43,8 @@ class RehearsalRecsClient(RecsClient):
     def calibrate(self) -> ActionResult:
         self.calibration_count += 1
         return ActionResult(
-            True, f"rehearsal recs calibration {self.calibration_count}"
+            ok=True,
+            message=f"rehearsal recs calibration {self.calibration_count}",
         )
 
 
@@ -73,7 +74,7 @@ class RehearsalTwitchoClient(TwitchoClient):
             self.muted = False
         elif command == "stop":
             self.stopped = True
-        return ActionResult(True, f"rehearsal twitcho {command} succeeded")
+        return ActionResult(ok=True, message=f"rehearsal twitcho {command} succeeded")
 
 
 class RehearsalTwitchoSupervisor:
@@ -86,7 +87,8 @@ class RehearsalTwitchoSupervisor:
     def restart(self) -> ActionResult:
         self.restart_count += 1
         return ActionResult(
-            True, f"rehearsal twitcho restart {self.restart_count} requested"
+            ok=True,
+            message=f"rehearsal twitcho restart {self.restart_count} requested",
         )
 
     def close(self) -> None:
