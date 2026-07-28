@@ -318,18 +318,12 @@ def x18_pi_ethernet_address(subnet: str) -> str:
     try:
         network = ipaddress.ip_network(subnet, strict=False)
     except ValueError:
-        sys.exit(
-            "ERROR: networks.internal.wired.x18.subnet "
-            "must be a valid IP subnet"
-        )
+        sys.exit("ERROR: networks.internal.wired.x18.subnet must be a valid IP subnet")
     hosts = network.hosts()
     try:
         address = next(hosts)
     except StopIteration:
-        sys.exit(
-            "ERROR: networks.internal.wired.x18.subnet "
-            "has no usable host address"
-        )
+        sys.exit("ERROR: networks.internal.wired.x18.subnet has no usable host address")
     return f"{address}/{network.prefixlen}"
 
 
@@ -377,7 +371,15 @@ def network_dict(values: dict[str, object], name: str) -> dict[str, Network]:
     for k, v in values.items():
         if not isinstance(v, dict):
             sys.exit(f"ERROR: {name}.{k} must be a table")
-        networks[k] = Network(**cast(dict[str, object], v))
+        table = cast(dict[str, object], v)
+        networks[k] = Network(
+            name=string_value(table, "name"),
+            dhcp_start=string_value(table, "dhcp_start"),
+            dhcp_end=string_value(table, "dhcp_end"),
+            ip_address=string_value(table, "ip_address"),
+            subnet=string_value(table, "subnet"),
+            password=string_value(table, "password"),
+        )
     return networks
 
 

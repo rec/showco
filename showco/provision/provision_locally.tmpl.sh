@@ -301,6 +301,10 @@ configure_network() {
   return "$status"
 }
 
+schedule_reboot() {
+  sudo shutdown -r +0
+}
+
 showco_args() {
   local args=(
     --host 0.0.0.0
@@ -490,6 +494,9 @@ TEXT
 
   phase "configuring network"
   configure_network
+
+  phase "rebooting"
+  schedule_reboot
 }
 
 main "$@"
