@@ -121,7 +121,7 @@ class RecsClient:
                     type="command",
                     id=message_id,
                     command="calibrate",
-                ).model_dump_json()
+                ).model_dump_json(exclude_none=True)
                 + "\n"
             ):
                 return ActionResult(
