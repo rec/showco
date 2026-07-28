@@ -394,6 +394,7 @@ main() {
     python3-venv
     rsync
     sudo
+    tmux
     exfatprogs
   )
   printf 'Installing packages:\n'
