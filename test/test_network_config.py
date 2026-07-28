@@ -10,6 +10,7 @@ from showco.network_config import (
     NetworkTopology,
     WifiInterface,
     assign_wifi,
+    config_from_values,
     configure_network,
     network_commands,
     select_topology,
@@ -151,7 +152,7 @@ class NetworkConfigTests(unittest.TestCase):
 
         with self.assertRaisesRegex(SystemExit, "radio failed"):
             configure_network(
-                network_config(is_x18_wired=False),
+                network_config(x18=False),
                 dry_run=False,
                 run_command=run_command,
             )
@@ -179,7 +180,7 @@ class NetworkConfigTests(unittest.TestCase):
         output = StringIO()
 
         configure_network(
-            network_config(is_x18_wired=False),
+            network_config(x18=False),
             dry_run=True,
             run_command=run_command,
             output=output,
@@ -187,10 +188,10 @@ class NetworkConfigTests(unittest.TestCase):
 
         self.assertIn("ifname wl:an0", output.getvalue())
 
-    def test_x18_wired_can_be_disabled(self) -> None:
+    def test_x18_can_be_disabled(self) -> None:
         commands = network_commands(
             network_config(
-                is_x18_wired=False,
+                x18=False,
                 network_topology=NetworkTopology.PRIVATE,
             ),
             assign_wifi([WifiInterface(name="wlan0")], swap_wifi=False),
@@ -205,10 +206,24 @@ class NetworkConfigTests(unittest.TestCase):
             "10.43.0.1/24",
         )
 
+    def test_config_reads_enabled_from_twitch_table(self) -> None:
+        config = config_from_values(
+            {
+                "networks": {
+                    "internal": {
+                        "wifi": {"private": {"name": "showbox"}},
+                    },
+                },
+                "twitch": {"enabled": True},
+            }
+        )
+
+        self.assertTrue(config.twitcho_enabled)
+
 
 def network_config(
     *,
-    is_x18_wired: bool = True,
+    x18: bool = True,
     swap_wifi: bool = False,
     network_topology: NetworkTopology | None = None,
     twitcho_enabled: bool = False,
@@ -216,10 +231,10 @@ def network_config(
     private_wifi_password: str = "",
     external_wifi_ssid: str = "",
     external_wifi_password: str = "",
-    x18_ethernet_subnet: str = "10.43.0.0/24",
+    x18_subnet: str = "10.43.0.0/24",
 ) -> NetworkConfig:
     return NetworkConfig(
-        is_x18_wired=is_x18_wired,
+        x18=x18,
         swap_wifi=swap_wifi,
         network_topology=network_topology,
         twitcho_enabled=twitcho_enabled,
@@ -227,7 +242,7 @@ def network_config(
         private_wifi_password=private_wifi_password,
         external_wifi_ssid=external_wifi_ssid,
         external_wifi_password=external_wifi_password,
-        x18_ethernet_subnet=x18_ethernet_subnet,
+        x18_subnet=x18_subnet,
     )
 
 

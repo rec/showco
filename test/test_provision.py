@@ -3,6 +3,7 @@ from __future__ import annotations
 import subprocess
 import unittest
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest import mock
 
 from showco.provision import provision
@@ -12,24 +13,42 @@ class ProvisionTests(unittest.TestCase):
     def test_wired_x18_uses_configured_x18_host(self) -> None:
         config = provision.config_from_args(
             args(),
-            values(
-                is_x18_wired=True,
-                showco_x18_wired_ethernet_ip_address="10.43.0.18",
-            ),
+            values(),
         )
 
-        self.assertEqual(config.showco_x18_host, "10.43.0.18")
+        self.assertEqual(config.x18_host, "10.43.0.18")
 
     def test_unwired_x18_omits_x18_host(self) -> None:
         config = provision.config_from_args(
             args(),
-            values(is_x18_wired=False),
+            values(networks=networks(x18=False)),
         )
 
-        self.assertEqual(config.showco_x18_host, "")
+        self.assertEqual(config.x18_host, "")
+
+    def test_ssh_port_defaults_to_22(self) -> None:
+        config = provision.config_from_args(
+            args(),
+            values(networks=networks(x18=False)),
+        )
+
+        self.assertEqual(config.ssh_port, 22)
+
+    def test_web_port_is_integer(self) -> None:
+        config = provision.config_from_args(
+            args(),
+            values(
+                network={"web_port": 17353},
+                networks=networks(x18=False),
+            ),
+        )
+
+        self.assertEqual(config.web_port, 17353)
 
     def test_remote_script_is_removed_after_remote_failure(self) -> None:
-        config = provision.config_from_args(args(), values(is_x18_wired=False))
+        config = provision.config_from_args(
+            args(), values(networks=networks(x18=False))
+        )
         original_error = subprocess.CalledProcessError(1, ["ssh", "provision"])
         cleanup_error = subprocess.CalledProcessError(1, ["ssh", "cleanup"])
         with (
@@ -64,7 +83,9 @@ class ProvisionTests(unittest.TestCase):
 
     def test_provision_adds_github_key_before_uploading_script(self) -> None:
         calls: list[str] = []
-        config = provision.config_from_args(args(), values(is_x18_wired=False))
+        config = provision.config_from_args(
+            args(), values(networks=networks(x18=False))
+        )
 
         def ensure_github_account_key(
             config: provision.Config, ssh_target: str
@@ -92,31 +113,41 @@ class ProvisionTests(unittest.TestCase):
         self.assertEqual(calls, ["github", "scp"])
 
     def test_github_key_title_uses_host(self) -> None:
-        config = provision.config_from_args(args(), values(is_x18_wired=False))
+        config = provision.config_from_args(
+            args(), values(networks=networks(x18=False))
+        )
 
         self.assertEqual(provision.github_key_title(config), "showco recs-stage.local")
 
     def test_remote_github_key_command_writes_only_public_key_to_stdout(self) -> None:
-        config = provision.config_from_args(args(), values(is_x18_wired=False))
+        config = provision.config_from_args(
+            args(), values(networks=networks(x18=False))
+        )
         command = provision.remote_github_key_command(config)
 
         self.assertIn('} >&2\ncat "$HOME/.ssh/id_ed25519.pub"', command)
 
     def test_remote_github_key_command_regenerates_missing_public_key(self) -> None:
-        config = provision.config_from_args(args(), values(is_x18_wired=False))
+        config = provision.config_from_args(
+            args(), values(networks=networks(x18=False))
+        )
         command = provision.remote_github_key_command(config)
 
         self.assertIn('ssh-keygen -y -f "$HOME/.ssh/id_ed25519"', command)
 
     def test_remote_github_key_command_does_not_run_gh_on_pi(self) -> None:
-        config = provision.config_from_args(args(), values(is_x18_wired=False))
+        config = provision.config_from_args(
+            args(), values(networks=networks(x18=False))
+        )
         command = provision.remote_github_key_command(config)
 
         self.assertNotIn("gh ", command)
         self.assertNotIn("gh\n", command)
 
     def test_remote_github_key_command_is_loaded_from_template_file(self) -> None:
-        config = provision.config_from_args(args(), values(is_x18_wired=False))
+        config = provision.config_from_args(
+            args(), values(networks=networks(x18=False))
+        )
         template = provision.script_dir() / provision.REMOTE_GITHUB_KEY_TEMPLATE
 
         self.assertEqual(
@@ -142,6 +173,12 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn("prepare_checkout_path()", provision.REMOTE_SCRIPT)
         self.assertIn("Moving non-git checkout aside", provision.REMOTE_SCRIPT)
         self.assertIn('sudo mv "$path" "$backup"', provision.REMOTE_SCRIPT)
+
+    def test_remote_script_checks_out_configured_refname(self) -> None:
+        self.assertIn('git -C "$path" checkout "$refname"', provision.REMOTE_SCRIPT)
+        self.assertIn(
+            'sync_repo recs "$RECS_REPO" "$RECS_REFNAME"', provision.REMOTE_SCRIPT
+        )
 
     def test_remote_script_reinstalls_broken_uv(self) -> None:
         self.assertIn("uv --version", provision.REMOTE_SCRIPT)
@@ -170,14 +207,60 @@ class ProvisionTests(unittest.TestCase):
         self.assertLess(update, upgrade)
         self.assertLess(upgrade, install)
 
+    def test_read_toml_preserves_string_lists(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "config.toml"
+            path.write_text('[twitch]\ntags = ["Live Music", "Music"]\n')
+
+            values = provision.read_toml(path)
+
+        self.assertEqual(
+            provision.table_value(values, "twitch")["tags"],
+            ["Live Music", "Music"],
+        )
+
+    def test_network_secrets_merge_by_key(self) -> None:
+        config = {
+            "networks": {
+                "external": {
+                    "wifi": {
+                        "venue": {"name": "Venue"},
+                    },
+                },
+            },
+        }
+        secrets = {
+            "networks": {
+                "external": {
+                    "wifi": {
+                        "venue": {"password": "venue password"},
+                    },
+                },
+            },
+        }
+
+        values = provision.merge_values(config, secrets)
+
+        self.assertEqual(
+            values["networks"]["external"]["wifi"]["venue"],
+            {
+                "name": "Venue",
+                "password": "venue password",
+            },
+        )
+
     def test_remote_command_passes_network_config(self) -> None:
         config = provision.config_from_args(
             args(),
             values(
-                is_x18_wired=False,
-                external_wifi_ssid="Venue",
-                external_wifi_password="venue password",
-                private_wifi_password="private password",
+                networks=networks(
+                    x18=False,
+                    internal_wifi={"password": "private password"},
+                    external_wifi={
+                        "name": "Venue",
+                        "password": "venue password",
+                    },
+                ),
             ),
         )
 
@@ -186,10 +269,39 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn("EXTERNAL_WIFI_SSID=Venue", command)
         self.assertIn("EXTERNAL_WIFI_PASSWORD='venue password'", command)
         self.assertIn("PRIVATE_WIFI_PASSWORD='private password'", command)
-        self.assertIn("IS_X18_WIRED=false", command)
+        self.assertIn("X18=false", command)
+        self.assertIn("RECS_REFNAME=''", command)
+
+    def test_remote_command_passes_git_refname(self) -> None:
+        config = provision.config_from_args(
+            args(),
+            values(
+                networks=networks(x18=False),
+                git={"recs": {"refname": "my-branch"}},
+            ),
+        )
+
+        command = provision.remote_command(config, "/tmp/provision.sh")
+
+        self.assertIn("RECS_REFNAME=my-branch", command)
+
+    def test_remote_command_passes_enabled_from_twitch_table(self) -> None:
+        config = provision.config_from_args(
+            args(),
+            values(
+                networks=networks(x18=False),
+                twitch={"enabled": True},
+            ),
+        )
+
+        command = provision.remote_command(config, "/tmp/provision.sh")
+
+        self.assertIn("TWITCHO_ENABLED=true", command)
 
     def test_ensure_github_account_key_adds_new_key(self) -> None:
-        config = provision.config_from_args(args(), values(is_x18_wired=False))
+        config = provision.config_from_args(
+            args(), values(networks=networks(x18=False))
+        )
         public_key = "ssh-ed25519 AAAATEST showco recs-stage.local"
         with (
             mock.patch("showco.provision.provision.shutil.which", return_value="/gh"),
@@ -209,7 +321,9 @@ class ProvisionTests(unittest.TestCase):
         )
 
     def test_ensure_github_account_key_reports_add_failure(self) -> None:
-        config = provision.config_from_args(args(), values(is_x18_wired=False))
+        config = provision.config_from_args(
+            args(), values(networks=networks(x18=False))
+        )
         public_key = "ssh-ed25519 AAAATEST showco recs-stage.local"
         add_error = subprocess.CalledProcessError(
             1,
@@ -236,7 +350,9 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn("gh said: not logged in", str(error.exception))
 
     def test_ensure_github_account_key_requires_local_gh(self) -> None:
-        config = provision.config_from_args(args(), values(is_x18_wired=False))
+        config = provision.config_from_args(
+            args(), values(networks=networks(x18=False))
+        )
         with (
             mock.patch("showco.provision.provision.shutil.which", return_value=None),
             self.assertRaises(SystemExit) as error,
@@ -250,7 +366,9 @@ class ProvisionTests(unittest.TestCase):
         )
 
     def test_ensure_github_account_key_skips_existing_key(self) -> None:
-        config = provision.config_from_args(args(), values(is_x18_wired=False))
+        config = provision.config_from_args(
+            args(), values(networks=networks(x18=False))
+        )
         public_key = "ssh-ed25519 AAAATEST showco recs-stage.local"
         with (
             mock.patch("showco.provision.provision.shutil.which", return_value="/gh"),
@@ -315,15 +433,51 @@ def args() -> provision.ProvisionOptions:
 
 def values(**overrides: object) -> dict[str, object]:
     result: dict[str, object] = {
-        "showco_pi_host": "recs-stage.local",
-        "showco_pi_user": "tom",
-        "showco_pi_ssh_port": "22",
-        "recs_repo": "git@github.com:rec/recs.git",
-        "twitcho_repo": "git@github.com:rec/twitcho.git",
-        "showco_repo": "git@github.com:rec/showco.git",
+        "network": {
+            "host": "recs-stage.local",
+            "user": "tom",
+            "web_port": 17352,
+        },
+        "networks": networks(),
+        "usb": {"x18_device_name": "X18/XR18"},
+        "git": {
+            "recs": {"url": "git@github.com:rec/recs.git"},
+            "twitcho": {"url": "git@github.com:rec/twitcho.git"},
+            "showco": {"url": "git@github.com:rec/showco.git"},
+        },
     }
-    result.update(overrides)
+    for k, v in overrides.items():
+        if isinstance(v, dict) and isinstance(result.get(k), dict):
+            result[k] = provision.merge_values(result[k], v)
+        else:
+            result[k] = v
     return result
+
+
+def networks(
+    *,
+    x18: bool = True,
+    internal_wifi: dict[str, object] | None = None,
+    external_wifi: dict[str, object] | None = None,
+) -> dict[str, object]:
+    wired_networks: dict[str, object] = {}
+    if x18:
+        wired_networks = {
+            "x18": {
+                "name": "x18",
+                "ip_address": "10.43.0.18",
+                "subnet": "10.43.0.0/24",
+            }
+        }
+    return {
+        "internal": {
+            "wired": wired_networks,
+            "wifi": {"private": internal_wifi or {"name": "showbox"}},
+        },
+        "external": {
+            "wifi": {"external": external_wifi or {}},
+        },
+    }
 
 
 if __name__ == "__main__":

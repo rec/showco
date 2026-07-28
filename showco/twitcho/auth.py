@@ -11,6 +11,7 @@ import urllib.parse
 import urllib.request
 import webbrowser
 from pathlib import Path
+from typing import cast
 
 import tyro
 from pydantic import BaseModel
@@ -66,7 +67,9 @@ def exchange_code_command(
     secrets: Path = DEFAULT_SECRETS_PATH,
 ) -> int:
     options = auth_options(config, secrets)
-    return exchange_code(read_toml(options.config) | read_toml(options.secrets))
+    return exchange_code(
+        merge_values(read_toml(options.config), read_toml(options.secrets))
+    )
 
 
 def validate_token_command(
@@ -77,12 +80,13 @@ def validate_token_command(
     return validate_token(read_toml(options.config))
 
 
-def authorize_url(config_path: Path, config: dict[str, str]) -> int:
-    client_id = require_value(config, "twitch_client_id", config_path)
-    redirect_uri = require_value(config, "twitch_redirect_uri", config_path)
-    scopes = require_value(config, "twitch_scopes", config_path)
+def authorize_url(config_path: Path, config: dict[str, object]) -> int:
+    twitch = table_value(config, "twitch")
+    client_id = require_value(twitch, "client_id", config_path)
+    redirect_uri = require_value(twitch, "redirect_uri", config_path)
+    scopes = require_value(twitch, "scopes", config_path)
     state = secrets.token_urlsafe(24)
-    write_toml_value(config_path, "twitch_state", state)
+    write_toml_value(config_path, "twitch", "state", state)
     params = {
         "response_type": "code",
         "client_id": client_id,
@@ -95,17 +99,18 @@ def authorize_url(config_path: Path, config: dict[str, str]) -> int:
     webbrowser.open(url)
     print(
         "After approving it, copy the full localhost callback URL from the browser\n"
-        "address bar and paste it into twitch_callback_url_or_code in secrets.toml."
+        "address bar and paste it into twitch.callback_url_or_code in secrets.toml."
     )
     return 0
 
 
-def exchange_code(env: dict[str, str]) -> int:
-    client_id = require_value(env, "twitch_client_id")
-    client_secret = require_value(env, "twitch_client_secret")
-    redirect_uri = require_value(env, "twitch_redirect_uri")
-    callback = require_value(env, "twitch_callback_url_or_code")
-    config_dir = Path(require_value(env, "twitch_config_dir")).expanduser()
+def exchange_code(env: dict[str, object]) -> int:
+    twitch = table_value(env, "twitch")
+    client_id = require_value(twitch, "client_id")
+    client_secret = require_value(twitch, "client_secret")
+    redirect_uri = require_value(twitch, "redirect_uri")
+    callback = require_value(twitch, "callback_url_or_code")
+    config_dir = Path(require_value(twitch, "config_dir")).expanduser()
     config_dir.mkdir(parents=True, exist_ok=True)
     response_file = config_dir / "oauth-response.json"
     data = urllib.parse.urlencode(
@@ -157,8 +162,9 @@ def exchange_code(env: dict[str, str]) -> int:
     return 0
 
 
-def validate_token(config: dict[str, str]) -> int:
-    config_dir = Path(require_value(config, "twitch_config_dir")).expanduser()
+def validate_token(config: dict[str, object]) -> int:
+    twitch = table_value(config, "twitch")
+    config_dir = Path(require_value(twitch, "config_dir")).expanduser()
     token_file = config_dir / "oauth-token"
     if not token_file.exists():
         message = (
@@ -197,34 +203,81 @@ def request_http(request: urllib.request.Request) -> HttpResponse:
         return HttpResponse(status=e.code, text=e.read().decode())
 
 
-def read_toml(path: Path) -> dict[str, str]:
+def read_toml(path: Path) -> dict[str, object]:
     if not path.exists():
         return {}
-    values: dict[str, str] = {}
     try:
         parsed = tomllib.loads(path.read_text())
     except tomllib.TOMLDecodeError as e:
         sys.exit(f"Cannot parse {path}: {e}")
-    for name, value in parsed.items():
-        if isinstance(value, str):
-            values[name] = os.path.expandvars(value)
-    return values
+    return {k: toml_value(v) for k, v in parsed.items()}
 
 
-def write_toml_value(path: Path, name: str, value: str) -> None:
+def toml_value(value: object) -> object:
+    if isinstance(value, str):
+        return os.path.expandvars(value)
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, list) and all(isinstance(i, str) for i in value):
+        return value
+    if isinstance(value, dict):
+        return {k: toml_value(v) for k, v in value.items()}
+    return None
+
+
+def write_toml_value(path: Path, section: str, name: str, value: str) -> None:
     lines = path.read_text().splitlines() if path.exists() else []
     replacement = f"{name} = {json.dumps(value)}"
+    section_header = f"[{section}]"
+    in_section = False
+    last_section_line = -1
     for i, line in enumerate(lines):
-        if line.startswith(f"{name} ="):
+        if line == section_header:
+            in_section = True
+            last_section_line = i
+            continue
+        if in_section and line.startswith("["):
+            lines.insert(i, replacement)
+            break
+        if in_section and line.startswith(f"{name} ="):
             lines[i] = replacement
             break
     else:
+        if last_section_line == -1:
+            if lines:
+                lines.append("")
+            lines.append(section_header)
         lines.append(replacement)
     path.write_text("\n".join(lines) + "\n")
 
 
-def require_value(env: dict[str, str], name: str, path: Path | None = None) -> str:
+def merge_values(
+    config: dict[str, object], secrets: dict[str, object]
+) -> dict[str, object]:
+    result = dict(config)
+    for k, v in secrets.items():
+        current = result.get(k)
+        if isinstance(v, dict) and isinstance(current, dict):
+            result[k] = merge_values(
+                cast(dict[str, object], current),
+                cast(dict[str, object], v),
+            )
+        else:
+            result[k] = v
+    return result
+
+
+def table_value(values: dict[str, object], name: str) -> dict[str, object]:
+    value = values.get(name, {})
+    if isinstance(value, dict):
+        return cast(dict[str, object], value)
+    sys.exit(f"ERROR: {name} must be a table")
+
+
+def require_value(env: dict[str, object], name: str, path: Path | None = None) -> str:
     value = env.get(name, "")
+    if not isinstance(value, str):
+        sys.exit(f"Set {name} to a string.")
     if value and value != "TODO":
         return value
     if path is None:
