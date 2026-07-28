@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import argparse
 import enum
 import ipaddress
 import os
@@ -12,9 +11,13 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import TextIO
 
+import tyro
 from pydantic import BaseModel
 
 RunCommand = Callable[[Sequence[str]], subprocess.CompletedProcess[str]]
+PROVISION_DIR = Path(__file__).resolve().parent / "provision"
+DEFAULT_CONFIG_PATH = PROVISION_DIR / "config.toml"
+DEFAULT_SECRETS_PATH = PROVISION_DIR / "secrets.toml"
 
 
 class NetworkTopology(enum.StrEnum):
@@ -44,32 +47,32 @@ class WifiAssignment(BaseModel, frozen=True):
     secondary: WifiInterface | None
 
 
+class NetworkOptions(BaseModel, frozen=True):
+    config: Path
+    secrets: Path
+    dry_run: bool
+
+
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Configure Raspberry Pi Wi-Fi")
-    parser.add_argument(
-        "--config",
-        type=Path,
-        default=default_config_path(),
-        help="default: showco/provision/config.toml",
+    options = tyro.cli(
+        network_options,
+        args=argv,
+        description="Configure Raspberry Pi Wi-Fi",
     )
-    parser.add_argument(
-        "--secrets",
-        type=Path,
-        default=default_secrets_path(),
-        help="default: showco/provision/secrets.toml",
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="print NetworkManager commands without running them",
-    )
-    args = parser.parse_args(argv)
-    values = read_toml(args.config)
-    values |= read_toml(args.secrets)
+    values = read_toml(options.config)
+    values |= read_toml(options.secrets)
     return configure_network(
         config_from_values(values),
-        dry_run=args.dry_run,
+        dry_run=options.dry_run,
     )
+
+
+def network_options(
+    config: Path = DEFAULT_CONFIG_PATH,
+    secrets: Path = DEFAULT_SECRETS_PATH,
+    dry_run: bool = False,
+) -> NetworkOptions:
+    return NetworkOptions(config=config, secrets=secrets, dry_run=dry_run)
 
 
 def configure_network(
@@ -350,15 +353,15 @@ def check_command_result(completed: subprocess.CompletedProcess[str]) -> None:
 
 
 def default_config_path() -> Path:
-    return provision_dir() / "config.toml"
+    return DEFAULT_CONFIG_PATH
 
 
 def default_secrets_path() -> Path:
-    return provision_dir() / "secrets.toml"
+    return DEFAULT_SECRETS_PATH
 
 
 def provision_dir() -> Path:
-    return Path(__file__).resolve().parent / "provision"
+    return PROVISION_DIR
 
 
 if __name__ == "__main__":

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import argparse
 import subprocess
 import unittest
 from pathlib import Path
@@ -271,8 +270,10 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn("gh said: authentication required", str(error.exception))
 
 
-def args() -> argparse.Namespace:
-    return argparse.Namespace(
+def args() -> provision.ProvisionOptions:
+    return provision.ProvisionOptions(
+        config=Path("/config.toml"),
+        secrets=Path("/secrets.toml"),
         host=None,
         user=None,
         port=None,

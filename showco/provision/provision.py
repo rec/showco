@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import argparse
 import os
 import shlex
 import shutil
@@ -11,10 +10,12 @@ import tempfile
 import tomllib
 from pathlib import Path
 
+import tyro
 from pydantic import BaseModel
 
+PROVISION_DIR = Path(__file__).resolve().parent
 REMOTE_SCRIPT_TEMPLATE = "provision_locally.tmpl.sh"
-REMOTE_SCRIPT = (Path(__file__).resolve().parent / REMOTE_SCRIPT_TEMPLATE).read_text()
+REMOTE_SCRIPT = (PROVISION_DIR / REMOTE_SCRIPT_TEMPLATE).read_text()
 REMOTE_GITHUB_KEY_TEMPLATE = "remote_github_key.tmpl.sh"
 
 
@@ -31,11 +32,26 @@ class Config(BaseModel, frozen=True):
     audio_x18_usb_device_name: str
 
 
+class ProvisionOptions(BaseModel, frozen=True):
+    config: Path
+    secrets: Path
+    host: str | None
+    user: str | None
+    port: str | None
+    recs_repo: str | None
+    twitcho_repo: str | None
+    showco_repo: str | None
+
+
 def main(argv: list[str] | None = None) -> int:
-    args = parse_args(argv)
-    env = read_toml(args.config)
-    env |= read_toml(args.secrets)
-    config = config_from_args(args, env)
+    options = tyro.cli(
+        provision_options,
+        args=argv,
+        description="Provision a reachable Raspberry Pi over SSH",
+    )
+    env = read_toml(options.config)
+    env |= read_toml(options.secrets)
+    config = config_from_args(options, env)
     ssh_target = f"{config.user}@{config.host}"
     remote_script = "/tmp/showco-provision-pi.sh"
 
@@ -179,32 +195,29 @@ def remote_github_key_command(config: Config) -> str:
     return template.read_text().replace("{comment}", comment)
 
 
-def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Provision a reachable Raspberry Pi over SSH"
+def provision_options(
+    config: Path = PROVISION_DIR / "config.toml",
+    secrets: Path = PROVISION_DIR / "secrets.toml",
+    host: str | None = None,
+    user: str | None = None,
+    port: str | None = None,
+    recs_repo: str | None = None,
+    twitcho_repo: str | None = None,
+    showco_repo: str | None = None,
+) -> ProvisionOptions:
+    return ProvisionOptions(
+        config=config,
+        secrets=secrets,
+        host=host,
+        user=user,
+        port=port,
+        recs_repo=recs_repo,
+        twitcho_repo=twitcho_repo,
+        showco_repo=showco_repo,
     )
-    parser.add_argument(
-        "--config",
-        type=Path,
-        default=script_dir() / "config.toml",
-        help="default: showco/provision/config.toml",
-    )
-    parser.add_argument(
-        "--secrets",
-        type=Path,
-        default=script_dir() / "secrets.toml",
-        help="default: showco/provision/secrets.toml",
-    )
-    parser.add_argument("--host", help="default: showco_pi_host")
-    parser.add_argument("--user", help="default: showco_pi_user, then USER")
-    parser.add_argument("--port", help="default: showco_pi_ssh_port")
-    parser.add_argument("--recs-repo", help="default: recs_repo")
-    parser.add_argument("--twitcho-repo", help="default: twitcho_repo")
-    parser.add_argument("--showco-repo", help="default: showco_repo")
-    return parser.parse_args(argv)
 
 
-def config_from_args(args: argparse.Namespace, env: dict[str, object]) -> Config:
+def config_from_args(args: ProvisionOptions, env: dict[str, object]) -> Config:
     host = value_or_env(args.host, env, "showco_pi_host")
     user = value_or_env(
         args.user,
@@ -337,7 +350,7 @@ def read_toml(path: Path) -> dict[str, object]:
 
 
 def script_dir() -> Path:
-    return Path(__file__).resolve().parent
+    return PROVISION_DIR
 
 
 if __name__ == "__main__":

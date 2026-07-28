@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import argparse
 import json
 import os
 import secrets
@@ -13,8 +12,12 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
+import tyro
 from pydantic import BaseModel
 
+PROVISION_DIR = Path(__file__).resolve().parent.parent / "provision"
+DEFAULT_CONFIG_PATH = PROVISION_DIR / "config.toml"
+DEFAULT_SECRETS_PATH = PROVISION_DIR / "secrets.toml"
 TWITCH_AUTHORIZE_URL = "https://id.twitch.tv/oauth2/authorize"
 TWITCH_TOKEN_URL = "https://id.twitch.tv/oauth2/token"
 TWITCH_VALIDATE_URL = "https://id.twitch.tv/oauth2/validate"
@@ -25,35 +28,53 @@ class HttpResponse(BaseModel, frozen=True):
     text: str
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Manage Showco Twitch OAuth tokens")
-    parser.add_argument(
-        "--config",
-        type=Path,
-        default=provision_dir() / "config.toml",
-        help="path to config.toml",
-    )
-    parser.add_argument(
-        "--secrets",
-        type=Path,
-        default=provision_dir() / "secrets.toml",
-        help="path to secrets.toml",
-    )
-    subparsers = parser.add_subparsers(dest="command", required=True)
-    subparsers.add_parser("authorize-url", help="open the Twitch authorization URL")
-    subparsers.add_parser("exchange-code", help="exchange callback code for tokens")
-    subparsers.add_parser("validate-token", help="validate the saved access token")
-    args = parser.parse_args(argv)
+class AuthOptions(BaseModel, frozen=True):
+    config: Path
+    secrets: Path
 
-    config = read_toml(args.config)
-    if args.command == "authorize-url":
-        return authorize_url(args.config, config)
-    if args.command == "exchange-code":
-        secrets_env = read_toml(args.secrets)
-        return exchange_code(config | secrets_env)
-    if args.command == "validate-token":
-        return validate_token(config)
-    sys.exit(f"unknown command: {args.command}")
+
+def main(argv: list[str] | None = None) -> int:
+    return tyro.extras.subcommand_cli_from_dict(
+        {
+            "authorize-url": authorize_url_command,
+            "exchange-code": exchange_code_command,
+            "validate-token": validate_token_command,
+        },
+        args=argv,
+        description="Manage Showco Twitch OAuth tokens",
+        sort_subcommands=True,
+    )
+
+
+def auth_options(
+    config: Path = DEFAULT_CONFIG_PATH,
+    secrets: Path = DEFAULT_SECRETS_PATH,
+) -> AuthOptions:
+    return AuthOptions(config=config, secrets=secrets)
+
+
+def authorize_url_command(
+    config: Path = DEFAULT_CONFIG_PATH,
+    secrets: Path = DEFAULT_SECRETS_PATH,
+) -> int:
+    options = auth_options(config, secrets)
+    return authorize_url(options.config, read_toml(options.config))
+
+
+def exchange_code_command(
+    config: Path = DEFAULT_CONFIG_PATH,
+    secrets: Path = DEFAULT_SECRETS_PATH,
+) -> int:
+    options = auth_options(config, secrets)
+    return exchange_code(read_toml(options.config) | read_toml(options.secrets))
+
+
+def validate_token_command(
+    config: Path = DEFAULT_CONFIG_PATH,
+    secrets: Path = DEFAULT_SECRETS_PATH,
+) -> int:
+    options = auth_options(config, secrets)
+    return validate_token(read_toml(options.config))
 
 
 def authorize_url(config_path: Path, config: dict[str, str]) -> int:
@@ -212,7 +233,7 @@ def require_value(env: dict[str, str], name: str, path: Path | None = None) -> s
 
 
 def provision_dir() -> Path:
-    return Path(__file__).resolve().parent.parent / "provision"
+    return PROVISION_DIR
 
 
 if __name__ == "__main__":
