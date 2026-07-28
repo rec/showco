@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import cast
 
 import tyro
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 import showco
 
@@ -38,25 +38,45 @@ class Network(BaseModel, frozen=True):
     password: str = ""
 
 
-class Config(BaseModel, frozen=True):
-    host: str
-    user: str
-    ssh_port: int
+class NetworkTable(BaseModel, frozen=True):
+    host: str = ""
+    user: str = ""
+    ssh_port: int = 22
+    web_port: int = 17352
+    swap_wifi: bool = False
+    topology: str = ""
+
+
+class NetworkGroup(BaseModel, frozen=True):
+    wired: dict[str, Network] = Field(default_factory=dict)
+    wifi: dict[str, Network] = Field(default_factory=dict)
+
+
+class Networks(BaseModel, frozen=True):
+    internal: NetworkGroup = Field(default_factory=NetworkGroup)
+    external: NetworkGroup = Field(default_factory=NetworkGroup)
+
+
+class Usb(BaseModel, frozen=True):
+    x18_device_name: str = ""
+
+
+class Twitch(BaseModel, frozen=True):
+    enabled: bool = False
+
+
+class Git(BaseModel, frozen=True):
     recs: GitRepo
     twitcho: GitRepo
     showco: GitRepo
-    web_port: int
-    x18: bool
-    swap_wifi: bool
-    network_topology: str
-    twitcho_enabled: bool
-    private_wifi_ssid: str
-    private_wifi_password: str
-    external_wifi_ssid: str
-    external_wifi_password: str
-    x18_subnet: str
-    x18_host: str
-    x18_usb_device_name: str
+
+
+class Config(BaseModel, frozen=True):
+    network: NetworkTable
+    networks: Networks
+    usb: Usb
+    twitch: Twitch
+    git: Git
 
 
 class ProvisionOptions(BaseModel, frozen=True):
@@ -85,7 +105,7 @@ def main(argv: list[str] | None = None) -> int:
     env = merge_values(read_toml(options.config), read_toml(options.secrets))
     config = config_from_args(options, env)
     validate_config(config)
-    ssh_target = f"{config.user}@{config.host}"
+    ssh_target = f"{config.network.user}@{config.network.host}"
     remote_script = "/tmp/showco-provision-pi.sh"
 
     with tempfile.NamedTemporaryFile(
@@ -154,11 +174,21 @@ def validate_config(config: Config) -> None:
 
 def config_errors(config: Config) -> list[str]:
     errors = []
-    if not config.external_wifi_ssid or config.external_wifi_ssid == "TODO":
+    external = first_network(
+        config.networks.external.wifi,
+        "networks.external.wifi",
+        default=Network(),
+    )
+    private = first_network(
+        config.networks.internal.wifi,
+        "networks.internal.wifi",
+        default=Network(),
+    )
+    if not external.name or external.name == "TODO":
         errors.append("- networks.external.wifi.external.name is required")
-    if not config.private_wifi_password or config.private_wifi_password == "TODO":
+    if not private.password or private.password == "TODO":
         errors.append("- networks.internal.wifi.private.password is required")
-    if not config.external_wifi_password or config.external_wifi_password == "TODO":
+    if not external.password or external.password == "TODO":
         errors.append("- networks.external.wifi.external.password is required")
     return errors
 
@@ -224,9 +254,9 @@ def remove_known_host(config: Config, ssh_target: str) -> None:
 
 def known_host_names(config: Config, ssh_target: str) -> list[str]:
     host = ssh_target.rsplit("@", maxsplit=1)[-1]
-    if config.ssh_port == 22:
+    if config.network.ssh_port == 22:
         return [host]
-    return [host, f"[{host}]:{config.ssh_port}"]
+    return [host, f"[{host}]:{config.network.ssh_port}"]
 
 
 def verify_provisioning(config: Config, ssh_target: str) -> list[VerificationResult]:
@@ -314,12 +344,12 @@ def user_session_command(command: str) -> str:
 
 
 def verify_x18_usb_device(config: Config, ssh_target: str) -> VerificationResult:
-    if not config.x18_usb_device_name or config.x18_usb_device_name == "TODO":
+    if not config.usb.x18_device_name or config.usb.x18_device_name == "TODO":
         return VerificationResult(
             name="X18 USB device", error="", note="not configured"
         )
     command = (
-        f"arecord -l | grep -F {shlex.quote(config.x18_usb_device_name)} >/dev/null"
+        f"arecord -l | grep -F {shlex.quote(config.usb.x18_device_name)} >/dev/null"
     )
     completed = showco.run(
         ssh_command(config, ssh_target, command, connect_timeout=1),
@@ -332,7 +362,7 @@ def verify_x18_usb_device(config: Config, ssh_target: str) -> VerificationResult
     return VerificationResult(
         name="X18 USB device",
         error="",
-        note=f"{config.x18_usb_device_name} not detected",
+        note=f"{config.usb.x18_device_name} not detected",
     )
 
 
@@ -460,7 +490,7 @@ def github_key_material(public_key: str) -> str:
 
 
 def github_key_title(config: Config) -> str:
-    return f"showco {config.host}"
+    return f"showco {config.network.host}"
 
 
 def remote_github_key_command(config: Config) -> str:
@@ -496,26 +526,6 @@ def config_from_args(args: ProvisionOptions, env: dict[str, object]) -> Config:
     networks = table_value(env, "networks")
     internal = table_value(networks, "internal")
     external = table_value(networks, "external")
-    internal_wired_networks = network_dict(
-        table_value(internal, "wired"),
-        "networks.internal.wired",
-    )
-    internal_wifi = first_network(
-        network_dict(
-            table_value(internal, "wifi"),
-            "networks.internal.wifi",
-        ),
-        "networks.internal.wifi",
-        default=Network(name="showbox"),
-    )
-    external_wifi = first_network(
-        network_dict(
-            table_value(external, "wifi"),
-            "networks.external.wifi",
-        ),
-        "networks.external.wifi",
-        default=Network(),
-    )
     usb = table_value(env, "usb")
     twitch = table_value(env, "twitch")
     git = table_value(env, "git")
@@ -527,52 +537,48 @@ def config_from_args(args: ProvisionOptions, env: dict[str, object]) -> Config:
         default=os.environ.get("USER", ""),
     )
     ssh_port = value_or_int(args.port, network, "ssh_port", default=22)
-    recs = git_repo("recs", table_value(git, "recs"), override=args.recs_repo)
-    twitcho = git_repo(
-        "twitcho",
-        table_value(git, "twitcho"),
-        override=args.twitcho_repo,
-    )
-    showco = git_repo(
-        "showco",
-        table_value(git, "showco"),
-        override=args.showco_repo,
-    )
-    web_port = int_value(network, "web_port", default=17352)
-    x18 = bool(internal_wired_networks)
-    x18_host = ""
-    if x18:
-        x18_network = first_network(
-            internal_wired_networks,
-            "networks.internal.wired",
-        )
-        x18_host = require_value(
-            "networks.internal.wired.x18.ip_address",
-            x18_network.ip_address,
-        )
-        x18_subnet = string_or_default(x18_network.subnet, "10.43.0.0/24")
-    else:
-        x18_subnet = "10.43.0.0/24"
-
     return Config(
-        host=require_value("network.host", host),
-        user=require_value("network.user or USER", user),
-        ssh_port=ssh_port,
-        recs=recs,
-        twitcho=twitcho,
-        showco=showco,
-        web_port=web_port,
-        x18=x18,
-        swap_wifi=bool_value(network, "swap_wifi", default=False),
-        network_topology=string_value(network, "topology"),
-        twitcho_enabled=bool_value(twitch, "enabled", default=False),
-        private_wifi_ssid=string_or_default(internal_wifi.name, "showbox"),
-        private_wifi_password=internal_wifi.password,
-        external_wifi_ssid=external_wifi.name,
-        external_wifi_password=external_wifi.password,
-        x18_subnet=x18_subnet,
-        x18_host=x18_host,
-        x18_usb_device_name=string_value(usb, "x18_device_name"),
+        network=NetworkTable(
+            host=require_value("network.host", host),
+            user=require_value("network.user or USER", user),
+            ssh_port=ssh_port,
+            web_port=int_value(network, "web_port", default=17352),
+            swap_wifi=bool_value(network, "swap_wifi", default=False),
+            topology=string_value(network, "topology"),
+        ),
+        networks=Networks(
+            internal=NetworkGroup(
+                wired=network_dict(
+                    table_value(internal, "wired"),
+                    "networks.internal.wired",
+                ),
+                wifi=network_dict(
+                    table_value(internal, "wifi"),
+                    "networks.internal.wifi",
+                ),
+            ),
+            external=NetworkGroup(
+                wifi=network_dict(
+                    table_value(external, "wifi"),
+                    "networks.external.wifi",
+                ),
+            ),
+        ),
+        usb=Usb(x18_device_name=string_value(usb, "x18_device_name")),
+        twitch=Twitch(enabled=bool_value(twitch, "enabled", default=False)),
+        git=Git(
+            recs=git_repo("recs", table_value(git, "recs"), override=args.recs_repo),
+            twitcho=git_repo(
+                "twitcho",
+                table_value(git, "twitcho"),
+                override=args.twitcho_repo,
+            ),
+            showco=git_repo(
+                "showco",
+                table_value(git, "showco"),
+                override=args.showco_repo,
+            ),
+        ),
     )
 
 
@@ -663,6 +669,28 @@ def first_network(
     sys.exit(f"ERROR: {name} must contain at least one network")
 
 
+def internal_wifi(config: Config) -> Network:
+    return first_network(
+        config.networks.internal.wifi,
+        "networks.internal.wifi",
+        default=Network(name="showbox"),
+    )
+
+
+def external_wifi(config: Config) -> Network:
+    return first_network(
+        config.networks.external.wifi,
+        "networks.external.wifi",
+        default=Network(),
+    )
+
+
+def x18(config: Config) -> Network | None:
+    if not config.networks.internal.wired:
+        return None
+    return first_network(config.networks.internal.wired, "networks.internal.wired")
+
+
 def string_or_default(value: str, default: str) -> str:
     if value:
         return value
@@ -708,27 +736,38 @@ def shell_bool(value: bool) -> str:
 
 
 def remote_command(config: Config, remote_script: str) -> str:
+    private = internal_wifi(config)
+    external = external_wifi(config)
+    x18_network = x18(config)
+    x18_host = ""
+    x18_subnet = "10.43.0.0/24"
+    if x18_network is not None:
+        x18_host = require_value(
+            "networks.internal.wired.x18.ip_address",
+            x18_network.ip_address,
+        )
+        x18_subnet = string_or_default(x18_network.subnet, "10.43.0.0/24")
     values = {
-        "SHOW_USER": config.user,
-        "CODE_DIR": f"/home/{config.user}/code",
-        "RECS_REPO": config.recs.url,
-        "RECS_REFNAME": config.recs.refname,
-        "TWITCHO_REPO": config.twitcho.url,
-        "TWITCHO_REFNAME": config.twitcho.refname,
-        "SHOWCO_REPO": config.showco.url,
-        "SHOWCO_REFNAME": config.showco.refname,
-        "SHOWCO_PORT": str(config.web_port),
-        "X18": shell_bool(config.x18),
-        "SWAP_WIFI": shell_bool(config.swap_wifi),
-        "NETWORK_TOPOLOGY": config.network_topology,
-        "TWITCHO_ENABLED": shell_bool(config.twitcho_enabled),
-        "PRIVATE_WIFI_SSID": config.private_wifi_ssid,
-        "PRIVATE_WIFI_PASSWORD": config.private_wifi_password,
-        "EXTERNAL_WIFI_SSID": config.external_wifi_ssid,
-        "EXTERNAL_WIFI_PASSWORD": config.external_wifi_password,
-        "SHOWCO_PI_X18_SUBNET": config.x18_subnet,
-        "SHOWCO_X18_HOST": config.x18_host,
-        "X18_USB_DEVICE_NAME": config.x18_usb_device_name,
+        "SHOW_USER": config.network.user,
+        "CODE_DIR": f"/home/{config.network.user}/code",
+        "RECS_REPO": config.git.recs.url,
+        "RECS_REFNAME": config.git.recs.refname,
+        "TWITCHO_REPO": config.git.twitcho.url,
+        "TWITCHO_REFNAME": config.git.twitcho.refname,
+        "SHOWCO_REPO": config.git.showco.url,
+        "SHOWCO_REFNAME": config.git.showco.refname,
+        "SHOWCO_PORT": str(config.network.web_port),
+        "X18": shell_bool(x18_network is not None),
+        "SWAP_WIFI": shell_bool(config.network.swap_wifi),
+        "NETWORK_TOPOLOGY": config.network.topology,
+        "TWITCHO_ENABLED": shell_bool(config.twitch.enabled),
+        "PRIVATE_WIFI_SSID": string_or_default(private.name, "showbox"),
+        "PRIVATE_WIFI_PASSWORD": private.password,
+        "EXTERNAL_WIFI_SSID": external.name,
+        "EXTERNAL_WIFI_PASSWORD": external.password,
+        "SHOWCO_PI_X18_SUBNET": x18_subnet,
+        "SHOWCO_X18_HOST": x18_host,
+        "X18_USB_DEVICE_NAME": config.usb.x18_device_name,
     }
     assignments = [f"{k}={shlex.quote(v)}" for k, v in values.items()]
     return " ".join([*assignments, "bash", shlex.quote(remote_script)])
@@ -742,7 +781,7 @@ def run_ssh(config: Config, target: str, command: str) -> None:
 
 def run_scp(config: Config, source: Path, target: str) -> None:
     run(
-        ["scp", "-P", str(config.ssh_port), str(source), target],
+        ["scp", "-P", str(config.network.ssh_port), str(source), target],
     )
 
 
@@ -768,7 +807,7 @@ def ssh_command(
     if connect_timeout is not None:
         result.extend(["-o", f"ConnectTimeout={connect_timeout}"])
     result.extend(["-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new"])
-    result.extend(["-p", str(config.ssh_port), target, command])
+    result.extend(["-p", str(config.network.ssh_port), target, command])
     return result
 
 

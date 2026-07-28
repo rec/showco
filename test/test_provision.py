@@ -16,7 +16,7 @@ class ProvisionTests(unittest.TestCase):
             values(),
         )
 
-        self.assertEqual(config.x18_host, "10.43.0.18")
+        self.assertEqual(config.networks.internal.wired["x18"].ip_address, "10.43.0.18")
 
     def test_unwired_x18_omits_x18_host(self) -> None:
         config = provision.config_from_args(
@@ -24,7 +24,7 @@ class ProvisionTests(unittest.TestCase):
             values(networks=networks(x18=False)),
         )
 
-        self.assertEqual(config.x18_host, "")
+        self.assertEqual(config.networks.internal.wired, {})
 
     def test_ssh_port_defaults_to_22(self) -> None:
         config = provision.config_from_args(
@@ -32,7 +32,7 @@ class ProvisionTests(unittest.TestCase):
             values(networks=networks(x18=False)),
         )
 
-        self.assertEqual(config.ssh_port, 22)
+        self.assertEqual(config.network.ssh_port, 22)
 
     def test_web_port_is_integer(self) -> None:
         config = provision.config_from_args(
@@ -43,7 +43,7 @@ class ProvisionTests(unittest.TestCase):
             ),
         )
 
-        self.assertEqual(config.web_port, 17353)
+        self.assertEqual(config.network.web_port, 17353)
 
     def test_config_validation_reports_missing_network_values(self) -> None:
         config = provision.config_from_args(
