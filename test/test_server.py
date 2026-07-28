@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 
 from showco.models import (
+    ChannelLevel,
     MixerStatus,
     RecsStatus,
     ServiceStatus,
@@ -66,6 +67,27 @@ class ServerTests(unittest.TestCase):
         self.assertIn("Mixer latency", html)
         self.assertIn("4.2 ms", html)
 
+    def test_home_page_has_track_name_editor_for_recs_channels(self) -> None:
+        html = home_page(
+            ShowStatus(
+                recs=RecsStatus(
+                    service=ServiceStatus(name="recs", state="connected"),
+                    channels=[
+                        ChannelLevel(name="1", state="healthy", device="Mic"),
+                    ],
+                ),
+                twitcho=TwitchoStatus(
+                    service=ServiceStatus(name="twitcho", state="connected")
+                ),
+            )
+        )
+
+        self.assertIn('value="recs-track-name"', html)
+        self.assertIn('method="post" action="/actions"', html)
+        self.assertIn('name="device" value="Mic"', html)
+        self.assertIn('name="channel" value="1"', html)
+        self.assertIn('name="track_name" value="1"', html)
+
     def test_actions_page_has_twitch_restart_button(self) -> None:
         html = actions_page([])
 
@@ -86,6 +108,27 @@ class ServerTests(unittest.TestCase):
 
         self.assertTrue(result.ok)
         self.assertEqual(supervisor.restart_count, 1)
+
+    def test_track_name_action_uses_recs_client(self) -> None:
+        recs = RehearsalRecsClient()
+        app = ShowcoApp(
+            recs,
+            RehearsalTwitchoClient(),
+            RehearsalSystemMonitor(),
+            RehearsalMixerMonitor(),
+        )
+
+        result = app.run_action(
+            {
+                "action": "recs-track-name",
+                "device": "X18/XR18",
+                "channel": "1",
+                "track_name": "Lead Vocal",
+            }
+        )
+
+        self.assertTrue(result.ok)
+        self.assertEqual(recs.rehearsal_track_names, {"X18/XR18": {"Lead Vocal": 1}})
 
     def test_action_log_keeps_ten_most_recent_results(self) -> None:
         app = ShowcoApp(

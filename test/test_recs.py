@@ -10,7 +10,7 @@ from unittest import mock
 
 from recs.daemon.models import DaemonMetadata, Platform
 
-from showco.recs import RecsClient, channel_levels, level_state
+from showco.recs import RecsClient, channel_levels, level_state, replace_track_name
 
 
 class RecsTests(unittest.TestCase):
@@ -136,6 +136,72 @@ class RecsTests(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertEqual(
             result.message, "could not connect to recs: connection refused"
+        )
+
+    def test_set_track_name_sends_recs_protocol_commands(self) -> None:
+        with TemporaryDirectory() as directory:
+            metadata = Path(directory) / "daemon.json"
+            metadata.write_text(
+                DaemonMetadata(
+                    executable=Path("/bin/recs"),
+                    platform=Platform.linux,
+                    gui_endpoint="/tmp/recs.sock",
+                ).model_dump_json()
+            )
+            connection = FakeRecsConnection(
+                [
+                    '{"type":"hello","role":"daemon","version":1}\n',
+                    '{"type":"reply","id":"get","ok":true,'
+                    '"result":{"track_names":{"Mic":{"Old Name":1}}}}\n',
+                    '{"type":"hello","role":"daemon","version":1}\n',
+                    '{"type":"reply","id":"set","ok":true,'
+                    '"result":{"track_names":{"Mic":{"Lead Vocal":1}}}}\n',
+                ]
+            )
+            client = RecsClient(metadata_path=metadata)
+
+            with (
+                mock.patch("showco.recs.client_connection", return_value=connection),
+                mock.patch(
+                    "showco.recs.uuid.uuid4",
+                    side_effect=["get", "set"],
+                ),
+            ):
+                result = client.set_track_name("Mic", "Old Name", "Lead Vocal")
+
+        self.assertTrue(result.ok)
+        self.assertEqual(result.message, "recs track name set to Lead Vocal")
+        self.assertEqual(
+            [json.loads(message) for message in connection.sent],
+            [
+                {"type": "hello", "role": "gui", "version": 1},
+                {"type": "command", "id": "get", "command": "get_track_names"},
+                {"type": "hello", "role": "gui", "version": 1},
+                {
+                    "type": "command",
+                    "id": "set",
+                    "command": "set_track_names",
+                    "track_names": {"Mic": {"Lead Vocal": 1}},
+                },
+            ],
+        )
+
+    def test_channel_levels_keep_device_context(self) -> None:
+        channels = channel_levels(
+            [
+                {"device": "Mic"},
+                {"channel": "1", "signal": 0.1},
+                {"device": "X18"},
+                {"channel": "2", "signal": 0.2},
+            ]
+        )
+
+        self.assertEqual([c.device for c in channels], ["Mic", "X18"])
+
+    def test_replace_track_name_removes_old_name_for_channel(self) -> None:
+        self.assertEqual(
+            replace_track_name({"Mic": {"Old": 1, "Other": 2}}, "Mic", 1, "New"),
+            {"Mic": {"Other": 2, "New": 1}},
         )
 
 

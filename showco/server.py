@@ -49,6 +49,12 @@ class ShowcoApp:
         action = form.get("action", "")
         if action == "recs-calibrate":
             result = self.recs.calibrate()
+        elif action == "recs-track-name":
+            result = self.recs.set_track_name(
+                form.get("device", ""),
+                form.get("channel", ""),
+                form.get("track_name", ""),
+            )
         elif action == "twitcho-restart":
             if self.twitcho_supervisor:
                 result = self.twitcho_supervisor.restart()
@@ -155,7 +161,9 @@ def make_server(
 def home_page(status: ShowStatus) -> str:
     recs = status.recs.service
     twitcho = status.twitcho.service
-    channel_html = "".join(level(c.name, c.state) for c in status.recs.channels)
+    channel_html = "".join(
+        level(c.device, c.name, c.state) for c in status.recs.channels
+    )
     if not channel_html:
         channel_html = "<p>No channel data from recs.</p>"
     return page(
@@ -247,13 +255,23 @@ def service_card(title: str, state: str, detail: str) -> str:
     """
 
 
-def level(name: str, state: str) -> str:
+def level(device: str, name: str, state: str) -> str:
+    safe_device = html.escape(device)
     safe_name = html.escape(name)
     safe_state = html.escape(state)
-    return (
-        f'<div class="level {safe_state}">'
-        f"<b>{safe_name}</b><span>{safe_state}</span></div>"
-    )
+    return f"""
+    <form class="level {safe_state}" method="post" action="/actions">
+      <input type="hidden" name="action" value="recs-track-name">
+      <input type="hidden" name="device" value="{safe_device}">
+      <input type="hidden" name="channel" value="{safe_name}">
+      <label>
+        <b>{safe_name}</b>
+        <input name="track_name" value="{safe_name}">
+      </label>
+      <span>{safe_state}</span>
+      <button>Save</button>
+    </form>
+    """
 
 
 def button(action: str, label: str, *, confirm: bool = False) -> str:
@@ -382,7 +400,7 @@ main {
   gap: 0.75rem;
   grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
 }
-.card, form, section {
+.card, .actions > form, section {
   background: #fffaf0;
   border: 2px solid #2b2b2b;
   border-radius: 0.75rem;
@@ -398,9 +416,21 @@ main {
 .level {
   border-radius: 0.5rem;
   color: white;
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: minmax(8rem, 1fr) auto auto;
+  align-items: end;
   padding: 0.75rem;
+}
+.level label {
+  margin: 0;
+}
+.level input, .level button {
+  margin: 0.25rem 0 0;
+  min-height: 2rem;
+}
+.level button {
+  width: auto;
 }
 .silent { background: #777; }
 .present { background: #3366cc; }

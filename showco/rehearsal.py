@@ -22,6 +22,7 @@ class RehearsalRecsClient(RecsClient):
     def __init__(self) -> None:
         self.started_at = time.time()
         self.calibration_count = 0
+        self.rehearsal_track_names: dict[str, dict[str, int]] = {}
 
     def status(self) -> RecsStatus:
         elapsed = time.time() - self.started_at
@@ -46,6 +47,23 @@ class RehearsalRecsClient(RecsClient):
             ok=True,
             message=f"rehearsal recs calibration {self.calibration_count}",
         )
+
+    def set_track_name(
+        self, device: str, channel: str, track_name: str
+    ) -> ActionResult:
+        device = device.strip()
+        channel = channel.strip()
+        track_name = track_name.strip()
+        if not device or not channel:
+            return ActionResult(ok=False, message="rehearsal recs track name missing")
+        channel_number = int(channel.partition("-")[0])
+        names = self.rehearsal_track_names.setdefault(device, {})
+        for name, value in list(names.items()):
+            if value == channel_number:
+                del names[name]
+        if track_name:
+            names[track_name] = channel_number
+        return ActionResult(ok=True, message=f"rehearsal recs track name {track_name}")
 
 
 class RehearsalTwitchoClient(TwitchoClient):
@@ -116,6 +134,7 @@ def rehearsal_channels(elapsed: float) -> list[ChannelLevel]:
             ChannelLevel(
                 name=str(index + 1),
                 state=channel_state(signal),
+                device="X18/XR18",
                 signal=signal,
             )
         )
