@@ -56,6 +56,7 @@ class ProvisionTests(unittest.TestCase):
                 "showco.provision.provision.run_ssh",
                 side_effect=[None, original_error, cleanup_error],
             ) as run_ssh,
+            mock.patch("showco.provision.provision.wait_for_ssh"),
             mock.patch("showco.provision.provision.ensure_github_account_key"),
             mock.patch("showco.provision.provision.run_scp"),
             self.assertRaises(subprocess.CalledProcessError) as error,
@@ -102,6 +103,7 @@ class ProvisionTests(unittest.TestCase):
                 side_effect=ensure_github_account_key,
             ),
             mock.patch("showco.provision.provision.run_scp", side_effect=run_scp),
+            mock.patch("showco.provision.provision.wait_for_ssh"),
             mock.patch("showco.provision.provision.wait_for_rebooted_ssh"),
             mock.patch(
                 "showco.provision.provision.verify_provisioning",
@@ -127,6 +129,7 @@ class ProvisionTests(unittest.TestCase):
             mock.patch("showco.provision.provision.run_ssh"),
             mock.patch("showco.provision.provision.ensure_github_account_key"),
             mock.patch("showco.provision.provision.run_scp"),
+            mock.patch("showco.provision.provision.wait_for_ssh") as initial_wait,
             mock.patch("showco.provision.provision.wait_for_rebooted_ssh") as wait,
             mock.patch(
                 "showco.provision.provision.verify_provisioning",
@@ -143,9 +146,26 @@ class ProvisionTests(unittest.TestCase):
                 "/tmp/remote.sh",
             )
 
+        initial_wait.assert_called_once_with(config, "tom@recs-stage.local")
         wait.assert_called_once_with(config, "tom@recs-stage.local")
         verify.assert_called_once_with(config, "tom@recs-stage.local")
         report.assert_called_once_with(result)
+
+    def test_initial_wait_for_ssh_retries_until_connected(self) -> None:
+        config = provision.config_from_args(
+            args(), values(networks=networks(x18=False))
+        )
+        with (
+            mock.patch(
+                "showco.provision.provision.ssh_is_reachable",
+                side_effect=[False, False, True],
+            ) as reachable,
+            mock.patch("showco.provision.provision.time.sleep") as sleep,
+        ):
+            provision.wait_for_ssh(config, "tom@recs-stage.local")
+
+        self.assertEqual(reachable.call_count, 3)
+        sleep.assert_has_calls([mock.call(1), mock.call(1)])
 
     def test_github_key_title_uses_host(self) -> None:
         config = provision.config_from_args(

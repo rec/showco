@@ -108,7 +108,9 @@ def provision_remote(
     config: Config, ssh_target: str, local_script: Path, remote_script: str
 ) -> None:
     uploaded = False
-    print(f"Checking SSH connection to {ssh_target}...")
+    print(f"Waiting for SSH connection to {ssh_target}...")
+    wait_for_ssh(config, ssh_target)
+    print(f"Checking {ssh_target}...")
     run_ssh(
         config,
         ssh_target,
@@ -144,7 +146,7 @@ def provision_remote(
 
 def wait_for_rebooted_ssh(config: Config, ssh_target: str) -> None:
     wait_for_ssh_disconnect(config, ssh_target)
-    wait_for_ssh(config, ssh_target)
+    wait_for_ssh(config, ssh_target, timeout_seconds=REBOOT_WAIT_SECONDS)
 
 
 def wait_for_ssh_disconnect(config: Config, ssh_target: str) -> None:
@@ -156,13 +158,20 @@ def wait_for_ssh_disconnect(config: Config, ssh_target: str) -> None:
     sys.exit(f"ERROR: {ssh_target} did not drop SSH before reboot")
 
 
-def wait_for_ssh(config: Config, ssh_target: str) -> None:
-    deadline = time.monotonic() + REBOOT_WAIT_SECONDS
-    while time.monotonic() < deadline:
+def wait_for_ssh(
+    config: Config,
+    ssh_target: str,
+    *,
+    timeout_seconds: int | None = None,
+) -> None:
+    deadline = None
+    if timeout_seconds is not None:
+        deadline = time.monotonic() + timeout_seconds
+    while deadline is None or time.monotonic() < deadline:
         if ssh_is_reachable(config, ssh_target):
             return
         time.sleep(1)
-    sys.exit(f"ERROR: {ssh_target} did not accept SSH within {REBOOT_WAIT_SECONDS}s")
+    sys.exit(f"ERROR: {ssh_target} did not accept SSH within {timeout_seconds}s")
 
 
 def ssh_is_reachable(config: Config, ssh_target: str) -> bool:
