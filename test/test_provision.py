@@ -116,6 +116,11 @@ class ProvisionTests(unittest.TestCase):
         self.assertNotIn("gh ", command)
         self.assertNotIn("gh\n", command)
 
+    def test_remote_script_is_loaded_from_template_file(self) -> None:
+        template = provision.script_dir() / provision.REMOTE_SCRIPT_TEMPLATE
+
+        self.assertEqual(provision.REMOTE_SCRIPT, template.read_text())
+
     def test_remote_script_configures_external_storage_mounts(self) -> None:
         self.assertIn("exfatprogs", provision.REMOTE_SCRIPT)
         self.assertIn('phase "configuring storage mounts"', provision.REMOTE_SCRIPT)
