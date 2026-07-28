@@ -167,6 +167,55 @@ class ProvisionTests(unittest.TestCase):
         self.assertEqual(reachable.call_count, 3)
         sleep.assert_has_calls([mock.call(1), mock.call(1)])
 
+    def test_changed_host_key_is_removed_during_ssh_retry(self) -> None:
+        config = provision.config_from_args(
+            args(), values(networks=networks(x18=False))
+        )
+        changed_key = subprocess.CompletedProcess(
+            ["ssh"],
+            255,
+            "",
+            "WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!",
+        )
+        connected = subprocess.CompletedProcess(["ssh"], 0, "", "")
+        removed = subprocess.CompletedProcess(["ssh-keygen"], 0, "", "")
+        with mock.patch(
+            "showco.run", side_effect=[changed_key, removed, connected]
+        ) as run:
+            self.assertFalse(provision.ssh_is_reachable(config, "tom@recs-stage.local"))
+            self.assertTrue(provision.ssh_is_reachable(config, "tom@recs-stage.local"))
+
+        self.assertEqual(
+            run.call_args_list[1].args[0],
+            ["ssh-keygen", "-R", "recs-stage.local"],
+        )
+
+    def test_ssh_retry_uses_non_interactive_host_key_options(self) -> None:
+        config = provision.config_from_args(
+            args(), values(networks=networks(x18=False))
+        )
+
+        command = provision.ssh_command(
+            config,
+            "tom@recs-stage.local",
+            "true",
+            connect_timeout=1,
+        )
+
+        self.assertIn("BatchMode=yes", command)
+        self.assertIn("StrictHostKeyChecking=accept-new", command)
+
+    def test_known_host_names_include_port_specific_host(self) -> None:
+        config = provision.config_from_args(
+            args(port=2200),
+            values(networks=networks(x18=False)),
+        )
+
+        self.assertEqual(
+            provision.known_host_names(config, "tom@recs-stage.local"),
+            ["recs-stage.local", "[recs-stage.local]:2200"],
+        )
+
     def test_github_key_title_uses_host(self) -> None:
         config = provision.config_from_args(
             args(), values(networks=networks(x18=False))
@@ -547,13 +596,13 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn("gh said: authentication required", str(error.exception))
 
 
-def args() -> provision.ProvisionOptions:
+def args(*, port: int | None = None) -> provision.ProvisionOptions:
     return provision.ProvisionOptions(
         config=Path("/config.toml"),
         secrets=Path("/secrets.toml"),
         host=None,
         user=None,
-        port=None,
+        port=port,
         recs_repo=None,
         twitcho_repo=None,
         showco_repo=None,

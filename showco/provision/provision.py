@@ -181,7 +181,33 @@ def ssh_is_reachable(config: Config, ssh_target: str) -> bool:
         check=False,
         text=True,
     )
+    if has_changed_host_key(completed):
+        remove_known_host(config, ssh_target)
+        return False
     return completed.returncode == 0
+
+
+def has_changed_host_key(completed: subprocess.CompletedProcess[str]) -> bool:
+    output = f"{completed.stdout}{completed.stderr}"
+    return "REMOTE HOST IDENTIFICATION HAS CHANGED" in output
+
+
+def remove_known_host(config: Config, ssh_target: str) -> None:
+    for host in known_host_names(config, ssh_target):
+        print(f"Removing stale SSH host key for {host}...")
+        showco.run(
+            ["ssh-keygen", "-R", host],
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+
+
+def known_host_names(config: Config, ssh_target: str) -> list[str]:
+    host = ssh_target.rsplit("@", maxsplit=1)[-1]
+    if config.ssh_port == 22:
+        return [host]
+    return [host, f"[{host}]:{config.ssh_port}"]
 
 
 def verify_provisioning(config: Config, ssh_target: str) -> list[VerificationResult]:
@@ -722,6 +748,7 @@ def ssh_command(
         result.append("-t")
     if connect_timeout is not None:
         result.extend(["-o", f"ConnectTimeout={connect_timeout}"])
+    result.extend(["-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new"])
     result.extend(["-p", str(config.ssh_port), target, command])
     return result
 
