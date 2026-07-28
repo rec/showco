@@ -84,6 +84,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     env = merge_values(read_toml(options.config), read_toml(options.secrets))
     config = config_from_args(options, env)
+    validate_config(config)
     ssh_target = f"{config.user}@{config.host}"
     remote_script = "/tmp/showco-provision-pi.sh"
 
@@ -142,6 +143,24 @@ def provision_remote(
                     f"WARNING: Could not remove remote provisioning script: {e}",
                     file=sys.stderr,
                 )
+
+
+def validate_config(config: Config) -> None:
+    errors = config_errors(config)
+    if not errors:
+        return
+    sys.exit("ERROR: invalid provisioning configuration\n" + "\n".join(errors))
+
+
+def config_errors(config: Config) -> list[str]:
+    errors = []
+    if not config.external_wifi_ssid or config.external_wifi_ssid == "TODO":
+        errors.append("- networks.external.wifi.external.name is required")
+    if not config.private_wifi_password or config.private_wifi_password == "TODO":
+        errors.append("- networks.internal.wifi.private.password is required")
+    if not config.external_wifi_password or config.external_wifi_password == "TODO":
+        errors.append("- networks.external.wifi.external.password is required")
+    return errors
 
 
 def wait_for_rebooted_ssh(config: Config, ssh_target: str) -> None:
