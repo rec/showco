@@ -376,6 +376,9 @@ main() {
   phase "checking user"
   id "$SHOW_USER" >/dev/null
 
+  phase "configuring locale"
+  configure_locale
+
   phase "installing base packages"
   packages=(
     alsa-utils
@@ -400,10 +403,8 @@ main() {
   printf 'Installing packages:\n'
   printf '  %s\n' "${packages[@]}"
   sudo apt-get update
+  sudo apt-get upgrade -y
   sudo apt-get install -y "${packages[@]}"
-
-  phase "configuring locale"
-  configure_locale
 
   phase "creating directories"
   sudo mkdir -p "$CODE_DIR"
