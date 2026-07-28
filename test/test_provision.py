@@ -102,6 +102,12 @@ class ProvisionTests(unittest.TestCase):
                 side_effect=ensure_github_account_key,
             ),
             mock.patch("showco.provision.provision.run_scp", side_effect=run_scp),
+            mock.patch("showco.provision.provision.wait_for_rebooted_ssh"),
+            mock.patch(
+                "showco.provision.provision.verify_provisioning",
+                return_value=[],
+            ),
+            mock.patch("showco.provision.provision.report_verification_results"),
         ):
             provision.provision_remote(
                 config,
@@ -111,6 +117,35 @@ class ProvisionTests(unittest.TestCase):
             )
 
         self.assertEqual(calls, ["github", "scp"])
+
+    def test_provision_waits_for_reboot_and_reports_verification(self) -> None:
+        config = provision.config_from_args(
+            args(), values(networks=networks(x18=False))
+        )
+        result = [provision.VerificationResult(name="showco", error="")]
+        with (
+            mock.patch("showco.provision.provision.run_ssh"),
+            mock.patch("showco.provision.provision.ensure_github_account_key"),
+            mock.patch("showco.provision.provision.run_scp"),
+            mock.patch("showco.provision.provision.wait_for_rebooted_ssh") as wait,
+            mock.patch(
+                "showco.provision.provision.verify_provisioning",
+                return_value=result,
+            ) as verify,
+            mock.patch(
+                "showco.provision.provision.report_verification_results"
+            ) as report,
+        ):
+            provision.provision_remote(
+                config,
+                "tom@recs-stage.local",
+                Path("/tmp/local.sh"),
+                "/tmp/remote.sh",
+            )
+
+        wait.assert_called_once_with(config, "tom@recs-stage.local")
+        verify.assert_called_once_with(config, "tom@recs-stage.local")
+        report.assert_called_once_with(result)
 
     def test_github_key_title_uses_host(self) -> None:
         config = provision.config_from_args(
@@ -196,6 +231,13 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn("configure_network()", provision.REMOTE_SCRIPT)
         self.assertIn("uv run showco run network-config", provision.REMOTE_SCRIPT)
         self.assertIn("Skipping network configuration", provision.REMOTE_SCRIPT)
+
+    def test_remote_script_reboots_after_successful_network_config(self) -> None:
+        network = provision.REMOTE_SCRIPT.index('phase "configuring network"')
+        reboot = provision.REMOTE_SCRIPT.index('phase "rebooting"')
+
+        self.assertIn("sudo shutdown -r +0", provision.REMOTE_SCRIPT)
+        self.assertLess(network, reboot)
 
     def test_remote_script_configures_locale_before_package_updates(self) -> None:
         locale = provision.REMOTE_SCRIPT.index('phase "configuring locale"')
@@ -297,6 +339,73 @@ class ProvisionTests(unittest.TestCase):
         command = provision.remote_command(config, "/tmp/provision.sh")
 
         self.assertIn("TWITCHO_ENABLED=true", command)
+
+    def test_wait_for_rebooted_ssh_waits_for_disconnect_then_connect(self) -> None:
+        config = provision.config_from_args(
+            args(), values(networks=networks(x18=False))
+        )
+        with (
+            mock.patch(
+                "showco.provision.provision.ssh_is_reachable",
+                side_effect=[True, False, False, True],
+            ) as reachable,
+            mock.patch("showco.provision.provision.time.sleep"),
+        ):
+            provision.wait_for_rebooted_ssh(config, "tom@recs-stage.local")
+
+        self.assertEqual(reachable.call_count, 4)
+
+    def test_verify_provisioning_checks_projects_and_user_services(self) -> None:
+        config = provision.config_from_args(args(), values())
+        with mock.patch(
+            "showco.run",
+            return_value=subprocess.CompletedProcess(["ssh"], 0, "", ""),
+        ) as run:
+            results = provision.verify_provisioning(config, "tom@recs-stage.local")
+
+        commands = [c.args[0][-1] for c in run.call_args_list]
+        self.assertFalse([r for r in results if r.error])
+        self.assertIn('git -C "$HOME/code/recs" status --short', commands)
+        self.assertIn('git -C "$HOME/code/twitcho" status --short', commands)
+        self.assertIn('git -C "$HOME/code/showco" status --short', commands)
+        self.assertIn(
+            "uid=$(id -u); XDG_RUNTIME_DIR=/run/user/$uid "
+            "systemctl --user is-active recs.service",
+            commands,
+        )
+        self.assertIn(
+            "uid=$(id -u); XDG_RUNTIME_DIR=/run/user/$uid "
+            "systemctl --user is-active showco.service",
+            commands,
+        )
+
+    def test_missing_x18_usb_device_is_note_not_error(self) -> None:
+        config = provision.config_from_args(args(), values())
+        with mock.patch(
+            "showco.run",
+            return_value=subprocess.CompletedProcess(["ssh"], 1, "", ""),
+        ):
+            result = provision.verify_x18_usb_device(config, "tom@recs-stage.local")
+
+        self.assertEqual(result.error, "")
+        self.assertEqual(result.note, "X18/XR18 not detected")
+
+    def test_report_verification_results_exits_with_errors(self) -> None:
+        with self.assertRaises(SystemExit):
+            provision.report_verification_results(
+                [provision.VerificationResult(name="showco", error="inactive")]
+            )
+
+    def test_report_verification_results_allows_notes(self) -> None:
+        provision.report_verification_results(
+            [
+                provision.VerificationResult(
+                    name="X18 USB device",
+                    error="",
+                    note="X18/XR18 not detected",
+                )
+            ]
+        )
 
     def test_ensure_github_account_key_adds_new_key(self) -> None:
         config = provision.config_from_args(
@@ -447,7 +556,9 @@ def values(**overrides: object) -> dict[str, object]:
         },
     }
     for k, v in overrides.items():
-        if isinstance(v, dict) and isinstance(result.get(k), dict):
+        if k == "networks":
+            result[k] = v
+        elif isinstance(v, dict) and isinstance(result.get(k), dict):
             result[k] = provision.merge_values(result[k], v)
         else:
             result[k] = v

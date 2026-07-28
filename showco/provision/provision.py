@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import tomllib
 from pathlib import Path
 from typing import cast
@@ -20,6 +21,7 @@ PROVISION_DIR = Path(__file__).resolve().parent
 REMOTE_SCRIPT_TEMPLATE = "provision_locally.tmpl.sh"
 REMOTE_SCRIPT = (PROVISION_DIR / REMOTE_SCRIPT_TEMPLATE).read_text()
 REMOTE_GITHUB_KEY_TEMPLATE = "remote_github_key.tmpl.sh"
+REBOOT_WAIT_SECONDS = 300
 
 
 class GitRepo(BaseModel, frozen=True):
@@ -66,6 +68,12 @@ class ProvisionOptions(BaseModel, frozen=True):
     recs_repo: str | None
     twitcho_repo: str | None
     showco_repo: str | None
+
+
+class VerificationResult(BaseModel, frozen=True):
+    name: str
+    error: str
+    note: str = ""
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -115,6 +123,12 @@ def provision_remote(
 
         print(f"Running provisioning on {ssh_target}...")
         run_ssh(config, ssh_target, remote_command(config, remote_script))
+
+        print(f"Waiting for {ssh_target} to reboot...")
+        wait_for_rebooted_ssh(config, ssh_target)
+
+        print(f"Checking provisioned services on {ssh_target}...")
+        report_verification_results(verify_provisioning(config, ssh_target))
     finally:
         if uploaded:
             try:
@@ -126,6 +140,188 @@ def provision_remote(
                     f"WARNING: Could not remove remote provisioning script: {e}",
                     file=sys.stderr,
                 )
+
+
+def wait_for_rebooted_ssh(config: Config, ssh_target: str) -> None:
+    wait_for_ssh_disconnect(config, ssh_target)
+    wait_for_ssh(config, ssh_target)
+
+
+def wait_for_ssh_disconnect(config: Config, ssh_target: str) -> None:
+    deadline = time.monotonic() + 60
+    while time.monotonic() < deadline:
+        if not ssh_is_reachable(config, ssh_target):
+            return
+        time.sleep(1)
+    sys.exit(f"ERROR: {ssh_target} did not drop SSH before reboot")
+
+
+def wait_for_ssh(config: Config, ssh_target: str) -> None:
+    deadline = time.monotonic() + REBOOT_WAIT_SECONDS
+    while time.monotonic() < deadline:
+        if ssh_is_reachable(config, ssh_target):
+            return
+        time.sleep(1)
+    sys.exit(f"ERROR: {ssh_target} did not accept SSH within {REBOOT_WAIT_SECONDS}s")
+
+
+def ssh_is_reachable(config: Config, ssh_target: str) -> bool:
+    completed = showco.run(
+        ssh_command(config, ssh_target, "true", connect_timeout=1),
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    return completed.returncode == 0
+
+
+def verify_provisioning(config: Config, ssh_target: str) -> list[VerificationResult]:
+    return [
+        verify_remote_command(
+            config,
+            ssh_target,
+            "no failed systemd units",
+            "systemctl --failed --no-legend --plain",
+            expect_empty_stdout=True,
+        ),
+        verify_remote_command(
+            config,
+            ssh_target,
+            "recs project status is clean",
+            project_status_command("recs"),
+            expect_empty_stdout=True,
+        ),
+        verify_remote_command(
+            config,
+            ssh_target,
+            "twitcho project status is clean",
+            project_status_command("twitcho"),
+            expect_empty_stdout=True,
+        ),
+        verify_remote_command(
+            config,
+            ssh_target,
+            "showco project status is clean",
+            project_status_command("showco"),
+            expect_empty_stdout=True,
+        ),
+        verify_remote_command(
+            config,
+            ssh_target,
+            "recs service is active",
+            user_systemctl_command("is-active recs.service"),
+        ),
+        verify_remote_command(
+            config,
+            ssh_target,
+            "showco service is active",
+            user_systemctl_command("is-active showco.service"),
+        ),
+        verify_remote_command(
+            config,
+            ssh_target,
+            "showco service status is healthy",
+            user_systemctl_command("status showco.service --no-pager >/dev/null"),
+        ),
+        verify_remote_command(
+            config,
+            ssh_target,
+            "showco journal is readable",
+            user_session_command(
+                "journalctl --user -u showco.service -n 100 --no-pager >/dev/null"
+            ),
+        ),
+        verify_remote_command(
+            config,
+            ssh_target,
+            "NetworkManager device status is readable",
+            "nmcli device status >/dev/null",
+        ),
+        verify_remote_command(
+            config,
+            ssh_target,
+            "NetworkManager connection list is readable",
+            "nmcli connection show >/dev/null",
+        ),
+        verify_x18_usb_device(config, ssh_target),
+    ]
+
+
+def project_status_command(project: str) -> str:
+    return f'git -C "$HOME/code/{project}" status --short'
+
+
+def user_systemctl_command(arguments: str) -> str:
+    return user_session_command(f"systemctl --user {arguments}")
+
+
+def user_session_command(command: str) -> str:
+    return f"uid=$(id -u); XDG_RUNTIME_DIR=/run/user/$uid {command}"
+
+
+def verify_x18_usb_device(config: Config, ssh_target: str) -> VerificationResult:
+    if not config.x18_usb_device_name or config.x18_usb_device_name == "TODO":
+        return VerificationResult(
+            name="X18 USB device", error="", note="not configured"
+        )
+    command = (
+        f"arecord -l | grep -F {shlex.quote(config.x18_usb_device_name)} >/dev/null"
+    )
+    completed = showco.run(
+        ssh_command(config, ssh_target, command, connect_timeout=1),
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    if completed.returncode == 0:
+        return VerificationResult(name="X18 USB device", error="")
+    return VerificationResult(
+        name="X18 USB device",
+        error="",
+        note=f"{config.x18_usb_device_name} not detected",
+    )
+
+
+def verify_remote_command(
+    config: Config,
+    ssh_target: str,
+    name: str,
+    command: str,
+    *,
+    expect_empty_stdout: bool = False,
+) -> VerificationResult:
+    completed = showco.run(
+        ssh_command(config, ssh_target, command, connect_timeout=1),
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    output = f"{completed.stdout}{completed.stderr}".strip()
+    if completed.returncode == 0 and (not expect_empty_stdout or not output):
+        return VerificationResult(name=name, error="")
+    if not output:
+        output = f"command exited with status {completed.returncode}"
+    return VerificationResult(name=name, error=output)
+
+
+def report_verification_results(results: list[VerificationResult]) -> None:
+    errors = [r for r in results if r.error]
+    notes = [r for r in results if r.note]
+    if not errors:
+        if notes:
+            print("Notes:")
+            for note in notes:
+                print(f"- {note.name}: {note.note}")
+        print("Success!")
+        return
+    print("ERROR")
+    for error in errors:
+        print(f"- {error.name}: {error.error}")
+    if notes:
+        print("Notes:")
+        for note in notes:
+            print(f"- {note.name}: {note.note}")
+    sys.exit(1)
 
 
 def ensure_github_account_key(config: Config, ssh_target: str) -> None:
@@ -386,7 +582,15 @@ def network_dict(values: dict[str, object], name: str) -> dict[str, Network]:
     for k, v in values.items():
         if not isinstance(v, dict):
             sys.exit(f"ERROR: {name}.{k} must be a table")
-        networks[k] = Network(**cast(dict[str, object], v))
+        table = cast(dict[str, object], v)
+        networks[k] = Network(
+            name=string_value(table, "name"),
+            dhcp_start=string_value(table, "dhcp_start"),
+            dhcp_end=string_value(table, "dhcp_end"),
+            ip_address=string_value(table, "ip_address"),
+            subnet=string_value(table, "subnet"),
+            password=string_value(table, "password"),
+        )
     return networks
 
 
@@ -478,7 +682,7 @@ def remote_command(config: Config, remote_script: str) -> str:
 
 def run_ssh(config: Config, target: str, command: str) -> None:
     run(
-        ["ssh", "-t", "-p", str(config.ssh_port), target, command],
+        ssh_command(config, target, command, allocate_tty=True),
     )
 
 
@@ -490,10 +694,27 @@ def run_scp(config: Config, source: Path, target: str) -> None:
 
 def capture_ssh(config: Config, target: str, command: str) -> str:
     completed = run(
-        ["ssh", "-p", str(config.ssh_port), target, command],
+        ssh_command(config, target, command),
         capture_output=True,
     )
     return completed.stdout.strip()
+
+
+def ssh_command(
+    config: Config,
+    target: str,
+    command: str,
+    *,
+    allocate_tty: bool = False,
+    connect_timeout: int | None = None,
+) -> list[str]:
+    result = ["ssh"]
+    if allocate_tty:
+        result.append("-t")
+    if connect_timeout is not None:
+        result.extend(["-o", f"ConnectTimeout={connect_timeout}"])
+    result.extend(["-p", str(config.ssh_port), target, command])
+    return result
 
 
 def run(
