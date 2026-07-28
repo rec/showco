@@ -51,7 +51,7 @@ class ProvisionTests(unittest.TestCase):
 
         self.assertEqual(config.network.web_port, 17353)
 
-    def test_config_validation_reports_missing_network_values(self) -> None:
+    def test_config_validation_reports_missing_private_wifi_password(self) -> None:
         config = make_config(
             values(
                 networks=networks(
@@ -68,12 +68,8 @@ class ProvisionTests(unittest.TestCase):
             "networks.internal.wifi.private.password is required",
             str(error.exception),
         )
-        self.assertIn(
-            "networks.external.wifi.external.password is required",
-            str(error.exception),
-        )
 
-    def test_config_validation_accepts_network_passwords(self) -> None:
+    def test_config_validation_accepts_passwordless_external_network(self) -> None:
         config = make_config(
             values(
                 networks=networks(
@@ -83,7 +79,6 @@ class ProvisionTests(unittest.TestCase):
                     },
                     external_wifi={
                         "name": "Venue",
-                        "password": "venue password",
                     },
                 )
             ),
