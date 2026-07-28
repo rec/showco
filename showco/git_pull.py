@@ -9,6 +9,8 @@ from typing import TextIO
 
 from pydantic import BaseModel
 
+import showco
+
 RunCommand = Callable[
     [Sequence[str]],
     subprocess.CompletedProcess[str],
@@ -126,7 +128,7 @@ def _run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
     env = dict(os.environ)
     if command and command[0] == "git":
         env["GIT_TERMINAL_PROMPT"] = "0"
-    return subprocess.run(
+    return showco.run(
         command,
         capture_output=True,
         check=False,

@@ -14,6 +14,8 @@ from typing import TextIO
 import tyro
 from pydantic import BaseModel
 
+import showco
+
 RunCommand = Callable[[Sequence[str]], subprocess.CompletedProcess[str]]
 PROVISION_DIR = Path(__file__).resolve().parent / "provision"
 DEFAULT_CONFIG_PATH = PROVISION_DIR / "config.toml"
@@ -339,7 +341,7 @@ def shlex_quote(value: str) -> str:
 
 
 def run(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(command, capture_output=True, check=False, text=True)
+    return showco.run(command, capture_output=True, check=False, text=True)
 
 
 def check_command_result(completed: subprocess.CompletedProcess[str]) -> None:
