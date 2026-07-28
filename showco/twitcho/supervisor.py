@@ -77,7 +77,7 @@ class TwitchoSupervisor:
             self.start()
         else:
             self._terminate_process()
-        return ActionResult(True, "twitcho restart requested")
+        return ActionResult(ok=True, message="twitcho restart requested")
 
     def close(self) -> None:
         self.stop_requested.set()

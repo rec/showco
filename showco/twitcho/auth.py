@@ -13,15 +13,16 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
+from pydantic import BaseModel
+
 TWITCH_AUTHORIZE_URL = "https://id.twitch.tv/oauth2/authorize"
 TWITCH_TOKEN_URL = "https://id.twitch.tv/oauth2/token"
 TWITCH_VALIDATE_URL = "https://id.twitch.tv/oauth2/validate"
 
 
-class HttpResponse:
-    def __init__(self, status: int, text: str) -> None:
-        self.status = status
-        self.text = text
+class HttpResponse(BaseModel, frozen=True):
+    status: int
+    text: str
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -170,9 +171,9 @@ def callback_code(value: str) -> str:
 def request_http(request: urllib.request.Request) -> HttpResponse:
     try:
         with urllib.request.urlopen(request) as response:
-            return HttpResponse(response.status, response.read().decode())
+            return HttpResponse(status=response.status, text=response.read().decode())
     except urllib.error.HTTPError as e:
-        return HttpResponse(e.code, e.read().decode())
+        return HttpResponse(status=e.code, text=e.read().decode())
 
 
 def read_toml(path: Path) -> dict[str, str]:

@@ -11,35 +11,23 @@ import tempfile
 import tomllib
 from pathlib import Path
 
+from pydantic import BaseModel
+
 REMOTE_SCRIPT_TEMPLATE = "provision_locally.tmpl.sh"
 REMOTE_SCRIPT = (Path(__file__).resolve().parent / REMOTE_SCRIPT_TEMPLATE).read_text()
 
 
-class Config:
-    def __init__(
-        self,
-        *,
-        host: str,
-        user: str,
-        port: str,
-        recs_repo: str,
-        twitcho_repo: str,
-        showco_repo: str,
-        showco_port: str,
-        is_x18_wired: bool,
-        showco_x18_host: str,
-        audio_x18_usb_device_name: str,
-    ) -> None:
-        self.host = host
-        self.user = user
-        self.port = port
-        self.recs_repo = recs_repo
-        self.twitcho_repo = twitcho_repo
-        self.showco_repo = showco_repo
-        self.showco_port = showco_port
-        self.is_x18_wired = is_x18_wired
-        self.showco_x18_host = showco_x18_host
-        self.audio_x18_usb_device_name = audio_x18_usb_device_name
+class Config(BaseModel, frozen=True):
+    host: str
+    user: str
+    port: str
+    recs_repo: str
+    twitcho_repo: str
+    showco_repo: str
+    showco_port: str
+    is_x18_wired: bool
+    showco_x18_host: str
+    audio_x18_usb_device_name: str
 
 
 def main(argv: list[str] | None = None) -> int:

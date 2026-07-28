@@ -15,7 +15,9 @@ class TwitchoAuthTests(unittest.TestCase):
             config_dir = Path(directory)
             with mock.patch(
                 "showco.twitcho.auth.request_http",
-                return_value=auth.HttpResponse(400, '{"message":"bad code"}'),
+                return_value=auth.HttpResponse(
+                    status=400, text='{"message":"bad code"}'
+                ),
             ):
                 result = auth.exchange_code(env(config_dir))
 
@@ -30,7 +32,7 @@ class TwitchoAuthTests(unittest.TestCase):
             config_dir = Path(directory)
             with mock.patch(
                 "showco.twitcho.auth.request_http",
-                return_value=auth.HttpResponse(200, "not json"),
+                return_value=auth.HttpResponse(status=200, text="not json"),
             ):
                 result = auth.exchange_code(env(config_dir))
 

@@ -6,6 +6,8 @@ import uuid
 from collections.abc import Mapping
 from typing import Protocol
 
+from pydantic import BaseModel
+
 from ..models import ActionResult, ServiceStatus, TwitchoStatus
 
 CONTROL_HOST = "127.0.0.1"
@@ -31,12 +33,18 @@ class TwitchoClient:
         result = self.command("status")
         if not result.ok:
             return TwitchoStatus(
-                service=ServiceStatus("twitcho", "offline", result.message)
+                service=ServiceStatus(
+                    name="twitcho", state="offline", last_error=result.message
+                )
             )
         value = result.payload.get("status")
         if not isinstance(value, dict):
             return TwitchoStatus(
-                service=ServiceStatus("twitcho", "error", "status reply missing status")
+                service=ServiceStatus(
+                    name="twitcho",
+                    state="error",
+                    last_error="status reply missing status",
+                )
             )
         status = dict(value)
         return TwitchoStatus(
@@ -56,8 +64,8 @@ class TwitchoClient:
     def action(self, command: str, **fields: object) -> ActionResult:
         result = self.command(command, **fields)
         if result.ok:
-            return ActionResult(True, f"twitcho {command} succeeded")
-        return ActionResult(False, result.message)
+            return ActionResult(ok=True, message=f"twitcho {command} succeeded")
+        return ActionResult(ok=False, message=result.message)
 
     def command(self, command: str, **fields: object) -> TwitchoReply:
         message: dict[str, object] = {
@@ -69,11 +77,15 @@ class TwitchoClient:
         try:
             reply = self._exchange(message)
         except (OSError, TimeoutError, json.JSONDecodeError, ValueError) as e:
-            return TwitchoReply(False, f"twitcho command failed: {e}", {})
+            return TwitchoReply(
+                ok=False, message=f"twitcho command failed: {e}", payload={}
+            )
         if reply.get("ok") is True:
-            return TwitchoReply(True, "ok", reply)
+            return TwitchoReply(ok=True, message="ok", payload=reply)
         return TwitchoReply(
-            False, _string(reply.get("error")) or "twitcho command failed", reply
+            ok=False,
+            message=_string(reply.get("error")) or "twitcho command failed",
+            payload=reply,
         )
 
     def _exchange(self, command: Mapping[str, object]) -> dict[str, object]:
@@ -93,11 +105,10 @@ class TwitchoClient:
             return _read_object(reader)
 
 
-class TwitchoReply:
-    def __init__(self, ok: bool, message: str, payload: dict[str, object]) -> None:
-        self.ok = ok
-        self.message = message
-        self.payload = payload
+class TwitchoReply(BaseModel, frozen=True):
+    ok: bool
+    message: str
+    payload: dict[str, object]
 
 
 class LineReader(Protocol):

@@ -4,7 +4,6 @@ import html
 import threading
 import time
 import urllib.parse
-from dataclasses import replace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import ClassVar
 
@@ -36,7 +35,9 @@ class ShowcoApp:
     def status(self) -> ShowStatus:
         twitcho = self.twitcho.status()
         if self.twitcho_supervisor and not twitcho.service.fresh:
-            twitcho = replace(twitcho, service=self.twitcho_supervisor.status())
+            twitcho = twitcho.model_copy(
+                update={"service": self.twitcho_supervisor.status()}
+            )
         return ShowStatus(
             recs=self.recs.status(),
             twitcho=twitcho,
@@ -52,13 +53,15 @@ class ShowcoApp:
             if self.twitcho_supervisor:
                 result = self.twitcho_supervisor.restart()
             else:
-                result = ActionResult(False, "twitcho supervisor is not configured")
+                result = ActionResult(
+                    ok=False, message="twitcho supervisor is not configured"
+                )
         elif action in TWITCHO_ACTIONS:
             result = self.twitcho.action(
                 TWITCHO_ACTIONS[action], **_twitcho_fields(form)
             )
         else:
-            result = ActionResult(False, f"unknown action {action}")
+            result = ActionResult(ok=False, message=f"unknown action {action}")
         with self.action_log_lock:
             self.action_log = [result, *self.action_log[:9]]
         return result

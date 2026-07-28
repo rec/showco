@@ -1,17 +1,16 @@
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
+
+from pydantic import BaseModel, Field
 
 
-@dataclass(frozen=True)
-class ActionResult:
+class ActionResult(BaseModel, frozen=True):
     ok: bool
     message: str
 
 
-@dataclass(frozen=True)
-class ServiceStatus:
+class ServiceStatus(BaseModel, frozen=True):
     name: str
     state: str
     last_error: str | None = None
@@ -22,15 +21,13 @@ class ServiceStatus:
         return self.state == "connected"
 
 
-@dataclass(frozen=True)
-class ChannelLevel:
+class ChannelLevel(BaseModel, frozen=True):
     name: str
     state: str
     signal: float | None = None
 
 
-@dataclass(frozen=True)
-class RecsStatus:
+class RecsStatus(BaseModel, frozen=True):
     service: ServiceStatus
     recording: bool = False
     elapsed_seconds: float | None = None
@@ -38,11 +35,10 @@ class RecsStatus:
     file_size: float | None = None
     file_count: int | None = None
     client_count: int = 0
-    channels: list[ChannelLevel] = field(default_factory=list)
+    channels: list[ChannelLevel] = Field(default_factory=list)
 
 
-@dataclass(frozen=True)
-class TwitchoStatus:
+class TwitchoStatus(BaseModel, frozen=True):
     service: ServiceStatus
     stream_state: str = "unknown"
     muted: bool = False
@@ -52,22 +48,19 @@ class TwitchoStatus:
     output_bitrate_kbps: float | None = None
 
 
-@dataclass(frozen=True)
-class SystemStatus:
+class SystemStatus(BaseModel, frozen=True):
     temperature_c: float | None = None
     temperature_error: str | None = None
 
 
-@dataclass(frozen=True)
-class MixerStatus:
+class MixerStatus(BaseModel, frozen=True):
     latency_ms: float | None = None
     error: str | None = None
 
 
-@dataclass(frozen=True)
-class ShowStatus:
+class ShowStatus(BaseModel, frozen=True):
     recs: RecsStatus
     twitcho: TwitchoStatus
-    system: SystemStatus = field(default_factory=SystemStatus)
-    mixer: MixerStatus = field(default_factory=MixerStatus)
-    generated_at: float = field(default_factory=time.time)
+    system: SystemStatus = Field(default_factory=SystemStatus)
+    mixer: MixerStatus = Field(default_factory=MixerStatus)
+    generated_at: float = Field(default_factory=time.time)
