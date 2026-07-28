@@ -1,32 +1,60 @@
-showco_pi_access_point_ssid = "showbox"
-is_x18_wired = true
+[network]
+host = "recs-stage.local"
+web_port = 17352
 swap_wifi = false
-network_topology = ""
-twitcho_enabled = false
-private_wifi_ssid = "showbox"
-external_wifi_ssid = "Livebox-F13E"
-showco_pi_host = "recs-stage.local"
-showco_pi_ssh_port = "22"
-showco_pi_wifi_ip_address = "10.42.0.1"
-showco_pi_wifi_dhcp_start = "10.42.0.50"
-showco_pi_wifi_dhcp_end = "10.42.0.200"
-showco_pi_x18_ethernet_subnet = "10.43.0.0/24"
-showco_x18_wired_ethernet_ip_address = "10.43.0.18"
-showco_port = "17352"
-twitch_account = "loopopenloop"
-twitch_default_stream_title = "openLoop, broadcasting live from Rouen"
-twitch_default_category = "Music"
-twitch_default_tags = "[\"Live Music\",\"Music\",\"Performance\"]"
-twitch_standard_chat_messages = "[\"Stream starting soon.\",\"Thanks for listening.\"]"
-twitch_standard_stream_marker_descriptions = "[\"show start\",\"song start\",\"song end\",\"set break\",\"show end\"]"
-twitch_id = "1523431675"
-twitch_oauth_token_scopes = "[\"channel:manage:broadcast\",\"chat:edit\",\"chat:read\",\"clips:edit\",\"moderation:read\",\"moderator:manage:announcements\"]"
-twitch_client_id = "qyqv064pencm797xuhee5biy0yxahh"
-twitch_redirect_uri = "http://localhost:17563/callback"
-twitch_scopes = "channel:manage:broadcast chat:edit chat:read moderator:manage:announcements clips:edit moderation:read"
-twitch_config_dir = "$HOME/.config/twitcho"
-twitch_state = "SaqhIYFnE124j25yv7OJm8FQ9yLIceEh"
-x18_usb_device_name = "X18/XR18"
-recs_repo = "git@github.com:rec/recs.git"
-twitcho_repo = "git@github.com:rec/twitcho.git"
-showco_repo = "git@github.com:rec/showco.git"
+topology = ""
+
+[networks.internal.wired.x18]
+name = "x18"
+ip_address = "10.43.0.18"
+subnet = "10.43.0.0/24"
+
+[networks.internal.wifi.private]
+name = "showbox"
+ip_address = "10.42.0.1"
+dhcp_start = "10.42.0.50"
+dhcp_end = "10.42.0.200"
+
+[networks.external.wifi.external]
+name = "Livebox-F13E"
+
+[usb]
+x18_device_name = "X18/XR18"
+
+[twitch]
+enabled = false
+account = "loopopenloop"
+stream_title = "openLoop, broadcasting live from Rouen"
+category = "Music"
+tags = ["Live Music", "Music", "Performance"]
+chat_messages = ["Stream starting soon.", "Thanks for listening."]
+stream_marker_descriptions = [
+  "show start",
+  "song start",
+  "song end",
+  "set break",
+  "show end",
+]
+id = "1523431675"
+oauth_token_scopes = [
+  "channel:manage:broadcast",
+  "chat:edit",
+  "chat:read",
+  "clips:edit",
+  "moderation:read",
+  "moderator:manage:announcements",
+]
+client_id = "qyqv064pencm797xuhee5biy0yxahh"
+redirect_uri = "http://localhost:17563/callback"
+scopes = "channel:manage:broadcast chat:edit chat:read moderator:manage:announcements clips:edit moderation:read"
+config_dir = "$HOME/.config/twitcho"
+state = "SaqhIYFnE124j25yv7OJm8FQ9yLIceEh"
+
+[git.recs]
+url = "git@github.com:rec/recs.git"
+
+[git.twitcho]
+url = "git@github.com:rec/twitcho.git"
+
+[git.showco]
+url = "git@github.com:rec/showco.git"

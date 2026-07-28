@@ -9,7 +9,7 @@ import sys
 import tomllib
 from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import TextIO
+from typing import TextIO, cast
 
 import tyro
 from pydantic import BaseModel
@@ -28,8 +28,17 @@ class NetworkTopology(enum.StrEnum):
     MIXED = enum.auto()
 
 
+class Network(BaseModel, frozen=True):
+    name: str = ""
+    dhcp_start: str = ""
+    dhcp_end: str = ""
+    ip_address: str = ""
+    subnet: str = ""
+    password: str = ""
+
+
 class NetworkConfig(BaseModel, frozen=True):
-    is_x18_wired: bool
+    x18: bool
     swap_wifi: bool
     network_topology: NetworkTopology | None
     twitcho_enabled: bool
@@ -37,7 +46,7 @@ class NetworkConfig(BaseModel, frozen=True):
     private_wifi_password: str
     external_wifi_ssid: str
     external_wifi_password: str
-    x18_ethernet_subnet: str
+    x18_subnet: str
 
 
 class WifiInterface(BaseModel, frozen=True):
@@ -61,8 +70,7 @@ def main(argv: list[str] | None = None) -> int:
         args=argv,
         description="Configure Raspberry Pi Wi-Fi",
     )
-    values = read_toml(options.config)
-    values |= read_toml(options.secrets)
+    values = merge_values(read_toml(options.config), read_toml(options.secrets))
     return configure_network(
         config_from_values(values),
         dry_run=options.dry_run,
@@ -101,31 +109,56 @@ def read_toml(path: Path) -> dict[str, object]:
     if not path.exists():
         return {}
     try:
-        return tomllib.loads(path.read_text())
+        parsed = tomllib.loads(path.read_text())
     except tomllib.TOMLDecodeError as e:
         sys.exit(f"ERROR: Cannot parse {path}: {e}")
+    return {k: toml_value(v) for k, v in parsed.items()}
 
 
 def config_from_values(values: dict[str, object]) -> NetworkConfig:
+    network = table_value(values, "network")
+    networks = table_value(values, "networks")
+    internal = table_value(networks, "internal")
+    external = table_value(networks, "external")
+    internal_wired_networks = network_dict(
+        table_value(internal, "wired"),
+        "networks.internal.wired",
+    )
+    internal_wifi = first_network(
+        network_dict(
+            table_value(internal, "wifi"),
+            "networks.internal.wifi",
+        ),
+        "networks.internal.wifi",
+        default=Network(name="showbox"),
+    )
+    external_wifi = first_network(
+        network_dict(
+            table_value(external, "wifi"),
+            "networks.external.wifi",
+        ),
+        "networks.external.wifi",
+        default=Network(),
+    )
+    twitch = table_value(values, "twitch")
+    x18 = bool(internal_wired_networks)
+    x18_subnet = "10.43.0.0/24"
+    if x18:
+        x18_network = first_network(
+            internal_wired_networks,
+            "networks.internal.wired",
+        )
+        x18_subnet = string_or_default(x18_network.subnet, "10.43.0.0/24")
     return NetworkConfig(
-        is_x18_wired=bool_value(values, "is_x18_wired", default=True),
-        swap_wifi=bool_value(values, "swap_wifi", default=False),
-        network_topology=topology_value(values.get("network_topology")),
-        twitcho_enabled=bool_value(values, "twitcho_enabled", default=False),
-        private_wifi_ssid=string_value(
-            values,
-            "private_wifi_ssid",
-            legacy_name="showco_pi_access_point_ssid",
-            default="showbox",
-        ),
-        private_wifi_password=string_value(values, "private_wifi_password"),
-        external_wifi_ssid=string_value(values, "external_wifi_ssid"),
-        external_wifi_password=string_value(values, "external_wifi_password"),
-        x18_ethernet_subnet=string_value(
-            values,
-            "showco_pi_x18_ethernet_subnet",
-            default="10.43.0.0/24",
-        ),
+        x18=x18,
+        swap_wifi=bool_value(network, "swap_wifi", default=False),
+        network_topology=topology_value(network.get("topology")),
+        twitcho_enabled=bool_value(twitch, "enabled", default=False),
+        private_wifi_ssid=string_or_default(internal_wifi.name, "showbox"),
+        private_wifi_password=internal_wifi.password,
+        external_wifi_ssid=external_wifi.name,
+        external_wifi_password=external_wifi.password,
+        x18_subnet=x18_subnet,
     )
 
 
@@ -180,7 +213,9 @@ def select_topology(config: NetworkConfig, has_second_wifi: bool) -> NetworkTopo
         return config.network_topology
     if not config.external_wifi_ssid:
         if config.twitcho_enabled:
-            sys.exit("ERROR: external_wifi_ssid is required when twitcho is enabled")
+            sys.exit(
+                "ERROR: network.external_wifi_ssid is required when twitcho is enabled"
+            )
         return NetworkTopology.PRIVATE
     if has_second_wifi:
         return NetworkTopology.MIXED
@@ -199,7 +234,7 @@ def network_commands(
     if topology in (NetworkTopology.PUBLIC, NetworkTopology.MIXED):
         require_external_network(config)
     commands = []
-    if config.is_x18_wired:
+    if config.x18:
         commands.append(x18_ethernet_command(config))
     commands.append(["nmcli", "radio", "wifi", "on"])
     if topology == NetworkTopology.PUBLIC:
@@ -259,7 +294,7 @@ def disconnect_command(interface: WifiInterface) -> list[str]:
 def x18_ethernet_command(config: NetworkConfig) -> list[str]:
     connection = "showco-x18"
     interface = "eth0"
-    address = x18_pi_ethernet_address(config.x18_ethernet_subnet)
+    address = x18_pi_ethernet_address(config.x18_subnet)
     script = "\n".join(
         [
             f"nmcli connection show {shlex_quote(connection)} >/dev/null 2>&1 || "
@@ -283,29 +318,96 @@ def x18_pi_ethernet_address(subnet: str) -> str:
     try:
         network = ipaddress.ip_network(subnet, strict=False)
     except ValueError:
-        sys.exit("ERROR: showco_pi_x18_ethernet_subnet must be a valid IP subnet")
+        sys.exit(
+            "ERROR: networks.internal.wired.x18.subnet "
+            "must be a valid IP subnet"
+        )
     hosts = network.hosts()
     try:
         address = next(hosts)
     except StopIteration:
-        sys.exit("ERROR: showco_pi_x18_ethernet_subnet has no usable host address")
+        sys.exit(
+            "ERROR: networks.internal.wired.x18.subnet "
+            "has no usable host address"
+        )
     return f"{address}/{network.prefixlen}"
 
 
 def require_external_network(config: NetworkConfig) -> None:
     if not config.external_wifi_ssid:
-        sys.exit("ERROR: external_wifi_ssid is required for this network topology")
+        sys.exit("ERROR: network.external_wifi_ssid is required for this topology")
 
 
 def topology_value(value: object) -> NetworkTopology | None:
     if value in (None, ""):
         return None
     if not isinstance(value, str):
-        sys.exit("ERROR: network_topology must be a string")
+        sys.exit("ERROR: network.topology must be a string")
     try:
         return NetworkTopology(value)
     except ValueError:
-        sys.exit("ERROR: network_topology must be public, private, mixed, or empty")
+        sys.exit("ERROR: network.topology must be public, private, mixed, or empty")
+
+
+def merge_values(
+    config: dict[str, object], secrets: dict[str, object]
+) -> dict[str, object]:
+    result = dict(config)
+    for k, v in secrets.items():
+        current = result.get(k)
+        if isinstance(v, dict) and isinstance(current, dict):
+            result[k] = merge_values(
+                cast(dict[str, object], current),
+                cast(dict[str, object], v),
+            )
+        else:
+            result[k] = v
+    return result
+
+
+def table_value(values: dict[str, object], name: str) -> dict[str, object]:
+    value = values.get(name, {})
+    if isinstance(value, dict):
+        return cast(dict[str, object], value)
+    sys.exit(f"ERROR: {name} must be a table")
+
+
+def network_dict(values: dict[str, object], name: str) -> dict[str, Network]:
+    networks = {}
+    for k, v in values.items():
+        if not isinstance(v, dict):
+            sys.exit(f"ERROR: {name}.{k} must be a table")
+        networks[k] = Network(**cast(dict[str, object], v))
+    return networks
+
+
+def first_network(
+    networks: dict[str, Network],
+    name: str,
+    *,
+    default: Network | None = None,
+) -> Network:
+    if networks:
+        if "x18" in networks:
+            return networks["x18"]
+        return next(iter(networks.values()))
+    if default is not None:
+        return default
+    sys.exit(f"ERROR: {name} must contain at least one network")
+
+
+def toml_value(value: object) -> object:
+    if isinstance(value, str):
+        return os.path.expandvars(value)
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, list) and all(isinstance(i, str) for i in value):
+        return value
+    if isinstance(value, list):
+        return [toml_value(i) for i in value]
+    if isinstance(value, dict):
+        return {k: toml_value(v) for k, v in value.items()}
+    return None
 
 
 def bool_value(values: dict[str, object], name: str, *, default: bool) -> bool:
@@ -319,17 +421,20 @@ def string_value(
     values: dict[str, object],
     name: str,
     *,
-    legacy_name: str | None = None,
     default: str = "",
 ) -> str:
     value = values.get(name)
-    if value is None and legacy_name:
-        value = values.get(legacy_name)
     if value is None:
         return default
     if not isinstance(value, str):
         sys.exit(f"ERROR: {name} must be a string")
     return os.path.expandvars(value)
+
+
+def string_or_default(value: str, default: str) -> str:
+    if value:
+        return value
+    return default
 
 
 def shell_command(command: Sequence[str]) -> str:

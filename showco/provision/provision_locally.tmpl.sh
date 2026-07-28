@@ -187,6 +187,7 @@ prepare_checkout_path() {
 sync_repo() {
   local name=$1
   local url=$2
+  local refname=$3
   local path="$CODE_DIR/$name"
 
   prepare_checkout_path "$path"
@@ -195,6 +196,9 @@ sync_repo() {
     sudo -H -u "$SHOW_USER" git -C "$path" pull --ff-only
   else
     sudo -H -u "$SHOW_USER" git clone "$url" "$path"
+  fi
+  if [[ -n "$refname" && "$refname" != TODO ]]; then
+    sudo -H -u "$SHOW_USER" git -C "$path" checkout "$refname"
   fi
 
   sudo -H -u "$SHOW_USER" env PATH="/home/$SHOW_USER/.local/bin:$PATH" \
@@ -217,23 +221,50 @@ write_toml_string() {
   printf '\n'
 }
 
+write_toml_network_values() {
+  local name=$1
+  local ip_address=$2
+  local subnet=$3
+  if [ -n "$name" ]; then
+    write_toml_string name "$name"
+  fi
+  if [ -n "$ip_address" ]; then
+    write_toml_string ip_address "$ip_address"
+  fi
+  if [ -n "$subnet" ]; then
+    write_toml_string subnet "$subnet"
+  fi
+}
+
+write_toml_wifi_secret_values() {
+  local password=$1
+  write_toml_string password "$password"
+}
+
 write_network_config_files() {
   local config_file=$1
   local secrets_file=$2
 
   {
-    printf 'is_x18_wired = %s\n' "$IS_X18_WIRED"
+    printf '[network]\n'
     printf 'swap_wifi = %s\n' "$SWAP_WIFI"
-    write_toml_string network_topology "$NETWORK_TOPOLOGY"
-    printf 'twitcho_enabled = %s\n' "$TWITCHO_ENABLED"
-    write_toml_string private_wifi_ssid "$PRIVATE_WIFI_SSID"
-    write_toml_string external_wifi_ssid "$EXTERNAL_WIFI_SSID"
-    write_toml_string showco_pi_x18_ethernet_subnet \
-      "$SHOWCO_PI_X18_ETHERNET_SUBNET"
+    write_toml_string topology "$NETWORK_TOPOLOGY"
+    if [ "$X18" = true ]; then
+      printf '\n[networks.internal.wired.x18]\n'
+      write_toml_network_values x18 "$SHOWCO_X18_HOST" "$SHOWCO_PI_X18_SUBNET"
+    fi
+    printf '\n[networks.internal.wifi.private]\n'
+    write_toml_network_values "$PRIVATE_WIFI_SSID" "" ""
+    printf '\n[networks.external.wifi.external]\n'
+    write_toml_network_values "$EXTERNAL_WIFI_SSID" "" ""
+    printf '\n[twitch]\n'
+    printf 'enabled = %s\n' "$TWITCHO_ENABLED"
   } >"$config_file"
   {
-    write_toml_string private_wifi_password "$PRIVATE_WIFI_PASSWORD"
-    write_toml_string external_wifi_password "$EXTERNAL_WIFI_PASSWORD"
+    printf '[networks.internal.wifi.private]\n'
+    write_toml_wifi_secret_values "$PRIVATE_WIFI_PASSWORD"
+    printf '\n[networks.external.wifi.external]\n'
+    write_toml_wifi_secret_values "$EXTERNAL_WIFI_PASSWORD"
   } >"$secrets_file"
   sudo chown "$SHOW_USER:$SHOW_USER" "$config_file" "$secrets_file"
   sudo chmod 600 "$config_file" "$secrets_file"
@@ -425,9 +456,9 @@ main() {
   install_uv
 
   phase "syncing repositories"
-  sync_repo recs "$RECS_REPO"
-  sync_repo twitcho "$TWITCHO_REPO"
-  sync_repo showco "$SHOWCO_REPO"
+  sync_repo recs "$RECS_REPO" "$RECS_REFNAME"
+  sync_repo twitcho "$TWITCHO_REPO" "$TWITCHO_REFNAME"
+  sync_repo showco "$SHOWCO_REPO" "$SHOWCO_REFNAME"
 
   phase "enabling user service autostart"
   sudo loginctl enable-linger "$SHOW_USER"
