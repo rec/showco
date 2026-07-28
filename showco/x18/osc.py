@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import argparse
 import base64
 import json
 import socket
@@ -10,19 +9,27 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import BinaryIO
 
+import tyro
+
 X18_OSC_PORT = 10_024
 XREMOTE_INTERVAL_SECONDS = 8.0
 SOCKET_TIMEOUT_SECONDS = 0.2
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Record X18 OSC traffic")
-    parser.add_argument("--host", required=True, help="X18 mixer host or IP address")
-    parser.add_argument("--port", type=int, default=X18_OSC_PORT)
-    parser.add_argument("--log-dir", type=Path, default=Path("."))
-    args = parser.parse_args(argv)
+    return tyro.cli(
+        record_osc,
+        args=argv,
+        description="Record X18 OSC traffic",
+    )
 
-    recorder = X18OscRecorder(args.host, port=args.port, log_dir=args.log_dir)
+
+def record_osc(
+    host: str,
+    port: int = X18_OSC_PORT,
+    log_dir: Path = Path("."),
+) -> int:
+    recorder = X18OscRecorder(host, port=port, log_dir=log_dir)
     print(f"recording X18 OSC to {recorder.path}")
     recorder.run_forever()
     return 0
