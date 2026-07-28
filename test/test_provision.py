@@ -160,6 +160,16 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn("uv run showco run network-config", provision.REMOTE_SCRIPT)
         self.assertIn("Skipping network configuration", provision.REMOTE_SCRIPT)
 
+    def test_remote_script_configures_locale_before_package_updates(self) -> None:
+        locale = provision.REMOTE_SCRIPT.index('phase "configuring locale"')
+        update = provision.REMOTE_SCRIPT.index("sudo apt-get update")
+        upgrade = provision.REMOTE_SCRIPT.index("sudo apt-get upgrade -y")
+        install = provision.REMOTE_SCRIPT.index("sudo apt-get install -y")
+
+        self.assertLess(locale, update)
+        self.assertLess(update, upgrade)
+        self.assertLess(upgrade, install)
+
     def test_remote_command_passes_network_config(self) -> None:
         config = provision.config_from_args(
             args(),
