@@ -45,6 +45,48 @@ class ProvisionTests(unittest.TestCase):
 
         self.assertEqual(config.web_port, 17353)
 
+    def test_config_validation_reports_missing_network_values(self) -> None:
+        config = provision.config_from_args(
+            args(),
+            values(
+                networks=networks(
+                    internal_wifi={"name": "showbox"},
+                    external_wifi={"name": "Venue"},
+                )
+            ),
+        )
+
+        with self.assertRaises(SystemExit) as error:
+            provision.validate_config(config)
+
+        self.assertIn(
+            "networks.internal.wifi.private.password is required",
+            str(error.exception),
+        )
+        self.assertIn(
+            "networks.external.wifi.external.password is required",
+            str(error.exception),
+        )
+
+    def test_config_validation_accepts_network_passwords(self) -> None:
+        config = provision.config_from_args(
+            args(),
+            values(
+                networks=networks(
+                    internal_wifi={
+                        "name": "showbox",
+                        "password": "private password",
+                    },
+                    external_wifi={
+                        "name": "Venue",
+                        "password": "venue password",
+                    },
+                )
+            ),
+        )
+
+        provision.validate_config(config)
+
     def test_remote_script_is_removed_after_remote_failure(self) -> None:
         config = provision.config_from_args(
             args(), values(networks=networks(x18=False))
