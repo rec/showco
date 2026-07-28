@@ -1,93 +1,36 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import os
 import shlex
 import shutil
 import subprocess
 import sys
 import tempfile
 import time
-import tomllib
 from pathlib import Path
-from typing import cast
 
 import tyro
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 import showco
+
+from .config import (
+    Config,
+    config_from_values,
+    external_wifi,
+    internal_wifi,
+    merge_values,
+    read_toml,
+    require_value,
+    string_or_default,
+    x18,
+)
 
 PROVISION_DIR = Path(__file__).resolve().parent
 REMOTE_SCRIPT_TEMPLATE = "provision_locally.tmpl.sh"
 REMOTE_SCRIPT = (PROVISION_DIR / REMOTE_SCRIPT_TEMPLATE).read_text()
 REMOTE_GITHUB_KEY_TEMPLATE = "remote_github_key.tmpl.sh"
 REBOOT_WAIT_SECONDS = 300
-
-
-class GitRepo(BaseModel, frozen=True):
-    url: str
-    refname: str
-
-
-class Network(BaseModel, frozen=True):
-    name: str = ""
-    dhcp_start: str = ""
-    dhcp_end: str = ""
-    ip_address: str = ""
-    subnet: str = ""
-    password: str = ""
-
-
-class NetworkTable(BaseModel, frozen=True):
-    host: str = ""
-    user: str = ""
-    ssh_port: int = 22
-    web_port: int = 17352
-    swap_wifi: bool = False
-    topology: str = ""
-
-
-class NetworkGroup(BaseModel, frozen=True):
-    wired: dict[str, Network] = Field(default_factory=dict)
-    wifi: dict[str, Network] = Field(default_factory=dict)
-
-
-class Networks(BaseModel, frozen=True):
-    internal: NetworkGroup = Field(default_factory=NetworkGroup)
-    external: NetworkGroup = Field(default_factory=NetworkGroup)
-
-
-class Usb(BaseModel, frozen=True):
-    x18_device_name: str = ""
-
-
-class Twitch(BaseModel, frozen=True):
-    enabled: bool = False
-
-
-class Git(BaseModel, frozen=True):
-    recs: GitRepo
-    twitcho: GitRepo
-    showco: GitRepo
-
-
-class Config(BaseModel, frozen=True):
-    network: NetworkTable
-    networks: Networks
-    usb: Usb
-    twitch: Twitch
-    git: Git
-
-
-class ProvisionOptions(BaseModel, frozen=True):
-    config: Path
-    secrets: Path
-    host: str | None
-    user: str | None
-    port: int | None
-    recs_repo: str | None
-    twitcho_repo: str | None
-    showco_repo: str | None
 
 
 class VerificationResult(BaseModel, frozen=True):
@@ -97,15 +40,35 @@ class VerificationResult(BaseModel, frozen=True):
 
 
 def main(argv: list[str] | None = None) -> int:
-    options = tyro.cli(
-        provision_options,
+    return tyro.cli(
+        run,
         args=argv,
         description="Provision a reachable Raspberry Pi over SSH",
     )
-    env = merge_values(read_toml(options.config), read_toml(options.secrets))
-    config = config_from_args(options, env)
-    validate_config(config)
-    ssh_target = f"{config.network.user}@{config.network.host}"
+
+
+def run(
+    config: Path = PROVISION_DIR / "config.toml",
+    secrets: Path = PROVISION_DIR / "secrets.toml",
+    host: str | None = None,
+    user: str | None = None,
+    port: int | None = None,
+    recs_repo: str | None = None,
+    twitcho_repo: str | None = None,
+    showco_repo: str | None = None,
+) -> int:
+    env = merge_values(read_toml(config), read_toml(secrets))
+    parsed_config = config_from_values(
+        env,
+        host=host,
+        user=user,
+        port=port,
+        recs_repo=recs_repo,
+        twitcho_repo=twitcho_repo,
+        showco_repo=showco_repo,
+    )
+    validate_config(parsed_config)
+    ssh_target = f"{parsed_config.network.user}@{parsed_config.network.host}"
     remote_script = "/tmp/showco-provision-pi.sh"
 
     with tempfile.NamedTemporaryFile(
@@ -117,7 +80,7 @@ def main(argv: list[str] | None = None) -> int:
         local_script = Path(fp.name)
         fp.write(REMOTE_SCRIPT)
     try:
-        provision_remote(config, ssh_target, local_script, remote_script)
+        provision_remote(parsed_config, ssh_target, local_script, remote_script)
     finally:
         local_script.unlink(missing_ok=True)
 
@@ -174,16 +137,8 @@ def validate_config(config: Config) -> None:
 
 def config_errors(config: Config) -> list[str]:
     errors = []
-    external = first_network(
-        config.networks.external.wifi,
-        "networks.external.wifi",
-        default=Network(),
-    )
-    private = first_network(
-        config.networks.internal.wifi,
-        "networks.internal.wifi",
-        default=Network(),
-    )
+    external = external_wifi(config)
+    private = internal_wifi(config)
     if not external.name or external.name == "TODO":
         errors.append("- networks.external.wifi.external.name is required")
     if not private.password or private.password == "TODO":
@@ -499,238 +454,6 @@ def remote_github_key_command(config: Config) -> str:
     return template.read_text().replace("{comment}", comment)
 
 
-def provision_options(
-    config: Path = PROVISION_DIR / "config.toml",
-    secrets: Path = PROVISION_DIR / "secrets.toml",
-    host: str | None = None,
-    user: str | None = None,
-    port: int | None = None,
-    recs_repo: str | None = None,
-    twitcho_repo: str | None = None,
-    showco_repo: str | None = None,
-) -> ProvisionOptions:
-    return ProvisionOptions(
-        config=config,
-        secrets=secrets,
-        host=host,
-        user=user,
-        port=port,
-        recs_repo=recs_repo,
-        twitcho_repo=twitcho_repo,
-        showco_repo=showco_repo,
-    )
-
-
-def config_from_args(args: ProvisionOptions, env: dict[str, object]) -> Config:
-    network = table_value(env, "network")
-    networks = table_value(env, "networks")
-    internal = table_value(networks, "internal")
-    external = table_value(networks, "external")
-    usb = table_value(env, "usb")
-    twitch = table_value(env, "twitch")
-    git = table_value(env, "git")
-    host = value_or_env(args.host, network, "host")
-    user = value_or_env(
-        args.user,
-        network,
-        "user",
-        default=os.environ.get("USER", ""),
-    )
-    ssh_port = value_or_int(args.port, network, "ssh_port", default=22)
-    return Config(
-        network=NetworkTable(
-            host=require_value("network.host", host),
-            user=require_value("network.user or USER", user),
-            ssh_port=ssh_port,
-            web_port=int_value(network, "web_port", default=17352),
-            swap_wifi=bool_value(network, "swap_wifi", default=False),
-            topology=string_value(network, "topology"),
-        ),
-        networks=Networks(
-            internal=NetworkGroup(
-                wired=network_dict(
-                    table_value(internal, "wired"),
-                    "networks.internal.wired",
-                ),
-                wifi=network_dict(
-                    table_value(internal, "wifi"),
-                    "networks.internal.wifi",
-                ),
-            ),
-            external=NetworkGroup(
-                wifi=network_dict(
-                    table_value(external, "wifi"),
-                    "networks.external.wifi",
-                ),
-            ),
-        ),
-        usb=Usb(x18_device_name=string_value(usb, "x18_device_name")),
-        twitch=Twitch(enabled=bool_value(twitch, "enabled", default=False)),
-        git=Git(
-            recs=git_repo("recs", table_value(git, "recs"), override=args.recs_repo),
-            twitcho=git_repo(
-                "twitcho",
-                table_value(git, "twitcho"),
-                override=args.twitcho_repo,
-            ),
-            showco=git_repo(
-                "showco",
-                table_value(git, "showco"),
-                override=args.showco_repo,
-            ),
-        ),
-    )
-
-
-def value_or_env(
-    value: str | None,
-    env: dict[str, object],
-    name: str,
-    *,
-    default: str = "",
-) -> str:
-    if value:
-        return value
-    return string_value(env, name, default=default)
-
-
-def value_or_int(
-    value: int | None,
-    env: dict[str, object],
-    name: str,
-    *,
-    default: int,
-) -> int:
-    if value is not None:
-        return value
-    return int_value(env, name, default=default)
-
-
-def git_repo(name: str, values: dict[str, object], *, override: str | None) -> GitRepo:
-    url = override or string_value(values, "url")
-    return GitRepo(
-        url=require_value(f"git.{name}.url", url),
-        refname=string_value(values, "refname"),
-    )
-
-
-def table_value(values: dict[str, object], name: str) -> dict[str, object]:
-    value = values.get(name, {})
-    if isinstance(value, dict):
-        return cast(dict[str, object], value)
-    sys.exit(f"ERROR: {name} must be a table")
-
-
-def merge_values(
-    config: dict[str, object], secrets: dict[str, object]
-) -> dict[str, object]:
-    result = dict(config)
-    for k, v in secrets.items():
-        current = result.get(k)
-        if isinstance(v, dict) and isinstance(current, dict):
-            result[k] = merge_values(
-                cast(dict[str, object], current),
-                cast(dict[str, object], v),
-            )
-        else:
-            result[k] = v
-    return result
-
-
-def network_dict(values: dict[str, object], name: str) -> dict[str, Network]:
-    networks = {}
-    for k, v in values.items():
-        if not isinstance(v, dict):
-            sys.exit(f"ERROR: {name}.{k} must be a table")
-        table = cast(dict[str, object], v)
-        networks[k] = Network(
-            name=string_value(table, "name"),
-            dhcp_start=string_value(table, "dhcp_start"),
-            dhcp_end=string_value(table, "dhcp_end"),
-            ip_address=string_value(table, "ip_address"),
-            subnet=string_value(table, "subnet"),
-            password=string_value(table, "password"),
-        )
-    return networks
-
-
-def first_network(
-    networks: dict[str, Network],
-    name: str,
-    *,
-    default: Network | None = None,
-) -> Network:
-    if networks:
-        if "x18" in networks:
-            return networks["x18"]
-        return next(iter(networks.values()))
-    if default is not None:
-        return default
-    sys.exit(f"ERROR: {name} must contain at least one network")
-
-
-def internal_wifi(config: Config) -> Network:
-    return first_network(
-        config.networks.internal.wifi,
-        "networks.internal.wifi",
-        default=Network(name="showbox"),
-    )
-
-
-def external_wifi(config: Config) -> Network:
-    return first_network(
-        config.networks.external.wifi,
-        "networks.external.wifi",
-        default=Network(),
-    )
-
-
-def x18(config: Config) -> Network | None:
-    if not config.networks.internal.wired:
-        return None
-    return first_network(config.networks.internal.wired, "networks.internal.wired")
-
-
-def string_or_default(value: str, default: str) -> str:
-    if value:
-        return value
-    return default
-
-
-def require_value(name: str, value: str) -> str:
-    if value and value != "TODO":
-        return value
-    sys.exit(f"ERROR: {name} is required")
-
-
-def bool_value(values: dict[str, object], name: str, *, default: bool) -> bool:
-    value = values.get(name, default)
-    if isinstance(value, bool):
-        return value
-    sys.exit(f"ERROR: {name} must be a boolean")
-
-
-def int_value(values: dict[str, object], name: str, *, default: int) -> int:
-    value = values.get(name, default)
-    if isinstance(value, int) and not isinstance(value, bool):
-        return value
-    sys.exit(f"ERROR: {name} must be an integer")
-
-
-def string_value(
-    values: dict[str, object],
-    name: str,
-    *,
-    default: str = "",
-) -> str:
-    value = values.get(name)
-    if value is None:
-        value = default
-    if isinstance(value, str):
-        return os.path.expandvars(value)
-    sys.exit(f"ERROR: {name} must be a string")
-
-
 def shell_bool(value: bool) -> str:
     return "true" if value else "false"
 
@@ -774,19 +497,19 @@ def remote_command(config: Config, remote_script: str) -> str:
 
 
 def run_ssh(config: Config, target: str, command: str) -> None:
-    run(
+    run_command(
         ssh_command(config, target, command, allocate_tty=True),
     )
 
 
 def run_scp(config: Config, source: Path, target: str) -> None:
-    run(
+    run_command(
         ["scp", "-P", str(config.network.ssh_port), str(source), target],
     )
 
 
 def capture_ssh(config: Config, target: str, command: str) -> str:
-    completed = run(
+    completed = run_command(
         ssh_command(config, target, command),
         capture_output=True,
     )
@@ -811,7 +534,7 @@ def ssh_command(
     return result
 
 
-def run(
+def run_command(
     command: list[str],
     *,
     capture_output: bool = False,
@@ -822,33 +545,6 @@ def run(
         check=True,
         text=True,
     )
-
-
-def read_toml(path: Path) -> dict[str, object]:
-    path = path.expanduser()
-    if not path.exists():
-        return {}
-    try:
-        parsed = tomllib.loads(path.read_text())
-    except tomllib.TOMLDecodeError as e:
-        sys.exit(f"ERROR: Cannot parse {path}: {e}")
-    return {k: toml_value(v) for k, v in parsed.items()}
-
-
-def toml_value(value: object) -> object:
-    if isinstance(value, str):
-        return os.path.expandvars(value)
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, int):
-        return value
-    if isinstance(value, list) and all(isinstance(i, str) for i in value):
-        return value
-    if isinstance(value, list):
-        return [toml_value(i) for i in value]
-    if isinstance(value, dict):
-        return {k: toml_value(v) for k, v in value.items()}
-    return None
 
 
 def script_dir() -> Path:

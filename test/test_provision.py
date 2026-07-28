@@ -7,36 +7,42 @@ from tempfile import TemporaryDirectory
 from unittest import mock
 
 from showco.provision import provision
+from showco.provision.config import (
+    Config,
+    config_from_values,
+    merge_values,
+    read_toml,
+    table_value,
+)
 
 
 class ProvisionTests(unittest.TestCase):
     def test_wired_x18_uses_configured_x18_host(self) -> None:
-        config = provision.config_from_args(
-            args(),
+        config = make_config(
             values(),
         )
 
-        self.assertEqual(config.networks.internal.wired["x18"].ip_address, "10.43.0.18")
+        self.assertEqual(
+            config.networks["internal"]["wired"]["x18"].ip_address,
+            "10.43.0.18",
+        )
 
     def test_unwired_x18_omits_x18_host(self) -> None:
-        config = provision.config_from_args(
-            args(),
+        config = make_config(
             values(networks=networks(x18=False)),
         )
 
-        self.assertEqual(config.networks.internal.wired, {})
+        self.assertEqual(config.networks["internal"]["wired"], {})
 
     def test_ssh_port_defaults_to_22(self) -> None:
-        config = provision.config_from_args(
-            args(),
+        config = make_config(
             values(networks=networks(x18=False)),
         )
 
         self.assertEqual(config.network.ssh_port, 22)
 
     def test_web_port_is_integer(self) -> None:
-        config = provision.config_from_args(
-            args(),
+        config = make_config(
             values(
                 network={"web_port": 17353},
                 networks=networks(x18=False),
@@ -46,8 +52,7 @@ class ProvisionTests(unittest.TestCase):
         self.assertEqual(config.network.web_port, 17353)
 
     def test_config_validation_reports_missing_network_values(self) -> None:
-        config = provision.config_from_args(
-            args(),
+        config = make_config(
             values(
                 networks=networks(
                     internal_wifi={"name": "showbox"},
@@ -69,8 +74,7 @@ class ProvisionTests(unittest.TestCase):
         )
 
     def test_config_validation_accepts_network_passwords(self) -> None:
-        config = provision.config_from_args(
-            args(),
+        config = make_config(
             values(
                 networks=networks(
                     internal_wifi={
@@ -88,9 +92,7 @@ class ProvisionTests(unittest.TestCase):
         provision.validate_config(config)
 
     def test_remote_script_is_removed_after_remote_failure(self) -> None:
-        config = provision.config_from_args(
-            args(), values(networks=networks(x18=False))
-        )
+        config = make_config(values(networks=networks(x18=False)))
         original_error = subprocess.CalledProcessError(1, ["ssh", "provision"])
         cleanup_error = subprocess.CalledProcessError(1, ["ssh", "cleanup"])
         with (
@@ -115,7 +117,7 @@ class ProvisionTests(unittest.TestCase):
 
     def test_run_uses_key_based_ssh_command(self) -> None:
         with mock.patch("showco.run") as run:
-            provision.run(["ssh"])
+            provision.run_command(["ssh"])
 
         run.assert_called_once_with(
             ["ssh"],
@@ -126,16 +128,12 @@ class ProvisionTests(unittest.TestCase):
 
     def test_provision_adds_github_key_before_uploading_script(self) -> None:
         calls: list[str] = []
-        config = provision.config_from_args(
-            args(), values(networks=networks(x18=False))
-        )
+        config = make_config(values(networks=networks(x18=False)))
 
-        def ensure_github_account_key(
-            config: provision.Config, ssh_target: str
-        ) -> None:
+        def ensure_github_account_key(config: Config, ssh_target: str) -> None:
             calls.append("github")
 
-        def run_scp(config: provision.Config, source: Path, target: str) -> None:
+        def run_scp(config: Config, source: Path, target: str) -> None:
             calls.append("scp")
 
         with (
@@ -163,9 +161,7 @@ class ProvisionTests(unittest.TestCase):
         self.assertEqual(calls, ["github", "scp"])
 
     def test_provision_waits_for_reboot_and_reports_verification(self) -> None:
-        config = provision.config_from_args(
-            args(), values(networks=networks(x18=False))
-        )
+        config = make_config(values(networks=networks(x18=False)))
         result = [provision.VerificationResult(name="showco", error="")]
         with (
             mock.patch("showco.provision.provision.run_ssh"),
@@ -194,9 +190,7 @@ class ProvisionTests(unittest.TestCase):
         report.assert_called_once_with(result)
 
     def test_initial_wait_for_ssh_retries_until_connected(self) -> None:
-        config = provision.config_from_args(
-            args(), values(networks=networks(x18=False))
-        )
+        config = make_config(values(networks=networks(x18=False)))
         with (
             mock.patch(
                 "showco.provision.provision.ssh_is_reachable",
@@ -210,9 +204,7 @@ class ProvisionTests(unittest.TestCase):
         sleep.assert_has_calls([mock.call(1), mock.call(1)])
 
     def test_changed_host_key_is_removed_during_ssh_retry(self) -> None:
-        config = provision.config_from_args(
-            args(), values(networks=networks(x18=False))
-        )
+        config = make_config(values(networks=networks(x18=False)))
         changed_key = subprocess.CompletedProcess(
             ["ssh"],
             255,
@@ -233,9 +225,7 @@ class ProvisionTests(unittest.TestCase):
         )
 
     def test_ssh_retry_uses_non_interactive_host_key_options(self) -> None:
-        config = provision.config_from_args(
-            args(), values(networks=networks(x18=False))
-        )
+        config = make_config(values(networks=networks(x18=False)))
 
         command = provision.ssh_command(
             config,
@@ -248,9 +238,9 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn("StrictHostKeyChecking=accept-new", command)
 
     def test_known_host_names_include_port_specific_host(self) -> None:
-        config = provision.config_from_args(
-            args(port=2200),
+        config = make_config(
             values(networks=networks(x18=False)),
+            port=2200,
         )
 
         self.assertEqual(
@@ -259,41 +249,31 @@ class ProvisionTests(unittest.TestCase):
         )
 
     def test_github_key_title_uses_host(self) -> None:
-        config = provision.config_from_args(
-            args(), values(networks=networks(x18=False))
-        )
+        config = make_config(values(networks=networks(x18=False)))
 
         self.assertEqual(provision.github_key_title(config), "showco recs-stage.local")
 
     def test_remote_github_key_command_writes_only_public_key_to_stdout(self) -> None:
-        config = provision.config_from_args(
-            args(), values(networks=networks(x18=False))
-        )
+        config = make_config(values(networks=networks(x18=False)))
         command = provision.remote_github_key_command(config)
 
         self.assertIn('} >&2\ncat "$HOME/.ssh/id_ed25519.pub"', command)
 
     def test_remote_github_key_command_regenerates_missing_public_key(self) -> None:
-        config = provision.config_from_args(
-            args(), values(networks=networks(x18=False))
-        )
+        config = make_config(values(networks=networks(x18=False)))
         command = provision.remote_github_key_command(config)
 
         self.assertIn('ssh-keygen -y -f "$HOME/.ssh/id_ed25519"', command)
 
     def test_remote_github_key_command_does_not_run_gh_on_pi(self) -> None:
-        config = provision.config_from_args(
-            args(), values(networks=networks(x18=False))
-        )
+        config = make_config(values(networks=networks(x18=False)))
         command = provision.remote_github_key_command(config)
 
         self.assertNotIn("gh ", command)
         self.assertNotIn("gh\n", command)
 
     def test_remote_github_key_command_is_loaded_from_template_file(self) -> None:
-        config = provision.config_from_args(
-            args(), values(networks=networks(x18=False))
-        )
+        config = make_config(values(networks=networks(x18=False)))
         template = provision.script_dir() / provision.REMOTE_GITHUB_KEY_TEMPLATE
 
         self.assertEqual(
@@ -372,10 +352,10 @@ class ProvisionTests(unittest.TestCase):
             path = Path(directory) / "config.toml"
             path.write_text('[twitch]\ntags = ["Live Music", "Music"]\n')
 
-            values = provision.read_toml(path)
+            values = read_toml(path)
 
         self.assertEqual(
-            provision.table_value(values, "twitch")["tags"],
+            table_value(values, "twitch")["tags"],
             ["Live Music", "Music"],
         )
 
@@ -399,7 +379,7 @@ class ProvisionTests(unittest.TestCase):
             },
         }
 
-        values = provision.merge_values(config, secrets)
+        values = merge_values(config, secrets)
 
         self.assertEqual(
             values["networks"]["external"]["wifi"]["venue"],
@@ -410,8 +390,7 @@ class ProvisionTests(unittest.TestCase):
         )
 
     def test_remote_command_passes_network_config(self) -> None:
-        config = provision.config_from_args(
-            args(),
+        config = make_config(
             values(
                 networks=networks(
                     x18=False,
@@ -433,8 +412,7 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn("RECS_REFNAME=''", command)
 
     def test_remote_command_passes_git_refname(self) -> None:
-        config = provision.config_from_args(
-            args(),
+        config = make_config(
             values(
                 networks=networks(x18=False),
                 git={"recs": {"refname": "my-branch"}},
@@ -446,8 +424,7 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn("RECS_REFNAME=my-branch", command)
 
     def test_remote_command_passes_enabled_from_twitch_table(self) -> None:
-        config = provision.config_from_args(
-            args(),
+        config = make_config(
             values(
                 networks=networks(x18=False),
                 twitch={"enabled": True},
@@ -459,9 +436,7 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn("TWITCHO_ENABLED=true", command)
 
     def test_wait_for_rebooted_ssh_waits_for_disconnect_then_connect(self) -> None:
-        config = provision.config_from_args(
-            args(), values(networks=networks(x18=False))
-        )
+        config = make_config(values(networks=networks(x18=False)))
         with (
             mock.patch(
                 "showco.provision.provision.ssh_is_reachable",
@@ -474,7 +449,7 @@ class ProvisionTests(unittest.TestCase):
         self.assertEqual(reachable.call_count, 4)
 
     def test_verify_provisioning_checks_projects_and_user_services(self) -> None:
-        config = provision.config_from_args(args(), values())
+        config = make_config(values())
         with mock.patch(
             "showco.run",
             return_value=subprocess.CompletedProcess(["ssh"], 0, "", ""),
@@ -498,7 +473,7 @@ class ProvisionTests(unittest.TestCase):
         )
 
     def test_missing_x18_usb_device_is_note_not_error(self) -> None:
-        config = provision.config_from_args(args(), values())
+        config = make_config(values())
         with mock.patch(
             "showco.run",
             return_value=subprocess.CompletedProcess(["ssh"], 1, "", ""),
@@ -526,9 +501,7 @@ class ProvisionTests(unittest.TestCase):
         )
 
     def test_ensure_github_account_key_adds_new_key(self) -> None:
-        config = provision.config_from_args(
-            args(), values(networks=networks(x18=False))
-        )
+        config = make_config(values(networks=networks(x18=False)))
         public_key = "ssh-ed25519 AAAATEST showco recs-stage.local"
         with (
             mock.patch("showco.provision.provision.shutil.which", return_value="/gh"),
@@ -548,9 +521,7 @@ class ProvisionTests(unittest.TestCase):
         )
 
     def test_ensure_github_account_key_reports_add_failure(self) -> None:
-        config = provision.config_from_args(
-            args(), values(networks=networks(x18=False))
-        )
+        config = make_config(values(networks=networks(x18=False)))
         public_key = "ssh-ed25519 AAAATEST showco recs-stage.local"
         add_error = subprocess.CalledProcessError(
             1,
@@ -577,9 +548,7 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn("gh said: not logged in", str(error.exception))
 
     def test_ensure_github_account_key_requires_local_gh(self) -> None:
-        config = provision.config_from_args(
-            args(), values(networks=networks(x18=False))
-        )
+        config = make_config(values(networks=networks(x18=False)))
         with (
             mock.patch("showco.provision.provision.shutil.which", return_value=None),
             self.assertRaises(SystemExit) as error,
@@ -593,9 +562,7 @@ class ProvisionTests(unittest.TestCase):
         )
 
     def test_ensure_github_account_key_skips_existing_key(self) -> None:
-        config = provision.config_from_args(
-            args(), values(networks=networks(x18=False))
-        )
+        config = make_config(values(networks=networks(x18=False)))
         public_key = "ssh-ed25519 AAAATEST showco recs-stage.local"
         with (
             mock.patch("showco.provision.provision.shutil.which", return_value="/gh"),
@@ -645,17 +612,8 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn("gh said: authentication required", str(error.exception))
 
 
-def args(*, port: int | None = None) -> provision.ProvisionOptions:
-    return provision.ProvisionOptions(
-        config=Path("/config.toml"),
-        secrets=Path("/secrets.toml"),
-        host=None,
-        user=None,
-        port=port,
-        recs_repo=None,
-        twitcho_repo=None,
-        showco_repo=None,
-    )
+def make_config(values: dict[str, object], *, port: int | None = None) -> Config:
+    return config_from_values(values, port=port)
 
 
 def values(**overrides: object) -> dict[str, object]:
@@ -677,7 +635,7 @@ def values(**overrides: object) -> dict[str, object]:
         if k == "networks":
             result[k] = v
         elif isinstance(v, dict) and isinstance(result.get(k), dict):
-            result[k] = provision.merge_values(result[k], v)
+            result[k] = merge_values(result[k], v)
         else:
             result[k] = v
     return result

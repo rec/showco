@@ -6,43 +6,42 @@ from collections.abc import Sequence
 from io import StringIO
 
 from showco.network_config import (
-    NetworkConfig,
     NetworkTopology,
     WifiInterface,
     assign_wifi,
-    config_from_values,
     configure_network,
     network_commands,
     select_topology,
     x18_pi_ethernet_address,
 )
+from showco.provision.config import Config, config_from_values
 
 
 class NetworkConfigTests(unittest.TestCase):
     def test_default_topology_without_external_network_is_private(self) -> None:
-        config = network_config(external_wifi_ssid="")
+        config = network_config(external_wifi_name="")
 
         self.assertEqual(select_topology(config, True), NetworkTopology.PRIVATE)
 
     def test_default_topology_with_second_wifi_and_external_network_is_mixed(
         self,
     ) -> None:
-        config = network_config(external_wifi_ssid="Venue")
+        config = network_config(external_wifi_name="Venue")
 
         self.assertEqual(select_topology(config, True), NetworkTopology.MIXED)
 
     def test_default_topology_without_second_wifi_and_twitcho_is_private(self) -> None:
-        config = network_config(external_wifi_ssid="Venue")
+        config = network_config(external_wifi_name="Venue")
 
         self.assertEqual(select_topology(config, False), NetworkTopology.PRIVATE)
 
     def test_default_topology_with_twitcho_and_one_wifi_is_public(self) -> None:
-        config = network_config(external_wifi_ssid="Venue", twitcho_enabled=True)
+        config = network_config(external_wifi_name="Venue", twitch_enabled=True)
 
         self.assertEqual(select_topology(config, False), NetworkTopology.PUBLIC)
 
     def test_twitcho_without_external_network_is_error(self) -> None:
-        config = network_config(external_wifi_ssid="", twitcho_enabled=True)
+        config = network_config(external_wifi_name="", twitch_enabled=True)
 
         with self.assertRaises(SystemExit):
             select_topology(config, False)
@@ -65,7 +64,7 @@ class NetworkConfigTests(unittest.TestCase):
         self,
     ) -> None:
         commands = network_commands(
-            network_config(network_topology=NetworkTopology.PRIVATE),
+            network_config(topology=NetworkTopology.PRIVATE),
             assign_wifi(
                 [
                     WifiInterface(name="wlan0"),
@@ -192,7 +191,7 @@ class NetworkConfigTests(unittest.TestCase):
         commands = network_commands(
             network_config(
                 x18=False,
-                network_topology=NetworkTopology.PRIVATE,
+                topology=NetworkTopology.PRIVATE,
             ),
             assign_wifi([WifiInterface(name="wlan0")], swap_wifi=False),
             NetworkTopology.PRIVATE,
@@ -209,40 +208,73 @@ class NetworkConfigTests(unittest.TestCase):
     def test_config_reads_enabled_from_twitch_table(self) -> None:
         config = config_from_values(
             {
+                "network": {"host": "recs-stage.local", "user": "tom"},
                 "networks": {
                     "internal": {
                         "wifi": {"private": {"name": "showbox"}},
                     },
                 },
                 "twitch": {"enabled": True},
+                "git": {
+                    "recs": {"url": "git@github.com:rec/recs.git"},
+                    "twitcho": {"url": "git@github.com:rec/twitcho.git"},
+                    "showco": {"url": "git@github.com:rec/showco.git"},
+                },
             }
         )
 
-        self.assertTrue(config.twitcho_enabled)
+        self.assertTrue(config.twitch.enabled)
 
 
 def network_config(
     *,
     x18: bool = True,
     swap_wifi: bool = False,
-    network_topology: NetworkTopology | None = None,
-    twitcho_enabled: bool = False,
-    private_wifi_ssid: str = "showbox",
+    topology: NetworkTopology | None = None,
+    twitch_enabled: bool = False,
+    private_wifi_name: str = "showbox",
     private_wifi_password: str = "",
-    external_wifi_ssid: str = "",
+    external_wifi_name: str = "",
     external_wifi_password: str = "",
     x18_subnet: str = "10.43.0.0/24",
-) -> NetworkConfig:
-    return NetworkConfig(
-        x18=x18,
-        swap_wifi=swap_wifi,
-        network_topology=network_topology,
-        twitcho_enabled=twitcho_enabled,
-        private_wifi_ssid=private_wifi_ssid,
-        private_wifi_password=private_wifi_password,
-        external_wifi_ssid=external_wifi_ssid,
-        external_wifi_password=external_wifi_password,
-        x18_subnet=x18_subnet,
+) -> Config:
+    wired: dict[str, object] = {}
+    if x18:
+        wired["x18"] = {"name": "x18", "subnet": x18_subnet}
+    return config_from_values(
+        {
+            "network": {
+                "host": "recs-stage.local",
+                "user": "tom",
+                "swap_wifi": swap_wifi,
+                "topology": topology.value if topology is not None else "",
+            },
+            "networks": {
+                "internal": {
+                    "wired": wired,
+                    "wifi": {
+                        "private": {
+                            "name": private_wifi_name,
+                            "password": private_wifi_password,
+                        },
+                    },
+                },
+                "external": {
+                    "wifi": {
+                        "external": {
+                            "name": external_wifi_name,
+                            "password": external_wifi_password,
+                        },
+                    },
+                },
+            },
+            "twitch": {"enabled": twitch_enabled},
+            "git": {
+                "recs": {"url": "git@github.com:rec/recs.git"},
+                "twitcho": {"url": "git@github.com:rec/twitcho.git"},
+                "showco": {"url": "git@github.com:rec/showco.git"},
+            },
+        }
     )
 
 
