@@ -12,7 +12,14 @@ from typing import Protocol
 from pydantic import BaseModel
 from recs.cfg.track_names import DeviceTrackNames
 from recs.daemon.gui_backend import client_connection
-from recs.daemon.gui_protocol import Command, Error, Hello, Reply, parse_message
+from recs.daemon.gui_protocol import (
+    Command,
+    Error,
+    Hello,
+    Reply,
+    Shutdown,
+    parse_message,
+)
 from recs.daemon.models import DaemonMetadata
 
 from .models import ActionResult, ChannelLevel, RecsStatus, ServiceStatus
@@ -92,6 +99,7 @@ class RecsClient:
             file_count=_int(totals.get("file_count")),
             client_count=_int(data.get("client_count")) or 0,
             channels=channel_levels(rows),
+            errors=_string_list(data.get("errors")),
         )
 
     def calibrate(self) -> ActionResult:
@@ -186,6 +194,61 @@ class RecsClient:
         if track_names is None:
             return ActionResult(ok=False, message="recs sent invalid track names")
         return track_names
+
+    def action(self, command: str, **fields: object) -> ActionResult:
+        message_id = str(uuid.uuid4())
+        payload: dict[str, object] = {
+            "type": "command",
+            "id": message_id,
+            "command": command,
+        }
+        payload.update({k: v for k, v in fields.items() if v not in ("", None)})
+        reply = self._send_command(
+            Command.model_validate(payload),
+            send_error=f"could not send recs {command} command",
+            failure_prefix=f"recs {command} failed",
+            reply_name=command.replace("_", " "),
+        )
+        if isinstance(reply, ActionResult):
+            return reply
+        if reply.ok:
+            return ActionResult(
+                ok=True,
+                message=command_result_message(command, reply.result),
+            )
+        return ActionResult(
+            ok=False,
+            message=reply.message or f"recs {command} failed",
+        )
+
+    def shutdown(self) -> ActionResult:
+        try:
+            metadata = self._metadata()
+        except (OSError, ValueError) as e:
+            return ActionResult(ok=False, message=f"could not read recs metadata: {e}")
+        if metadata is None:
+            return ActionResult(
+                ok=False, message=f"{self.metadata_path} does not exist"
+            )
+
+        try:
+            connection = client_connection(_endpoint(metadata.gui_endpoint))
+        except OSError as e:
+            return ActionResult(ok=False, message=f"could not connect to recs: {e}")
+        try:
+            if not connection.write(
+                Hello(type="hello", role="gui").model_dump_json() + "\n"
+            ):
+                return ActionResult(ok=False, message="could not send recs hello")
+            if error := _expect_daemon_hello(_read_message(connection)):
+                return ActionResult(ok=False, message=error)
+            if not connection.write(Shutdown(type="shutdown").model_dump_json() + "\n"):
+                return ActionResult(ok=False, message="could not send recs shutdown")
+            return ActionResult(ok=True, message="recs shutdown requested")
+        except (OSError, ValueError) as e:
+            return ActionResult(ok=False, message=f"recs shutdown failed: {e}")
+        finally:
+            connection.close()
 
     def _send_command(
         self,
@@ -341,6 +404,15 @@ def replace_track_name(
     return updated
 
 
+def command_result_message(command: str, result: dict[str, object] | None) -> str:
+    if result is None:
+        return f"recs {command} succeeded"
+    text = json.dumps(result, sort_keys=True)
+    if len(text) > 500:
+        text = text[:497] + "..."
+    return f"recs {command} succeeded: {text}"
+
+
 def channel_levels(rows: list[dict[str, object]]) -> list[ChannelLevel]:
     channels = []
     device = ""
@@ -392,6 +464,12 @@ def _rows(value: object) -> list[dict[str, object]]:
 
 def _string(value: object) -> str | None:
     return value if isinstance(value, str) else None
+
+
+def _string_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [i for i in value if isinstance(i, str)]
 
 
 def _float(value: object) -> float | None:

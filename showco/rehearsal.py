@@ -39,6 +39,7 @@ class RehearsalRecsClient(RecsClient):
             file_count=18,
             client_count=1,
             channels=rehearsal_channels(elapsed),
+            errors=[],
         )
 
     def calibrate(self) -> ActionResult:
@@ -64,6 +65,16 @@ class RehearsalRecsClient(RecsClient):
         if track_name:
             names[track_name] = channel_number
         return ActionResult(ok=True, message=f"rehearsal recs track name {track_name}")
+
+    def action(self, command: str, **fields: object) -> ActionResult:
+        if fields:
+            return ActionResult(
+                ok=True, message=f"rehearsal recs {command} {fields} succeeded"
+            )
+        return ActionResult(ok=True, message=f"rehearsal recs {command} succeeded")
+
+    def shutdown(self) -> ActionResult:
+        return ActionResult(ok=True, message="rehearsal recs shutdown requested")
 
 
 class RehearsalTwitchoClient(TwitchoClient):

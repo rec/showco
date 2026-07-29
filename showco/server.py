@@ -55,6 +55,18 @@ class ShowcoApp:
                 form.get("channel", ""),
                 form.get("track_name", ""),
             )
+        elif action == "recs-shutdown":
+            if form.get("confirmation") == "shutdown":
+                result = self.recs.shutdown()
+            else:
+                result = ActionResult(ok=True, message="recs shutdown canceled")
+        elif action in RECS_ACTIONS:
+            try:
+                fields = _recs_fields(form)
+            except ValueError as e:
+                result = ActionResult(ok=False, message=str(e))
+            else:
+                result = self.recs.action(RECS_ACTIONS[action], **fields)
         elif action == "twitcho-restart":
             if self.twitcho_supervisor:
                 result = self.twitcho_supervisor.restart()
@@ -182,6 +194,7 @@ def home_page(status: ShowStatus) -> str:
         <section>
           <h2>Health</h2>
           <p>recs: {_service_detail(recs.state, recs.last_error)}</p>
+          {_recs_errors(status)}
           <p>twitcho: {_service_detail(twitcho.state, twitcho.last_error)}</p>
           <p>Pi temperature: {_temperature(status)}</p>
           <p>Twitch bitrate: {_bitrate(status)}</p>
@@ -194,11 +207,29 @@ def home_page(status: ShowStatus) -> str:
 
 def actions_page(action_log: list[ActionResult]) -> str:
     title_fields = ["title", "category", "tags"]
+    noise_floor = field_action(
+        "recs-set-noise-floor",
+        "Set noise floor",
+        ["source", "noise_floor"],
+    )
     return page(
         "Actions",
         f"""
         <section class="actions">
           {button("recs-calibrate", "Calibrate noise floor")}
+          {noise_floor}
+          {button("recs-reload-profiles", "Reload Recs profiles")}
+          {field_action("recs-marker", "Create Recs marker", ["label"])}
+          {field_action("recs-key-label", "Set Recs key label", ["key", "label"])}
+          {button("recs-pause-recording", "Pause recording")}
+          {button("recs-resume-recording", "Resume recording")}
+          {button("recs-stop-recording", "Stop recording", confirm=True)}
+          {button("recs-start-recording", "Start recording")}
+          {button("recs-status-snapshot", "Recs status snapshot")}
+          {button("recs-disk-status", "Recs disk status")}
+          {button("recs-list-devices", "List Recs devices")}
+          {button("recs-capabilities", "Recs capabilities")}
+          {shutdown_action()}
           {button("twitcho-restart", "Restart Twitch")}
           {button("twitcho-mute", "Mute Twitch")}
           {button("twitcho-unmute", "Unmute Twitch")}
@@ -299,6 +330,22 @@ def field_action(action: str, label: str, fields: list[str]) -> str:
     """
 
 
+def shutdown_action() -> str:
+    return """
+    <form method="post">
+      <input type="hidden" name="action" value="recs-shutdown">
+      <h2>Shutdown Recs daemon</h2>
+      <label>confirmation
+        <select name="confirmation">
+          <option value="cancel" selected>Cancel</option>
+          <option value="shutdown">Shutdown Recs daemon</option>
+        </select>
+      </label>
+      <button>Apply shutdown choice</button>
+    </form>
+    """
+
+
 def action_result(result: ActionResult) -> str:
     state = "ok" if result.ok else "failed"
     return f'<p class="{state}">{html.escape(result.message)}</p>'
@@ -340,6 +387,13 @@ def _mixer_latency(status: ShowStatus) -> str:
     return status.mixer.error or "unknown"
 
 
+def _recs_errors(status: ShowStatus) -> str:
+    if not status.recs.errors:
+        return ""
+    items = "".join(f"<li>{html.escape(e)}</li>" for e in status.recs.errors)
+    return f"<p>Recs errors:</p><ul>{items}</ul>"
+
+
 def _duration(seconds: float | None) -> str:
     if seconds is None:
         return "unknown time"
@@ -357,6 +411,36 @@ def _time(timestamp: float) -> str:
 def _twitcho_fields(form: dict[str, str]) -> dict[str, object]:
     return {k: v for k, v in form.items() if k != "action" and v}
 
+
+def _recs_fields(form: dict[str, str]) -> dict[str, object]:
+    fields: dict[str, object] = {}
+    for k, v in form.items():
+        if k == "action" or not v:
+            continue
+        if k == "noise_floor":
+            try:
+                fields[k] = float(v)
+            except ValueError:
+                raise ValueError("noise_floor must be a number") from None
+        else:
+            fields[k] = v
+    return fields
+
+
+RECS_ACTIONS = {
+    "recs-capabilities": "capabilities",
+    "recs-disk-status": "disk_status",
+    "recs-key-label": "set_key_label",
+    "recs-list-devices": "list_devices",
+    "recs-marker": "mark",
+    "recs-pause-recording": "pause_recording",
+    "recs-reload-profiles": "reload_profiles",
+    "recs-resume-recording": "resume_recording",
+    "recs-set-noise-floor": "set_noise_floor",
+    "recs-start-recording": "start_recording",
+    "recs-status-snapshot": "status_snapshot",
+    "recs-stop-recording": "stop_recording",
+}
 
 TWITCHO_ACTIONS = {
     "twitcho-mute": "mute",

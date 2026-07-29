@@ -21,6 +21,7 @@ class RecsTests(unittest.TestCase):
                 json.dumps(
                     {
                         "client_count": 2,
+                        "errors": ["disk almost full"],
                         "recording": True,
                         "updated_at": time.time(),
                         "rows": [
@@ -39,6 +40,7 @@ class RecsTests(unittest.TestCase):
         self.assertEqual(status.file_count, 1)
         self.assertEqual(status.client_count, 2)
         self.assertEqual(status.channels[0].state, "healthy")
+        self.assertEqual(status.errors, ["disk almost full"])
 
     def test_reports_missing_recs_status_as_offline(self) -> None:
         status = RecsClient(status_path=Path("/does/not/exist")).status()
@@ -183,6 +185,78 @@ class RecsTests(unittest.TestCase):
                     "command": "set_track_names",
                     "track_names": {"Mic": {"Lead Vocal": 1}},
                 },
+            ],
+        )
+
+    def test_recs_action_sends_protocol_command_with_fields(self) -> None:
+        with TemporaryDirectory() as directory:
+            metadata = Path(directory) / "daemon.json"
+            metadata.write_text(
+                DaemonMetadata(
+                    executable=Path("/bin/recs"),
+                    platform=Platform.linux,
+                    gui_endpoint="/tmp/recs.sock",
+                ).model_dump_json()
+            )
+            connection = FakeRecsConnection(
+                [
+                    '{"type":"hello","role":"daemon","version":1}\n',
+                    '{"type":"reply","id":"c1","ok":true,'
+                    '"result":{"source":"Mic","noise_floor":42.5}}\n',
+                ]
+            )
+            client = RecsClient(metadata_path=metadata)
+
+            with (
+                mock.patch("showco.recs.client_connection", return_value=connection),
+                mock.patch("showco.recs.uuid.uuid4", return_value="c1"),
+            ):
+                result = client.action(
+                    "set_noise_floor",
+                    source="Mic",
+                    noise_floor=42.5,
+                )
+
+        self.assertTrue(result.ok)
+        self.assertEqual(
+            [json.loads(message) for message in connection.sent],
+            [
+                {"type": "hello", "role": "gui", "version": 1},
+                {
+                    "type": "command",
+                    "id": "c1",
+                    "command": "set_noise_floor",
+                    "noise_floor": 42.5,
+                    "source": "Mic",
+                },
+            ],
+        )
+        self.assertIn("recs set_noise_floor succeeded", result.message)
+
+    def test_shutdown_sends_recs_shutdown_message(self) -> None:
+        with TemporaryDirectory() as directory:
+            metadata = Path(directory) / "daemon.json"
+            metadata.write_text(
+                DaemonMetadata(
+                    executable=Path("/bin/recs"),
+                    platform=Platform.linux,
+                    gui_endpoint="/tmp/recs.sock",
+                ).model_dump_json()
+            )
+            connection = FakeRecsConnection(
+                ['{"type":"hello","role":"daemon","version":1}\n']
+            )
+            client = RecsClient(metadata_path=metadata)
+
+            with mock.patch("showco.recs.client_connection", return_value=connection):
+                result = client.shutdown()
+
+        self.assertTrue(result.ok)
+        self.assertEqual(
+            [json.loads(message) for message in connection.sent],
+            [
+                {"type": "hello", "role": "gui", "version": 1},
+                {"type": "shutdown"},
             ],
         )
 

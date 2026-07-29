@@ -37,6 +37,7 @@ class RecsStatus(BaseModel, frozen=True):
     file_count: int | None = None
     client_count: int = 0
     channels: list[ChannelLevel] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
 
 
 class TwitchoStatus(BaseModel, frozen=True):

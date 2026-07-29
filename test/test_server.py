@@ -67,6 +67,22 @@ class ServerTests(unittest.TestCase):
         self.assertIn("Mixer latency", html)
         self.assertIn("4.2 ms", html)
 
+    def test_home_page_shows_recs_errors(self) -> None:
+        html = home_page(
+            ShowStatus(
+                recs=RecsStatus(
+                    service=ServiceStatus(name="recs", state="connected"),
+                    errors=["disk almost full"],
+                ),
+                twitcho=TwitchoStatus(
+                    service=ServiceStatus(name="twitcho", state="connected")
+                ),
+            )
+        )
+
+        self.assertIn("Recs errors", html)
+        self.assertIn("disk almost full", html)
+
     def test_home_page_has_track_name_editor_for_recs_channels(self) -> None:
         html = home_page(
             ShowStatus(
@@ -93,6 +109,17 @@ class ServerTests(unittest.TestCase):
 
         self.assertIn("Restart Twitch", html)
         self.assertIn('value="twitcho-restart"', html)
+
+    def test_actions_page_has_recs_protocol_controls(self) -> None:
+        html = actions_page([])
+
+        self.assertIn('value="recs-disk-status"', html)
+        self.assertIn('value="recs-list-devices"', html)
+        self.assertIn('value="recs-pause-recording"', html)
+        self.assertIn('value="recs-marker"', html)
+        self.assertIn('value="recs-set-noise-floor"', html)
+        self.assertIn('value="recs-shutdown"', html)
+        self.assertIn('<option value="cancel" selected>Cancel</option>', html)
 
     def test_twitch_restart_action_uses_supervisor(self) -> None:
         supervisor = RehearsalTwitchoSupervisor()
@@ -129,6 +156,58 @@ class ServerTests(unittest.TestCase):
 
         self.assertTrue(result.ok)
         self.assertEqual(recs.rehearsal_track_names, {"X18/XR18": {"Lead Vocal": 1}})
+
+    def test_recs_action_uses_recs_client(self) -> None:
+        recs = RehearsalRecsClient()
+        app = ShowcoApp(
+            recs,
+            RehearsalTwitchoClient(),
+            RehearsalSystemMonitor(),
+            RehearsalMixerMonitor(),
+        )
+
+        result = app.run_action(
+            {
+                "action": "recs-set-noise-floor",
+                "source": "Mic",
+                "noise_floor": "42.5",
+            }
+        )
+
+        self.assertTrue(result.ok)
+        self.assertIn("set_noise_floor", result.message)
+
+    def test_recs_action_reports_invalid_noise_floor(self) -> None:
+        app = ShowcoApp(
+            RehearsalRecsClient(),
+            RehearsalTwitchoClient(),
+            RehearsalSystemMonitor(),
+            RehearsalMixerMonitor(),
+        )
+
+        result = app.run_action(
+            {
+                "action": "recs-set-noise-floor",
+                "source": "Mic",
+                "noise_floor": "loud",
+            }
+        )
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.message, "noise_floor must be a number")
+
+    def test_shutdown_action_defaults_to_cancel(self) -> None:
+        app = ShowcoApp(
+            RehearsalRecsClient(),
+            RehearsalTwitchoClient(),
+            RehearsalSystemMonitor(),
+            RehearsalMixerMonitor(),
+        )
+
+        result = app.run_action({"action": "recs-shutdown"})
+
+        self.assertTrue(result.ok)
+        self.assertEqual(result.message, "recs shutdown canceled")
 
     def test_action_log_keeps_ten_most_recent_results(self) -> None:
         app = ShowcoApp(
