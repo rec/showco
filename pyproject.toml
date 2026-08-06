@@ -5,12 +5,14 @@ description = "🎪 Local show control for recs and twitcho 🎪"
 requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.13.4",
+    "reccy",
     "recs",
     "twitcho",
     "tyro>=1.0.15",
 ]
 
 [tool.uv.sources]
+reccy = { path = "../reccy", editable = true }
 recs = { path = "../recs", editable = true }
 twitcho = { path = "../twitcho", editable = true }
 
