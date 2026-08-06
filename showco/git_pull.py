@@ -10,6 +10,8 @@ from typing import TextIO
 import reccy.subprocess
 from pydantic import BaseModel
 
+from . import services
+
 RunCommand = Callable[
     [Sequence[str]],
     subprocess.CompletedProcess[str],
@@ -63,8 +65,8 @@ def update_programs(
     if all(r.ok for r in results):
         results.extend(
             [
-                _run_service_step("recs", "restart", run_command),
-                _run_service_step("showco", "restart", run_command),
+                _run_service_step("recs", "start", run_command),
+                _run_service_step("showco", "start", run_command),
             ]
         )
 
@@ -75,11 +77,54 @@ def update_programs(
 
 
 def _run_service_step(service: str, step: str, run_command: RunCommand) -> StepResult:
-    return _run_step(
-        service,
-        step,
-        ["systemctl", "--user", step, service],
-        run_command,
+    spec = services.SERVICES[service]
+    command = ["systemctl", "--user", step, spec.systemd_unit]
+    try:
+        controller = services.service_controller(
+            spec, runner=_service_runner(run_command)
+        )
+        if step == "stop":
+            result = controller.stop()
+        elif step == "start":
+            result = controller.start()
+        else:
+            return StepResult(
+                program=service,
+                step=step,
+                command=command,
+                returncode=2,
+                output=f"unsupported service step {step}",
+            )
+    except FileNotFoundError as e:
+        return StepResult(
+            program=service,
+            step=step,
+            command=command,
+            returncode=127,
+            output=str(e),
+        )
+    except subprocess.CalledProcessError as e:
+        return StepResult(
+            program=service,
+            step=step,
+            command=list(e.cmd),
+            returncode=e.returncode,
+            output=f"{e.stdout or ''}{e.stderr or ''}",
+        )
+    except subprocess.TimeoutExpired as e:
+        return StepResult(
+            program=service,
+            step=step,
+            command=command,
+            returncode=124,
+            output=_timeout_output(e),
+        )
+    return StepResult(
+        program=service,
+        step=step,
+        command=command,
+        returncode=0,
+        output=result.details,
     )
 
 
@@ -135,6 +180,29 @@ def _run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
         text=True,
         timeout=_timeout(command),
     )
+
+
+def _service_runner(
+    run_command: RunCommand,
+) -> Callable[..., subprocess.CompletedProcess[str]]:
+    def run(
+        command: list[str],
+        *,
+        check: bool,
+        text: bool,
+        capture_output: bool,
+    ) -> subprocess.CompletedProcess[str]:
+        completed = run_command(command)
+        if check and completed.returncode != 0:
+            raise subprocess.CalledProcessError(
+                completed.returncode,
+                command,
+                output=completed.stdout,
+                stderr=completed.stderr,
+            )
+        return completed
+
+    return run
 
 
 def _timeout(command: Sequence[str]) -> float:

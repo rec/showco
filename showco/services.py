@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 import reccy.paths
@@ -106,17 +108,21 @@ def service_status(name: str) -> StatusResult:
     return service_controller(service).status()
 
 
-def service_controller(service: ServiceSpec) -> reccy.service.ServiceController:
+def service_controller(
+    service: ServiceSpec,
+    runner: Callable[..., subprocess.CompletedProcess[str]] | None = None,
+) -> reccy.service.ServiceController:
     platform = reccy.paths.current_platform()
     if service == RECS_SERVICE:
         return reccy.service.ServiceController(
             service,
             platform,
+            runner=runner,
             status_model=RecsDaemonStatus,
             status_error_attribute="gui_ipc_error",
             status_error_label="GUI IPC error",
         )
-    return reccy.service.ServiceController(service, platform)
+    return reccy.service.ServiceController(service, platform, runner=runner)
 
 
 def print_service_status(name: str, result: StatusResult) -> None:

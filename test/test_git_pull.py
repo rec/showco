@@ -5,6 +5,9 @@ import unittest
 from collections.abc import Sequence
 from io import StringIO
 from pathlib import Path
+from unittest import mock
+
+from reccy.models import Platform
 
 from showco.git_pull import update_programs
 
@@ -19,14 +22,17 @@ class GitPullTests(unittest.TestCase):
                 return subprocess.CompletedProcess(command, 1, "", "network down\n")
             return subprocess.CompletedProcess(command, 0, "", "")
 
-        result = update_programs(
-            code_dir=Path("/code"), run_command=run_command, output=StringIO()
-        )
+        with mock.patch(
+            "showco.services.reccy.paths.current_platform", return_value=Platform.linux
+        ):
+            result = update_programs(
+                code_dir=Path("/code"), run_command=run_command, output=StringIO()
+            )
 
         self.assertEqual(result, 1)
         self.assertIn(["git", "-C", "/code/twitcho", "pull"], commands)
-        self.assertNotIn(["systemctl", "--user", "restart", "recs"], commands)
-        self.assertNotIn(["systemctl", "--user", "restart", "showco"], commands)
+        self.assertNotIn(["systemctl", "--user", "start", "recs.service"], commands)
+        self.assertNotIn(["systemctl", "--user", "start", "showco.service"], commands)
 
     def test_pulls_twitcho_without_managing_a_twitcho_service(self) -> None:
         commands: list[list[str]] = []
@@ -35,21 +41,24 @@ class GitPullTests(unittest.TestCase):
             commands.append(list(command))
             return subprocess.CompletedProcess(command, 0, "", "")
 
-        result = update_programs(
-            code_dir=Path("/code"), run_command=run_command, output=StringIO()
-        )
+        with mock.patch(
+            "showco.services.reccy.paths.current_platform", return_value=Platform.linux
+        ):
+            result = update_programs(
+                code_dir=Path("/code"), run_command=run_command, output=StringIO()
+            )
 
         self.assertEqual(result, 0)
         self.assertEqual(
             commands,
             [
-                ["systemctl", "--user", "stop", "recs"],
-                ["systemctl", "--user", "stop", "showco"],
+                ["systemctl", "--user", "stop", "recs.service"],
+                ["systemctl", "--user", "stop", "showco.service"],
                 ["git", "-C", "/code/recs", "pull"],
                 ["git", "-C", "/code/twitcho", "pull"],
                 ["git", "-C", "/code/showco", "pull"],
-                ["systemctl", "--user", "restart", "recs"],
-                ["systemctl", "--user", "restart", "showco"],
+                ["systemctl", "--user", "start", "recs.service"],
+                ["systemctl", "--user", "start", "showco.service"],
             ],
         )
 
