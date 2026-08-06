@@ -7,7 +7,7 @@ from . import models
 from .mixer import MixerMonitor
 from .recs import RecsClient
 from .system import SystemMonitor
-from .twitcho import TwitchoClient
+from .twitcho.client import TwitchoClient
 
 
 class RehearsalRecsClient(RecsClient):

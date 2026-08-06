@@ -23,7 +23,7 @@ class GitPullTests(unittest.TestCase):
             return subprocess.CompletedProcess(command, 0, "", "")
 
         with mock.patch(
-            "showco.services.paths.current_platform", return_value=Platform.linux
+            "showco.services.service.current_platform", return_value=Platform.linux
         ):
             result = update_programs(
                 code_dir=Path("/code"), run_command=run_command, output=StringIO()
@@ -42,7 +42,7 @@ class GitPullTests(unittest.TestCase):
             return subprocess.CompletedProcess(command, 0, "", "")
 
         with mock.patch(
-            "showco.services.paths.current_platform", return_value=Platform.linux
+            "showco.services.service.current_platform", return_value=Platform.linux
         ):
             result = update_programs(
                 code_dir=Path("/code"), run_command=run_command, output=StringIO()
