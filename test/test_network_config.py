@@ -5,52 +5,56 @@ import unittest
 from collections.abc import Sequence
 from io import StringIO
 
-from showco.network_config import (
-    NetworkTopology,
-    WifiInterface,
-    assign_wifi,
-    configure_network,
-    network_commands,
-    select_topology,
-    x18_pi_ethernet_address,
-)
+from showco import network_config
 from showco.provision.config import Config, config_from_values
 
 
 class NetworkConfigTests(unittest.TestCase):
     def test_default_topology_without_external_network_is_private(self) -> None:
-        config = network_config(external_wifi_name="")
+        config = make_network_config(external_wifi_name="")
 
-        self.assertEqual(select_topology(config, True), NetworkTopology.PRIVATE)
+        self.assertEqual(
+            network_config.select_topology(config, True),
+            network_config.NetworkTopology.PRIVATE,
+        )
 
     def test_default_topology_with_second_wifi_and_external_network_is_mixed(
         self,
     ) -> None:
-        config = network_config(external_wifi_name="Venue")
+        config = make_network_config(external_wifi_name="Venue")
 
-        self.assertEqual(select_topology(config, True), NetworkTopology.MIXED)
+        self.assertEqual(
+            network_config.select_topology(config, True),
+            network_config.NetworkTopology.MIXED,
+        )
 
     def test_default_topology_without_second_wifi_and_twitcho_is_private(self) -> None:
-        config = network_config(external_wifi_name="Venue")
+        config = make_network_config(external_wifi_name="Venue")
 
-        self.assertEqual(select_topology(config, False), NetworkTopology.PRIVATE)
+        self.assertEqual(
+            network_config.select_topology(config, False),
+            network_config.NetworkTopology.PRIVATE,
+        )
 
     def test_default_topology_with_twitcho_and_one_wifi_is_public(self) -> None:
-        config = network_config(external_wifi_name="Venue", twitch_enabled=True)
+        config = make_network_config(external_wifi_name="Venue", twitch_enabled=True)
 
-        self.assertEqual(select_topology(config, False), NetworkTopology.PUBLIC)
+        self.assertEqual(
+            network_config.select_topology(config, False),
+            network_config.NetworkTopology.PUBLIC,
+        )
 
     def test_twitcho_without_external_network_is_error(self) -> None:
-        config = network_config(external_wifi_name="", twitch_enabled=True)
+        config = make_network_config(external_wifi_name="", twitch_enabled=True)
 
         with self.assertRaises(SystemExit):
-            select_topology(config, False)
+            network_config.select_topology(config, False)
 
     def test_swap_wifi_makes_second_interface_primary(self) -> None:
-        assignment = assign_wifi(
+        assignment = network_config.assign_wifi(
             [
-                WifiInterface(name="wlan0"),
-                WifiInterface(name="wlan1"),
+                network_config.WifiInterface(name="wlan0"),
+                network_config.WifiInterface(name="wlan1"),
             ],
             swap_wifi=True,
         )
@@ -63,16 +67,16 @@ class NetworkConfigTests(unittest.TestCase):
     def test_private_topology_starts_access_point_and_disconnects_secondary(
         self,
     ) -> None:
-        commands = network_commands(
-            network_config(topology=NetworkTopology.PRIVATE),
-            assign_wifi(
+        commands = network_config.network_commands(
+            make_network_config(topology=network_config.NetworkTopology.PRIVATE),
+            network_config.assign_wifi(
                 [
-                    WifiInterface(name="wlan0"),
-                    WifiInterface(name="wlan1"),
+                    network_config.WifiInterface(name="wlan0"),
+                    network_config.WifiInterface(name="wlan1"),
                 ],
                 swap_wifi=False,
             ),
-            NetworkTopology.PRIVATE,
+            network_config.NetworkTopology.PRIVATE,
         )
 
         self.assertEqual(
@@ -124,8 +128,8 @@ class NetworkConfigTests(unittest.TestCase):
 
         output = StringIO()
 
-        configure_network(
-            network_config(), dry_run=True, run_command=run_command, output=output
+        network_config.configure_network(
+            make_network_config(), dry_run=True, run_command=run_command, output=output
         )
 
         self.assertEqual(
@@ -150,8 +154,8 @@ class NetworkConfigTests(unittest.TestCase):
             )
 
         with self.assertRaisesRegex(SystemExit, "radio failed"):
-            configure_network(
-                network_config(x18=False),
+            network_config.configure_network(
+                make_network_config(x18=False),
                 dry_run=False,
                 run_command=run_command,
             )
@@ -178,8 +182,8 @@ class NetworkConfigTests(unittest.TestCase):
 
         output = StringIO()
 
-        configure_network(
-            network_config(x18=False),
+        network_config.configure_network(
+            make_network_config(x18=False),
             dry_run=True,
             run_command=run_command,
             output=output,
@@ -188,20 +192,22 @@ class NetworkConfigTests(unittest.TestCase):
         self.assertIn("ifname wl:an0", output.getvalue())
 
     def test_x18_can_be_disabled(self) -> None:
-        commands = network_commands(
-            network_config(
+        commands = network_config.network_commands(
+            make_network_config(
                 x18=False,
-                topology=NetworkTopology.PRIVATE,
+                topology=network_config.NetworkTopology.PRIVATE,
             ),
-            assign_wifi([WifiInterface(name="wlan0")], swap_wifi=False),
-            NetworkTopology.PRIVATE,
+            network_config.assign_wifi(
+                [network_config.WifiInterface(name="wlan0")], swap_wifi=False
+            ),
+            network_config.NetworkTopology.PRIVATE,
         )
 
         self.assertEqual(commands[0], ["nmcli", "radio", "wifi", "on"])
 
     def test_x18_pi_ethernet_address_uses_first_subnet_host(self) -> None:
         self.assertEqual(
-            x18_pi_ethernet_address("10.43.0.0/24"),
+            network_config.x18_pi_ethernet_address("10.43.0.0/24"),
             "10.43.0.1/24",
         )
 
@@ -226,11 +232,11 @@ class NetworkConfigTests(unittest.TestCase):
         self.assertTrue(config.twitch.enabled)
 
 
-def network_config(
+def make_network_config(
     *,
     x18: bool = True,
     swap_wifi: bool = False,
-    topology: NetworkTopology | None = None,
+    topology: network_config.NetworkTopology | None = None,
     twitch_enabled: bool = False,
     private_wifi_name: str = "showbox",
     private_wifi_password: str = "",

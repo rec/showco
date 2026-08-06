@@ -2,32 +2,19 @@ from __future__ import annotations
 
 import unittest
 
-from showco.models import (
-    ChannelLevel,
-    MixerStatus,
-    RecsStatus,
-    ServiceStatus,
-    ShowStatus,
-    SystemStatus,
-    TwitchoStatus,
-)
-from showco.rehearsal import (
-    RehearsalMixerMonitor,
-    RehearsalRecsClient,
-    RehearsalSystemMonitor,
-    RehearsalTwitchoClient,
-    RehearsalTwitchoSupervisor,
-)
+from showco import models, rehearsal
 from showco.server import ShowcoApp, actions_page, home_page
 
 
 class ServerTests(unittest.TestCase):
     def test_home_page_has_two_screen_navigation(self) -> None:
         html = home_page(
-            ShowStatus(
-                recs=RecsStatus(service=ServiceStatus(name="recs", state="connected")),
-                twitcho=TwitchoStatus(
-                    service=ServiceStatus(name="twitcho", state="offline")
+            models.ShowStatus(
+                recs=models.RecsStatus(
+                    service=models.ServiceStatus(name="recs", state="connected")
+                ),
+                twitcho=models.TwitchoStatus(
+                    service=models.ServiceStatus(name="twitcho", state="offline")
                 ),
             )
         )
@@ -38,12 +25,14 @@ class ServerTests(unittest.TestCase):
 
     def test_home_page_shows_pi_temperature(self) -> None:
         html = home_page(
-            ShowStatus(
-                recs=RecsStatus(service=ServiceStatus(name="recs", state="connected")),
-                twitcho=TwitchoStatus(
-                    service=ServiceStatus(name="twitcho", state="connected")
+            models.ShowStatus(
+                recs=models.RecsStatus(
+                    service=models.ServiceStatus(name="recs", state="connected")
                 ),
-                system=SystemStatus(temperature_c=52.75),
+                twitcho=models.TwitchoStatus(
+                    service=models.ServiceStatus(name="twitcho", state="connected")
+                ),
+                system=models.SystemStatus(temperature_c=52.75),
             )
         )
 
@@ -52,13 +41,15 @@ class ServerTests(unittest.TestCase):
 
     def test_home_page_shows_bitrate_and_mixer_latency(self) -> None:
         html = home_page(
-            ShowStatus(
-                recs=RecsStatus(service=ServiceStatus(name="recs", state="connected")),
-                twitcho=TwitchoStatus(
-                    service=ServiceStatus(name="twitcho", state="connected"),
+            models.ShowStatus(
+                recs=models.RecsStatus(
+                    service=models.ServiceStatus(name="recs", state="connected")
+                ),
+                twitcho=models.TwitchoStatus(
+                    service=models.ServiceStatus(name="twitcho", state="connected"),
                     output_bitrate_kbps=312.5,
                 ),
-                mixer=MixerStatus(latency_ms=4.25),
+                mixer=models.MixerStatus(latency_ms=4.25),
             )
         )
 
@@ -69,13 +60,13 @@ class ServerTests(unittest.TestCase):
 
     def test_home_page_shows_recs_errors(self) -> None:
         html = home_page(
-            ShowStatus(
-                recs=RecsStatus(
-                    service=ServiceStatus(name="recs", state="connected"),
+            models.ShowStatus(
+                recs=models.RecsStatus(
+                    service=models.ServiceStatus(name="recs", state="connected"),
                     errors=["disk almost full"],
                 ),
-                twitcho=TwitchoStatus(
-                    service=ServiceStatus(name="twitcho", state="connected")
+                twitcho=models.TwitchoStatus(
+                    service=models.ServiceStatus(name="twitcho", state="connected")
                 ),
             )
         )
@@ -85,15 +76,15 @@ class ServerTests(unittest.TestCase):
 
     def test_home_page_has_track_name_editor_for_recs_channels(self) -> None:
         html = home_page(
-            ShowStatus(
-                recs=RecsStatus(
-                    service=ServiceStatus(name="recs", state="connected"),
+            models.ShowStatus(
+                recs=models.RecsStatus(
+                    service=models.ServiceStatus(name="recs", state="connected"),
                     channels=[
-                        ChannelLevel(name="1", state="healthy", device="Mic"),
+                        models.ChannelLevel(name="1", state="healthy", device="Mic"),
                     ],
                 ),
-                twitcho=TwitchoStatus(
-                    service=ServiceStatus(name="twitcho", state="connected")
+                twitcho=models.TwitchoStatus(
+                    service=models.ServiceStatus(name="twitcho", state="connected")
                 ),
             )
         )
@@ -122,12 +113,12 @@ class ServerTests(unittest.TestCase):
         self.assertIn('<option value="cancel" selected>Cancel</option>', html)
 
     def test_twitch_restart_action_uses_supervisor(self) -> None:
-        supervisor = RehearsalTwitchoSupervisor()
+        supervisor = rehearsal.RehearsalTwitchoSupervisor()
         app = ShowcoApp(
-            RehearsalRecsClient(),
-            RehearsalTwitchoClient(),
-            RehearsalSystemMonitor(),
-            RehearsalMixerMonitor(),
+            rehearsal.RehearsalRecsClient(),
+            rehearsal.RehearsalTwitchoClient(),
+            rehearsal.RehearsalSystemMonitor(),
+            rehearsal.RehearsalMixerMonitor(),
             supervisor,
         )
 
@@ -137,12 +128,12 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(supervisor.restart_count, 1)
 
     def test_track_name_action_uses_recs_client(self) -> None:
-        recs = RehearsalRecsClient()
+        recs = rehearsal.RehearsalRecsClient()
         app = ShowcoApp(
             recs,
-            RehearsalTwitchoClient(),
-            RehearsalSystemMonitor(),
-            RehearsalMixerMonitor(),
+            rehearsal.RehearsalTwitchoClient(),
+            rehearsal.RehearsalSystemMonitor(),
+            rehearsal.RehearsalMixerMonitor(),
         )
 
         result = app.run_action(
@@ -158,12 +149,12 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(recs.rehearsal_track_names, {"X18/XR18": {"Lead Vocal": 1}})
 
     def test_recs_action_uses_recs_client(self) -> None:
-        recs = RehearsalRecsClient()
+        recs = rehearsal.RehearsalRecsClient()
         app = ShowcoApp(
             recs,
-            RehearsalTwitchoClient(),
-            RehearsalSystemMonitor(),
-            RehearsalMixerMonitor(),
+            rehearsal.RehearsalTwitchoClient(),
+            rehearsal.RehearsalSystemMonitor(),
+            rehearsal.RehearsalMixerMonitor(),
         )
 
         result = app.run_action(
@@ -179,10 +170,10 @@ class ServerTests(unittest.TestCase):
 
     def test_recs_action_reports_invalid_noise_floor(self) -> None:
         app = ShowcoApp(
-            RehearsalRecsClient(),
-            RehearsalTwitchoClient(),
-            RehearsalSystemMonitor(),
-            RehearsalMixerMonitor(),
+            rehearsal.RehearsalRecsClient(),
+            rehearsal.RehearsalTwitchoClient(),
+            rehearsal.RehearsalSystemMonitor(),
+            rehearsal.RehearsalMixerMonitor(),
         )
 
         result = app.run_action(
@@ -198,10 +189,10 @@ class ServerTests(unittest.TestCase):
 
     def test_shutdown_action_defaults_to_cancel(self) -> None:
         app = ShowcoApp(
-            RehearsalRecsClient(),
-            RehearsalTwitchoClient(),
-            RehearsalSystemMonitor(),
-            RehearsalMixerMonitor(),
+            rehearsal.RehearsalRecsClient(),
+            rehearsal.RehearsalTwitchoClient(),
+            rehearsal.RehearsalSystemMonitor(),
+            rehearsal.RehearsalMixerMonitor(),
         )
 
         result = app.run_action({"action": "recs-shutdown"})
@@ -211,10 +202,10 @@ class ServerTests(unittest.TestCase):
 
     def test_action_log_keeps_ten_most_recent_results(self) -> None:
         app = ShowcoApp(
-            RehearsalRecsClient(),
-            RehearsalTwitchoClient(),
-            RehearsalSystemMonitor(),
-            RehearsalMixerMonitor(),
+            rehearsal.RehearsalRecsClient(),
+            rehearsal.RehearsalTwitchoClient(),
+            rehearsal.RehearsalSystemMonitor(),
+            rehearsal.RehearsalMixerMonitor(),
         )
 
         for i in range(12):

@@ -6,12 +6,10 @@ import os
 import secrets
 import sys
 import tomllib
-import urllib.error
-import urllib.parse
-import urllib.request
 import webbrowser
 from pathlib import Path
 from typing import cast
+from urllib import error, parse, request
 
 import tyro
 from pydantic import BaseModel
@@ -95,7 +93,7 @@ def authorize_url(config_path: Path, config: dict[str, object]) -> int:
         "state": state,
         "force_verify": "true",
     }
-    url = TWITCH_AUTHORIZE_URL + "?" + urllib.parse.urlencode(params)
+    url = TWITCH_AUTHORIZE_URL + "?" + parse.urlencode(params)
     webbrowser.open(url)
     print(
         "After approving it, copy the full localhost callback URL from the browser\n"
@@ -113,7 +111,7 @@ def exchange_code(env: dict[str, object]) -> int:
     config_dir = Path(require_value(twitch, "config_dir")).expanduser()
     config_dir.mkdir(parents=True, exist_ok=True)
     response_file = config_dir / "oauth-response.json"
-    data = urllib.parse.urlencode(
+    data = parse.urlencode(
         {
             "client_id": client_id,
             "client_secret": client_secret,
@@ -122,8 +120,8 @@ def exchange_code(env: dict[str, object]) -> int:
             "redirect_uri": redirect_uri,
         }
     ).encode()
-    request = urllib.request.Request(TWITCH_TOKEN_URL, data=data, method="POST")
-    http_response = request_http(request)
+    http_request = request.Request(TWITCH_TOKEN_URL, data=data, method="POST")
+    http_response = request_http(http_request)
     response_file.write_text(http_response.text + "\n")
     try:
         response = json.loads(http_response.text)
@@ -172,11 +170,11 @@ def validate_token(config: dict[str, object]) -> int:
         )
         sys.exit(message)
     token = token_file.read_text().strip()
-    request = urllib.request.Request(
+    http_request = request.Request(
         TWITCH_VALIDATE_URL,
         headers={"Authorization": f"OAuth {token}"},
     )
-    http_response = request_http(request)
+    http_response = request_http(http_request)
     if http_response.status < 200 or http_response.status >= 300:
         sys.exit(f"Twitch token validation failed with HTTP {http_response.status}.")
     try:
@@ -189,17 +187,17 @@ def validate_token(config: dict[str, object]) -> int:
 
 def callback_code(value: str) -> str:
     if value.startswith(("http://", "https://")):
-        url = urllib.parse.urlparse(value)
-        params = urllib.parse.parse_qs(url.query)
+        url = parse.urlparse(value)
+        params = parse.parse_qs(url.query)
         return params["code"][0]
     return value
 
 
-def request_http(request: urllib.request.Request) -> HttpResponse:
+def request_http(http_request: request.Request) -> HttpResponse:
     try:
-        with urllib.request.urlopen(request) as response:
+        with request.urlopen(http_request) as response:
             return HttpResponse(status=response.status, text=response.read().decode())
-    except urllib.error.HTTPError as e:
+    except error.HTTPError as e:
         return HttpResponse(status=e.code, text=e.read().decode())
 
 

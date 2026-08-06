@@ -2,17 +2,12 @@ from __future__ import annotations
 
 import unittest
 
-from showco.rehearsal import (
-    RehearsalMixerMonitor,
-    RehearsalRecsClient,
-    RehearsalSystemMonitor,
-    RehearsalTwitchoClient,
-)
+from showco import rehearsal
 
 
 class RehearsalTests(unittest.TestCase):
     def test_rehearsal_recs_returns_recording_status(self) -> None:
-        recs = RehearsalRecsClient()
+        recs = rehearsal.RehearsalRecsClient()
 
         status = recs.status()
 
@@ -22,7 +17,7 @@ class RehearsalTests(unittest.TestCase):
         self.assertIn("healthy", {c.state for c in status.channels})
 
     def test_rehearsal_twitcho_actions_change_status(self) -> None:
-        twitcho = RehearsalTwitchoClient()
+        twitcho = rehearsal.RehearsalTwitchoClient()
 
         mute = twitcho.action("mute")
         muted = twitcho.status()
@@ -36,13 +31,13 @@ class RehearsalTests(unittest.TestCase):
         self.assertEqual(stopped.stream_state, "stopped")
 
     def test_rehearsal_system_reports_temperature(self) -> None:
-        status = RehearsalSystemMonitor().status()
+        status = rehearsal.RehearsalSystemMonitor().status()
 
         self.assertEqual(status.temperature_c, 48.5)
         self.assertIsNone(status.temperature_error)
 
     def test_rehearsal_mixer_reports_latency(self) -> None:
-        status = RehearsalMixerMonitor().status()
+        status = rehearsal.RehearsalMixerMonitor().status()
 
         self.assertEqual(status.latency_ms, 4.2)
         self.assertIsNone(status.error)

@@ -3,28 +3,19 @@ from __future__ import annotations
 import enum
 import ipaddress
 import shlex
-import subprocess
 import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import TextIO
+from subprocess import CompletedProcess
+from typing import Annotated, TextIO
 
-import reccy.subprocess
 import tyro
 from pydantic import BaseModel
+from reccy import subprocess
 
-from .provision.config import (
-    Config,
-    config_from_values,
-    external_wifi,
-    internal_wifi,
-    merge_values,
-    read_toml,
-    string_or_default,
-    x18,
-)
+from .provision import config
 
-RunCommand = Callable[[Sequence[str]], subprocess.CompletedProcess[str]]
+RunCommand = Callable[[Sequence[str]], CompletedProcess[str]]
 PROVISION_DIR = Path(__file__).resolve().parent / "provision"
 DEFAULT_CONFIG_PATH = PROVISION_DIR / "config.toml"
 DEFAULT_SECRETS_PATH = PROVISION_DIR / "secrets.toml"
@@ -54,16 +45,21 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def configure_network_from_paths(
-    config: Path = DEFAULT_CONFIG_PATH,
+    config_path: Annotated[
+        Path,
+        tyro.conf.arg(name="config"),
+    ] = DEFAULT_CONFIG_PATH,
     secrets: Path = DEFAULT_SECRETS_PATH,
     dry_run: bool = False,
 ) -> int:
-    values = merge_values(read_toml(config), read_toml(secrets))
-    return configure_network(config_from_values(values), dry_run=dry_run)
+    values = config.merge_values(
+        config.read_toml(config_path), config.read_toml(secrets)
+    )
+    return configure_network(config.config_from_values(values), dry_run=dry_run)
 
 
 def configure_network(
-    config: Config,
+    provision_config: config.Config,
     *,
     dry_run: bool = False,
     run_command: RunCommand | None = None,
@@ -71,9 +67,9 @@ def configure_network(
 ) -> int:
     run_command = run_command or run
     interfaces = detect_wifi_interfaces(run_command)
-    assignment = assign_wifi(interfaces, config.network.swap_wifi)
-    topology = select_topology(config, assignment.secondary is not None)
-    commands = network_commands(config, assignment, topology)
+    assignment = assign_wifi(interfaces, provision_config.network.swap_wifi)
+    topology = select_topology(provision_config, assignment.secondary is not None)
+    commands = network_commands(provision_config, assignment, topology)
     for command in commands:
         print(shell_command(command), file=output)
         if not dry_run:
@@ -127,12 +123,14 @@ def assign_wifi(interfaces: list[WifiInterface], swap_wifi: bool) -> WifiAssignm
     return WifiAssignment(primary=primary, secondary=secondary)
 
 
-def select_topology(config: Config, has_second_wifi: bool) -> NetworkTopology:
-    topology = topology_value(config.network.topology)
+def select_topology(
+    provision_config: config.Config, has_second_wifi: bool
+) -> NetworkTopology:
+    topology = topology_value(provision_config.network.topology)
     if topology is not None:
         return topology
-    if not external_wifi(config).name:
-        if config.twitch.enabled:
+    if not config.external_wifi(provision_config).name:
+        if provision_config.twitch.enabled:
             sys.exit(
                 "ERROR: networks.external.wifi.external.name is required "
                 "when twitch.enabled is true"
@@ -140,44 +138,46 @@ def select_topology(config: Config, has_second_wifi: bool) -> NetworkTopology:
         return NetworkTopology.PRIVATE
     if has_second_wifi:
         return NetworkTopology.MIXED
-    if config.twitch.enabled:
+    if provision_config.twitch.enabled:
         return NetworkTopology.PUBLIC
     return NetworkTopology.PRIVATE
 
 
 def network_commands(
-    config: Config,
+    provision_config: config.Config,
     assignment: WifiAssignment,
     topology: NetworkTopology,
 ) -> list[list[str]]:
     if topology == NetworkTopology.MIXED and assignment.secondary is None:
         sys.exit("ERROR: mixed network topology requires a secondary Wi-Fi interface")
     if topology in (NetworkTopology.PUBLIC, NetworkTopology.MIXED):
-        require_external_network(config)
+        require_external_network(provision_config)
     commands = []
-    if x18(config) is not None:
-        commands.append(x18_ethernet_command(config))
+    if config.x18(provision_config) is not None:
+        commands.append(x18_ethernet_command(provision_config))
     commands.append(["nmcli", "radio", "wifi", "on"])
     if topology == NetworkTopology.PUBLIC:
-        commands.append(external_wifi_command(config, assignment.primary))
+        commands.append(external_wifi_command(provision_config, assignment.primary))
         if assignment.secondary:
             commands.append(disconnect_command(assignment.secondary))
     elif topology == NetworkTopology.PRIVATE:
-        commands.append(private_wifi_command(config, assignment.primary))
+        commands.append(private_wifi_command(provision_config, assignment.primary))
         if assignment.secondary:
             commands.append(disconnect_command(assignment.secondary))
     else:
-        commands.append(private_wifi_command(config, assignment.primary))
+        commands.append(private_wifi_command(provision_config, assignment.primary))
         if assignment.secondary is None:
             sys.exit(
                 "ERROR: mixed network topology requires a secondary Wi-Fi interface"
             )
-        commands.append(external_wifi_command(config, assignment.secondary))
+        commands.append(external_wifi_command(provision_config, assignment.secondary))
     return commands
 
 
-def private_wifi_command(config: Config, interface: WifiInterface) -> list[str]:
-    network = internal_wifi(config)
+def private_wifi_command(
+    provision_config: config.Config, interface: WifiInterface
+) -> list[str]:
+    network = config.internal_wifi(provision_config)
     command = [
         "nmcli",
         "device",
@@ -188,15 +188,17 @@ def private_wifi_command(config: Config, interface: WifiInterface) -> list[str]:
         "con-name",
         "showco-private",
         "ssid",
-        string_or_default(network.name, "showbox"),
+        config.string_or_default(network.name, "showbox"),
     ]
     if network.password:
         command.extend(["password", network.password])
     return command
 
 
-def external_wifi_command(config: Config, interface: WifiInterface) -> list[str]:
-    network = external_wifi(config)
+def external_wifi_command(
+    provision_config: config.Config, interface: WifiInterface
+) -> list[str]:
+    network = config.external_wifi(provision_config)
     command = [
         "nmcli",
         "device",
@@ -214,14 +216,14 @@ def disconnect_command(interface: WifiInterface) -> list[str]:
     return ["nmcli", "device", "disconnect", interface.name]
 
 
-def x18_ethernet_command(config: Config) -> list[str]:
-    x18_network = x18(config)
+def x18_ethernet_command(provision_config: config.Config) -> list[str]:
+    x18_network = config.x18(provision_config)
     if x18_network is None:
         sys.exit("ERROR: networks.internal.wired.x18 is required")
     connection = "showco-x18"
     interface = "eth0"
     address = x18_pi_ethernet_address(
-        string_or_default(x18_network.subnet, "10.43.0.0/24")
+        config.string_or_default(x18_network.subnet, "10.43.0.0/24")
     )
     script = "\n".join(
         [
@@ -255,8 +257,8 @@ def x18_pi_ethernet_address(subnet: str) -> str:
     return f"{address}/{network.prefixlen}"
 
 
-def require_external_network(config: Config) -> None:
-    if not external_wifi(config).name:
+def require_external_network(provision_config: config.Config) -> None:
+    if not config.external_wifi(provision_config).name:
         sys.exit("ERROR: networks.external.wifi.external.name is required")
 
 
@@ -279,11 +281,11 @@ def shlex_quote(value: str) -> str:
     return shlex.quote(value)
 
 
-def run(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
-    return reccy.subprocess.run(command, capture_output=True, check=False, text=True)
+def run(command: Sequence[str]) -> CompletedProcess[str]:
+    return subprocess.run(command, capture_output=True, check=False, text=True)
 
 
-def check_command_result(completed: subprocess.CompletedProcess[str]) -> None:
+def check_command_result(completed: CompletedProcess[str]) -> None:
     if completed.returncode == 0:
         return
     output = f"{completed.stdout}{completed.stderr}".strip()

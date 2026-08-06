@@ -1,20 +1,20 @@
 from __future__ import annotations
 
 import os
-import subprocess
 import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
+from subprocess import CalledProcessError, CompletedProcess, TimeoutExpired
 from typing import TextIO
 
-import reccy.subprocess
 from pydantic import BaseModel
+from reccy import subprocess
 
 from . import services
 
 RunCommand = Callable[
     [Sequence[str]],
-    subprocess.CompletedProcess[str],
+    CompletedProcess[str],
 ]
 
 
@@ -103,7 +103,7 @@ def _run_service_step(service: str, step: str, run_command: RunCommand) -> StepR
             returncode=127,
             output=str(e),
         )
-    except subprocess.CalledProcessError as e:
+    except CalledProcessError as e:
         return StepResult(
             program=service,
             step=step,
@@ -111,7 +111,7 @@ def _run_service_step(service: str, step: str, run_command: RunCommand) -> StepR
             returncode=e.returncode,
             output=f"{e.stdout or ''}{e.stderr or ''}",
         )
-    except subprocess.TimeoutExpired as e:
+    except TimeoutExpired as e:
         return StepResult(
             program=service,
             step=step,
@@ -151,7 +151,7 @@ def _run_step(
             returncode=127,
             output=str(e),
         )
-    except subprocess.TimeoutExpired as e:
+    except TimeoutExpired as e:
         return StepResult(
             program=program,
             step=step,
@@ -168,11 +168,11 @@ def _run_step(
     )
 
 
-def _run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+def _run_command(command: Sequence[str]) -> CompletedProcess[str]:
     env = dict(os.environ)
     if command and command[0] == "git":
         env["GIT_TERMINAL_PROMPT"] = "0"
-    return reccy.subprocess.run(
+    return subprocess.run(
         command,
         capture_output=True,
         check=False,
@@ -184,17 +184,17 @@ def _run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
 
 def _service_runner(
     run_command: RunCommand,
-) -> Callable[..., subprocess.CompletedProcess[str]]:
+) -> Callable[..., CompletedProcess[str]]:
     def run(
         command: list[str],
         *,
         check: bool,
         text: bool,
         capture_output: bool,
-    ) -> subprocess.CompletedProcess[str]:
+    ) -> CompletedProcess[str]:
         completed = run_command(command)
         if check and completed.returncode != 0:
-            raise subprocess.CalledProcessError(
+            raise CalledProcessError(
                 completed.returncode,
                 command,
                 output=completed.stdout,
@@ -211,7 +211,7 @@ def _timeout(command: Sequence[str]) -> float:
     return 30.0
 
 
-def _timeout_output(error: subprocess.TimeoutExpired) -> str:
+def _timeout_output(error: TimeoutExpired) -> str:
     output = error.output or ""
     stderr = error.stderr or ""
     return f"command timed out after {error.timeout} seconds\n{output}{stderr}"

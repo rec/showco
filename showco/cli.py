@@ -3,19 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Annotated, Literal
 
-import reccy.cli
 import tyro
+from reccy import cli
 
-from . import git_pull, network_config, services
+from . import git_pull, network_config, rehearsal, services
 from .mixer import MixerMonitor
 from .provision import provision
-from .rehearsal import (
-    RehearsalMixerMonitor,
-    RehearsalRecsClient,
-    RehearsalSystemMonitor,
-    RehearsalTwitchoClient,
-    RehearsalTwitchoSupervisor,
-)
 from .server import make_server
 from .twitcho import auth, supervisor
 from .x18 import osc, recorder_supervisor
@@ -43,22 +36,25 @@ def run_web_ui(
         Literal["internal", "external"],
         tyro.conf.arg(help="restart policy for the supervised Twitcho process"),
     ] = "external",
-    rehearsal: Annotated[
+    rehearsal_mode: Annotated[
         bool,
-        tyro.conf.arg(help="run with simulated recs and twitcho services"),
+        tyro.conf.arg(
+            name="rehearsal",
+            help="run with simulated recs and twitcho services",
+        ),
     ] = False,
 ) -> int:
     x18_recorder = None
 
-    if rehearsal:
+    if rehearsal_mode:
         server = make_server(
             host,
             port,
-            recs=RehearsalRecsClient(),
-            twitcho=RehearsalTwitchoClient(),
-            system=RehearsalSystemMonitor(),
-            mixer=RehearsalMixerMonitor(),
-            twitcho_supervisor=RehearsalTwitchoSupervisor(),
+            recs=rehearsal.RehearsalRecsClient(),
+            twitcho=rehearsal.RehearsalTwitchoClient(),
+            system=rehearsal.RehearsalSystemMonitor(),
+            mixer=rehearsal.RehearsalMixerMonitor(),
+            twitcho_supervisor=rehearsal.RehearsalTwitchoSupervisor(),
         )
         print(f"showco rehearsal listening on http://{host}:{port}")
     else:
@@ -98,7 +94,7 @@ def run_web_ui(
 
 
 def main(argv: list[str] | None = None) -> int:
-    return reccy.cli.route_command(
+    return cli.route_command(
         {
             "run": run_command,
             "provision": provision.main,

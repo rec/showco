@@ -12,7 +12,7 @@ from recs.daemon.models import DaemonMetadata, Platform
 
 from showco.recs import RecsClient, channel_levels, level_state, replace_track_name
 
-CLIENT_CONNECTION = "showco.recs.reccy.ipc.client_connection"
+CLIENT_CONNECTION = "showco.recs.ipc.client_connection"
 
 
 class RecsTests(unittest.TestCase):

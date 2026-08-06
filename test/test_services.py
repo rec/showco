@@ -51,15 +51,15 @@ class ServicesTests(unittest.TestCase):
             controller.install.return_value = StatusResult(installed=True, running=True)
             with (
                 mock.patch(
-                    "showco.services.reccy.paths.current_platform",
+                    "showco.services.paths.current_platform",
                     return_value=Platform.linux,
                 ),
                 mock.patch(
-                    "showco.services.reccy.paths.service_paths",
+                    "showco.services.paths.service_paths",
                     return_value=paths,
                 ),
                 mock.patch(
-                    "showco.services.reccy.service.ServiceController",
+                    "showco.services.service.ServiceController",
                     return_value=controller,
                 ),
             ):
@@ -88,7 +88,7 @@ class ServicesTests(unittest.TestCase):
 
     def test_recs_service_controller_uses_gui_ipc_error_status(self) -> None:
         with mock.patch(
-            "showco.services.reccy.paths.current_platform", return_value=Platform.linux
+            "showco.services.paths.current_platform", return_value=Platform.linux
         ):
             controller = services.service_controller(services.RECS_SERVICE)
 

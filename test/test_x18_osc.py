@@ -7,28 +7,22 @@ import unittest
 from datetime import UTC, datetime
 from pathlib import Path
 
-from showco.x18.osc import (
-    X18OscRecorder,
-    decode_osc,
-    log_path,
-    osc_string,
-    xremote_message,
-)
+from showco.x18 import osc
 from showco.x18.recorder_supervisor import X18RecorderSupervisor
 
 
 class X18OscTests(unittest.TestCase):
     def test_xremote_message_is_read_only_subscription(self) -> None:
         self.assertEqual(
-            decode_osc(xremote_message()),
+            osc.decode_osc(osc.xremote_message()),
             [{"path": "/xremote", "types": "", "args": []}],
         )
 
     def test_decodes_float_message(self) -> None:
-        data = osc_string("/ch/01/mix/fader") + osc_string(",f") + b"?@\0\0"
+        data = osc.osc_string("/ch/01/mix/fader") + osc.osc_string(",f") + b"?@\0\0"
 
         self.assertEqual(
-            decode_osc(data),
+            osc.decode_osc(data),
             [{"path": "/ch/01/mix/fader", "types": "f", "args": [0.75]}],
         )
 
@@ -36,14 +30,14 @@ class X18OscTests(unittest.TestCase):
         timestamp = datetime(2026, 7, 26, 12, 34, 56, tzinfo=UTC)
 
         self.assertEqual(
-            log_path(Path("/logs"), timestamp),
+            osc.log_path(Path("/logs"), timestamp),
             Path("/logs/x18-20260726T123456Z.jsonl"),
         )
 
     def test_write_datagram_records_raw_payload_and_decoded_message(self) -> None:
         output = io.BytesIO()
-        recorder = X18OscRecorder("10.43.0.18", log_dir=Path("/logs"))
-        data = xremote_message()
+        recorder = osc.X18OscRecorder("10.43.0.18", log_dir=Path("/logs"))
+        data = osc.xremote_message()
 
         recorder.write_datagram(output, "out", data, target=("10.43.0.18", 10_024))
 
@@ -58,7 +52,7 @@ class X18OscTests(unittest.TestCase):
 
     def test_send_xremote_records_send_error(self) -> None:
         output = io.BytesIO()
-        recorder = X18OscRecorder("10.43.0.18", log_dir=Path("/logs"))
+        recorder = osc.X18OscRecorder("10.43.0.18", log_dir=Path("/logs"))
 
         recorder.send_xremote(BrokenSocket(), output)
 

@@ -3,9 +3,9 @@ from __future__ import annotations
 import html
 import threading
 import time
-import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import ClassVar
+from urllib import parse
 
 from .mixer import MixerMonitor
 from .models import ActionResult, ShowStatus
@@ -125,7 +125,7 @@ class ShowcoHandler(BaseHTTPRequestHandler):
     def _form(self) -> dict[str, str]:
         length = int(self.headers.get("Content-Length", "0"))
         body = self.rfile.read(length).decode()
-        parsed = urllib.parse.parse_qs(body)
+        parsed = parse.parse_qs(body)
         return {k: v[-1] for k, v in parsed.items() if v}
 
     def _html(self, body: str) -> None:
