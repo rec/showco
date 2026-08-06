@@ -6,14 +6,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import mock
 
-from showco.provision import provision
-from showco.provision.config import (
-    Config,
-    config_from_values,
-    merge_values,
-    read_toml,
-    table_value,
-)
+from showco.provision import config, provision
 
 
 class ProvisionTests(unittest.TestCase):
@@ -125,10 +118,10 @@ class ProvisionTests(unittest.TestCase):
         calls: list[str] = []
         config = make_config(values(networks=networks(x18=False)))
 
-        def ensure_github_account_key(config: Config, ssh_target: str) -> None:
+        def ensure_github_account_key(config: config.Config, ssh_target: str) -> None:
             calls.append("github")
 
-        def run_scp(config: Config, source: Path, target: str) -> None:
+        def run_scp(config: config.Config, source: Path, target: str) -> None:
             calls.append("scp")
 
         with (
@@ -352,15 +345,15 @@ class ProvisionTests(unittest.TestCase):
             path = Path(directory) / "config.toml"
             path.write_text('[twitch]\ntags = ["Live Music", "Music"]\n')
 
-            values = read_toml(path)
+            values = config.read_toml(path)
 
         self.assertEqual(
-            table_value(values, "twitch")["tags"],
+            config.table_value(values, "twitch")["tags"],
             ["Live Music", "Music"],
         )
 
     def test_network_secrets_merge_by_key(self) -> None:
-        config = {
+        config_values = {
             "networks": {
                 "external": {
                     "wifi": {
@@ -379,7 +372,7 @@ class ProvisionTests(unittest.TestCase):
             },
         }
 
-        values = merge_values(config, secrets)
+        values = config.merge_values(config_values, secrets)
 
         self.assertEqual(
             values["networks"]["external"]["wifi"]["venue"],
@@ -612,8 +605,8 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn("gh said: authentication required", str(error.exception))
 
 
-def make_config(values: dict[str, object], *, port: int | None = None) -> Config:
-    return config_from_values(values, port=port)
+def make_config(values: dict[str, object], *, port: int | None = None) -> config.Config:
+    return config.config_from_values(values, port=port)
 
 
 def values(**overrides: object) -> dict[str, object]:
@@ -635,7 +628,7 @@ def values(**overrides: object) -> dict[str, object]:
         if k == "networks":
             result[k] = v
         elif isinstance(v, dict) and isinstance(result.get(k), dict):
-            result[k] = merge_values(result[k], v)
+            result[k] = config.merge_values(result[k], v)
         else:
             result[k] = v
     return result

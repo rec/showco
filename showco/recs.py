@@ -8,14 +8,10 @@ import uuid
 from pathlib import Path
 from typing import cast
 
-import reccy.ipc
 from pydantic import BaseModel
+from reccy import ipc
 from recs.cfg.track_names import DeviceTrackNames
-from recs.daemon.gui_protocol import (
-    MESSAGE,
-    Command,
-    Reply,
-)
+from recs.daemon import gui_protocol
 from recs.daemon.models import DaemonMetadata
 
 from .models import ActionResult, ChannelLevel, RecsStatus, ServiceStatus
@@ -101,7 +97,7 @@ class RecsClient:
     def calibrate(self) -> ActionResult:
         message_id = str(uuid.uuid4())
         reply = self._send_command(
-            Command(
+            gui_protocol.Command(
                 type="command",
                 id=message_id,
                 command="calibrate",
@@ -142,7 +138,7 @@ class RecsClient:
         updated = replace_track_name(track_names, device, channel_number, track_name)
         message_id = str(uuid.uuid4())
         reply = self._send_command(
-            Command(
+            gui_protocol.Command(
                 type="command",
                 id=message_id,
                 command="set_track_names",
@@ -170,7 +166,7 @@ class RecsClient:
     def track_names(self) -> DeviceTrackNames | ActionResult:
         message_id = str(uuid.uuid4())
         reply = self._send_command(
-            Command(
+            gui_protocol.Command(
                 type="command",
                 id=message_id,
                 command="get_track_names",
@@ -200,7 +196,7 @@ class RecsClient:
         }
         payload.update({k: v for k, v in fields.items() if v not in ("", None)})
         reply = self._send_command(
-            Command.model_validate(payload),
+            gui_protocol.Command.model_validate(payload),
             send_error=f"could not send recs {command} command",
             failure_prefix=f"recs {command} failed",
             reply_name=command.replace("_", " "),
@@ -228,7 +224,7 @@ class RecsClient:
             )
 
         try:
-            connection = reccy.ipc.client_connection(_endpoint(metadata.gui_endpoint))
+            connection = ipc.client_connection(_endpoint(metadata.gui_endpoint))
         except OSError as e:
             return ActionResult(ok=False, message=f"could not connect to recs: {e}")
         try:
@@ -236,9 +232,7 @@ class RecsClient:
                 return ActionResult(ok=False, message="could not send recs hello")
             if error := _expect_daemon_hello(_read_message(connection)):
                 return ActionResult(ok=False, message=error)
-            if not connection.write(
-                reccy.ipc.message_json(reccy.ipc.Shutdown(type="shutdown"))
-            ):
+            if not connection.write(ipc.message_json(ipc.Shutdown(type="shutdown"))):
                 return ActionResult(ok=False, message="could not send recs shutdown")
             return ActionResult(ok=True, message="recs shutdown requested")
         except (OSError, ValueError) as e:
@@ -248,12 +242,12 @@ class RecsClient:
 
     def _send_command(
         self,
-        command: Command,
+        command: gui_protocol.Command,
         *,
         send_error: str,
         failure_prefix: str,
         reply_name: str,
-    ) -> Reply | ActionResult:
+    ) -> gui_protocol.Reply | ActionResult:
         try:
             metadata = self._metadata()
         except (OSError, ValueError) as e:
@@ -264,7 +258,7 @@ class RecsClient:
             )
 
         try:
-            connection = reccy.ipc.client_connection(_endpoint(metadata.gui_endpoint))
+            connection = ipc.client_connection(_endpoint(metadata.gui_endpoint))
         except OSError as e:
             return ActionResult(ok=False, message=f"could not connect to recs: {e}")
         try:
@@ -273,7 +267,7 @@ class RecsClient:
             if error := _expect_daemon_hello(_read_message(connection)):
                 return ActionResult(ok=False, message=error)
 
-            if not connection.write(reccy.ipc.message_json(command, exclude_none=True)):
+            if not connection.write(ipc.message_json(command, exclude_none=True)):
                 return ActionResult(ok=False, message=send_error)
 
             return _command_reply(_read_message(connection), command.id, reply_name)
@@ -318,33 +312,33 @@ def _endpoint(endpoint: str) -> Path | str:
 
 
 def gui_hello() -> str:
-    return reccy.ipc.message_json(reccy.ipc.Hello(type="hello", role="gui", version=1))
+    return ipc.message_json(ipc.Hello(type="hello", role="gui", version=1))
 
 
-def _read_message(connection: reccy.ipc.Connection) -> object:
+def _read_message(connection: ipc.Connection) -> object:
     for line in connection.read_lines():
-        return reccy.ipc.parse_message(line, MESSAGE)
-    return reccy.ipc.Error(type="error", message="recs closed the connection")
+        return ipc.parse_message(line, gui_protocol.MESSAGE)
+    return ipc.Error(type="error", message="recs closed the connection")
 
 
 def _expect_daemon_hello(message: object) -> str | None:
-    if isinstance(message, reccy.ipc.Error):
+    if isinstance(message, ipc.Error):
         return message.message
-    if not isinstance(message, reccy.ipc.Hello) or message.role != "daemon":
+    if not isinstance(message, ipc.Hello) or message.role != "daemon":
         return "recs did not send daemon hello"
     return None
 
 
 def _command_reply(
     message: object, message_id: str, reply_name: str
-) -> Reply | ActionResult:
-    if isinstance(message, reccy.ipc.Error):
+) -> gui_protocol.Reply | ActionResult:
+    if isinstance(message, ipc.Error):
         return ActionResult(ok=False, message=message.message)
-    if not isinstance(message, reccy.ipc.Reply):
+    if not isinstance(message, gui_protocol.Reply):
         return ActionResult(ok=False, message=f"recs did not send {reply_name} reply")
     if message.id != message_id:
         return ActionResult(ok=False, message="recs sent reply for a different command")
-    return cast(Reply, message)
+    return cast(gui_protocol.Reply, message)
 
 
 def result_track_names(result: dict[str, object] | None) -> DeviceTrackNames | None:

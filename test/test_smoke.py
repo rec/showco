@@ -3,11 +3,10 @@ from __future__ import annotations
 import socket
 import threading
 import unittest
-import urllib.parse
-import urllib.request
 from collections.abc import Iterator
 from contextlib import contextmanager
 from http.server import ThreadingHTTPServer
+from urllib import parse, request
 
 from showco.rehearsal import RehearsalRecsClient, RehearsalTwitchoClient
 from showco.server import make_server
@@ -55,13 +54,13 @@ def running_rehearsal_server(
 
 
 def read_url(url: str) -> str:
-    with urllib.request.urlopen(url, timeout=2) as response:
+    with request.urlopen(url, timeout=2) as response:
         return response.read().decode()
 
 
 def post_form(url: str, form: dict[str, str]) -> object:
-    data = urllib.parse.urlencode(form).encode()
-    opener = urllib.request.build_opener(NoRedirectHandler)
+    data = parse.urlencode(form).encode()
+    opener = request.build_opener(NoRedirectHandler)
     return opener.open(url, data=data, timeout=2)
 
 
@@ -77,18 +76,18 @@ def unused_port() -> int:
         return int(sock.getsockname()[1])
 
 
-class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+class NoRedirectHandler(request.HTTPRedirectHandler):
     def redirect_request(
         self,
-        req: urllib.request.Request,
+        req: request.Request,
         fp: object,
         code: int,
         msg: str,
         headers: object,
         newurl: str,
-    ) -> urllib.request.Request | None:
+    ) -> request.Request | None:
         if code == 303:
-            return urllib.request.Request(newurl, method="GET")
+            return request.Request(newurl, method="GET")
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 

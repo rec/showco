@@ -1,15 +1,13 @@
 from __future__ import annotations
 
 import argparse
-import subprocess
 import sys
 from collections.abc import Callable
 from pathlib import Path
+from subprocess import CompletedProcess
 
-import reccy.paths
-import reccy.renderers
-import reccy.service
 from pydantic import BaseModel
+from reccy import paths, renderers, service
 from reccy.models import ServiceSpec, StatusResult
 
 SHOWCO_SERVICE = ServiceSpec(
@@ -52,10 +50,10 @@ def install_showco_service(
     twitcho_config: Path | None = None,
     executable: Path | None = None,
 ) -> int:
-    platform = reccy.paths.current_platform()
-    paths = reccy.paths.service_paths(SHOWCO_SERVICE, platform)
+    platform = paths.current_platform()
+    service_paths = paths.service_paths(SHOWCO_SERVICE, platform)
     executable = executable or Path.home() / "code/showco/.venv/bin/showco"
-    metadata = reccy.renderers.service_metadata(
+    metadata = renderers.service_metadata(
         executable,
         platform,
         [
@@ -69,10 +67,10 @@ def install_showco_service(
                 twitcho_config,
             ),
         ],
-        paths,
+        service_paths,
     )
-    result = reccy.service.ServiceController(SHOWCO_SERVICE, platform).install(metadata)
-    reccy.service.print_service_status("showco", result)
+    result = service.ServiceController(SHOWCO_SERVICE, platform).install(metadata)
+    service.print_service_status("showco", result)
     return 0 if result.running else 1
 
 
@@ -104,15 +102,15 @@ def service_status(name: str) -> StatusResult:
 
 def service_controller(
     service: ServiceSpec,
-    runner: Callable[..., subprocess.CompletedProcess[str]] | None = None,
-) -> reccy.service.ServiceController:
+    runner: Callable[..., CompletedProcess[str]] | None = None,
+) -> service.ServiceController:
     return service_registry(runner=runner).controller(service.name)
 
 
 def service_registry(
-    runner: Callable[..., subprocess.CompletedProcess[str]] | None = None,
-) -> reccy.service.ServiceRegistry:
-    return reccy.service.ServiceRegistry(
+    runner: Callable[..., CompletedProcess[str]] | None = None,
+) -> service.ServiceRegistry:
+    return service.ServiceRegistry(
         SERVICES,
         runner=runner,
         status_models=STATUS_MODELS,
