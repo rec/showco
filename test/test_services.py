@@ -79,13 +79,12 @@ class ServicesTests(unittest.TestCase):
         )
 
     def test_report_service_status_fails_inactive_service(self) -> None:
-        with mock.patch(
-            "showco.services.service_status",
-            return_value=StatusResult(
-                installed=True, running=False, details="inactive"
-            ),
-        ):
+        registry = mock.Mock()
+        registry.report_status.return_value = 1
+        with mock.patch("showco.services.service_registry", return_value=registry):
             self.assertEqual(services.report_service_status(["showco"]), 1)
+
+        registry.report_status.assert_called_once_with(["showco"])
 
     def test_recs_service_controller_uses_gui_ipc_error_status(self) -> None:
         with mock.patch(
