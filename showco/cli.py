@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 from typing import Annotated, Literal
 
+import reccy.cli
 import tyro
 
 from . import git_pull, network_config, services
@@ -98,19 +98,15 @@ def run_web_ui(
 
 
 def main(argv: list[str] | None = None) -> int:
-    arguments = sys.argv[1:] if argv is None else argv
-    if not arguments or arguments[:1] in (["-h"], ["--help"]):
-        print("Usage: showco {run,provision,twitcho} ...")
-        return 0
-    if arguments[:1] == ["run"]:
-        return run_command(arguments[1:])
-    if arguments[:1] == ["provision"]:
-        return provision.main(arguments[1:])
-    if arguments[:1] == ["twitcho"]:
-        return auth.main(arguments[1:])
-    print(f"unknown command: {arguments[0]}", file=sys.stderr)
-    print("Usage: showco {run,provision,twitcho} ...", file=sys.stderr)
-    return 2
+    return reccy.cli.route_command(
+        {
+            "run": run_command,
+            "provision": provision.main,
+            "twitcho": auth.main,
+        },
+        argv,
+        prog="showco",
+    )
 
 
 def run_command(arguments: list[str]) -> int:
