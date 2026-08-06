@@ -348,30 +348,12 @@ install_recs_service() {
 }
 
 install_showco_service() {
-  local service_dir="/home/$SHOW_USER/.config/systemd/user"
-  local service_file="$service_dir/showco.service"
-  local command="/home/$SHOW_USER/code/showco/.venv/bin/showco run $(showco_args)"
-
-  sudo -H -u "$SHOW_USER" mkdir -p "$service_dir"
-  sudo -H -u "$SHOW_USER" tee "$service_file" >/dev/null <<SERVICE
-[Unit]
-Description=showco local show control
-After=default.target recs.service
-
-[Service]
-ExecStart=$command
-Restart=always
-RestartSec=5
-WorkingDirectory=/home/$SHOW_USER/code/showco
-StandardOutput=append:%h/.local/state/showco/showco.out.log
-StandardError=append:%h/.local/state/showco/showco.err.log
-
-[Install]
-WantedBy=default.target
-SERVICE
-  user_systemctl daemon-reload
-  user_systemctl enable showco.service
-  user_systemctl restart showco.service
+  local uid
+  uid=$(id -u "$SHOW_USER")
+  sudo -H -u "$SHOW_USER" \
+    env XDG_RUNTIME_DIR="/run/user/$uid" \
+    PATH="/home/$SHOW_USER/code/showco/.venv/bin:/home/$SHOW_USER/.local/bin:$PATH" \
+    bash -lc "cd '$CODE_DIR/showco' && uv run showco run install-service $(showco_args)"
 }
 
 write_provisioning_report() {
