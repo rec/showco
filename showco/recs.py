@@ -5,20 +5,16 @@ import os
 import sys
 import time
 import uuid
-from collections.abc import Iterator
 from pathlib import Path
-from typing import Protocol
+from typing import cast
 
+import reccy.ipc
 from pydantic import BaseModel
 from recs.cfg.track_names import DeviceTrackNames
-from recs.daemon.gui_backend import client_connection
 from recs.daemon.gui_protocol import (
+    MESSAGE,
     Command,
-    Error,
-    Hello,
     Reply,
-    Shutdown,
-    parse_message,
 )
 from recs.daemon.models import DaemonMetadata
 
@@ -232,17 +228,17 @@ class RecsClient:
             )
 
         try:
-            connection = client_connection(_endpoint(metadata.gui_endpoint))
+            connection = reccy.ipc.client_connection(_endpoint(metadata.gui_endpoint))
         except OSError as e:
             return ActionResult(ok=False, message=f"could not connect to recs: {e}")
         try:
-            if not connection.write(
-                Hello(type="hello", role="gui").model_dump_json() + "\n"
-            ):
+            if not connection.write(gui_hello()):
                 return ActionResult(ok=False, message="could not send recs hello")
             if error := _expect_daemon_hello(_read_message(connection)):
                 return ActionResult(ok=False, message=error)
-            if not connection.write(Shutdown(type="shutdown").model_dump_json() + "\n"):
+            if not connection.write(
+                reccy.ipc.message_json(reccy.ipc.Shutdown(type="shutdown"))
+            ):
                 return ActionResult(ok=False, message="could not send recs shutdown")
             return ActionResult(ok=True, message="recs shutdown requested")
         except (OSError, ValueError) as e:
@@ -268,18 +264,16 @@ class RecsClient:
             )
 
         try:
-            connection = client_connection(_endpoint(metadata.gui_endpoint))
+            connection = reccy.ipc.client_connection(_endpoint(metadata.gui_endpoint))
         except OSError as e:
             return ActionResult(ok=False, message=f"could not connect to recs: {e}")
         try:
-            if not connection.write(
-                Hello(type="hello", role="gui").model_dump_json() + "\n"
-            ):
+            if not connection.write(gui_hello()):
                 return ActionResult(ok=False, message="could not send recs hello")
             if error := _expect_daemon_hello(_read_message(connection)):
                 return ActionResult(ok=False, message=error)
 
-            if not connection.write(command.model_dump_json(exclude_none=True) + "\n"):
+            if not connection.write(reccy.ipc.message_json(command, exclude_none=True)):
                 return ActionResult(ok=False, message=send_error)
 
             return _command_reply(_read_message(connection), command.id, reply_name)
@@ -298,14 +292,6 @@ class RecsPaths(BaseModel, frozen=True):
     metadata: Path
     status: Path
     gui_endpoint: str
-
-
-class RecsConnection(Protocol):
-    def read_lines(self) -> Iterator[str]: ...
-
-    def write(self, message: str) -> bool: ...
-
-    def close(self) -> None: ...
 
 
 def recs_paths(home: Path | None = None) -> RecsPaths:
@@ -331,16 +317,20 @@ def _endpoint(endpoint: str) -> Path | str:
     return Path(endpoint)
 
 
-def _read_message(connection: RecsConnection) -> object:
+def gui_hello() -> str:
+    return reccy.ipc.message_json(reccy.ipc.Hello(type="hello", role="gui", version=1))
+
+
+def _read_message(connection: reccy.ipc.Connection) -> object:
     for line in connection.read_lines():
-        return parse_message(line)
-    return Error(type="error", message="recs closed the connection")
+        return reccy.ipc.parse_message(line, MESSAGE)
+    return reccy.ipc.Error(type="error", message="recs closed the connection")
 
 
 def _expect_daemon_hello(message: object) -> str | None:
-    if isinstance(message, Error):
+    if isinstance(message, reccy.ipc.Error):
         return message.message
-    if not isinstance(message, Hello) or message.role != "daemon":
+    if not isinstance(message, reccy.ipc.Hello) or message.role != "daemon":
         return "recs did not send daemon hello"
     return None
 
@@ -348,13 +338,13 @@ def _expect_daemon_hello(message: object) -> str | None:
 def _command_reply(
     message: object, message_id: str, reply_name: str
 ) -> Reply | ActionResult:
-    if isinstance(message, Error):
+    if isinstance(message, reccy.ipc.Error):
         return ActionResult(ok=False, message=message.message)
-    if not isinstance(message, Reply):
+    if not isinstance(message, reccy.ipc.Reply):
         return ActionResult(ok=False, message=f"recs did not send {reply_name} reply")
     if message.id != message_id:
         return ActionResult(ok=False, message="recs sent reply for a different command")
-    return message
+    return cast(Reply, message)
 
 
 def result_track_names(result: dict[str, object] | None) -> DeviceTrackNames | None:
