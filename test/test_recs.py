@@ -12,6 +12,8 @@ from recs.daemon.models import DaemonMetadata, Platform
 
 from showco.recs import RecsClient, channel_levels, level_state, replace_track_name
 
+CLIENT_CONNECTION = "showco.recs.reccy.ipc.client_connection"
+
 
 class RecsTests(unittest.TestCase):
     def test_reads_recs_status_file(self) -> None:
@@ -91,7 +93,7 @@ class RecsTests(unittest.TestCase):
             client = RecsClient(metadata_path=metadata)
 
             with (
-                mock.patch("showco.recs.client_connection", return_value=connection),
+                mock.patch(CLIENT_CONNECTION, return_value=connection),
                 mock.patch("showco.recs.uuid.uuid4", return_value="c1"),
             ):
                 result = client.calibrate()
@@ -130,7 +132,7 @@ class RecsTests(unittest.TestCase):
             client = RecsClient(metadata_path=metadata)
 
             with mock.patch(
-                "showco.recs.client_connection",
+                CLIENT_CONNECTION,
                 side_effect=OSError("connection refused"),
             ):
                 result = client.calibrate()
@@ -163,7 +165,7 @@ class RecsTests(unittest.TestCase):
             client = RecsClient(metadata_path=metadata)
 
             with (
-                mock.patch("showco.recs.client_connection", return_value=connection),
+                mock.patch(CLIENT_CONNECTION, return_value=connection),
                 mock.patch(
                     "showco.recs.uuid.uuid4",
                     side_effect=["get", "set"],
@@ -208,7 +210,7 @@ class RecsTests(unittest.TestCase):
             client = RecsClient(metadata_path=metadata)
 
             with (
-                mock.patch("showco.recs.client_connection", return_value=connection),
+                mock.patch(CLIENT_CONNECTION, return_value=connection),
                 mock.patch("showco.recs.uuid.uuid4", return_value="c1"),
             ):
                 result = client.action(
@@ -248,7 +250,7 @@ class RecsTests(unittest.TestCase):
             )
             client = RecsClient(metadata_path=metadata)
 
-            with mock.patch("showco.recs.client_connection", return_value=connection):
+            with mock.patch(CLIENT_CONNECTION, return_value=connection):
                 result = client.shutdown()
 
         self.assertTrue(result.ok)
