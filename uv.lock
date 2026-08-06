@@ -678,6 +678,31 @@ wheels = [
 ]
 
 [[package]]
+name = "reccy"
+version = "0.1.0"
+source = { editable = "../reccy" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "strenum" },
+    { name = "tyro" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pydantic", specifier = ">=2.13.4" },
+    { name = "strenum" },
+    { name = "tyro", specifier = ">=1.0.13" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest" },
+    { name = "pyupgrade", specifier = ">=3.21.2" },
+    { name = "ruff" },
+    { name = "ty", specifier = ">=0.0.14" },
+]
+
+[[package]]
 name = "recs"
 version = "0.12.5"
 source = { editable = "../recs" }
@@ -688,6 +713,7 @@ dependencies = [
     { name = "overrides" },
     { name = "pydantic" },
     { name = "pyside6" },
+    { name = "reccy" },
     { name = "rich" },
     { name = "sounddevice" },
     { name = "soundfile" },
@@ -704,6 +730,7 @@ requires-dist = [
     { name = "overrides" },
     { name = "pydantic", specifier = ">=2.13.4" },
     { name = "pyside6", specifier = ">=6.11.1" },
+    { name = "reccy", editable = "../reccy" },
     { name = "rich" },
     { name = "sounddevice" },
     { name = "soundfile" },
@@ -756,6 +783,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "pydantic" },
+    { name = "reccy" },
     { name = "recs" },
     { name = "twitcho" },
     { name = "tyro" },
@@ -769,6 +797,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "pydantic", specifier = ">=2.13.4" },
+    { name = "reccy", editable = "../reccy" },
     { name = "recs", editable = "../recs" },
     { name = "twitcho", editable = "../twitcho" },
     { name = "tyro", specifier = ">=1.0.15" },
