@@ -7,9 +7,8 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import TextIO
 
+import reccy.subprocess
 from pydantic import BaseModel
-
-import showco
 
 RunCommand = Callable[
     [Sequence[str]],
@@ -128,7 +127,7 @@ def _run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
     env = dict(os.environ)
     if command and command[0] == "git":
         env["GIT_TERMINAL_PROMPT"] = "0"
-    return showco.run(
+    return reccy.subprocess.run(
         command,
         capture_output=True,
         check=False,

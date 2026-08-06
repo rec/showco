@@ -111,7 +111,7 @@ class ProvisionTests(unittest.TestCase):
         self.assertEqual(run_ssh.call_args_list[-1].args[2], "rm -f /tmp/remote.sh")
 
     def test_run_uses_key_based_ssh_command(self) -> None:
-        with mock.patch("showco.run") as run:
+        with mock.patch("reccy.subprocess.run") as run:
             provision.run_command(["ssh"])
 
         run.assert_called_once_with(
@@ -209,7 +209,7 @@ class ProvisionTests(unittest.TestCase):
         connected = subprocess.CompletedProcess(["ssh"], 0, "", "")
         removed = subprocess.CompletedProcess(["ssh-keygen"], 0, "", "")
         with mock.patch(
-            "showco.run", side_effect=[changed_key, removed, connected]
+            "reccy.subprocess.run", side_effect=[changed_key, removed, connected]
         ) as run:
             self.assertFalse(provision.ssh_is_reachable(config, "tom@recs-stage.local"))
             self.assertTrue(provision.ssh_is_reachable(config, "tom@recs-stage.local"))
@@ -446,7 +446,7 @@ class ProvisionTests(unittest.TestCase):
     def test_verify_provisioning_checks_projects_and_user_services(self) -> None:
         config = make_config(values())
         with mock.patch(
-            "showco.run",
+            "reccy.subprocess.run",
             return_value=subprocess.CompletedProcess(["ssh"], 0, "", ""),
         ) as run:
             results = provision.verify_provisioning(config, "tom@recs-stage.local")
@@ -470,7 +470,7 @@ class ProvisionTests(unittest.TestCase):
     def test_missing_x18_usb_device_is_note_not_error(self) -> None:
         config = make_config(values())
         with mock.patch(
-            "showco.run",
+            "reccy.subprocess.run",
             return_value=subprocess.CompletedProcess(["ssh"], 1, "", ""),
         ):
             result = provision.verify_x18_usb_device(config, "tom@recs-stage.local")
@@ -506,7 +506,7 @@ class ProvisionTests(unittest.TestCase):
             mock.patch(
                 "showco.provision.provision.github_key_exists", return_value=False
             ),
-            mock.patch("showco.run") as run,
+            mock.patch("reccy.subprocess.run") as run,
         ):
             provision.ensure_github_account_key(config, "tom@recs-stage.local")
 
@@ -531,7 +531,7 @@ class ProvisionTests(unittest.TestCase):
             mock.patch(
                 "showco.provision.provision.github_key_exists", return_value=False
             ),
-            mock.patch("showco.run", side_effect=add_error),
+            mock.patch("reccy.subprocess.run", side_effect=add_error),
             self.assertRaises(SystemExit) as error,
         ):
             provision.ensure_github_account_key(config, "tom@recs-stage.local")
@@ -567,7 +567,7 @@ class ProvisionTests(unittest.TestCase):
             mock.patch(
                 "showco.provision.provision.github_key_exists", return_value=True
             ),
-            mock.patch("showco.run") as run,
+            mock.patch("reccy.subprocess.run") as run,
         ):
             provision.ensure_github_account_key(config, "tom@recs-stage.local")
 
@@ -575,7 +575,7 @@ class ProvisionTests(unittest.TestCase):
 
     def test_github_key_exists_ignores_public_key_comment(self) -> None:
         with mock.patch(
-            "showco.run",
+            "reccy.subprocess.run",
             return_value=subprocess.CompletedProcess(
                 ["gh"],
                 0,
@@ -594,7 +594,7 @@ class ProvisionTests(unittest.TestCase):
             stderr="authentication required",
         )
         with (
-            mock.patch("showco.run", side_effect=gh_error),
+            mock.patch("reccy.subprocess.run", side_effect=gh_error),
             self.assertRaises(SystemExit) as error,
         ):
             provision.github_key_exists("ssh-ed25519 AAAATEST showco bertrand")
