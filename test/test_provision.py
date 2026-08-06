@@ -318,6 +318,11 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn("uv run showco run network-config", provision.REMOTE_SCRIPT)
         self.assertIn("Skipping network configuration", provision.REMOTE_SCRIPT)
 
+    def test_remote_script_installs_showco_service_through_showco(self) -> None:
+        self.assertIn("uv run showco run install-service", provision.REMOTE_SCRIPT)
+        self.assertNotIn('tee "$service_file"', provision.REMOTE_SCRIPT)
+        self.assertNotIn("ExecStart=$command", provision.REMOTE_SCRIPT)
+
     def test_remote_script_reboots_after_successful_network_config(self) -> None:
         network = provision.REMOTE_SCRIPT.index('phase "configuring network"')
         reboot = provision.REMOTE_SCRIPT.index('phase "rebooting"')
@@ -458,12 +463,12 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn('git -C "$HOME/code/showco" status --short', commands)
         self.assertIn(
             "uid=$(id -u); XDG_RUNTIME_DIR=/run/user/$uid "
-            "systemctl --user is-active recs.service",
+            'cd "$HOME/code/showco" && uv run showco run service-status recs',
             commands,
         )
         self.assertIn(
             "uid=$(id -u); XDG_RUNTIME_DIR=/run/user/$uid "
-            "systemctl --user is-active showco.service",
+            'cd "$HOME/code/showco" && uv run showco run service-status showco',
             commands,
         )
 

@@ -6,7 +6,7 @@ from typing import Annotated, Literal
 
 import tyro
 
-from . import git_pull, network_config
+from . import git_pull, network_config, services
 from .mixer import MixerMonitor
 from .provision import provision
 from .rehearsal import (
@@ -120,6 +120,10 @@ def run_command(arguments: list[str]) -> int:
         return osc.main(arguments[1:])
     if arguments[:1] == ["network-config"]:
         return network_config.main(arguments[1:])
+    if arguments[:1] == ["install-service"]:
+        return services.install_main(arguments[1:])
+    if arguments[:1] == ["service-status"]:
+        return services.status_main(arguments[1:])
     return tyro.cli(
         run_web_ui,
         args=arguments,

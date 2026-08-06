@@ -9,9 +9,9 @@ import tempfile
 import time
 from pathlib import Path
 
+import reccy.subprocess
 import tyro
 from pydantic import BaseModel
-import reccy.subprocess
 
 from .config import (
     Config,
@@ -245,13 +245,13 @@ def verify_provisioning(config: Config, ssh_target: str) -> list[VerificationRes
             config,
             ssh_target,
             "recs service is active",
-            user_systemctl_command("is-active recs.service"),
+            showco_service_status_command("recs"),
         ),
         verify_remote_command(
             config,
             ssh_target,
             "showco service is active",
-            user_systemctl_command("is-active showco.service"),
+            showco_service_status_command("showco"),
         ),
         verify_remote_command(
             config,
@@ -289,6 +289,12 @@ def project_status_command(project: str) -> str:
 
 def user_systemctl_command(arguments: str) -> str:
     return user_session_command(f"systemctl --user {arguments}")
+
+
+def showco_service_status_command(service: str) -> str:
+    return user_session_command(
+        f'cd "$HOME/code/showco" && uv run showco run service-status {service}'
+    )
 
 
 def user_session_command(command: str) -> str:
