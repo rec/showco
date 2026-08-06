@@ -9,10 +9,9 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import TextIO
 
+import reccy.subprocess
 import tyro
 from pydantic import BaseModel
-
-import showco
 
 from .provision.config import (
     Config,
@@ -281,7 +280,7 @@ def shlex_quote(value: str) -> str:
 
 
 def run(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
-    return showco.run(command, capture_output=True, check=False, text=True)
+    return reccy.subprocess.run(command, capture_output=True, check=False, text=True)
 
 
 def check_command_result(completed: subprocess.CompletedProcess[str]) -> None:

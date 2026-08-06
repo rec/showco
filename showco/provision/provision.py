@@ -11,8 +11,7 @@ from pathlib import Path
 
 import tyro
 from pydantic import BaseModel
-
-import showco
+import reccy.subprocess
 
 from .config import (
     Config,
@@ -177,7 +176,7 @@ def wait_for_ssh(
 
 
 def ssh_is_reachable(config: Config, ssh_target: str) -> bool:
-    completed = showco.run(
+    completed = reccy.subprocess.run(
         ssh_command(config, ssh_target, "true", connect_timeout=1),
         capture_output=True,
         check=False,
@@ -197,7 +196,7 @@ def has_changed_host_key(completed: subprocess.CompletedProcess[str]) -> bool:
 def remove_known_host(config: Config, ssh_target: str) -> None:
     for host in known_host_names(config, ssh_target):
         print(f"Removing stale SSH host key for {host}...")
-        showco.run(
+        reccy.subprocess.run(
             ["ssh-keygen", "-R", host],
             capture_output=True,
             check=False,
@@ -304,7 +303,7 @@ def verify_x18_usb_device(config: Config, ssh_target: str) -> VerificationResult
     command = (
         f"arecord -l | grep -F {shlex.quote(config.usb.x18_device_name)} >/dev/null"
     )
-    completed = showco.run(
+    completed = reccy.subprocess.run(
         ssh_command(config, ssh_target, command, connect_timeout=1),
         capture_output=True,
         check=False,
@@ -327,7 +326,7 @@ def verify_remote_command(
     *,
     expect_empty_stdout: bool = False,
 ) -> VerificationResult:
-    completed = showco.run(
+    completed = reccy.subprocess.run(
         ssh_command(config, ssh_target, command, connect_timeout=1),
         capture_output=True,
         check=False,
@@ -391,7 +390,7 @@ def ensure_github_account_key(config: Config, ssh_target: str) -> None:
 
 def add_github_key(key_file: Path, title: str) -> None:
     try:
-        showco.run(
+        reccy.subprocess.run(
             ["gh", "ssh-key", "add", str(key_file), "--title", title],
             capture_output=True,
             check=True,
@@ -408,7 +407,7 @@ def add_github_key(key_file: Path, title: str) -> None:
 
 def github_key_exists(public_key: str) -> bool:
     try:
-        completed = showco.run(
+        completed = reccy.subprocess.run(
             ["gh", "api", "user/keys", "--jq", ".[].key"],
             capture_output=True,
             check=True,
@@ -537,7 +536,7 @@ def run_command(
     *,
     capture_output: bool = False,
 ) -> subprocess.CompletedProcess[str]:
-    return showco.run(
+    return reccy.subprocess.run(
         command,
         capture_output=capture_output,
         check=True,
