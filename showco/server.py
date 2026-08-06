@@ -11,7 +11,7 @@ from .mixer import MixerMonitor
 from .models import ActionResult, ShowStatus
 from .recs import RecsClient
 from .system import SystemMonitor
-from .twitcho import TwitchoClient
+from .twitcho.client import TwitchoClient
 from .twitcho.supervisor import TwitchoSupervisorLike
 
 

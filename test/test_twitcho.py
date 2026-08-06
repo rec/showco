@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from showco.twitcho import TwitchoClient
+from showco.twitcho.client import TwitchoClient
 
 
 class TwitchoTests(unittest.TestCase):
