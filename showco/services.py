@@ -38,6 +38,11 @@ class RecsDaemonStatus(BaseModel, frozen=True):
     gui_ipc_error: str | None = None
 
 
+STATUS_MODELS = {"recs": RecsDaemonStatus}
+STATUS_ERROR_ATTRIBUTES = {"recs": "gui_ipc_error"}
+STATUS_ERROR_LABELS = {"recs": "GUI IPC error"}
+
+
 def install_showco_service(
     host: str = "0.0.0.0",
     port: int = 17_352,
@@ -67,7 +72,7 @@ def install_showco_service(
         paths,
     )
     result = reccy.service.ServiceController(SHOWCO_SERVICE, platform).install(metadata)
-    print_service_status("showco", result)
+    reccy.service.print_service_status("showco", result)
     return 0 if result.running else 1
 
 
@@ -90,46 +95,30 @@ def showco_args(
 
 
 def report_service_status(service_names: list[str]) -> int:
-    failures = 0
-    for name in service_names:
-        if name not in SERVICES:
-            print(f"unknown service: {name}", file=sys.stderr)
-            failures += 1
-            continue
-        result = service_status(name)
-        print_service_status(name, result)
-        if result.running is not True:
-            failures += 1
-    return 0 if failures == 0 else 1
+    return service_registry().report_status(service_names)
 
 
 def service_status(name: str) -> StatusResult:
-    service = SERVICES[name]
-    return service_controller(service).status()
+    return service_registry().status(name)
 
 
 def service_controller(
     service: ServiceSpec,
     runner: Callable[..., subprocess.CompletedProcess[str]] | None = None,
 ) -> reccy.service.ServiceController:
-    platform = reccy.paths.current_platform()
-    if service == RECS_SERVICE:
-        return reccy.service.ServiceController(
-            service,
-            platform,
-            runner=runner,
-            status_model=RecsDaemonStatus,
-            status_error_attribute="gui_ipc_error",
-            status_error_label="GUI IPC error",
-        )
-    return reccy.service.ServiceController(service, platform, runner=runner)
+    return service_registry(runner=runner).controller(service.name)
 
 
-def print_service_status(name: str, result: StatusResult) -> None:
-    state = "active" if result.running else "inactive"
-    print(f"{name}: {state}")
-    if result.details:
-        print(result.details)
+def service_registry(
+    runner: Callable[..., subprocess.CompletedProcess[str]] | None = None,
+) -> reccy.service.ServiceRegistry:
+    return reccy.service.ServiceRegistry(
+        SERVICES,
+        runner=runner,
+        status_models=STATUS_MODELS,
+        status_error_attributes=STATUS_ERROR_ATTRIBUTES,
+        status_error_labels=STATUS_ERROR_LABELS,
+    )
 
 
 def install_main(argv: list[str] | None = None) -> int:
