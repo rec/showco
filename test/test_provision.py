@@ -341,6 +341,45 @@ class ProvisionTests(unittest.TestCase):
 
         self.assertIn("BatchMode=yes", command)
         self.assertIn("StrictHostKeyChecking=accept-new", command)
+        self.assertIn("ConnectTimeout=1", command)
+
+    def test_ssh_command_uses_short_default_connect_timeout(self) -> None:
+        config = make_config(values(networks=networks(x18=False)))
+
+        command = provision.ssh_command(config, "tom@recs-stage.local", "true")
+
+        self.assertIn("ConnectTimeout=2", command)
+
+    def test_run_scp_uses_short_connect_timeout(self) -> None:
+        config = make_config(values(networks=networks(x18=False)))
+
+        with mock.patch("reccy.subprocess.run") as run:
+            provision.run_scp(config, Path("/tmp/local.sh"), "tom@host:/tmp/remote.sh")
+
+        self.assertIn("ConnectTimeout=2", run.call_args.args[0])
+
+    def test_run_ssh_reports_connection_failure_without_traceback(self) -> None:
+        config = make_config(values(networks=networks(x18=False)))
+        error = subprocess.CalledProcessError(
+            255,
+            ["ssh"],
+            stderr="ssh: connect to host failed\n",
+        )
+
+        with (
+            mock.patch("reccy.subprocess.run", side_effect=error),
+            self.assertRaises(SystemExit) as exit_error,
+        ):
+            provision.run_ssh(config, "tom@host", "true")
+
+        self.assertIn(
+            "ERROR: SSH connection or command failed for tom@host.",
+            str(exit_error.exception),
+        )
+        self.assertIn("SSH connect timeout is 2 seconds.", str(exit_error.exception))
+        self.assertIn(
+            "ssh said: ssh: connect to host failed", str(exit_error.exception)
+        )
 
     def test_known_host_names_include_port_specific_host(self) -> None:
         config = make_config(

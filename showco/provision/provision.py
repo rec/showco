@@ -22,6 +22,7 @@ REMOTE_SCRIPT_TEMPLATE = "provision_locally.tmpl.sh"
 REMOTE_SCRIPT = (PROVISION_DIR / REMOTE_SCRIPT_TEMPLATE).read_text()
 REMOTE_GITHUB_KEY_TEMPLATE = "remote_github_key.tmpl.sh"
 REBOOT_WAIT_SECONDS = 300
+SSH_CONNECT_TIMEOUT_SECONDS = 2
 LOCAL_REPOSITORIES = ["showco", "reccy", "recs", "twitcho"]
 
 
@@ -169,7 +170,10 @@ def provision_remote(
         if uploaded:
             try:
                 run_ssh(
-                    provision_config, ssh_target, f"rm -f {shlex.quote(remote_script)}"
+                    provision_config,
+                    ssh_target,
+                    f"rm -f {shlex.quote(remote_script)}",
+                    exit_on_error=False,
                 )
             except CalledProcessError as e:
                 if sys.exc_info()[0] is None:
@@ -667,24 +671,60 @@ def remote_command(provision_config: config.Config, remote_script: str) -> str:
     return " ".join([*assignments, "bash", shlex.quote(remote_script)])
 
 
-def run_ssh(provision_config: config.Config, target: str, command: str) -> None:
-    run_command(
-        ssh_command(provision_config, target, command, allocate_tty=True),
-    )
+def run_ssh(
+    provision_config: config.Config,
+    target: str,
+    command: str,
+    *,
+    exit_on_error: bool = True,
+) -> None:
+    try:
+        run_command(
+            ssh_command(provision_config, target, command, allocate_tty=True),
+        )
+    except CalledProcessError as e:
+        if not exit_on_error:
+            raise
+        sys.exit(ssh_error_message(target, e))
 
 
 def run_scp(provision_config: config.Config, source: Path, target: str) -> None:
-    run_command(
-        ["scp", "-P", str(provision_config.network.ssh_port), str(source), target],
-    )
+    try:
+        run_command(
+            [
+                "scp",
+                "-o",
+                f"ConnectTimeout={SSH_CONNECT_TIMEOUT_SECONDS}",
+                "-P",
+                str(provision_config.network.ssh_port),
+                str(source),
+                target,
+            ],
+        )
+    except CalledProcessError as e:
+        sys.exit(ssh_error_message(target, e))
 
 
 def capture_ssh(provision_config: config.Config, target: str, command: str) -> str:
-    completed = run_command(
-        ssh_command(provision_config, target, command),
-        capture_output=True,
-    )
+    try:
+        completed = run_command(
+            ssh_command(provision_config, target, command),
+            capture_output=True,
+        )
+    except CalledProcessError as e:
+        sys.exit(ssh_error_message(target, e))
     return completed.stdout.strip()
+
+
+def ssh_error_message(target: str, error: CalledProcessError) -> str:
+    output = f"{error.stdout or ''}{error.stderr or ''}".strip()
+    message = (
+        f"ERROR: SSH connection or command failed for {target}. "
+        f"SSH connect timeout is {SSH_CONNECT_TIMEOUT_SECONDS} seconds."
+    )
+    if output:
+        message += f"\nssh said: {output}"
+    return message
 
 
 def ssh_command(
@@ -693,7 +733,7 @@ def ssh_command(
     command: str,
     *,
     allocate_tty: bool = False,
-    connect_timeout: int | None = None,
+    connect_timeout: int | None = SSH_CONNECT_TIMEOUT_SECONDS,
 ) -> list[str]:
     result = ["ssh"]
     if allocate_tty:
