@@ -79,7 +79,7 @@ class ProvisionTests(unittest.TestCase):
 
         provision.validate_config(config)
 
-    def test_local_repository_errors_reports_ahead_repository(self) -> None:
+    def test_local_repository_errors_pushes_ahead_repository(self) -> None:
         with TemporaryDirectory() as directory:
             repository = provision.LocalRepository(
                 name="recs",
@@ -91,13 +91,44 @@ class ProvisionTests(unittest.TestCase):
                     subprocess.CompletedProcess(["git"], 0, "true\n", ""),
                     subprocess.CompletedProcess(["git"], 0, "origin/main\n", ""),
                     subprocess.CompletedProcess(["git"], 0, "2\n", ""),
+                    subprocess.CompletedProcess(["git"], 0, "", ""),
+                    subprocess.CompletedProcess(["git"], 0, "0\n", ""),
+                ],
+            ) as run:
+                errors = provision.repository_errors(repository)
+
+        self.assertEqual(errors, [])
+        push_command = run.call_args_list[3].args[0]
+        self.assertEqual(
+            push_command,
+            ["git", "-C", str(Path(directory)), "push", "origin", "HEAD:main"],
+        )
+        self.assertNotIn("--force", push_command)
+
+    def test_local_repository_errors_reports_push_failure(self) -> None:
+        with TemporaryDirectory() as directory:
+            repository = provision.LocalRepository(
+                name="recs",
+                path=Path(directory),
+            )
+            with mock.patch(
+                "reccy.subprocess.run",
+                side_effect=[
+                    subprocess.CompletedProcess(["git"], 0, "true\n", ""),
+                    subprocess.CompletedProcess(["git"], 0, "origin/main\n", ""),
+                    subprocess.CompletedProcess(["git"], 0, "2\n", ""),
+                    subprocess.CalledProcessError(
+                        1,
+                        ["git", "push"],
+                        stderr="rejected\n",
+                    ),
                 ],
             ):
                 errors = provision.repository_errors(repository)
 
         self.assertEqual(
             errors,
-            ["- recs: 2 local commit(s) are not in origin/main"],
+            ["- recs: could not push 2 local commit(s) to origin/main: rejected"],
         )
 
     def test_local_repository_errors_reports_missing_upstream(self) -> None:

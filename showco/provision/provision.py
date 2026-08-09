@@ -196,9 +196,22 @@ def repository_errors(repository: LocalRepository) -> list[str]:
         git_output(repository.path, ["rev-list", "--count", "@{upstream}..HEAD"])
     )
     if ahead:
-        errors.append(
-            f"- {repository.name}: {ahead} local commit(s) are not in {upstream}"
+        try:
+            git_push(repository.path, upstream)
+        except CalledProcessError as e:
+            errors.append(
+                f"- {repository.name}: could not push {ahead} local commit(s) "
+                f"to {upstream}: {git_error_output(e)}"
+            )
+            return errors
+        remaining = int(
+            git_output(repository.path, ["rev-list", "--count", "@{upstream}..HEAD"])
         )
+        if remaining:
+            errors.append(
+                f"- {repository.name}: {remaining} local commit(s) are still not "
+                f"in {upstream}"
+            )
     return errors
 
 
@@ -214,6 +227,29 @@ def git_output(repository: Path, arguments: list[str]) -> str:
         text=True,
     )
     return completed.stdout.strip()
+
+
+def git_push(repository: Path, upstream: str) -> None:
+    remote, _, branch = upstream.partition("/")
+    if not remote or not branch:
+        raise CalledProcessError(
+            128,
+            ["git", "push"],
+            stderr=f"bad upstream {upstream}",
+        )
+    subprocess.run(
+        ["git", "-C", str(repository), "push", remote, f"HEAD:{branch}"],
+        capture_output=True,
+        check=True,
+        text=True,
+    )
+
+
+def git_error_output(error: CalledProcessError) -> str:
+    output = f"{error.stderr or ''}{error.stdout or ''}".strip()
+    if output:
+        return output
+    return str(error)
 
 
 def wait_for_rebooted_ssh(provision_config: config.Config, ssh_target: str) -> None:
