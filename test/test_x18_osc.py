@@ -7,11 +7,23 @@ import unittest
 from datetime import UTC, datetime
 from pathlib import Path
 
+import tyro
+
 from showco.x18 import osc
 from showco.x18.recorder_supervisor import X18RecorderSupervisor
 
 
 class X18OscTests(unittest.TestCase):
+    def test_recorder_options_accept_existing_flags(self) -> None:
+        options = tyro.cli(
+            osc.X18RecorderOptions,
+            args=["--host", "10.43.0.18", "--port", "10024", "--log-dir", "/logs"],
+        )
+
+        self.assertEqual(options.host, "10.43.0.18")
+        self.assertEqual(options.port, 10_024)
+        self.assertEqual(options.log_dir, Path("/logs"))
+
     def test_xremote_message_is_read_only_subscription(self) -> None:
         self.assertEqual(
             osc.decode_osc(osc.xremote_message()),

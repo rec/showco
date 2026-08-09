@@ -37,41 +37,46 @@ class LocalRepository(BaseModel, frozen=True):
     path: Path
 
 
-def main(argv: list[str] | None = None) -> int:
-    machine_role.require_provisioning_machine("showco provision")
-    return tyro.cli(
-        run,
-        args=argv,
-        description="Provision a reachable Raspberry Pi over SSH",
-    )
-
-
-def run(
+class ProvisionOptions(BaseModel, frozen=True):
     config_path: Annotated[
         Path,
         tyro.conf.arg(name="config"),
-    ] = PROVISION_DIR / "config.toml",
-    secrets: Path = PROVISION_DIR / "secrets.toml",
-    host: str | None = None,
-    user: str | None = None,
-    port: int | None = None,
-    reccy_repo: str | None = None,
-    recs_repo: str | None = None,
-    twitcho_repo: str | None = None,
-    showco_repo: str | None = None,
-) -> int:
-    if host is not None:
-        persist_network_host(config_path, host)
-    env = config.merge_values(config.read_toml(config_path), config.read_toml(secrets))
+    ] = PROVISION_DIR / "config.toml"
+    secrets: Path = PROVISION_DIR / "secrets.toml"
+    host: str | None = None
+    user: str | None = None
+    port: int | None = None
+    reccy_repo: str | None = None
+    recs_repo: str | None = None
+    twitcho_repo: str | None = None
+    showco_repo: str | None = None
+
+
+def main(argv: list[str] | None = None) -> int:
+    machine_role.require_provisioning_machine("showco provision")
+    options = tyro.cli(
+        ProvisionOptions,
+        args=argv,
+        description="Provision a reachable Raspberry Pi over SSH",
+    )
+    return run(options)
+
+
+def run(options: ProvisionOptions) -> int:
+    if options.host is not None:
+        persist_network_host(options.config_path, options.host)
+    env = config.merge_values(
+        config.read_toml(options.config_path), config.read_toml(options.secrets)
+    )
     parsed_config = config.config_from_values(
         env,
-        host=host,
-        user=user,
-        port=port,
-        reccy_repo=reccy_repo,
-        recs_repo=recs_repo,
-        twitcho_repo=twitcho_repo,
-        showco_repo=showco_repo,
+        host=options.host,
+        user=options.user,
+        port=options.port,
+        reccy_repo=options.reccy_repo,
+        recs_repo=options.recs_repo,
+        twitcho_repo=options.twitcho_repo,
+        showco_repo=options.showco_repo,
     )
     validate_config(parsed_config)
     validate_local_repositories()

@@ -3,10 +3,22 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
+import tyro
+
 from showco import cli
 
 
 class CliTests(unittest.TestCase):
+    def test_web_ui_options_accept_existing_flags(self) -> None:
+        options = tyro.cli(
+            cli.WebUiOptions,
+            args=["--host", "0.0.0.0", "--port", "17352", "--rehearsal"],
+        )
+
+        self.assertEqual(options.host, "0.0.0.0")
+        self.assertEqual(options.port, 17_352)
+        self.assertTrue(options.rehearsal_mode)
+
     def test_dispatches_provision_subcommand(self) -> None:
         with patch.object(cli.provision, "main", return_value=7) as provision:
             self.assertEqual(cli.main(["provision", "--help"]), 7)

@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import BinaryIO
 
 import tyro
+from pydantic import BaseModel
 
 from .. import machine_role
 
@@ -18,21 +19,24 @@ XREMOTE_INTERVAL_SECONDS = 8.0
 SOCKET_TIMEOUT_SECONDS = 0.2
 
 
+class X18RecorderOptions(BaseModel, frozen=True):
+    host: str
+    port: int = X18_OSC_PORT
+    log_dir: Path = Path(".")
+
+
 def main(argv: list[str] | None = None) -> int:
     machine_role.require_target_machine("showco run x18-record")
-    return tyro.cli(
-        record_osc,
+    options = tyro.cli(
+        X18RecorderOptions,
         args=argv,
         description="Record X18 OSC traffic",
     )
+    return record_osc(options)
 
 
-def record_osc(
-    host: str,
-    port: int = X18_OSC_PORT,
-    log_dir: Path = Path("."),
-) -> int:
-    recorder = X18OscRecorder(host, port=port, log_dir=log_dir)
+def record_osc(options: X18RecorderOptions) -> int:
+    recorder = X18OscRecorder(options.host, port=options.port, log_dir=options.log_dir)
     print(f"recording X18 OSC to {recorder.path}")
     recorder.run_forever()
     return 0
