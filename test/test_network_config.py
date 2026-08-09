@@ -97,8 +97,9 @@ class NetworkConfigTests(unittest.TestCase):
                         ]
                     ),
                 ],
-                ["nmcli", "radio", "wifi", "on"],
+                ["sudo", "nmcli", "radio", "wifi", "on"],
                 [
+                    "sudo",
                     "nmcli",
                     "device",
                     "wifi",
@@ -110,7 +111,7 @@ class NetworkConfigTests(unittest.TestCase):
                     "ssid",
                     "showbox",
                 ],
-                ["nmcli", "device", "disconnect", "wlan1"],
+                ["sudo", "nmcli", "device", "disconnect", "wlan1"],
             ],
         )
 
@@ -136,7 +137,7 @@ class NetworkConfigTests(unittest.TestCase):
             commands,
             [["nmcli", "-t", "-f", "DEVICE,TYPE", "device", "status"]],
         )
-        self.assertIn("nmcli radio wifi on", output.getvalue())
+        self.assertIn("sudo nmcli radio wifi on", output.getvalue())
         self.assertIn("sudo nmcli connection up showco-x18", output.getvalue())
 
     def test_configuration_stops_when_command_fails(self) -> None:
@@ -144,7 +145,7 @@ class NetworkConfigTests(unittest.TestCase):
 
         def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
             commands.append(list(command))
-            if command == ["nmcli", "radio", "wifi", "on"]:
+            if command == ["sudo", "nmcli", "radio", "wifi", "on"]:
                 return subprocess.CompletedProcess(command, 10, "", "radio failed")
             return subprocess.CompletedProcess(
                 command,
@@ -164,7 +165,7 @@ class NetworkConfigTests(unittest.TestCase):
             commands,
             [
                 ["nmcli", "-t", "-f", "DEVICE,TYPE", "device", "status"],
-                ["nmcli", "radio", "wifi", "on"],
+                ["sudo", "nmcli", "radio", "wifi", "on"],
             ],
         )
 
@@ -203,7 +204,7 @@ class NetworkConfigTests(unittest.TestCase):
             network_config.NetworkTopology.PRIVATE,
         )
 
-        self.assertEqual(commands[0], ["nmcli", "radio", "wifi", "on"])
+        self.assertEqual(commands[0], ["sudo", "nmcli", "radio", "wifi", "on"])
 
     def test_x18_pi_ethernet_address_uses_first_subnet_host(self) -> None:
         self.assertEqual(
