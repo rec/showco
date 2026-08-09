@@ -30,6 +30,7 @@ class NetworkTopology(enum.StrEnum):
 
 class WifiInterface(BaseModel, frozen=True):
     name: str
+    connected: bool = False
 
 
 class WifiAssignment(BaseModel, frozen=True):
@@ -83,15 +84,26 @@ def configure_network(
 def detect_wifi_interfaces(
     run_command: RunCommand,
 ) -> list[WifiInterface]:
-    completed = run_command(["nmcli", "-t", "-f", "DEVICE,TYPE", "device", "status"])
+    completed = run_command(
+        ["nmcli", "-t", "-f", "DEVICE,TYPE,STATE", "device", "status"]
+    )
     if completed.returncode != 0:
         sys.exit(completed.stderr.strip() or "ERROR: nmcli device status failed")
-    names = []
-    for line in completed.stdout.splitlines():
+    return wifi_interfaces_from_status(completed.stdout)
+
+
+def wifi_interfaces_from_status(status: str) -> list[WifiInterface]:
+    interfaces = []
+    for line in status.splitlines():
         fields = split_nmcli_terse_fields(line)
         if len(fields) >= 2 and fields[1] == "wifi":
-            names.append(fields[0])
-    return [WifiInterface(name=name) for name in names]
+            interfaces.append(
+                WifiInterface(
+                    name=fields[0],
+                    connected=len(fields) >= 3 and fields[2].startswith("connected"),
+                )
+            )
+    return interfaces
 
 
 def split_nmcli_terse_fields(line: str) -> list[str]:
@@ -121,6 +133,9 @@ def assign_wifi(interfaces: list[WifiInterface], swap_wifi: bool) -> WifiAssignm
     ordered = list(interfaces)
     if swap_wifi and len(ordered) > 1:
         ordered[0], ordered[1] = ordered[1], ordered[0]
+    elif unconnected := next((i for i in ordered if not i.connected), None):
+        ordered.remove(unconnected)
+        ordered.insert(0, unconnected)
     primary = ordered[0]
     secondary = ordered[1] if len(ordered) > 1 else None
     return WifiAssignment(primary=primary, secondary=secondary)
@@ -153,27 +168,21 @@ def network_commands(
 ) -> list[list[str]]:
     if topology == NetworkTopology.MIXED and assignment.secondary is None:
         sys.exit("ERROR: mixed network topology requires a secondary Wi-Fi interface")
+    if topology != NetworkTopology.PUBLIC and assignment.primary.connected:
+        sys.exit(
+            "ERROR: no unconnected Wi-Fi interface is available for the private hotspot"
+        )
     if topology in (NetworkTopology.PUBLIC, NetworkTopology.MIXED):
         require_external_network(provision_config)
     commands = []
     if config.x18(provision_config) is not None:
         commands.append(x18_ethernet_command(provision_config))
-    commands.append(nmcli_command("radio", "wifi", "on"))
     if topology == NetworkTopology.PUBLIC:
-        commands.append(external_wifi_command(provision_config, assignment.primary))
-        if assignment.secondary:
-            commands.append(disconnect_command(assignment.secondary))
+        return commands
     elif topology == NetworkTopology.PRIVATE:
         commands.append(private_wifi_command(provision_config, assignment.primary))
-        if assignment.secondary:
-            commands.append(disconnect_command(assignment.secondary))
     else:
         commands.append(private_wifi_command(provision_config, assignment.primary))
-        if assignment.secondary is None:
-            sys.exit(
-                "ERROR: mixed network topology requires a secondary Wi-Fi interface"
-            )
-        commands.append(external_wifi_command(provision_config, assignment.secondary))
     return commands
 
 
@@ -193,24 +202,6 @@ def private_wifi_command(
     if network.password:
         command.extend(["password", network.password])
     return command
-
-
-def external_wifi_command(
-    provision_config: config.Config, interface: WifiInterface
-) -> list[str]:
-    network = config.external_wifi(provision_config)
-    command = [
-        *nmcli_command("device", "wifi", "connect"),
-        network.name,
-    ]
-    if network.password:
-        command.extend(["password", network.password])
-    command.extend(["ifname", interface.name, "name", "showco-external"])
-    return command
-
-
-def disconnect_command(interface: WifiInterface) -> list[str]:
-    return nmcli_command("device", "disconnect", interface.name)
 
 
 def nmcli_command(*arguments: str) -> list[str]:
