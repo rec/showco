@@ -90,14 +90,13 @@ def update_from_provisioning_machine(
     command = remote_update_command(selected)
     print(f"Updating target {ssh_target}: {command}", file=output)
     output.flush()
-    results.append(
-        run_uncaptured_step(
-            "target",
-            "update",
-            provision.ssh_command(provision_config, ssh_target, command),
-        )
+    target_result = run_remote_step(
+        "target",
+        "update",
+        provision.ssh_command(provision_config, ssh_target, command),
     )
-    print_results(results, output)
+    results.append(target_result)
+    print_result(target_result, output)
     return 0 if all(r.ok for r in results) else 1
 
 
@@ -403,9 +402,15 @@ def run_step(
     )
 
 
-def run_uncaptured_step(program: str, step: str, command: list[str]) -> StepResult:
+def run_remote_step(program: str, step: str, command: list[str]) -> StepResult:
     try:
-        completed = subprocess.run(command, check=False, text=True)
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=timeout(command),
+        )
     except FileNotFoundError as e:
         return StepResult(
             program=program,
@@ -414,12 +419,20 @@ def run_uncaptured_step(program: str, step: str, command: list[str]) -> StepResu
             returncode=127,
             output=str(e),
         )
+    except TimeoutExpired as e:
+        return StepResult(
+            program=program,
+            step=step,
+            command=command,
+            returncode=124,
+            output=timeout_output(e),
+        )
     return StepResult(
         program=program,
         step=step,
         command=command,
         returncode=completed.returncode,
-        output="",
+        output=f"{completed.stdout}{completed.stderr}",
     )
 
 
