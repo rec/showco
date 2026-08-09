@@ -4,7 +4,7 @@ import json
 import unittest
 from collections.abc import Iterator
 
-from recs.cfg import Cfg
+from recs.cfg.cfg import Cfg
 from recs.daemon import gui_ipc
 from recs.ui.key_events import KeyEvent
 

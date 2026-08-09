@@ -21,12 +21,18 @@ REMOTE_SCRIPT_TEMPLATE = "provision_locally.tmpl.sh"
 REMOTE_SCRIPT = (PROVISION_DIR / REMOTE_SCRIPT_TEMPLATE).read_text()
 REMOTE_GITHUB_KEY_TEMPLATE = "remote_github_key.tmpl.sh"
 REBOOT_WAIT_SECONDS = 300
+LOCAL_REPOSITORIES = ["showco", "reccy", "recs", "twitcho"]
 
 
 class VerificationResult(BaseModel, frozen=True):
     name: str
     error: str
     note: str = ""
+
+
+class LocalRepository(BaseModel, frozen=True):
+    name: str
+    path: Path
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -61,6 +67,7 @@ def run(
         showco_repo=showco_repo,
     )
     validate_config(parsed_config)
+    validate_local_repositories()
     ssh_target = f"{parsed_config.network.user}@{parsed_config.network.host}"
     remote_script = "/tmp/showco-provision-pi.sh"
 
@@ -146,6 +153,67 @@ def config_errors(provision_config: config.Config) -> list[str]:
     if not private.password or private.password == "TODO":
         errors.append("- networks.internal.wifi.private.password is required")
     return errors
+
+
+def validate_local_repositories(code_dir: Path | None = None) -> None:
+    errors = local_repository_errors(code_dir or local_code_dir())
+    if errors:
+        sys.exit(
+            "ERROR: local repositories are not ready for Raspberry Pi provisioning\n"
+            + "\n".join(errors)
+        )
+
+
+def local_repository_errors(code_dir: Path) -> list[str]:
+    errors = []
+    for repository in local_repositories(code_dir):
+        errors.extend(repository_errors(repository))
+    return errors
+
+
+def local_repositories(code_dir: Path) -> list[LocalRepository]:
+    return [LocalRepository(name=n, path=code_dir / n) for n in LOCAL_REPOSITORIES]
+
+
+def repository_errors(repository: LocalRepository) -> list[str]:
+    if not repository.path.exists():
+        return [f"- {repository.name}: {repository.path} does not exist"]
+    try:
+        git_output(repository.path, ["rev-parse", "--is-inside-work-tree"])
+    except CalledProcessError as e:
+        return [f"- {repository.name}: {repository.path} is not a Git repository: {e}"]
+
+    errors = []
+    try:
+        upstream = git_output(
+            repository.path,
+            ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"],
+        )
+    except CalledProcessError:
+        errors.append(f"- {repository.name}: current branch has no upstream")
+        return errors
+    ahead = int(
+        git_output(repository.path, ["rev-list", "--count", "@{upstream}..HEAD"])
+    )
+    if ahead:
+        errors.append(
+            f"- {repository.name}: {ahead} local commit(s) are not in {upstream}"
+        )
+    return errors
+
+
+def local_code_dir() -> Path:
+    return PROVISION_DIR.parents[2]
+
+
+def git_output(repository: Path, arguments: list[str]) -> str:
+    completed = subprocess.run(
+        ["git", "-C", str(repository), *arguments],
+        capture_output=True,
+        check=True,
+        text=True,
+    )
+    return completed.stdout.strip()
 
 
 def wait_for_rebooted_ssh(provision_config: config.Config, ssh_target: str) -> None:
