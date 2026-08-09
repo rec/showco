@@ -654,12 +654,14 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn('git -C "$HOME/code/showco" status --short', commands)
         self.assertIn(
             "uid=$(id -u); XDG_RUNTIME_DIR=/run/user/$uid "
-            'cd "$HOME/code/showco" && uv run showco run service-status recs',
+            'cd "$HOME/code/showco" && PATH="$HOME/.local/bin:$PATH" '
+            "uv run showco run service-status recs",
             commands,
         )
         self.assertIn(
             "uid=$(id -u); XDG_RUNTIME_DIR=/run/user/$uid "
-            'cd "$HOME/code/showco" && uv run showco run service-status showco',
+            'cd "$HOME/code/showco" && PATH="$HOME/.local/bin:$PATH" '
+            "uv run showco run service-status showco",
             commands,
         )
 

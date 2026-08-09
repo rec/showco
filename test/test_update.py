@@ -236,6 +236,7 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(
             remote_update.call_args.args[2][-1],
             'cd "$HOME/code/showco" && '
+            'PATH="$HOME/.local/bin:$PATH" '
             "uv run showco update --target-machine showco reccy",
         )
         self.assertIn("ConnectTimeout=2", remote_update.call_args.args[2])

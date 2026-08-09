@@ -314,7 +314,8 @@ def provisioning_config() -> config.Config:
 def remote_update_command(selected: list[str]) -> str:
     arguments = shlex.join(selected)
     return (
-        f'cd "$HOME/code/showco" && uv run showco update --target-machine {arguments}'
+        f'cd "$HOME/code/showco" && PATH="$HOME/.local/bin:$PATH" '
+        f"uv run showco update --target-machine {arguments}"
     ).rstrip()
 
 
