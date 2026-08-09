@@ -228,17 +228,17 @@ def x18_ethernet_command(provision_config: config.Config) -> list[str]:
     script = "\n".join(
         [
             f"nmcli connection show {shlex_quote(connection)} >/dev/null 2>&1 || "
-            "nmcli connection add "
+            "sudo nmcli connection add "
             f"type ethernet ifname {shlex_quote(interface)} "
             f"con-name {shlex_quote(connection)}",
-            "nmcli connection modify "
+            "sudo nmcli connection modify "
             f"{shlex_quote(connection)} "
             f"ifname {shlex_quote(interface)} "
             "ipv4.method manual "
             f"ipv4.addresses {shlex_quote(address)} "
             "ipv6.method disabled "
             "connection.autoconnect yes",
-            f"nmcli connection up {shlex_quote(connection)}",
+            f"sudo nmcli connection up {shlex_quote(connection)}",
         ]
     )
     return ["sh", "-c", script]

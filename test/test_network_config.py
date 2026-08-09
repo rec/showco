@@ -88,12 +88,12 @@ class NetworkConfigTests(unittest.TestCase):
                     "\n".join(
                         [
                             "nmcli connection show showco-x18 >/dev/null 2>&1 || "
-                            "nmcli connection add type ethernet ifname eth0 "
+                            "sudo nmcli connection add type ethernet ifname eth0 "
                             "con-name showco-x18",
-                            "nmcli connection modify showco-x18 ifname eth0 "
+                            "sudo nmcli connection modify showco-x18 ifname eth0 "
                             "ipv4.method manual ipv4.addresses 10.43.0.1/24 "
                             "ipv6.method disabled connection.autoconnect yes",
-                            "nmcli connection up showco-x18",
+                            "sudo nmcli connection up showco-x18",
                         ]
                     ),
                 ],
@@ -137,7 +137,7 @@ class NetworkConfigTests(unittest.TestCase):
             [["nmcli", "-t", "-f", "DEVICE,TYPE", "device", "status"]],
         )
         self.assertIn("nmcli radio wifi on", output.getvalue())
-        self.assertIn("nmcli connection up showco-x18", output.getvalue())
+        self.assertIn("sudo nmcli connection up showco-x18", output.getvalue())
 
     def test_configuration_stops_when_command_fails(self) -> None:
         commands: list[list[str]] = []
