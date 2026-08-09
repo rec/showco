@@ -599,6 +599,7 @@ def remote_command(provision_config: config.Config, remote_script: str) -> str:
         x18_subnet = config.string_or_default(x18_network.subnet, "10.43.0.0/24")
     values = {
         "SHOW_USER": provision_config.network.user,
+        "SHOWCO_HOST": provision_config.network.host,
         "CODE_DIR": f"/home/{provision_config.network.user}/code",
         "RECCY_REPO": provision_config.git.reccy.url,
         "RECCY_REFNAME": provision_config.git.reccy.refname,

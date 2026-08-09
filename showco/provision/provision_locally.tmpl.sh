@@ -251,6 +251,9 @@ write_network_config_files() {
 
   {
     printf '[network]\n'
+    write_toml_string host "$SHOWCO_HOST"
+    write_toml_string user "$SHOW_USER"
+    printf 'web_port = %s\n' "$SHOWCO_PORT"
     printf 'swap_wifi = %s\n' "$SWAP_WIFI"
     write_toml_string topology "$NETWORK_TOPOLOGY"
     if [ "$X18" = true ]; then
@@ -263,6 +266,18 @@ write_network_config_files() {
     write_toml_network_values "$EXTERNAL_WIFI_SSID" "" ""
     printf '\n[twitch]\n'
     printf 'enabled = %s\n' "$TWITCHO_ENABLED"
+    printf '\n[git.reccy]\n'
+    write_toml_string url "$RECCY_REPO"
+    write_toml_string refname "$RECCY_REFNAME"
+    printf '\n[git.recs]\n'
+    write_toml_string url "$RECS_REPO"
+    write_toml_string refname "$RECS_REFNAME"
+    printf '\n[git.twitcho]\n'
+    write_toml_string url "$TWITCHO_REPO"
+    write_toml_string refname "$TWITCHO_REFNAME"
+    printf '\n[git.showco]\n'
+    write_toml_string url "$SHOWCO_REPO"
+    write_toml_string refname "$SHOWCO_REFNAME"
   } >"$config_file"
   {
     printf '[networks.internal.wifi.private]\n'
