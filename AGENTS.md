@@ -13,7 +13,7 @@ client-side tooling unless the user explicitly asks for that direction.
 
 ## Important Modules
 
-- `showco/cli.py`: command-line parsing, `showco git-pull`, rehearsal mode, and
+- `showco/cli.py`: command-line parsing, `showco update`, rehearsal mode, and
   optional Twitcho supervision.
 - `showco/server.py`: request handling, app orchestration, action dispatch, HTML,
   CSS, and form behavior.
@@ -26,7 +26,8 @@ client-side tooling unless the user explicitly asks for that direction.
 - `showco/mixer.py`: TCP/UDP mixer reachability probes.
 - `showco/system.py`: Raspberry Pi temperature probe.
 - `showco/rehearsal.py`: in-process fakes for local rehearsal and tests.
-- `showco/git_pull.py`: operational update helper for recs, twitcho, and showco.
+- `showco/update.py`: operational update helper for recs, reccy, twitcho, and
+  showco.
 
 ## Coding Conventions
 
@@ -66,8 +67,8 @@ Recheck before reporting, and separate pre-existing diagnostics from regressions
 
 - Do not launch `uv run showco`, rehearsal mode, system services, Twitch flows,
   or hardware-facing checks unless the user explicitly asks.
-- Do not run `showco git-pull` as a verification step. It stops/restarts user
-  services and performs git pulls in sibling repos.
+- Do not run `showco update` as a verification step. It pushes or pulls sibling
+  repos and stops/restarts user services.
 - Recs and Twitcho are sibling editable dependencies. Changes that belong in
   those projects should be made there only when the user scopes the task that
   way.
