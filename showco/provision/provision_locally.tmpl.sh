@@ -195,6 +195,7 @@ sync_repo() {
 
   prepare_checkout_path "$path"
   if [[ -d "$path/.git" ]]; then
+    sudo -H -u "$SHOW_USER" git -C "$path" reset --hard HEAD
     sudo -H -u "$SHOW_USER" git -C "$path" fetch --all --prune
     sudo -H -u "$SHOW_USER" git -C "$path" pull --ff-only
   else

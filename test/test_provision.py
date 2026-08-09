@@ -350,6 +350,14 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn("Moving non-git checkout aside", provision.REMOTE_SCRIPT)
         self.assertIn('sudo mv "$path" "$backup"', provision.REMOTE_SCRIPT)
 
+    def test_remote_script_discards_local_checkout_changes_before_pull(self) -> None:
+        reset = provision.REMOTE_SCRIPT.index('git -C "$path" reset --hard HEAD')
+        fetch = provision.REMOTE_SCRIPT.index('git -C "$path" fetch --all --prune')
+        pull = provision.REMOTE_SCRIPT.index('git -C "$path" pull --ff-only')
+
+        self.assertLess(reset, fetch)
+        self.assertLess(fetch, pull)
+
     def test_remote_script_checks_out_configured_refname(self) -> None:
         self.assertIn('git -C "$path" checkout "$refname"', provision.REMOTE_SCRIPT)
         self.assertIn(
