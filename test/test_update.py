@@ -207,7 +207,7 @@ class UpdateTests(unittest.TestCase):
                 return_value=make_config(),
             ),
             mock.patch(
-                "showco.update.run_uncaptured_step",
+                "showco.update.run_remote_step",
                 return_value=update.StepResult(
                     program="target",
                     step="update",
@@ -242,6 +242,22 @@ class UpdateTests(unittest.TestCase):
         self.assertIn("showco push: ok", output.getvalue())
         self.assertIn("Updating target tom@bertrand.local", output.getvalue())
 
+    def test_remote_step_reports_remote_output(self) -> None:
+        command = ["ssh", "tom@bertrand.local", "showco update"]
+        with mock.patch(
+            "showco.update.subprocess.run",
+            return_value=subprocess.CompletedProcess(
+                command,
+                1,
+                "target output\n",
+                "target error\n",
+            ),
+        ):
+            result = update.run_remote_step("target", "update", command)
+
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.output, "target output\ntarget error\n")
+
     def test_provisioning_update_defaults_to_saved_host(self) -> None:
         with (
             mock.patch(
@@ -250,7 +266,7 @@ class UpdateTests(unittest.TestCase):
             ),
             mock.patch("showco.update.push_program"),
             mock.patch(
-                "showco.update.run_uncaptured_step",
+                "showco.update.run_remote_step",
                 return_value=update.StepResult(
                     program="target",
                     step="update",
@@ -273,7 +289,7 @@ class UpdateTests(unittest.TestCase):
             ),
             mock.patch("showco.update.push_program"),
             mock.patch(
-                "showco.update.run_uncaptured_step",
+                "showco.update.run_remote_step",
                 return_value=update.StepResult(
                     program="target",
                     step="update",
@@ -338,7 +354,7 @@ class UpdateTests(unittest.TestCase):
                 return_value=make_config(),
             ),
             mock.patch(
-                "showco.update.run_uncaptured_step",
+                "showco.update.run_remote_step",
                 return_value=update.StepResult(
                     program="target",
                     step="update",
