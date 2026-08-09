@@ -6,7 +6,7 @@ from typing import Annotated, Literal
 import tyro
 from reccy import cli
 
-from . import git_pull, network_config, rehearsal, services
+from . import git_pull, machine_role, network_config, rehearsal, services
 from .mixer import MixerMonitor
 from .provision import provision
 from .server import make_server
@@ -44,6 +44,8 @@ def run_web_ui(
         ),
     ] = False,
 ) -> int:
+    if not rehearsal_mode:
+        machine_role.require_target_machine("showco run")
     x18_recorder = None
 
     if rehearsal_mode:
@@ -98,7 +100,7 @@ def main(argv: list[str] | None = None) -> int:
         {
             "run": run_command,
             "provision": provision.main,
-            "twitcho": auth.main,
+            "twitcho": twitcho_command,
         },
         argv,
         prog="showco",
@@ -107,6 +109,7 @@ def main(argv: list[str] | None = None) -> int:
 
 def run_command(arguments: list[str]) -> int:
     if arguments[:1] == ["git-pull"]:
+        machine_role.require_target_machine("showco run git-pull")
         return git_pull.main(arguments[1:])
     if arguments[:1] == ["x18-record"]:
         return osc.main(arguments[1:])
@@ -121,3 +124,8 @@ def run_command(arguments: list[str]) -> int:
         args=arguments,
         description="Run the Showco web UI",
     )
+
+
+def twitcho_command(arguments: list[str]) -> int:
+    machine_role.require_target_machine("showco twitcho")
+    return auth.main(arguments)

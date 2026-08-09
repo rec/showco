@@ -10,6 +10,8 @@ from pydantic import BaseModel
 from reccy import paths, renderers, service
 from reccy.models import ServiceSpec, StatusResult
 
+from . import machine_role
+
 SHOWCO_SERVICE = ServiceSpec(
     name="showco",
     display_name="Showco",
@@ -120,6 +122,7 @@ def service_registry(
 
 
 def install_main(argv: list[str] | None = None) -> int:
+    machine_role.require_target_machine("showco run install-service")
     parser = argparse.ArgumentParser(
         prog="showco run install-service",
         description="Install or refresh the Showco user service",
@@ -142,6 +145,7 @@ def install_main(argv: list[str] | None = None) -> int:
 
 
 def status_main(argv: list[str] | None = None) -> int:
+    machine_role.require_target_machine("showco run service-status")
     arguments = sys.argv[1:] if argv is None else argv
     if not arguments or arguments[:1] in (["-h"], ["--help"]):
         print("Usage: showco run service-status {recs,showco} ...")

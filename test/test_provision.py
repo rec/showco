@@ -409,6 +409,13 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn("iw dev", provision.REMOTE_SCRIPT)
         self.assertIn("PROVISIONING-REPORT.txt", provision.REMOTE_SCRIPT)
 
+    def test_remote_script_marks_target_machine(self) -> None:
+        self.assertIn(
+            '"/home/$SHOW_USER/.config/showco/machine-role"',
+            provision.REMOTE_SCRIPT,
+        )
+        self.assertIn("printf 'target\\n'", provision.REMOTE_SCRIPT)
+
     def test_remote_script_configures_network(self) -> None:
         self.assertIn('phase "configuring network"', provision.REMOTE_SCRIPT)
         self.assertIn("configure_network()", provision.REMOTE_SCRIPT)

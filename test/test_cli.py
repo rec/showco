@@ -8,7 +8,10 @@ from showco import cli
 
 class CliTests(unittest.TestCase):
     def test_dispatches_run_subcommand(self) -> None:
-        with patch.object(cli.git_pull, "main", return_value=7) as git_pull:
+        with (
+            patch.object(cli.machine_role, "require_target_machine"),
+            patch.object(cli.git_pull, "main", return_value=7) as git_pull,
+        ):
             self.assertEqual(cli.main(["run", "git-pull"]), 7)
 
         git_pull.assert_called_once_with([])
@@ -20,7 +23,10 @@ class CliTests(unittest.TestCase):
         provision.assert_called_once_with(["--help"])
 
     def test_dispatches_twitcho_subcommand(self) -> None:
-        with patch.object(cli.auth, "main", return_value=7) as twitcho:
+        with (
+            patch.object(cli.machine_role, "require_target_machine"),
+            patch.object(cli.auth, "main", return_value=7) as twitcho,
+        ):
             self.assertEqual(cli.main(["twitcho", "--help"]), 7)
 
         twitcho.assert_called_once_with(["--help"])
