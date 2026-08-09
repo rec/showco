@@ -155,7 +155,7 @@ def network_commands(
     commands = []
     if config.x18(provision_config) is not None:
         commands.append(x18_ethernet_command(provision_config))
-    commands.append(["nmcli", "radio", "wifi", "on"])
+    commands.append(nmcli_command("radio", "wifi", "on"))
     if topology == NetworkTopology.PUBLIC:
         commands.append(external_wifi_command(provision_config, assignment.primary))
         if assignment.secondary:
@@ -179,10 +179,7 @@ def private_wifi_command(
 ) -> list[str]:
     network = config.internal_wifi(provision_config)
     command = [
-        "nmcli",
-        "device",
-        "wifi",
-        "hotspot",
+        *nmcli_command("device", "wifi", "hotspot"),
         "ifname",
         interface.name,
         "con-name",
@@ -200,10 +197,7 @@ def external_wifi_command(
 ) -> list[str]:
     network = config.external_wifi(provision_config)
     command = [
-        "nmcli",
-        "device",
-        "wifi",
-        "connect",
+        *nmcli_command("device", "wifi", "connect"),
         network.name,
     ]
     if network.password:
@@ -213,7 +207,11 @@ def external_wifi_command(
 
 
 def disconnect_command(interface: WifiInterface) -> list[str]:
-    return ["nmcli", "device", "disconnect", interface.name]
+    return nmcli_command("device", "disconnect", interface.name)
+
+
+def nmcli_command(*arguments: str) -> list[str]:
+    return ["sudo", "nmcli", *arguments]
 
 
 def x18_ethernet_command(provision_config: config.Config) -> list[str]:
