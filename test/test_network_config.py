@@ -82,7 +82,61 @@ class NetworkConfigTests(unittest.TestCase):
             assignment.secondary.name if assignment.secondary else "", "wlan0"
         )
 
-    def test_private_topology_starts_access_point_and_disconnects_secondary(
+    def test_unconnected_wifi_is_preferred_for_private_hotspot(self) -> None:
+        assignment = network_config.assign_wifi(
+            [
+                network_config.WifiInterface(name="wlan0"),
+                network_config.WifiInterface(name="wlan1", connected=True),
+            ],
+            swap_wifi=False,
+        )
+
+        self.assertEqual(assignment.primary.name, "wlan0")
+        self.assertEqual(
+            assignment.secondary.name if assignment.secondary else "", "wlan1"
+        )
+
+    def test_status_parser_marks_connected_wifi_interfaces(self) -> None:
+        interfaces = network_config.wifi_interfaces_from_status(
+            "wlan0:wifi:disconnected\nwlan1:wifi:connected\n"
+        )
+
+        self.assertEqual(
+            interfaces,
+            [
+                network_config.WifiInterface(name="wlan0"),
+                network_config.WifiInterface(name="wlan1", connected=True),
+            ],
+        )
+
+    def test_private_hotspot_rejects_only_connected_wifi_interfaces(self) -> None:
+        config = make_network_config(topology=network_config.NetworkTopology.PRIVATE)
+        assignment = network_config.assign_wifi(
+            [network_config.WifiInterface(name="wlan0", connected=True)],
+            swap_wifi=False,
+        )
+
+        with self.assertRaisesRegex(SystemExit, "no unconnected Wi-Fi interface"):
+            network_config.network_commands(
+                config, assignment, network_config.NetworkTopology.PRIVATE
+            )
+
+    def test_swap_cannot_select_connected_wifi_for_private_hotspot(self) -> None:
+        config = make_network_config(topology=network_config.NetworkTopology.PRIVATE)
+        assignment = network_config.assign_wifi(
+            [
+                network_config.WifiInterface(name="wlan0"),
+                network_config.WifiInterface(name="wlan1", connected=True),
+            ],
+            swap_wifi=True,
+        )
+
+        with self.assertRaisesRegex(SystemExit, "no unconnected Wi-Fi interface"):
+            network_config.network_commands(
+                config, assignment, network_config.NetworkTopology.PRIVATE
+            )
+
+    def test_private_topology_starts_access_point_without_touching_secondary(
         self,
     ) -> None:
         commands = network_config.network_commands(
@@ -115,7 +169,6 @@ class NetworkConfigTests(unittest.TestCase):
                         ]
                     ),
                 ],
-                ["sudo", "nmcli", "radio", "wifi", "on"],
                 [
                     "sudo",
                     "nmcli",
@@ -129,7 +182,42 @@ class NetworkConfigTests(unittest.TestCase):
                     "ssid",
                     "showbox",
                 ],
-                ["sudo", "nmcli", "device", "disconnect", "wlan1"],
+            ],
+        )
+
+    def test_mixed_topology_leaves_connected_external_wifi_unchanged(self) -> None:
+        commands = network_config.network_commands(
+            make_network_config(
+                x18=False,
+                external_wifi_name="Livebox-F13E",
+                topology=network_config.NetworkTopology.MIXED,
+            ),
+            network_config.assign_wifi(
+                [
+                    network_config.WifiInterface(name="wlan0"),
+                    network_config.WifiInterface(name="wlan1", connected=True),
+                ],
+                swap_wifi=False,
+            ),
+            network_config.NetworkTopology.MIXED,
+        )
+
+        self.assertEqual(
+            commands,
+            [
+                [
+                    "sudo",
+                    "nmcli",
+                    "device",
+                    "wifi",
+                    "hotspot",
+                    "ifname",
+                    "wlan0",
+                    "con-name",
+                    "showco-private",
+                    "ssid",
+                    "showbox",
+                ],
             ],
         )
 
@@ -153,9 +241,9 @@ class NetworkConfigTests(unittest.TestCase):
 
         self.assertEqual(
             commands,
-            [["nmcli", "-t", "-f", "DEVICE,TYPE", "device", "status"]],
+            [["nmcli", "-t", "-f", "DEVICE,TYPE,STATE", "device", "status"]],
         )
-        self.assertIn("sudo nmcli radio wifi on", output.getvalue())
+        self.assertIn("ifname wlan1", output.getvalue())
         self.assertIn("sudo nmcli connection up showco-x18", output.getvalue())
 
     def test_configuration_stops_when_command_fails(self) -> None:
@@ -163,16 +251,16 @@ class NetworkConfigTests(unittest.TestCase):
 
         def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
             commands.append(list(command))
-            if command == ["sudo", "nmcli", "radio", "wifi", "on"]:
-                return subprocess.CompletedProcess(command, 10, "", "radio failed")
+            if command[:5] == ["sudo", "nmcli", "device", "wifi", "hotspot"]:
+                return subprocess.CompletedProcess(command, 10, "", "hotspot failed")
             return subprocess.CompletedProcess(
                 command,
                 0,
-                "wlan0:wifi:connected\n",
+                "wlan0:wifi:disconnected\n",
                 "",
             )
 
-        with self.assertRaisesRegex(SystemExit, "radio failed"):
+        with self.assertRaisesRegex(SystemExit, "hotspot failed"):
             network_config.configure_network(
                 make_network_config(x18=False),
                 dry_run=False,
@@ -182,8 +270,27 @@ class NetworkConfigTests(unittest.TestCase):
         self.assertEqual(
             commands,
             [
-                ["nmcli", "-t", "-f", "DEVICE,TYPE", "device", "status"],
-                ["sudo", "nmcli", "radio", "wifi", "on"],
+                [
+                    "nmcli",
+                    "-t",
+                    "-f",
+                    "DEVICE,TYPE,STATE",
+                    "device",
+                    "status",
+                ],
+                [
+                    "sudo",
+                    "nmcli",
+                    "device",
+                    "wifi",
+                    "hotspot",
+                    "ifname",
+                    "wlan0",
+                    "con-name",
+                    "showco-private",
+                    "ssid",
+                    "showbox",
+                ],
             ],
         )
 
@@ -195,7 +302,7 @@ class NetworkConfigTests(unittest.TestCase):
             return subprocess.CompletedProcess(
                 command,
                 0,
-                "wl\\:an0:wifi:connected\neth0:ethernet:connected\n",
+                "wl\\:an0:wifi:disconnected\neth0:ethernet:connected\n",
                 "",
             )
 
@@ -222,7 +329,22 @@ class NetworkConfigTests(unittest.TestCase):
             network_config.NetworkTopology.PRIVATE,
         )
 
-        self.assertEqual(commands[0], ["sudo", "nmcli", "radio", "wifi", "on"])
+        self.assertEqual(
+            commands[0],
+            [
+                "sudo",
+                "nmcli",
+                "device",
+                "wifi",
+                "hotspot",
+                "ifname",
+                "wlan0",
+                "con-name",
+                "showco-private",
+                "ssid",
+                "showbox",
+            ],
+        )
 
     def test_x18_pi_ethernet_address_uses_first_subnet_host(self) -> None:
         self.assertEqual(

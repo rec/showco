@@ -14,7 +14,7 @@ import tyro
 from pydantic import BaseModel
 from reccy import subprocess
 
-from .. import machine_role
+from .. import machine_role, network_config
 from . import config
 
 PROVISION_DIR = Path(__file__).resolve().parent
@@ -24,6 +24,7 @@ REMOTE_GITHUB_KEY_TEMPLATE = "remote_github_key.tmpl.sh"
 REBOOT_WAIT_SECONDS = 300
 SSH_CONNECT_TIMEOUT_SECONDS = 2
 LOCAL_REPOSITORIES = ["showco", "reccy", "recs", "twitcho"]
+WIFI_STATUS_COMMAND = "nmcli -t -f DEVICE,TYPE,STATE device status"
 
 
 class VerificationResult(BaseModel, frozen=True):
@@ -146,6 +147,7 @@ def provision_remote(
     uploaded = False
     print(f"Waiting for SSH connection to {ssh_target}...")
     wait_for_ssh(provision_config, ssh_target)
+    preflight_network_config(provision_config, ssh_target)
     print(f"Checking {ssh_target}...")
     run_ssh(
         provision_config,
@@ -187,6 +189,19 @@ def provision_remote(
                     f"WARNING: Could not remove remote provisioning script: {e}",
                     file=sys.stderr,
                 )
+
+
+def preflight_network_config(provision_config: config.Config, ssh_target: str) -> None:
+    print(f"Checking Wi-Fi interfaces on {ssh_target}...")
+    status = capture_ssh(provision_config, ssh_target, WIFI_STATUS_COMMAND)
+    interfaces = network_config.wifi_interfaces_from_status(status)
+    assignment = network_config.assign_wifi(
+        interfaces, provision_config.network.swap_wifi
+    )
+    topology = network_config.select_topology(
+        provision_config, assignment.secondary is not None
+    )
+    network_config.network_commands(provision_config, assignment, topology)
 
 
 def validate_config(provision_config: config.Config) -> None:

@@ -212,6 +212,31 @@ class ProvisionTests(unittest.TestCase):
                 '[network]\nhost = "bertrand.local"\nweb_port = 17352\n',
             )
 
+    def test_network_preflight_rejects_connected_hotspot_interface(self) -> None:
+        config = make_config(values(networks=networks(x18=False)))
+        with (
+            mock.patch(
+                "showco.provision.provision.capture_ssh",
+                return_value="wlan0:wifi:connected\n",
+            ),
+            self.assertRaisesRegex(SystemExit, "no unconnected Wi-Fi interface"),
+        ):
+            provision.preflight_network_config(config, "tom@recs-stage.local")
+
+    def test_network_preflight_preserves_connected_external_wifi(self) -> None:
+        config = make_config(values(networks=networks(x18=False)))
+        with mock.patch(
+            "showco.provision.provision.capture_ssh",
+            return_value="wlan0:wifi:disconnected\nwlan1:wifi:connected\n",
+        ) as capture_ssh:
+            provision.preflight_network_config(config, "tom@recs-stage.local")
+
+        capture_ssh.assert_called_once_with(
+            config,
+            "tom@recs-stage.local",
+            "nmcli -t -f DEVICE,TYPE,STATE device status",
+        )
+
     def test_remote_script_is_removed_after_remote_failure(self) -> None:
         config = make_config(values(networks=networks(x18=False)))
         original_error = subprocess.CalledProcessError(1, ["ssh", "provision"])
@@ -222,6 +247,7 @@ class ProvisionTests(unittest.TestCase):
                 side_effect=[None, original_error, cleanup_error],
             ) as run_ssh,
             mock.patch("showco.provision.provision.wait_for_ssh"),
+            mock.patch("showco.provision.provision.preflight_network_config"),
             mock.patch("showco.provision.provision.ensure_github_account_key"),
             mock.patch("showco.provision.provision.run_scp"),
             self.assertRaises(subprocess.CalledProcessError) as error,
@@ -251,6 +277,9 @@ class ProvisionTests(unittest.TestCase):
         calls: list[str] = []
         config = make_config(values(networks=networks(x18=False)))
 
+        def preflight_network_config(config: config.Config, ssh_target: str) -> None:
+            calls.append("preflight")
+
         def ensure_github_account_key(config: config.Config, ssh_target: str) -> None:
             calls.append("github")
 
@@ -259,6 +288,10 @@ class ProvisionTests(unittest.TestCase):
 
         with (
             mock.patch("showco.provision.provision.run_ssh"),
+            mock.patch(
+                "showco.provision.provision.preflight_network_config",
+                side_effect=preflight_network_config,
+            ),
             mock.patch(
                 "showco.provision.provision.ensure_github_account_key",
                 side_effect=ensure_github_account_key,
@@ -279,13 +312,14 @@ class ProvisionTests(unittest.TestCase):
                 "/tmp/remote.sh",
             )
 
-        self.assertEqual(calls, ["github", "scp"])
+        self.assertEqual(calls, ["preflight", "github", "scp"])
 
     def test_provision_waits_for_reboot_and_reports_verification(self) -> None:
         config = make_config(values(networks=networks(x18=False)))
         result = [provision.VerificationResult(name="showco", error="")]
         with (
             mock.patch("showco.provision.provision.run_ssh"),
+            mock.patch("showco.provision.provision.preflight_network_config"),
             mock.patch("showco.provision.provision.ensure_github_account_key"),
             mock.patch("showco.provision.provision.run_scp"),
             mock.patch("showco.provision.provision.wait_for_ssh") as initial_wait,
