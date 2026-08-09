@@ -227,6 +227,7 @@ class UpdateTests(unittest.TestCase):
             remote_update.call_args.args[2][-1],
             'cd "$HOME/code/showco" && uv run showco update showco reccy',
         )
+        self.assertIn("ConnectTimeout=2", remote_update.call_args.args[2])
         self.assertIn("showco push: ok", output.getvalue())
         self.assertIn("Updating target tom@bertrand.local", output.getvalue())
 
