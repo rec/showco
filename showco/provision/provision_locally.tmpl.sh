@@ -449,6 +449,8 @@ main() {
     "/home/$SHOW_USER/.local/state/showco" \
     "/home/$SHOW_USER/.local/state/twitcho" \
     "/home/$SHOW_USER/recordings"
+  printf 'target\n' | sudo -H -u "$SHOW_USER" tee \
+    "/home/$SHOW_USER/.config/showco/machine-role" >/dev/null
 
   phase "configuring storage mounts"
   configure_storage_mounts

@@ -11,12 +11,15 @@ from typing import BinaryIO
 
 import tyro
 
+from .. import machine_role
+
 X18_OSC_PORT = 10_024
 XREMOTE_INTERVAL_SECONDS = 8.0
 SOCKET_TIMEOUT_SECONDS = 0.2
 
 
 def main(argv: list[str] | None = None) -> int:
+    machine_role.require_target_machine("showco run x18-record")
     return tyro.cli(
         record_osc,
         args=argv,

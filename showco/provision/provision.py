@@ -14,6 +14,7 @@ import tyro
 from pydantic import BaseModel
 from reccy import subprocess
 
+from .. import machine_role
 from . import config
 
 PROVISION_DIR = Path(__file__).resolve().parent
@@ -36,6 +37,7 @@ class LocalRepository(BaseModel, frozen=True):
 
 
 def main(argv: list[str] | None = None) -> int:
+    machine_role.require_provisioning_machine("showco provision")
     return tyro.cli(
         run,
         args=argv,

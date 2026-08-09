@@ -13,6 +13,7 @@ import tyro
 from pydantic import BaseModel
 from reccy import subprocess
 
+from . import machine_role
 from .provision import config
 
 RunCommand = Callable[[Sequence[str]], CompletedProcess[str]]
@@ -37,6 +38,7 @@ class WifiAssignment(BaseModel, frozen=True):
 
 
 def main(argv: list[str] | None = None) -> int:
+    machine_role.require_target_machine("showco run network-config")
     return tyro.cli(
         configure_network_from_paths,
         args=argv,
