@@ -52,6 +52,7 @@ def run(
     host: str | None = None,
     user: str | None = None,
     port: int | None = None,
+    reccy_repo: str | None = None,
     recs_repo: str | None = None,
     twitcho_repo: str | None = None,
     showco_repo: str | None = None,
@@ -62,6 +63,7 @@ def run(
         host=host,
         user=user,
         port=port,
+        reccy_repo=reccy_repo,
         recs_repo=recs_repo,
         twitcho_repo=twitcho_repo,
         showco_repo=showco_repo,
@@ -332,6 +334,13 @@ def verify_provisioning(
         verify_remote_command(
             provision_config,
             ssh_target,
+            "reccy project status is clean",
+            project_status_command("reccy"),
+            expect_empty_stdout=True,
+        ),
+        verify_remote_command(
+            provision_config,
+            ssh_target,
             "recs project status is clean",
             project_status_command("recs"),
             expect_empty_stdout=True,
@@ -591,6 +600,8 @@ def remote_command(provision_config: config.Config, remote_script: str) -> str:
     values = {
         "SHOW_USER": provision_config.network.user,
         "CODE_DIR": f"/home/{provision_config.network.user}/code",
+        "RECCY_REPO": provision_config.git.reccy.url,
+        "RECCY_REFNAME": provision_config.git.reccy.refname,
         "RECS_REPO": provision_config.git.recs.url,
         "RECS_REFNAME": provision_config.git.recs.refname,
         "TWITCHO_REPO": provision_config.git.twitcho.url,

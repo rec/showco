@@ -222,6 +222,7 @@ class NetworkConfigTests(unittest.TestCase):
                 },
                 "twitch": {"enabled": True},
                 "git": {
+                    "reccy": {"url": "git@github.com:rec/reccy.git"},
                     "recs": {"url": "git@github.com:rec/recs.git"},
                     "twitcho": {"url": "git@github.com:rec/twitcho.git"},
                     "showco": {"url": "git@github.com:rec/showco.git"},
@@ -276,6 +277,7 @@ def make_network_config(
             },
             "twitch": {"enabled": twitch_enabled},
             "git": {
+                "reccy": {"url": "git@github.com:rec/reccy.git"},
                 "recs": {"url": "git@github.com:rec/recs.git"},
                 "twitcho": {"url": "git@github.com:rec/twitcho.git"},
                 "showco": {"url": "git@github.com:rec/showco.git"},

@@ -392,6 +392,9 @@ class ProvisionTests(unittest.TestCase):
     def test_remote_script_checks_out_configured_refname(self) -> None:
         self.assertIn('git -C "$path" checkout "$refname"', provision.REMOTE_SCRIPT)
         self.assertIn(
+            'sync_repo reccy "$RECCY_REPO" "$RECCY_REFNAME"', provision.REMOTE_SCRIPT
+        )
+        self.assertIn(
             'sync_repo recs "$RECS_REPO" "$RECS_REFNAME"', provision.REMOTE_SCRIPT
         )
 
@@ -499,6 +502,7 @@ class ProvisionTests(unittest.TestCase):
 
         command = provision.remote_command(config, "/tmp/provision.sh")
 
+        self.assertIn("RECCY_REFNAME=''", command)
         self.assertIn("EXTERNAL_WIFI_SSID=Venue", command)
         self.assertIn("EXTERNAL_WIFI_PASSWORD='venue password'", command)
         self.assertIn("PRIVATE_WIFI_PASSWORD='private password'", command)
@@ -552,6 +556,7 @@ class ProvisionTests(unittest.TestCase):
 
         commands = [c.args[0][-1] for c in run.call_args_list]
         self.assertFalse([r for r in results if r.error])
+        self.assertIn('git -C "$HOME/code/reccy" status --short', commands)
         self.assertIn('git -C "$HOME/code/recs" status --short', commands)
         self.assertIn('git -C "$HOME/code/twitcho" status --short', commands)
         self.assertIn('git -C "$HOME/code/showco" status --short', commands)
@@ -720,6 +725,7 @@ def values(**overrides: object) -> dict[str, object]:
         "networks": networks(),
         "usb": {"x18_device_name": "X18/XR18"},
         "git": {
+            "reccy": {"url": "git@github.com:rec/reccy.git"},
             "recs": {"url": "git@github.com:rec/recs.git"},
             "twitcho": {"url": "git@github.com:rec/twitcho.git"},
             "showco": {"url": "git@github.com:rec/showco.git"},
