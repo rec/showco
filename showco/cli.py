@@ -6,7 +6,7 @@ from typing import Annotated, Literal
 import tyro
 from reccy import cli
 
-from . import git_pull, machine_role, network_config, rehearsal, services
+from . import machine_role, network_config, rehearsal, services, update
 from .mixer import MixerMonitor
 from .provision import provision
 from .server import make_server
@@ -101,6 +101,7 @@ def main(argv: list[str] | None = None) -> int:
             "run": run_command,
             "provision": provision.main,
             "twitcho": twitcho_command,
+            "update": update.main,
         },
         argv,
         prog="showco",
@@ -108,9 +109,6 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def run_command(arguments: list[str]) -> int:
-    if arguments[:1] == ["git-pull"]:
-        machine_role.require_target_machine("showco run git-pull")
-        return git_pull.main(arguments[1:])
     if arguments[:1] == ["x18-record"]:
         return osc.main(arguments[1:])
     if arguments[:1] == ["network-config"]:
