@@ -401,6 +401,9 @@ class ProvisionTests(unittest.TestCase):
     def test_remote_script_reinstalls_broken_uv(self) -> None:
         self.assertIn("uv --version", provision.REMOTE_SCRIPT)
 
+    def test_remote_script_uses_frozen_uv_sync(self) -> None:
+        self.assertIn("uv sync --frozen", provision.REMOTE_SCRIPT)
+
     def test_remote_script_writes_provisioning_report(self) -> None:
         self.assertIn('phase "writing provisioning report"', provision.REMOTE_SCRIPT)
         self.assertIn("Disks discovered:", provision.REMOTE_SCRIPT)

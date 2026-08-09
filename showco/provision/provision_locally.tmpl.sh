@@ -206,7 +206,7 @@ sync_repo() {
   fi
 
   sudo -H -u "$SHOW_USER" env PATH="/home/$SHOW_USER/.local/bin:$PATH" \
-    bash -lc "cd '$path' && uv sync"
+    bash -lc "cd '$path' && uv sync --frozen"
 }
 
 toml_string() {
