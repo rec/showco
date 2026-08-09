@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 import tyro
+from pydantic import BaseModel
 from reccy import cli
 
 from . import machine_role, network_config, rehearsal, services, update
@@ -14,74 +15,76 @@ from .twitcho import auth, supervisor
 from .x18 import osc, recorder_supervisor
 
 
-def run_web_ui(
-    host: str = "127.0.0.1",
-    port: int = 17_352,
-    mixer_host: str | None = None,
-    mixer_port: int | None = None,
-    mixer_protocol: Literal["tcp", "udp"] = "tcp",
+class WebUiOptions(BaseModel, frozen=True):
+    host: str = "127.0.0.1"
+    port: int = 17_352
+    mixer_host: str | None = None
+    mixer_port: int | None = None
+    mixer_protocol: Literal["tcp", "udp"] = "tcp"
     x18_host: Annotated[
         str | None,
         tyro.conf.arg(
             help="start a read-only X18 OSC recorder subprocess for this mixer host"
         ),
-    ] = None,
-    x18_port: int = osc.X18_OSC_PORT,
-    x18_log_dir: Path = Path("."),
+    ] = None
+    x18_port: int = osc.X18_OSC_PORT
+    x18_log_dir: Path = Path(".")
     twitcho_config: Annotated[
         Path | None,
         tyro.conf.arg(help="start and supervise Twitcho with this config file"),
-    ] = None,
+    ] = None
     twitcho_restart_policy: Annotated[
         Literal["internal", "external"],
         tyro.conf.arg(help="restart policy for the supervised Twitcho process"),
-    ] = "external",
+    ] = "external"
     rehearsal_mode: Annotated[
         bool,
         tyro.conf.arg(
             name="rehearsal",
             help="run with simulated recs and twitcho services",
         ),
-    ] = False,
-) -> int:
-    if not rehearsal_mode:
+    ] = False
+
+
+def run_web_ui(options: WebUiOptions) -> int:
+    if not options.rehearsal_mode:
         machine_role.require_target_machine("showco run")
     x18_recorder = None
 
-    if rehearsal_mode:
+    if options.rehearsal_mode:
         server = make_server(
-            host,
-            port,
+            options.host,
+            options.port,
             recs=rehearsal.RehearsalRecsClient(),
             twitcho=rehearsal.RehearsalTwitchoClient(),
             system=rehearsal.RehearsalSystemMonitor(),
             mixer=rehearsal.RehearsalMixerMonitor(),
             twitcho_supervisor=rehearsal.RehearsalTwitchoSupervisor(),
         )
-        print(f"showco rehearsal listening on http://{host}:{port}")
+        print(f"showco rehearsal listening on http://{options.host}:{options.port}")
     else:
         twitcho_supervisor = None
-        if twitcho_config:
+        if options.twitcho_config:
             twitcho_supervisor = supervisor.TwitchoSupervisor(
-                twitcho_config,
-                policy=twitcho_restart_policy,
+                options.twitcho_config,
+                policy=options.twitcho_restart_policy,
             )
         server = make_server(
-            host,
-            port,
+            options.host,
+            options.port,
             mixer=MixerMonitor(
-                host=mixer_host,
-                port=mixer_port,
-                protocol=mixer_protocol,
+                host=options.mixer_host,
+                port=options.mixer_port,
+                protocol=options.mixer_protocol,
             ),
             twitcho_supervisor=twitcho_supervisor,
         )
-        print(f"showco listening on http://{host}:{port}")
-    if x18_host:
+        print(f"showco listening on http://{options.host}:{options.port}")
+    if options.x18_host:
         x18_recorder = recorder_supervisor.X18RecorderSupervisor(
-            x18_host,
-            port=x18_port,
-            log_dir=x18_log_dir,
+            options.x18_host,
+            port=options.x18_port,
+            log_dir=options.x18_log_dir,
         )
         x18_recorder.start()
     try:
@@ -117,11 +120,12 @@ def run_command(arguments: list[str]) -> int:
         return services.install_main(arguments[1:])
     if arguments[:1] == ["service-status"]:
         return services.status_main(arguments[1:])
-    return tyro.cli(
-        run_web_ui,
+    options = tyro.cli(
+        WebUiOptions,
         args=arguments,
         description="Run the Showco web UI",
     )
+    return run_web_ui(options)
 
 
 def twitcho_command(arguments: list[str]) -> int:

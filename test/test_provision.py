@@ -6,10 +6,26 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import mock
 
+import tyro
+
 from showco.provision import config, provision
 
 
 class ProvisionTests(unittest.TestCase):
+    def test_provision_options_accept_existing_flags(self) -> None:
+        options = tyro.cli(
+            provision.ProvisionOptions,
+            args=[
+                "--host",
+                "bertrand.local",
+                "--recs-repo",
+                "git@github.com:rec/recs.git",
+            ],
+        )
+
+        self.assertEqual(options.host, "bertrand.local")
+        self.assertEqual(options.recs_repo, "git@github.com:rec/recs.git")
+
     def test_wired_x18_uses_configured_x18_host(self) -> None:
         config = make_config(
             values(),

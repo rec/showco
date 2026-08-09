@@ -37,27 +37,28 @@ class WifiAssignment(BaseModel, frozen=True):
     secondary: WifiInterface | None
 
 
-def main(argv: list[str] | None = None) -> int:
-    machine_role.require_target_machine("showco run network-config")
-    return tyro.cli(
-        configure_network_from_paths,
-        args=argv,
-        description="Configure Raspberry Pi Wi-Fi",
-    )
-
-
-def configure_network_from_paths(
+class NetworkConfigOptions(BaseModel, frozen=True):
     config_path: Annotated[
         Path,
         tyro.conf.arg(name="config"),
-    ] = DEFAULT_CONFIG_PATH,
-    secrets: Path = DEFAULT_SECRETS_PATH,
-    dry_run: bool = False,
-) -> int:
-    values = config.merge_values(
-        config.read_toml(config_path), config.read_toml(secrets)
+    ] = DEFAULT_CONFIG_PATH
+    secrets: Path = DEFAULT_SECRETS_PATH
+    dry_run: bool = False
+
+
+def main(argv: list[str] | None = None) -> int:
+    machine_role.require_target_machine("showco run network-config")
+    options = tyro.cli(
+        NetworkConfigOptions, args=argv, description="Configure Raspberry Pi Wi-Fi"
     )
-    return configure_network(config.config_from_values(values), dry_run=dry_run)
+    return configure_network_from_paths(options)
+
+
+def configure_network_from_paths(options: NetworkConfigOptions) -> int:
+    values = config.merge_values(
+        config.read_toml(options.config_path), config.read_toml(options.secrets)
+    )
+    return configure_network(config.config_from_values(values), dry_run=options.dry_run)
 
 
 def configure_network(

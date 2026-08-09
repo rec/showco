@@ -5,11 +5,29 @@ import unittest
 from collections.abc import Sequence
 from io import StringIO
 
+import tyro
+
 from showco import network_config
 from showco.provision.config import Config, config_from_values
 
 
 class NetworkConfigTests(unittest.TestCase):
+    def test_network_config_options_accept_existing_flags(self) -> None:
+        options = tyro.cli(
+            network_config.NetworkConfigOptions,
+            args=[
+                "--config",
+                "/config.toml",
+                "--secrets",
+                "/secrets.toml",
+                "--dry-run",
+            ],
+        )
+
+        self.assertEqual(str(options.config_path), "/config.toml")
+        self.assertEqual(str(options.secrets), "/secrets.toml")
+        self.assertTrue(options.dry_run)
+
     def test_default_topology_without_external_network_is_private(self) -> None:
         config = make_network_config(external_wifi_name="")
 
