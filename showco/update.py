@@ -32,6 +32,7 @@ class UpdateOptions(BaseModel, frozen=True):
         default_factory=list
     )
     host: str | None = None
+    target_machine: bool = False
 
 
 class StepResult(BaseModel, frozen=True):
@@ -53,7 +54,10 @@ def main(argv: list[str] | None = None) -> int:
         description="Push development repositories and update the target machine",
     )
     selected = selected_repositories(options.repositories)
-    if machine_role.machine_role() == machine_role.TARGET_ROLE:
+    if (
+        options.target_machine
+        or machine_role.machine_role() == machine_role.TARGET_ROLE
+    ):
         return update_target(selected)
     return update_from_provisioning_machine(selected, host=options.host)
 
@@ -310,7 +314,9 @@ def provisioning_config() -> config.Config:
 
 def remote_update_command(selected: list[str]) -> str:
     arguments = shlex.join(selected)
-    return f'cd "$HOME/code/showco" && uv run showco update {arguments}'.rstrip()
+    return (
+        f'cd "$HOME/code/showco" && uv run showco update --target-machine {arguments}'
+    ).rstrip()
 
 
 def run_service_step(
