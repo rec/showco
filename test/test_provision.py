@@ -413,6 +413,8 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn('phase "configuring network"', provision.REMOTE_SCRIPT)
         self.assertIn("configure_network()", provision.REMOTE_SCRIPT)
         self.assertIn("uv run showco run network-config", provision.REMOTE_SCRIPT)
+        self.assertIn('write_toml_string host "$SHOWCO_HOST"', provision.REMOTE_SCRIPT)
+        self.assertIn("printf '\\n[git.reccy]\\n'", provision.REMOTE_SCRIPT)
         self.assertIn("Skipping network configuration", provision.REMOTE_SCRIPT)
 
     def test_remote_script_installs_showco_service_through_showco(self) -> None:
@@ -502,6 +504,7 @@ class ProvisionTests(unittest.TestCase):
 
         command = provision.remote_command(config, "/tmp/provision.sh")
 
+        self.assertIn("SHOWCO_HOST=recs-stage.local", command)
         self.assertIn("RECCY_REFNAME=''", command)
         self.assertIn("EXTERNAL_WIFI_SSID=Venue", command)
         self.assertIn("EXTERNAL_WIFI_PASSWORD='venue password'", command)
