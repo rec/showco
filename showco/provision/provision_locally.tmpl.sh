@@ -442,6 +442,7 @@ main() {
   install_uv
 
   phase "syncing repositories"
+  sync_repo reccy "$RECCY_REPO" "$RECCY_REFNAME"
   sync_repo recs "$RECS_REPO" "$RECS_REFNAME"
   sync_repo twitcho "$TWITCHO_REPO" "$TWITCHO_REFNAME"
   sync_repo showco "$SHOWCO_REPO" "$SHOWCO_REFNAME"

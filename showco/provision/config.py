@@ -58,6 +58,7 @@ class Twitch(BaseModel, frozen=True):
 
 
 class Git(BaseModel, frozen=True):
+    reccy: GitRepo
     recs: GitRepo
     twitcho: GitRepo
     showco: GitRepo
@@ -77,6 +78,7 @@ def config_from_values(
     host: str | None = None,
     user: str | None = None,
     port: int | None = None,
+    reccy_repo: str | None = None,
     recs_repo: str | None = None,
     twitcho_repo: str | None = None,
     showco_repo: str | None = None,
@@ -106,6 +108,7 @@ def config_from_values(
         ),
         twitch=twitch_value(table_value(values, "twitch")),
         git=Git(
+            reccy=git_repo("reccy", table_value(git, "reccy"), override=reccy_repo),
             recs=git_repo("recs", table_value(git, "recs"), override=recs_repo),
             twitcho=git_repo(
                 "twitcho",
