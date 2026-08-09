@@ -35,6 +35,16 @@ class UpdateTests(unittest.TestCase):
             {"host": "other.local"},
         )
 
+    def test_target_machine_override_runs_target_update(self) -> None:
+        with (
+            mock.patch("showco.update.machine_role.machine_role", return_value=""),
+            mock.patch("showco.update.update_target", return_value=0) as update_target,
+        ):
+            result = update.main(["--target-machine", "recs"])
+
+        self.assertEqual(result, 0)
+        self.assertEqual(update_target.call_args.args, (["recs"],))
+
     def test_target_update_pulls_selected_repositories_and_restarts_services(
         self,
     ) -> None:
@@ -225,7 +235,8 @@ class UpdateTests(unittest.TestCase):
         )
         self.assertEqual(
             remote_update.call_args.args[2][-1],
-            'cd "$HOME/code/showco" && uv run showco update showco reccy',
+            'cd "$HOME/code/showco" && '
+            "uv run showco update --target-machine showco reccy",
         )
         self.assertIn("ConnectTimeout=2", remote_update.call_args.args[2])
         self.assertIn("showco push: ok", output.getvalue())
