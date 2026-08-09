@@ -13,6 +13,28 @@ from showco import update
 
 
 class UpdateTests(unittest.TestCase):
+    def test_update_host_override_is_used_for_target_ssh(self) -> None:
+        with (
+            mock.patch(
+                "showco.update.machine_role.machine_role",
+                return_value="provisioning",
+            ),
+            mock.patch(
+                "showco.update.update_from_provisioning_machine", return_value=0
+            ) as update_from_provisioning_machine,
+        ):
+            result = update.main(["--host", "other.local", "recs"])
+
+        self.assertEqual(result, 0)
+        self.assertEqual(
+            update_from_provisioning_machine.call_args.args,
+            (["recs"],),
+        )
+        self.assertEqual(
+            update_from_provisioning_machine.call_args.kwargs,
+            {"host": "other.local"},
+        )
+
     def test_target_update_pulls_selected_repositories_and_restarts_services(
         self,
     ) -> None:
@@ -207,6 +229,54 @@ class UpdateTests(unittest.TestCase):
         )
         self.assertIn("showco push: ok", output.getvalue())
         self.assertIn("Updating target tom@bertrand.local", output.getvalue())
+
+    def test_provisioning_update_defaults_to_saved_host(self) -> None:
+        with (
+            mock.patch(
+                "showco.update.provisioning_config",
+                return_value=make_config(),
+            ),
+            mock.patch("showco.update.push_program"),
+            mock.patch(
+                "showco.update.run_uncaptured_step",
+                return_value=update.StepResult(
+                    program="target",
+                    step="update",
+                    command=["ssh"],
+                    returncode=0,
+                    output="",
+                ),
+            ) as remote_update,
+        ):
+            result = update.update_from_provisioning_machine(["recs"])
+
+        self.assertEqual(result, 0)
+        self.assertIn("tom@bertrand.local", remote_update.call_args.args[2])
+
+    def test_provisioning_update_uses_host_override(self) -> None:
+        with (
+            mock.patch(
+                "showco.update.provisioning_config",
+                return_value=make_config(),
+            ),
+            mock.patch("showco.update.push_program"),
+            mock.patch(
+                "showco.update.run_uncaptured_step",
+                return_value=update.StepResult(
+                    program="target",
+                    step="update",
+                    command=["ssh"],
+                    returncode=0,
+                    output="",
+                ),
+            ) as remote_update,
+        ):
+            result = update.update_from_provisioning_machine(
+                ["recs"], host="other.local"
+            )
+
+        self.assertEqual(result, 0)
+        self.assertIn("tom@other.local", remote_update.call_args.args[2])
 
     def test_provisioning_update_rejects_dirty_local_repository(self) -> None:
         commands: list[list[str]] = []

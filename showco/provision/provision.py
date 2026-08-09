@@ -59,6 +59,8 @@ def run(
     twitcho_repo: str | None = None,
     showco_repo: str | None = None,
 ) -> int:
+    if host is not None:
+        persist_network_host(config_path, host)
     env = config.merge_values(config.read_toml(config_path), config.read_toml(secrets))
     parsed_config = config.config_from_values(
         env,
@@ -90,6 +92,43 @@ def run(
 
     print(f"Provisioned {ssh_target}.")
     return 0
+
+
+def persist_network_host(config_path: Path, host: str) -> None:
+    path = config_path.expanduser()
+    lines = path.read_text().splitlines()
+    host_line = f"host = {toml_string(host)}"
+    network_index = table_index(lines, "[network]")
+    if network_index is None:
+        path.write_text("[network]\n" + host_line + "\n\n" + "\n".join(lines) + "\n")
+        return
+    next_table = next_table_index(lines, network_index + 1)
+    for index in range(network_index + 1, next_table):
+        if lines[index].lstrip().startswith("host"):
+            lines[index] = host_line
+            path.write_text("\n".join(lines) + "\n")
+            return
+    lines.insert(network_index + 1, host_line)
+    path.write_text("\n".join(lines) + "\n")
+
+
+def table_index(lines: list[str], table: str) -> int | None:
+    for index, line in enumerate(lines):
+        if line.strip() == table:
+            return index
+    return None
+
+
+def next_table_index(lines: list[str], start: int) -> int:
+    for index in range(start, len(lines)):
+        line = lines[index].strip()
+        if line.startswith("[") and line.endswith("]"):
+            return index
+    return len(lines)
+
+
+def toml_string(value: str) -> str:
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
 def provision_remote(

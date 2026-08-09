@@ -172,6 +172,30 @@ class ProvisionTests(unittest.TestCase):
             Path(__file__).resolve().parents[2],
         )
 
+    def test_persist_network_host_replaces_existing_host(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "config.toml"
+            path.write_text('[network]\nhost = "old.local"\nweb_port = 17352\n')
+
+            provision.persist_network_host(path, "bertrand.local")
+
+            self.assertEqual(
+                path.read_text(),
+                '[network]\nhost = "bertrand.local"\nweb_port = 17352\n',
+            )
+
+    def test_persist_network_host_adds_missing_host(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "config.toml"
+            path.write_text("[network]\nweb_port = 17352\n")
+
+            provision.persist_network_host(path, "bertrand.local")
+
+            self.assertEqual(
+                path.read_text(),
+                '[network]\nhost = "bertrand.local"\nweb_port = 17352\n',
+            )
+
     def test_remote_script_is_removed_after_remote_failure(self) -> None:
         config = make_config(values(networks=networks(x18=False)))
         original_error = subprocess.CalledProcessError(1, ["ssh", "provision"])

@@ -6,9 +6,10 @@ import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from subprocess import CalledProcessError, CompletedProcess, TimeoutExpired
-from typing import TextIO
+from typing import Annotated, TextIO
 
-from pydantic import BaseModel
+import tyro
+from pydantic import BaseModel, Field
 from reccy import subprocess
 
 from . import machine_role, services
@@ -26,6 +27,13 @@ class Program(BaseModel, frozen=True):
     service_names: list[str]
 
 
+class UpdateOptions(BaseModel, frozen=True):
+    repositories: Annotated[list[str], tyro.conf.Positional] = Field(
+        default_factory=list
+    )
+    host: str | None = None
+
+
 class StepResult(BaseModel, frozen=True):
     program: str
     step: str
@@ -39,19 +47,21 @@ class StepResult(BaseModel, frozen=True):
 
 
 def main(argv: list[str] | None = None) -> int:
-    arguments = sys.argv[1:] if argv is None else argv
-    if arguments in (["-h"], ["--help"]):
-        print("Usage: showco update [reccy] [recs] [showco] [twitcho]")
-        return 0
-    selected = selected_repositories(arguments)
+    options = tyro.cli(
+        UpdateOptions,
+        args=sys.argv[1:] if argv is None else argv,
+        description="Push development repositories and update the target machine",
+    )
+    selected = selected_repositories(options.repositories)
     if machine_role.machine_role() == machine_role.TARGET_ROLE:
         return update_target(selected)
-    return update_from_provisioning_machine(selected)
+    return update_from_provisioning_machine(selected, host=options.host)
 
 
 def update_from_provisioning_machine(
     selected: list[str],
     *,
+    host: str | None = None,
     code_dir: Path | None = None,
     run_command: RunCommand | None = None,
     output: TextIO = sys.stdout,
@@ -71,7 +81,8 @@ def update_from_provisioning_machine(
         if not result.ok:
             return 1
 
-    ssh_target = f"{provision_config.network.user}@{provision_config.network.host}"
+    target_host = host or provision_config.network.host
+    ssh_target = f"{provision_config.network.user}@{target_host}"
     command = remote_update_command(selected)
     print(f"Updating target {ssh_target}: {command}", file=output)
     output.flush()
