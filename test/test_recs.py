@@ -8,7 +8,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import mock
 
-from recs.daemon.models import DaemonMetadata, Platform
+from reccy.models import Platform
+from recs.daemon.models import DaemonMetadata
 
 from showco.recs import RecsClient, channel_levels, level_state, replace_track_name
 

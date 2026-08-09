@@ -79,6 +79,68 @@ class ProvisionTests(unittest.TestCase):
 
         provision.validate_config(config)
 
+    def test_local_repository_errors_reports_ahead_repository(self) -> None:
+        with TemporaryDirectory() as directory:
+            repository = provision.LocalRepository(
+                name="recs",
+                path=Path(directory),
+            )
+            with mock.patch(
+                "reccy.subprocess.run",
+                side_effect=[
+                    subprocess.CompletedProcess(["git"], 0, "true\n", ""),
+                    subprocess.CompletedProcess(["git"], 0, "origin/main\n", ""),
+                    subprocess.CompletedProcess(["git"], 0, "2\n", ""),
+                ],
+            ):
+                errors = provision.repository_errors(repository)
+
+        self.assertEqual(
+            errors,
+            ["- recs: 2 local commit(s) are not in origin/main"],
+        )
+
+    def test_local_repository_errors_reports_missing_upstream(self) -> None:
+        with TemporaryDirectory() as directory:
+            repository = provision.LocalRepository(
+                name="showco",
+                path=Path(directory),
+            )
+            with mock.patch(
+                "reccy.subprocess.run",
+                side_effect=[
+                    subprocess.CompletedProcess(["git"], 0, "true\n", ""),
+                    subprocess.CalledProcessError(128, ["git"]),
+                ],
+            ):
+                errors = provision.repository_errors(repository)
+
+        self.assertEqual(errors, ["- showco: current branch has no upstream"])
+
+    def test_validate_local_repositories_reports_all_deployed_repositories(
+        self,
+    ) -> None:
+        with (
+            mock.patch(
+                "showco.provision.provision.repository_errors",
+                side_effect=lambda r: [r.name],
+            ),
+            self.assertRaises(SystemExit) as error,
+        ):
+            provision.validate_local_repositories(Path("/code"))
+
+        message = str(error.exception)
+        self.assertIn("showco", message)
+        self.assertIn("reccy", message)
+        self.assertIn("recs", message)
+        self.assertIn("twitcho", message)
+
+    def test_local_code_dir_is_parent_of_showco_checkout(self) -> None:
+        self.assertEqual(
+            provision.local_code_dir(),
+            Path(__file__).resolve().parents[2],
+        )
+
     def test_remote_script_is_removed_after_remote_failure(self) -> None:
         config = make_config(values(networks=networks(x18=False)))
         original_error = subprocess.CalledProcessError(1, ["ssh", "provision"])
