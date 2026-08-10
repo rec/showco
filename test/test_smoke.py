@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import socket
 import threading
 import unittest
@@ -20,6 +21,10 @@ class SmokeTests(unittest.TestCase):
             home = read_url(f"{url}/home")
             self.assertIn("Recording channels", home)
             self.assertIn("Streaming", home)
+
+            status = read_json(f"{url}/status")
+            self.assertEqual(status["recs"]["service"]["state"], "connected")
+            self.assertEqual(status["twitcho"]["service"]["state"], "connected")
 
             response = post_form(f"{url}/actions", {"action": "twitcho-mute"})
             self.assertEqual(response.status, 200)
@@ -62,6 +67,11 @@ def running_rehearsal_server(
 def read_url(url: str) -> str:
     with request.urlopen(url, timeout=2) as response:
         return response.read().decode()
+
+
+def read_json(url: str) -> dict[str, object]:
+    with request.urlopen(url, timeout=2) as response:
+        return json.loads(response.read())
 
 
 def post_form(url: str, form: dict[str, str]) -> object:

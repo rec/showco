@@ -111,6 +111,9 @@ class ShowcoHandler(BaseHTTPRequestHandler):
     app: ClassVar[ShowcoApp]
 
     def do_GET(self) -> None:
+        if self.path == "/status":
+            self._json(self.app.status())
+            return
         if self.path in {"/", "/home"}:
             self._html(home_page(self.app.status()))
             return
@@ -147,6 +150,15 @@ class ShowcoHandler(BaseHTTPRequestHandler):
         data = body.encode()
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _json(self, value: models.ShowStatus) -> None:
+        data = value.model_dump_json().encode()
+        self.send_response(200)
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
@@ -198,26 +210,33 @@ def home_page(status: models.ShowStatus) -> str:
         "Home",
         f"""
         <section class="cards">
-          {service_card("Recording", recs.state, _recording_text(status))}
-          {service_card("Streaming", twitcho.state, _streaming_text(status))}
+          {service_card("recording", "Recording", recs.state, _recording_text(status))}
+          {
+            service_card(
+                "streaming", "Streaming", twitcho.state, _streaming_text(status)
+            )
+        }
         </section>
         <section>
           <h2>Recording channels</h2>
-          <div class="levels">
+          <div class="levels" id="channels">
             {channel_html}
           </div>
         </section>
         <section>
           <h2>Health</h2>
-          <p>recs: {_service_detail(recs.state, recs.last_error)}</p>
-          {_recs_errors(status)}
-          <p>twitcho: {_service_detail(twitcho.state, twitcho.last_error)}</p>
-          <p>Pi temperature: {_temperature(status)}</p>
-          <p>Twitch bitrate: {_bitrate(status)}</p>
-          <p>Mixer latency: {_mixer_latency(status)}</p>
-          <p>Generated: {_time(status.generated_at)}</p>
+          <p id="recs-health">recs: {_service_detail(recs.state, recs.last_error)}</p>
+          <div id="recs-errors">{_recs_errors(status)}</div>
+          <p id="twitcho-health">
+            twitcho: {_service_detail(twitcho.state, twitcho.last_error)}
+          </p>
+          <p>Pi temperature: <span id="temperature">{_temperature(status)}</span></p>
+          <p>Twitch bitrate: <span id="bitrate">{_bitrate(status)}</span></p>
+          <p>Mixer latency: <span id="mixer-latency">{_mixer_latency(status)}</span></p>
+          <p>Generated: <span id="generated-at">{_time(status.generated_at)}</span></p>
         </section>
         """,
+        script=HOME_STATUS_SCRIPT,
     )
 
 
@@ -272,7 +291,7 @@ def _twitcho_actions(title_fields: list[str]) -> str:
     """
 
 
-def page(title: str, body: str) -> str:
+def page(title: str, body: str, *, script: str = "") -> str:
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -296,16 +315,17 @@ def page(title: str, body: str) -> str:
       }});
     }}
   </script>
+  {script}
 </body>
 </html>"""
 
 
-def service_card(title: str, state: str, detail: str) -> str:
+def service_card(identifier: str, title: str, state: str, detail: str) -> str:
     return f"""
-    <article class="card {html.escape(state)}">
+    <article class="card {html.escape(state)}" id="{html.escape(identifier)}-card">
       <h2>{html.escape(title)}</h2>
-      <div class="state">{html.escape(state)}</div>
-      <p>{html.escape(detail)}</p>
+      <div class="state" id="{html.escape(identifier)}-state">{html.escape(state)}</div>
+      <p id="{html.escape(identifier)}-detail">{html.escape(detail)}</p>
     </article>
     """
 
@@ -315,7 +335,8 @@ def level(device: str, name: str, state: str) -> str:
     safe_name = html.escape(name)
     safe_state = html.escape(state)
     return f"""
-    <form class="level {safe_state}" method="post" action="/actions">
+    <form class="level {safe_state}" method="post" action="/actions"
+          data-device="{safe_device}" data-channel="{safe_name}">
       <input type="hidden" name="action" value="recs-track-name">
       <input type="hidden" name="device" value="{safe_device}">
       <input type="hidden" name="channel" value="{safe_name}">
@@ -323,7 +344,7 @@ def level(device: str, name: str, state: str) -> str:
         <b>{safe_name}</b>
         <input name="track_name" value="{safe_name}">
       </label>
-      <span>{safe_state}</span>
+      <span class="channel-state">{safe_state}</span>
       <button>Save</button>
     </form>
     """
@@ -476,6 +497,151 @@ TWITCHO_ACTIONS = {
     "twitcho-clip": "clip",
     "twitcho-marker": "marker",
 }
+
+HOME_STATUS_SCRIPT = """
+<script>
+  function serviceDetail(service) {
+    return service.last_error
+      ? `${service.state}: ${service.last_error}`
+      : service.state;
+  }
+
+  function recordingText(recs) {
+    if (!recs.recording) return "stopped";
+    const seconds = recs.elapsed_seconds;
+    if (seconds === null) return "recording for unknown time, ? files";
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const duration = hours
+      ? `${hours}:${String(minutes % 60).padStart(2, "0")}:${String(
+          Math.floor(seconds % 60),
+        ).padStart(2, "0")}`
+      : `${minutes}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
+    return `recording for ${duration}, ${recs.file_count ?? "?"} files`;
+  }
+
+  function streamingText(twitcho) {
+    return `${twitcho.stream_state}${twitcho.muted ? ", muted" : ""}`;
+  }
+
+  function updateService(identifier, service, detail, healthIdentifier) {
+    document.getElementById(`${identifier}-card`).className = `card ${service.state}`;
+    document.getElementById(`${identifier}-state`).textContent = service.state;
+    document.getElementById(`${identifier}-detail`).textContent = detail;
+    document.getElementById(healthIdentifier).textContent = `${
+      healthIdentifier.replace("-health", "")
+    }: ${serviceDetail(service)}`;
+  }
+
+  function hiddenInput(name, value) {
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = name;
+    input.value = value;
+    return input;
+  }
+
+  function channelForm(channel, trackName) {
+    const form = document.createElement("form");
+    form.className = `level ${channel.state}`;
+    form.method = "post";
+    form.action = "/actions";
+    form.dataset.device = channel.device;
+    form.dataset.channel = channel.name;
+    form.append(hiddenInput("action", "recs-track-name"));
+    form.append(hiddenInput("device", channel.device));
+    form.append(hiddenInput("channel", channel.name));
+    const label = document.createElement("label");
+    const title = document.createElement("b");
+    title.textContent = channel.name;
+    const input = document.createElement("input");
+    input.name = "track_name";
+    input.value = trackName;
+    label.append(title, input);
+    const state = document.createElement("span");
+    state.className = "channel-state";
+    state.textContent = channel.state;
+    const button = document.createElement("button");
+    button.textContent = "Save";
+    form.append(label, state, button);
+    return form;
+  }
+
+  function updateChannels(channels) {
+    const container = document.getElementById("channels");
+    if (document.activeElement.closest("#channels .level")) return;
+    const names = new Map(
+      [...container.querySelectorAll(".level")].map(form => [
+        `${form.dataset.device}\\u0000${form.dataset.channel}`,
+        form.querySelector("[name=track_name]").value,
+      ]),
+    );
+    container.replaceChildren(...channels.map(channel => channelForm(
+      channel,
+      names.get(`${channel.device}\\u0000${channel.name}`) ?? channel.name,
+    )));
+  }
+
+  function updateRecsErrors(errors) {
+    const container = document.getElementById("recs-errors");
+    container.replaceChildren();
+    if (!errors.length) return;
+    const heading = document.createElement("p");
+    heading.textContent = "Recs errors:";
+    const list = document.createElement("ul");
+    for (const error of errors) {
+      const item = document.createElement("li");
+      item.textContent = error;
+      list.append(item);
+    }
+    container.append(heading, list);
+  }
+
+  function updateStatus() {
+    return fetch("/status", { cache: "no-store" })
+      .then(response => {
+      if (!response.ok) throw new Error(`status request failed: ${response.status}`);
+        return response.json();
+      })
+      .then(status => {
+      updateService(
+        "recording", status.recs.service, recordingText(status.recs), "recs-health",
+      );
+      updateService(
+        "streaming", status.twitcho.service, streamingText(status.twitcho),
+        "twitcho-health",
+      );
+      updateChannels(status.recs.channels);
+      updateRecsErrors(status.recs.errors);
+      document.getElementById("temperature").textContent =
+        status.system.temperature_c === null
+        ? status.system.temperature_error || "unknown"
+        : `${status.system.temperature_c.toFixed(1)} °C`;
+      document.getElementById("bitrate").textContent =
+        status.twitcho.output_bitrate_kbps === null
+        ? "unknown"
+        : `${status.twitcho.output_bitrate_kbps.toFixed(0)} kbps`;
+      document.getElementById("mixer-latency").textContent =
+        status.mixer.latency_ms === null
+        ? status.mixer.error || "unknown"
+        : `${status.mixer.latency_ms.toFixed(1)} ms`;
+      document.getElementById("generated-at").textContent = new Date(
+        status.generated_at * 1000,
+      ).toLocaleTimeString();
+      })
+      .catch(error => {
+      document.getElementById("generated-at").textContent =
+        "stale (status update failed)";
+      });
+  }
+
+  function pollStatus() {
+    updateStatus().then(() => setTimeout(pollStatus, 1000));
+  }
+
+  pollStatus();
+</script>
+"""
 
 CSS = """
 body {
