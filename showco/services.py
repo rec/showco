@@ -49,6 +49,7 @@ def install_showco_service(
     mixer_host: str | None = None,
     x18_host: str | None = None,
     x18_log_dir: Path | None = None,
+    twitcho_enabled: bool = False,
     twitcho_config: Path | None = None,
     executable: Path | None = None,
 ) -> int:
@@ -66,6 +67,7 @@ def install_showco_service(
                 mixer_host,
                 x18_host,
                 x18_log_dir or Path.home() / "recordings",
+                twitcho_enabled,
                 twitcho_config,
             ),
         ],
@@ -82,6 +84,7 @@ def showco_args(
     mixer_host: str | None,
     x18_host: str | None,
     x18_log_dir: Path,
+    twitcho_enabled: bool,
     twitcho_config: Path | None,
 ) -> list[str]:
     result = ["--host", host, "--port", str(port)]
@@ -89,7 +92,9 @@ def showco_args(
         result.extend(["--mixer-host", mixer_host])
     if x18_host:
         result.extend(["--x18-host", x18_host, "--x18-log-dir", str(x18_log_dir)])
-    if twitcho_config:
+    if twitcho_enabled:
+        result.append("--twitcho-enabled")
+    if twitcho_enabled and twitcho_config:
         result.extend(["--twitcho-config", str(twitcho_config)])
     return result
 
@@ -132,6 +137,7 @@ def install_main(argv: list[str] | None = None) -> int:
     parser.add_argument("--mixer-host")
     parser.add_argument("--x18-host")
     parser.add_argument("--x18-log-dir", type=Path)
+    parser.add_argument("--twitcho-enabled", action="store_true")
     parser.add_argument("--twitcho-config", type=Path)
     args = parser.parse_args(argv)
     return install_showco_service(
@@ -140,6 +146,7 @@ def install_main(argv: list[str] | None = None) -> int:
         mixer_host=args.mixer_host,
         x18_host=args.x18_host,
         x18_log_dir=args.x18_log_dir,
+        twitcho_enabled=args.twitcho_enabled,
         twitcho_config=args.twitcho_config,
     )
 

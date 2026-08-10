@@ -332,8 +332,11 @@ showco_args() {
       --x18-log-dir "/home/$SHOW_USER/recordings"
     )
   fi
-  if [[ -f "/home/$SHOW_USER/.config/twitcho/config.json" ]]; then
-    args+=(--twitcho-config "/home/$SHOW_USER/.config/twitcho/config.json")
+  if [[ "$TWITCHO_ENABLED" == true ]]; then
+    args+=(--twitcho-enabled)
+    if [[ -f "/home/$SHOW_USER/.config/twitcho/config.json" ]]; then
+      args+=(--twitcho-config "/home/$SHOW_USER/.config/twitcho/config.json")
+    fi
   fi
   printf '%q ' "${args[@]}"
 }
