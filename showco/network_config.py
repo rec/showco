@@ -28,6 +28,9 @@ class NetworkTopology(enum.StrEnum):
     MIXED = enum.auto()
 
 
+PRIVATE_WIFI_CONNECTION = "showco-private"
+
+
 class WifiInterface(BaseModel, frozen=True):
     name: str
     connected: bool = False
@@ -179,10 +182,18 @@ def network_commands(
         commands.append(x18_ethernet_command(provision_config))
     if topology == NetworkTopology.PUBLIC:
         return commands
-    elif topology == NetworkTopology.PRIVATE:
-        commands.append(private_wifi_command(provision_config, assignment.primary))
-    else:
-        commands.append(private_wifi_command(provision_config, assignment.primary))
+    commands.extend(
+        [
+            private_wifi_command(provision_config, assignment.primary),
+            nmcli_command(
+                "connection",
+                "modify",
+                PRIVATE_WIFI_CONNECTION,
+                "connection.autoconnect",
+                "yes",
+            ),
+        ]
+    )
     return commands
 
 
@@ -195,7 +206,7 @@ def private_wifi_command(
         "ifname",
         interface.name,
         "con-name",
-        "showco-private",
+        PRIVATE_WIFI_CONNECTION,
         "ssid",
         config.string_or_default(network.name, "showbox"),
     ]

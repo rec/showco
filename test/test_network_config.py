@@ -182,6 +182,15 @@ class NetworkConfigTests(unittest.TestCase):
                     "ssid",
                     "showbox",
                 ],
+                [
+                    "sudo",
+                    "nmcli",
+                    "connection",
+                    "modify",
+                    "showco-private",
+                    "connection.autoconnect",
+                    "yes",
+                ],
             ],
         )
 
@@ -217,6 +226,15 @@ class NetworkConfigTests(unittest.TestCase):
                     "showco-private",
                     "ssid",
                     "showbox",
+                ],
+                [
+                    "sudo",
+                    "nmcli",
+                    "connection",
+                    "modify",
+                    "showco-private",
+                    "connection.autoconnect",
+                    "yes",
                 ],
             ],
         )
