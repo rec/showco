@@ -23,6 +23,23 @@ class ServerTests(unittest.TestCase):
         self.assertIn('href="/actions"', html)
         self.assertNotIn('href="/levels"', html)
 
+    def test_home_page_has_live_status_elements(self) -> None:
+        html = home_page(
+            models.ShowStatus(
+                recs=models.RecsStatus(
+                    service=models.ServiceStatus(name="recs", state="connected")
+                ),
+                twitcho=models.TwitchoStatus(
+                    service=models.ServiceStatus(name="twitcho", state="disabled")
+                ),
+            )
+        )
+
+        self.assertIn('id="recording-card"', html)
+        self.assertIn('id="channels"', html)
+        self.assertIn('id="generated-at"', html)
+        self.assertIn('fetch("/status"', html)
+
     def test_home_page_shows_pi_temperature(self) -> None:
         html = home_page(
             models.ShowStatus(
