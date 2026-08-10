@@ -477,7 +477,7 @@ def user_systemctl_command(arguments: str) -> str:
 def showco_service_status_command(service: str) -> str:
     return user_session_command(
         f'cd "$HOME/code/showco" && PATH="$HOME/.local/bin:$PATH" '
-        f"uv run showco run service-status {service}"
+        f"uv run --frozen showco run service-status {service}"
     )
 
 

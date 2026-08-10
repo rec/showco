@@ -309,7 +309,7 @@ configure_network() {
   set +e
   sudo -H -u "$SHOW_USER" env PATH="/home/$SHOW_USER/.local/bin:$PATH" \
     bash -lc \
-      "cd '$CODE_DIR/showco' && uv run showco run network-config --config '$config_file' --secrets '$secrets_file'"
+      "cd '$CODE_DIR/showco' && uv run --frozen showco run network-config --config '$config_file' --secrets '$secrets_file'"
   status=$?
   set -e
   rm -f "$config_file" "$secrets_file"
@@ -360,7 +360,7 @@ install_recs_service() {
   sudo -H -u "$SHOW_USER" \
     env XDG_RUNTIME_DIR="/run/user/$uid" \
     PATH="/home/$SHOW_USER/code/recs/.venv/bin:/home/$SHOW_USER/.local/bin:$PATH" \
-    bash -lc "cd '$CODE_DIR/recs' && uv run recs daemon install $quoted_args"
+    bash -lc "cd '$CODE_DIR/recs' && uv run --frozen recs daemon install $quoted_args"
 }
 
 install_showco_service() {
@@ -369,7 +369,7 @@ install_showco_service() {
   sudo -H -u "$SHOW_USER" \
     env XDG_RUNTIME_DIR="/run/user/$uid" \
     PATH="/home/$SHOW_USER/code/showco/.venv/bin:/home/$SHOW_USER/.local/bin:$PATH" \
-    bash -lc "cd '$CODE_DIR/showco' && uv run showco run install-service $(showco_args)"
+    bash -lc "cd '$CODE_DIR/showco' && uv run --frozen showco run install-service $(showco_args)"
 }
 
 write_provisioning_report() {
