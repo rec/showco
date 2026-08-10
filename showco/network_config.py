@@ -29,6 +29,11 @@ class NetworkTopology(enum.StrEnum):
 
 
 PRIVATE_WIFI_CONNECTION = "showco-private"
+X18_BRIDGE_CONNECTION = "showco-x18-bridge"
+X18_BRIDGE_INTERFACE = "br-x18"
+X18_ETHERNET_CONNECTION = "showco-x18-ethernet"
+X18_ETHERNET_INTERFACE = "eth0"
+X18_LEGACY_CONNECTION = "showco-x18"
 
 
 class WifiInterface(BaseModel, frozen=True):
@@ -178,9 +183,13 @@ def network_commands(
     if topology in (NetworkTopology.PUBLIC, NetworkTopology.MIXED):
         require_external_network(provision_config)
     commands = []
-    if config.x18(provision_config) is not None:
+    x18_network = config.x18(provision_config)
+    if x18_network is not None and topology == NetworkTopology.PUBLIC:
         commands.append(x18_ethernet_command(provision_config))
     if topology == NetworkTopology.PUBLIC:
+        return commands
+    if x18_network is not None:
+        commands.append(x18_bridge_command(provision_config, assignment.primary))
         return commands
     commands.extend(
         [
@@ -223,8 +232,8 @@ def x18_ethernet_command(provision_config: config.Config) -> list[str]:
     x18_network = config.x18(provision_config)
     if x18_network is None:
         sys.exit("ERROR: networks.internal.wired.x18 is required")
-    connection = "showco-x18"
-    interface = "eth0"
+    connection = X18_LEGACY_CONNECTION
+    interface = X18_ETHERNET_INTERFACE
     address = x18_pi_ethernet_address(
         config.string_or_default(x18_network.subnet, "10.43.0.0/24")
     )
@@ -247,17 +256,103 @@ def x18_ethernet_command(provision_config: config.Config) -> list[str]:
     return ["sh", "-c", script]
 
 
-def x18_pi_ethernet_address(subnet: str) -> str:
+def x18_bridge_command(
+    provision_config: config.Config, wifi_interface: WifiInterface
+) -> list[str]:
+    network = config.internal_wifi(provision_config)
+    bridge_address = x18_bridge_address(provision_config)
+    bridge_connection = shlex_quote(X18_BRIDGE_CONNECTION)
+    bridge_interface = shlex_quote(X18_BRIDGE_INTERFACE)
+    ethernet_connection = shlex_quote(X18_ETHERNET_CONNECTION)
+    ethernet_interface = shlex_quote(X18_ETHERNET_INTERFACE)
+    legacy_connection = shlex_quote(X18_LEGACY_CONNECTION)
+    wifi_connection = shlex_quote(PRIVATE_WIFI_CONNECTION)
+    wifi_name = shlex_quote(wifi_interface.name)
+    wifi_ssid = shlex_quote(config.string_or_default(network.name, "showbox"))
+    script = [
+        "set -e",
+        f"if nmcli connection show {legacy_connection} >/dev/null 2>&1; then "
+        f"sudo nmcli connection delete {legacy_connection}; fi",
+        f"if ! nmcli connection show {bridge_connection} >/dev/null 2>&1; then "
+        "sudo nmcli connection add "
+        f"type bridge ifname {bridge_interface} con-name {bridge_connection}; fi",
+        "sudo nmcli connection modify "
+        f"{bridge_connection} ifname {bridge_interface} "
+        "ipv4.method shared "
+        f"ipv4.addresses {shlex_quote(bridge_address)} "
+        "ipv6.method disabled bridge.stp no connection.autoconnect yes",
+        f"if ! nmcli connection show {ethernet_connection} >/dev/null 2>&1; then "
+        "sudo nmcli connection add "
+        f"type ethernet ifname {ethernet_interface} con-name {ethernet_connection} "
+        f"controller {bridge_interface}; fi",
+        "sudo nmcli connection modify "
+        f"{ethernet_connection} ifname {ethernet_interface} "
+        f"connection.controller {bridge_interface} "
+        "ipv4.method disabled ipv6.method disabled connection.autoconnect yes",
+        f"if ! nmcli connection show {wifi_connection} >/dev/null 2>&1; then "
+        "sudo nmcli connection add "
+        f"type wifi ifname {wifi_name} con-name {wifi_connection} ssid {wifi_ssid}; fi",
+        "sudo nmcli connection modify "
+        f"{wifi_connection} ifname {wifi_name} "
+        f"connection.controller {bridge_interface} "
+        "802-11-wireless.mode ap "
+        "ipv4.method disabled ipv6.method disabled connection.autoconnect yes",
+    ]
+    if network.password:
+        script.append(
+            "sudo nmcli connection modify "
+            f"{wifi_connection} 802-11-wireless-security.key-mgmt wpa-psk "
+            f"802-11-wireless-security.psk {shlex_quote(network.password)}"
+        )
+    script.extend(
+        [
+            f"sudo nmcli connection up {bridge_connection}",
+            f"sudo nmcli connection up {ethernet_connection}",
+            f"sudo nmcli connection up {wifi_connection}",
+        ]
+    )
+    return ["sh", "-c", "\n".join(script)]
+
+
+def x18_bridge_address(provision_config: config.Config) -> str:
+    x18_network = config.x18(provision_config)
+    if x18_network is None:
+        sys.exit("ERROR: networks.internal.wired.x18 is required")
+    subnet = config.string_or_default(x18_network.subnet, "10.43.0.0/24")
+    network = ip_network(subnet)
+    address = config.string_or_default(
+        config.internal_wifi(provision_config).ip_address,
+        x18_pi_ethernet_address(subnet),
+    )
     try:
-        network = ipaddress.ip_network(subnet, strict=False)
+        host = ipaddress.ip_interface(address).ip
     except ValueError:
-        sys.exit("ERROR: networks.internal.wired.x18.subnet must be a valid IP subnet")
+        sys.exit(
+            "ERROR: networks.internal.wifi.private.ip_address must be an IP address"
+        )
+    if host not in network:
+        sys.exit(
+            "ERROR: networks.internal.wifi.private.ip_address must be within "
+            "networks.internal.wired.x18.subnet"
+        )
+    return f"{host}/{network.prefixlen}"
+
+
+def x18_pi_ethernet_address(subnet: str) -> str:
+    network = ip_network(subnet)
     hosts = network.hosts()
     try:
         address = next(hosts)
     except StopIteration:
         sys.exit("ERROR: networks.internal.wired.x18.subnet has no usable host address")
     return f"{address}/{network.prefixlen}"
+
+
+def ip_network(subnet: str) -> ipaddress.IPv4Network | ipaddress.IPv6Network:
+    try:
+        return ipaddress.ip_network(subnet, strict=False)
+    except ValueError:
+        sys.exit("ERROR: networks.internal.wired.x18.subnet must be a valid IP subnet")
 
 
 def require_external_network(provision_config: config.Config) -> None:

@@ -11,9 +11,9 @@ subnet = "10.43.0.0/24"
 
 [networks.internal.wifi.private]
 name = "showbox"
-ip_address = "10.42.0.1"
-dhcp_start = "10.42.0.50"
-dhcp_end = "10.42.0.200"
+ip_address = "10.43.0.1"
+dhcp_start = "10.43.0.50"
+dhcp_end = "10.43.0.200"
 
 [networks.external.wifi.external]
 name = "Livebox-F13E"
