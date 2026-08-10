@@ -372,6 +372,31 @@ class ProvisionTests(unittest.TestCase):
         )
         report.assert_called_once_with(result)
 
+    def test_wait_for_provisioning_ready_retries_startup_checks(self) -> None:
+        starting = [
+            provision.VerificationResult(
+                name="recs service is active", error="activating"
+            )
+        ]
+        ready = [provision.VerificationResult(name="recs service is active", error="")]
+        config = make_config(values())
+        with (
+            mock.patch(
+                "showco.provision.provision.verify_provisioning",
+                side_effect=[starting, ready],
+            ) as verify,
+            mock.patch("showco.provision.provision.time.sleep") as sleep,
+        ):
+            result = provision.wait_for_provisioning_ready(
+                config,
+                "tom@recs-stage.local",
+                network_config.NetworkTopology.MIXED,
+            )
+
+        self.assertEqual(result, ready)
+        self.assertEqual(verify.call_count, 2)
+        sleep.assert_called_once_with(1)
+
     def test_initial_wait_for_ssh_retries_until_connected(self) -> None:
         config = make_config(values(networks=networks(x18=False)))
         with (
