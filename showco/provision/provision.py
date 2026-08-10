@@ -397,6 +397,18 @@ def verify_provisioning(
 ) -> list[VerificationResult]:
     private_wifi_verification = []
     if topology is not None and topology != network_config.NetworkTopology.PUBLIC:
+        if config.x18(provision_config) is not None:
+            bridge_address = network_config.x18_bridge_address(provision_config)
+            private_wifi_verification.append(
+                verify_remote_command(
+                    provision_config,
+                    ssh_target,
+                    "X18 bridge has the configured address",
+                    "ip -4 -o address show dev "
+                    f"{network_config.X18_BRIDGE_INTERFACE} "
+                    f"| grep -F {shlex.quote(bridge_address)}",
+                )
+            )
         private_wifi_verification.append(
             verify_remote_command(
                 provision_config,

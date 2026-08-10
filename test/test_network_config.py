@@ -136,9 +136,7 @@ class NetworkConfigTests(unittest.TestCase):
                 config, assignment, network_config.NetworkTopology.PRIVATE
             )
 
-    def test_private_topology_starts_access_point_without_touching_secondary(
-        self,
-    ) -> None:
+    def test_x18_bridge_includes_ethernet_and_wifi_ports(self) -> None:
         commands = network_config.network_commands(
             make_network_config(topology=network_config.NetworkTopology.PRIVATE),
             network_config.assign_wifi(
@@ -159,37 +157,36 @@ class NetworkConfigTests(unittest.TestCase):
                     "-c",
                     "\n".join(
                         [
-                            "nmcli connection show showco-x18 >/dev/null 2>&1 || "
-                            "sudo nmcli connection add type ethernet ifname eth0 "
-                            "con-name showco-x18",
-                            "sudo nmcli connection modify showco-x18 ifname eth0 "
-                            "ipv4.method manual ipv4.addresses 10.43.0.1/24 "
-                            "ipv6.method disabled connection.autoconnect yes",
-                            "sudo nmcli connection up showco-x18",
+                            "set -e",
+                            "if nmcli connection show showco-x18 >/dev/null 2>&1; "
+                            "then sudo nmcli connection delete showco-x18; fi",
+                            "if ! nmcli connection show showco-x18-bridge "
+                            ">/dev/null 2>&1; then sudo nmcli connection add "
+                            "type bridge ifname br-x18 con-name showco-x18-bridge; fi",
+                            "sudo nmcli connection modify showco-x18-bridge "
+                            "ifname br-x18 ipv4.method shared "
+                            "ipv4.addresses 10.43.0.1/24 ipv6.method disabled "
+                            "bridge.stp no connection.autoconnect yes",
+                            "if ! nmcli connection show showco-x18-ethernet "
+                            ">/dev/null 2>&1; then sudo nmcli connection add "
+                            "type ethernet ifname eth0 con-name showco-x18-ethernet "
+                            "controller br-x18; fi",
+                            "sudo nmcli connection modify showco-x18-ethernet "
+                            "ifname eth0 connection.controller br-x18 "
+                            "ipv4.method disabled ipv6.method disabled "
+                            "connection.autoconnect yes",
+                            "if ! nmcli connection show showco-private >/dev/null "
+                            "2>&1; then sudo nmcli connection add type wifi "
+                            "ifname wlan0 con-name showco-private ssid showbox; fi",
+                            "sudo nmcli connection modify showco-private ifname wlan0 "
+                            "connection.controller br-x18 802-11-wireless.mode ap "
+                            "ipv4.method disabled ipv6.method disabled "
+                            "connection.autoconnect yes",
+                            "sudo nmcli connection up showco-x18-bridge",
+                            "sudo nmcli connection up showco-x18-ethernet",
+                            "sudo nmcli connection up showco-private",
                         ]
                     ),
-                ],
-                [
-                    "sudo",
-                    "nmcli",
-                    "device",
-                    "wifi",
-                    "hotspot",
-                    "ifname",
-                    "wlan0",
-                    "con-name",
-                    "showco-private",
-                    "ssid",
-                    "showbox",
-                ],
-                [
-                    "sudo",
-                    "nmcli",
-                    "connection",
-                    "modify",
-                    "showco-private",
-                    "connection.autoconnect",
-                    "yes",
                 ],
             ],
         )
@@ -370,6 +367,17 @@ class NetworkConfigTests(unittest.TestCase):
             "10.43.0.1/24",
         )
 
+    def test_x18_bridge_address_uses_private_wifi_address(self) -> None:
+        config = make_network_config(private_wifi_ip_address="10.43.0.1")
+
+        self.assertEqual(network_config.x18_bridge_address(config), "10.43.0.1/24")
+
+    def test_x18_bridge_address_rejects_other_subnet(self) -> None:
+        config = make_network_config(private_wifi_ip_address="10.42.0.1")
+
+        with self.assertRaisesRegex(SystemExit, "must be within"):
+            network_config.x18_bridge_address(config)
+
     def test_config_reads_enabled_from_twitch_table(self) -> None:
         config = config_from_values(
             {
@@ -399,6 +407,7 @@ def make_network_config(
     topology: network_config.NetworkTopology | None = None,
     twitch_enabled: bool = False,
     private_wifi_name: str = "showbox",
+    private_wifi_ip_address: str = "",
     private_wifi_password: str = "",
     external_wifi_name: str = "",
     external_wifi_password: str = "",
@@ -421,6 +430,7 @@ def make_network_config(
                     "wifi": {
                         "private": {
                             "name": private_wifi_name,
+                            "ip_address": private_wifi_ip_address,
                             "password": private_wifi_password,
                         },
                     },

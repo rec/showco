@@ -729,6 +729,10 @@ class ProvisionTests(unittest.TestCase):
             commands,
         )
         self.assertIn(
+            "ip -4 -o address show dev br-x18 | grep -F 10.43.0.1/24",
+            commands,
+        )
+        self.assertIn(
             "uid=$(id -u); XDG_RUNTIME_DIR=/run/user/$uid "
             'cd "$HOME/code/showco" && PATH="$HOME/.local/bin:$PATH" '
             "uv run --frozen showco run service-status showco",
