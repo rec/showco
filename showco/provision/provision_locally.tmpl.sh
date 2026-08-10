@@ -317,7 +317,7 @@ configure_network() {
 }
 
 schedule_reboot() {
-  sudo shutdown -r +0
+  sudo systemd-run --on-active=2s /usr/bin/systemctl reboot
 }
 
 showco_args() {
