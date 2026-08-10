@@ -24,7 +24,7 @@ REMOTE_GITHUB_KEY_TEMPLATE = "remote_github_key.tmpl.sh"
 REBOOT_WAIT_SECONDS = 300
 SSH_CONNECT_TIMEOUT_SECONDS = 2
 LOCAL_REPOSITORIES = ["showco", "reccy", "recs", "twitcho"]
-WIFI_STATUS_COMMAND = "nmcli -t -f DEVICE,TYPE,STATE device status"
+WIFI_STATUS_COMMAND = "nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device status"
 
 
 class VerificationResult(BaseModel, frozen=True):

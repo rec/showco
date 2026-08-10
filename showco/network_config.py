@@ -39,6 +39,7 @@ X18_LEGACY_CONNECTION = "showco-x18"
 class WifiInterface(BaseModel, frozen=True):
     name: str
     connected: bool = False
+    connection: str = ""
 
 
 class WifiAssignment(BaseModel, frozen=True):
@@ -93,7 +94,7 @@ def detect_wifi_interfaces(
     run_command: RunCommand,
 ) -> list[WifiInterface]:
     completed = run_command(
-        ["nmcli", "-t", "-f", "DEVICE,TYPE,STATE", "device", "status"]
+        ["nmcli", "-t", "-f", "DEVICE,TYPE,STATE,CONNECTION", "device", "status"]
     )
     if completed.returncode != 0:
         sys.exit(completed.stderr.strip() or "ERROR: nmcli device status failed")
@@ -109,6 +110,7 @@ def wifi_interfaces_from_status(status: str) -> list[WifiInterface]:
                 WifiInterface(
                     name=fields[0],
                     connected=len(fields) >= 3 and fields[2].startswith("connected"),
+                    connection=fields[3] if len(fields) >= 4 else "",
                 )
             )
     return interfaces
@@ -141,9 +143,16 @@ def assign_wifi(interfaces: list[WifiInterface], swap_wifi: bool) -> WifiAssignm
     ordered = list(interfaces)
     if swap_wifi and len(ordered) > 1:
         ordered[0], ordered[1] = ordered[1], ordered[0]
-    elif unconnected := next((i for i in ordered if not i.connected), None):
-        ordered.remove(unconnected)
-        ordered.insert(0, unconnected)
+    elif private_wifi := next(
+        (
+            i
+            for i in ordered
+            if not i.connected or i.connection == PRIVATE_WIFI_CONNECTION
+        ),
+        None,
+    ):
+        ordered.remove(private_wifi)
+        ordered.insert(0, private_wifi)
     primary = ordered[0]
     secondary = ordered[1] if len(ordered) > 1 else None
     return WifiAssignment(primary=primary, secondary=secondary)
@@ -176,7 +185,11 @@ def network_commands(
 ) -> list[list[str]]:
     if topology == NetworkTopology.MIXED and assignment.secondary is None:
         sys.exit("ERROR: mixed network topology requires a secondary Wi-Fi interface")
-    if topology != NetworkTopology.PUBLIC and assignment.primary.connected:
+    if (
+        topology != NetworkTopology.PUBLIC
+        and assignment.primary.connected
+        and assignment.primary.connection != PRIVATE_WIFI_CONNECTION
+    ):
         sys.exit(
             "ERROR: no unconnected Wi-Fi interface is available for the private hotspot"
         )
