@@ -350,9 +350,14 @@ install_recs_service() {
   local quoted_args=
   local uid
   local args=()
+  local device_name
+  local device_names
   uid=$(id -u "$SHOW_USER")
   if [[ -n "$X18_USB_DEVICE_NAME" && "$X18_USB_DEVICE_NAME" != TODO ]]; then
-    args+=(--include "$X18_USB_DEVICE_NAME")
+    IFS=/ read -r -a device_names <<<"$X18_USB_DEVICE_NAME"
+    for device_name in "${device_names[@]}"; do
+      args+=(--include "$device_name")
+    done
   fi
   if [[ ${#args[@]} -gt 0 ]]; then
     quoted_args=$(printf '%q ' "${args[@]}")

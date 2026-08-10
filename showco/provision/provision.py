@@ -551,8 +551,9 @@ def verify_x18_usb_device(
         return VerificationResult(
             name="X18 USB device", error="", note="not configured"
         )
-    device_name = shlex.quote(provision_config.usb.x18_device_name)
-    command = f"arecord -l | grep -F {device_name} >/dev/null"
+    device_names = x18_device_names(provision_config.usb.x18_device_name)
+    selectors = " ".join(f"-e {shlex.quote(name)}" for name in device_names)
+    command = f"arecord -l | grep -Fi {selectors} >/dev/null"
     completed = subprocess.run(
         ssh_command(provision_config, ssh_target, command, connect_timeout=1),
         capture_output=True,
@@ -566,6 +567,10 @@ def verify_x18_usb_device(
         error="",
         note=f"{provision_config.usb.x18_device_name} not detected",
     )
+
+
+def x18_device_names(value: str) -> list[str]:
+    return [name for part in value.split("/") if (name := part.strip())]
 
 
 def verify_remote_command(
