@@ -22,9 +22,17 @@ REMOTE_SCRIPT_TEMPLATE = "provision_locally.tmpl.sh"
 REMOTE_SCRIPT = (PROVISION_DIR / REMOTE_SCRIPT_TEMPLATE).read_text()
 REMOTE_GITHUB_KEY_TEMPLATE = "remote_github_key.tmpl.sh"
 REBOOT_WAIT_SECONDS = 300
+POST_REBOOT_READY_WAIT_SECONDS = 60
 SSH_CONNECT_TIMEOUT_SECONDS = 2
 LOCAL_REPOSITORIES = ["showco", "reccy", "recs", "twitcho"]
 WIFI_STATUS_COMMAND = "nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device status"
+STARTUP_CHECK_NAMES = [
+    "recs service is active",
+    "showco service is active",
+    "showco service status is healthy",
+    "X18 bridge has the configured address",
+    "private Wi-Fi hotspot is active",
+]
 
 
 class VerificationResult(BaseModel, frozen=True):
@@ -173,7 +181,7 @@ def provision_remote(
 
         print(f"Checking provisioned services on {ssh_target}...")
         report_verification_results(
-            verify_provisioning(provision_config, ssh_target, topology)
+            wait_for_provisioning_ready(provision_config, ssh_target, topology)
         )
     finally:
         if uploaded:
@@ -496,6 +504,22 @@ def verify_provisioning(
         *private_wifi_verification,
         verify_x18_usb_device(provision_config, ssh_target),
     ]
+
+
+def wait_for_provisioning_ready(
+    provision_config: config.Config,
+    ssh_target: str,
+    topology: network_config.NetworkTopology,
+) -> list[VerificationResult]:
+    deadline = time.monotonic() + POST_REBOOT_READY_WAIT_SECONDS
+    while True:
+        results = verify_provisioning(provision_config, ssh_target, topology)
+        startup_errors = [
+            r for r in results if r.name in STARTUP_CHECK_NAMES and r.error
+        ]
+        if not startup_errors or time.monotonic() >= deadline:
+            return results
+        time.sleep(1)
 
 
 def project_status_command(project: str) -> str:
