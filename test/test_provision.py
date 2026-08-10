@@ -792,6 +792,26 @@ class ProvisionTests(unittest.TestCase):
         self.assertEqual(result.error, "")
         self.assertEqual(result.note, "X18/XR18 not detected")
 
+    def test_x18_usb_device_check_accepts_model_components(self) -> None:
+        config = make_config(values())
+        with mock.patch(
+            "reccy.subprocess.run",
+            return_value=subprocess.CompletedProcess(["ssh"], 0, "", ""),
+        ) as run:
+            provision.verify_x18_usb_device(config, "tom@recs-stage.local")
+
+        self.assertIn(
+            "arecord -l | grep -Fi -e X18 -e XR18 >/dev/null",
+            run.call_args.args[0],
+        )
+
+    def test_remote_script_includes_x18_model_components(self) -> None:
+        self.assertIn(
+            'IFS=/ read -r -a device_names <<<"$X18_USB_DEVICE_NAME"',
+            provision.REMOTE_SCRIPT,
+        )
+        self.assertIn('args+=(--include "$device_name")', provision.REMOTE_SCRIPT)
+
     def test_report_verification_results_exits_with_errors(self) -> None:
         with self.assertRaises(SystemExit):
             provision.report_verification_results(
