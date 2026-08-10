@@ -517,6 +517,15 @@ class ProvisionTests(unittest.TestCase):
     def test_remote_script_uses_frozen_uv_sync(self) -> None:
         self.assertIn("uv sync --frozen", provision.REMOTE_SCRIPT)
 
+    def test_remote_script_uses_frozen_uv_run(self) -> None:
+        self.assertIn(
+            "uv run --frozen showco run network-config", provision.REMOTE_SCRIPT
+        )
+        self.assertIn("uv run --frozen recs daemon install", provision.REMOTE_SCRIPT)
+        self.assertIn(
+            "uv run --frozen showco run install-service", provision.REMOTE_SCRIPT
+        )
+
     def test_remote_script_writes_provisioning_report(self) -> None:
         self.assertIn('phase "writing provisioning report"', provision.REMOTE_SCRIPT)
         self.assertIn("Disks discovered:", provision.REMOTE_SCRIPT)
@@ -535,13 +544,17 @@ class ProvisionTests(unittest.TestCase):
     def test_remote_script_configures_network(self) -> None:
         self.assertIn('phase "configuring network"', provision.REMOTE_SCRIPT)
         self.assertIn("configure_network()", provision.REMOTE_SCRIPT)
-        self.assertIn("uv run showco run network-config", provision.REMOTE_SCRIPT)
+        self.assertIn(
+            "uv run --frozen showco run network-config", provision.REMOTE_SCRIPT
+        )
         self.assertIn('write_toml_string host "$SHOWCO_HOST"', provision.REMOTE_SCRIPT)
         self.assertIn("printf '\\n[git.reccy]\\n'", provision.REMOTE_SCRIPT)
         self.assertIn("Skipping network configuration", provision.REMOTE_SCRIPT)
 
     def test_remote_script_installs_showco_service_through_showco(self) -> None:
-        self.assertIn("uv run showco run install-service", provision.REMOTE_SCRIPT)
+        self.assertIn(
+            "uv run --frozen showco run install-service", provision.REMOTE_SCRIPT
+        )
         self.assertNotIn('tee "$service_file"', provision.REMOTE_SCRIPT)
         self.assertNotIn("ExecStart=$command", provision.REMOTE_SCRIPT)
 
@@ -689,13 +702,13 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn(
             "uid=$(id -u); XDG_RUNTIME_DIR=/run/user/$uid "
             'cd "$HOME/code/showco" && PATH="$HOME/.local/bin:$PATH" '
-            "uv run showco run service-status recs",
+            "uv run --frozen showco run service-status recs",
             commands,
         )
         self.assertIn(
             "uid=$(id -u); XDG_RUNTIME_DIR=/run/user/$uid "
             'cd "$HOME/code/showco" && PATH="$HOME/.local/bin:$PATH" '
-            "uv run showco run service-status showco",
+            "uv run --frozen showco run service-status showco",
             commands,
         )
 
