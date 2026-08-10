@@ -7,8 +7,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import ClassVar
 from urllib import parse
 
+from . import models
 from .mixer import MixerMonitor
-from .models import ActionResult, ShowStatus
 from .recs import RecsClient
 from .system import SystemMonitor
 from .twitcho.client import TwitchoClient
@@ -19,7 +19,7 @@ class ShowcoApp:
     def __init__(
         self,
         recs: RecsClient,
-        twitcho: TwitchoClient,
+        twitcho: TwitchoClient | None,
         system: SystemMonitor,
         mixer: MixerMonitor,
         twitcho_supervisor: TwitchoSupervisorLike | None = None,
@@ -29,23 +29,28 @@ class ShowcoApp:
         self.system = system
         self.mixer = mixer
         self.twitcho_supervisor = twitcho_supervisor
-        self.action_log: list[ActionResult] = []
+        self.action_log: list[models.ActionResult] = []
         self.action_log_lock = threading.Lock()
 
-    def status(self) -> ShowStatus:
-        twitcho = self.twitcho.status()
-        if self.twitcho_supervisor and not twitcho.service.fresh:
-            twitcho = twitcho.model_copy(
-                update={"service": self.twitcho_supervisor.status()}
+    def status(self) -> models.ShowStatus:
+        if self.twitcho is None:
+            twitcho = models.TwitchoStatus(
+                service=models.ServiceStatus(name="twitcho", state="disabled")
             )
-        return ShowStatus(
+        else:
+            twitcho = self.twitcho.status()
+            if self.twitcho_supervisor and not twitcho.service.fresh:
+                twitcho = twitcho.model_copy(
+                    update={"service": self.twitcho_supervisor.status()}
+                )
+        return models.ShowStatus(
             recs=self.recs.status(),
             twitcho=twitcho,
             system=self.system.status(),
             mixer=self.mixer.status(),
         )
 
-    def run_action(self, form: dict[str, str]) -> ActionResult:
+    def run_action(self, form: dict[str, str]) -> models.ActionResult:
         action = form.get("action", "")
         if action == "recs-calibrate":
             result = self.recs.calibrate()
@@ -59,32 +64,37 @@ class ShowcoApp:
             if form.get("confirmation") == "shutdown":
                 result = self.recs.shutdown()
             else:
-                result = ActionResult(ok=True, message="recs shutdown canceled")
+                result = models.ActionResult(ok=True, message="recs shutdown canceled")
         elif action in RECS_ACTIONS:
             try:
                 fields = _recs_fields(form)
             except ValueError as e:
-                result = ActionResult(ok=False, message=str(e))
+                result = models.ActionResult(ok=False, message=str(e))
             else:
                 result = self.recs.action(RECS_ACTIONS[action], **fields)
+        elif action == "twitcho-restart" and self.twitcho is None:
+            result = models.ActionResult(ok=False, message="twitcho is disabled")
         elif action == "twitcho-restart":
             if self.twitcho_supervisor:
                 result = self.twitcho_supervisor.restart()
             else:
-                result = ActionResult(
+                result = models.ActionResult(
                     ok=False, message="twitcho supervisor is not configured"
                 )
         elif action in TWITCHO_ACTIONS:
-            result = self.twitcho.action(
-                TWITCHO_ACTIONS[action], **_twitcho_fields(form)
-            )
+            if self.twitcho is None:
+                result = models.ActionResult(ok=False, message="twitcho is disabled")
+            else:
+                result = self.twitcho.action(
+                    TWITCHO_ACTIONS[action], **_twitcho_fields(form)
+                )
         else:
-            result = ActionResult(ok=False, message=f"unknown action {action}")
+            result = models.ActionResult(ok=False, message=f"unknown action {action}")
         with self.action_log_lock:
             self.action_log = [result, *self.action_log[:9]]
         return result
 
-    def recent_actions(self) -> list[ActionResult]:
+    def recent_actions(self) -> list[models.ActionResult]:
         with self.action_log_lock:
             return list(self.action_log)
 
@@ -105,7 +115,12 @@ class ShowcoHandler(BaseHTTPRequestHandler):
             self._html(home_page(self.app.status()))
             return
         if self.path == "/actions":
-            self._html(actions_page(self.app.recent_actions()))
+            self._html(
+                actions_page(
+                    self.app.recent_actions(),
+                    twitcho_enabled=self.app.twitcho is not None,
+                )
+            )
             return
         self.send_error(404)
 
@@ -154,14 +169,15 @@ def make_server(
     system: SystemMonitor | None = None,
     mixer: MixerMonitor | None = None,
     twitcho_supervisor: TwitchoSupervisorLike | None = None,
+    twitcho_enabled: bool = False,
 ) -> ThreadingHTTPServer:
     handler = type("ConfiguredShowcoHandler", (ShowcoHandler,), {})
     app = ShowcoApp(
         recs or RecsClient(),
-        twitcho or TwitchoClient(),
+        (twitcho or TwitchoClient()) if twitcho_enabled else None,
         system or SystemMonitor(),
         mixer or MixerMonitor(),
-        twitcho_supervisor,
+        twitcho_supervisor if twitcho_enabled else None,
     )
     handler.app = app
     server = ShowcoServer((host, port), handler)
@@ -170,7 +186,7 @@ def make_server(
     return server
 
 
-def home_page(status: ShowStatus) -> str:
+def home_page(status: models.ShowStatus) -> str:
     recs = status.recs.service
     twitcho = status.twitcho.service
     channel_html = "".join(
@@ -205,7 +221,9 @@ def home_page(status: ShowStatus) -> str:
     )
 
 
-def actions_page(action_log: list[ActionResult]) -> str:
+def actions_page(
+    action_log: list[models.ActionResult], *, twitcho_enabled: bool = True
+) -> str:
     title_fields = ["title", "category", "tags"]
     noise_floor = field_action(
         "recs-set-noise-floor",
@@ -230,6 +248,18 @@ def actions_page(action_log: list[ActionResult]) -> str:
           {button("recs-list-devices", "List Recs devices")}
           {button("recs-capabilities", "Recs capabilities")}
           {shutdown_action()}
+          {_twitcho_actions(title_fields) if twitcho_enabled else ""}
+        </section>
+        <section>
+          <h2>Recent actions</h2>
+          {"".join(action_result(r) for r in action_log) or "<p>No actions yet.</p>"}
+        </section>
+        """,
+    )
+
+
+def _twitcho_actions(title_fields: list[str]) -> str:
+    return f"""
           {button("twitcho-restart", "Restart Twitch")}
           {button("twitcho-mute", "Mute Twitch")}
           {button("twitcho-unmute", "Unmute Twitch")}
@@ -239,13 +269,7 @@ def actions_page(action_log: list[ActionResult]) -> str:
           {field_action("twitcho-announce", "Send announcement", ["message"])}
           {button("twitcho-clip", "Create clip")}
           {field_action("twitcho-marker", "Create stream marker", ["description"])}
-        </section>
-        <section>
-          <h2>Recent actions</h2>
-          {"".join(action_result(r) for r in action_log) or "<p>No actions yet.</p>"}
-        </section>
-        """,
-    )
+    """
 
 
 def page(title: str, body: str) -> str:
@@ -346,12 +370,12 @@ def shutdown_action() -> str:
     """
 
 
-def action_result(result: ActionResult) -> str:
+def action_result(result: models.ActionResult) -> str:
     state = "ok" if result.ok else "failed"
     return f'<p class="{state}">{html.escape(result.message)}</p>'
 
 
-def _recording_text(status: ShowStatus) -> str:
+def _recording_text(status: models.ShowStatus) -> str:
     if not status.recs.recording:
         return "stopped"
     elapsed = _duration(status.recs.elapsed_seconds)
@@ -359,7 +383,7 @@ def _recording_text(status: ShowStatus) -> str:
     return f"recording for {elapsed}, {files} files"
 
 
-def _streaming_text(status: ShowStatus) -> str:
+def _streaming_text(status: models.ShowStatus) -> str:
     state = status.twitcho.stream_state
     muted = ", muted" if status.twitcho.muted else ""
     return f"{state}{muted}"
@@ -369,25 +393,25 @@ def _service_detail(state: str, error: str | None) -> str:
     return f"{state}: {error}" if error else state
 
 
-def _temperature(status: ShowStatus) -> str:
+def _temperature(status: models.ShowStatus) -> str:
     if status.system.temperature_c is not None:
         return f"{status.system.temperature_c:.1f} °C"
     return status.system.temperature_error or "unknown"
 
 
-def _bitrate(status: ShowStatus) -> str:
+def _bitrate(status: models.ShowStatus) -> str:
     if status.twitcho.output_bitrate_kbps is None:
         return "unknown"
     return f"{status.twitcho.output_bitrate_kbps:.0f} kbps"
 
 
-def _mixer_latency(status: ShowStatus) -> str:
+def _mixer_latency(status: models.ShowStatus) -> str:
     if status.mixer.latency_ms is not None:
         return f"{status.mixer.latency_ms:.1f} ms"
     return status.mixer.error or "unknown"
 
 
-def _recs_errors(status: ShowStatus) -> str:
+def _recs_errors(status: models.ShowStatus) -> str:
     if not status.recs.errors:
         return ""
     items = "".join(f"<li>{html.escape(e)}</li>" for e in status.recs.errors)

@@ -19,6 +19,7 @@ class ServicesTests(unittest.TestCase):
                 "10.43.0.18",
                 "10.43.0.18",
                 Path("/recordings"),
+                True,
                 Path("/twitcho/config.json"),
             ),
             [
@@ -32,6 +33,7 @@ class ServicesTests(unittest.TestCase):
                 "10.43.0.18",
                 "--x18-log-dir",
                 "/recordings",
+                "--twitcho-enabled",
                 "--twitcho-config",
                 "/twitcho/config.json",
             ],
@@ -77,6 +79,20 @@ class ServicesTests(unittest.TestCase):
         self.assertEqual(
             metadata.argv[:5], ["run", "--host", "0.0.0.0", "--port", "17352"]
         )
+
+    def test_showco_args_omit_twitcho_configuration_when_disabled(self) -> None:
+        arguments = services.showco_args(
+            "0.0.0.0",
+            17_352,
+            None,
+            None,
+            Path("/recordings"),
+            False,
+            Path("/twitcho/config.json"),
+        )
+
+        self.assertNotIn("--twitcho-enabled", arguments)
+        self.assertNotIn("--twitcho-config", arguments)
 
     def test_report_service_status_fails_inactive_service(self) -> None:
         registry = mock.Mock()

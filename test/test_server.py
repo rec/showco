@@ -101,6 +101,37 @@ class ServerTests(unittest.TestCase):
         self.assertIn("Restart Twitch", html)
         self.assertIn('value="twitcho-restart"', html)
 
+    def test_actions_page_hides_twitch_controls_when_disabled(self) -> None:
+        html = actions_page([], twitcho_enabled=False)
+
+        self.assertNotIn("Restart Twitch", html)
+        self.assertNotIn('value="twitcho-mute"', html)
+
+    def test_disabled_twitcho_does_not_request_status(self) -> None:
+        app = ShowcoApp(
+            rehearsal.RehearsalRecsClient(),
+            None,
+            rehearsal.RehearsalSystemMonitor(),
+            rehearsal.RehearsalMixerMonitor(),
+        )
+
+        status = app.status()
+
+        self.assertEqual(status.twitcho.service.state, "disabled")
+
+    def test_disabled_twitcho_rejects_actions(self) -> None:
+        app = ShowcoApp(
+            rehearsal.RehearsalRecsClient(),
+            None,
+            rehearsal.RehearsalSystemMonitor(),
+            rehearsal.RehearsalMixerMonitor(),
+        )
+
+        result = app.run_action({"action": "twitcho-mute"})
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.message, "twitcho is disabled")
+
     def test_actions_page_has_recs_protocol_controls(self) -> None:
         html = actions_page([])
 

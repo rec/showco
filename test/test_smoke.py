@@ -43,7 +43,13 @@ class SmokeTests(unittest.TestCase):
 def running_rehearsal_server(
     recs: RehearsalRecsClient, twitcho: RehearsalTwitchoClient
 ) -> Iterator[str]:
-    server = make_server("127.0.0.1", unused_port(), recs=recs, twitcho=twitcho)
+    server = make_server(
+        "127.0.0.1",
+        unused_port(),
+        recs=recs,
+        twitcho=twitcho,
+        twitcho_enabled=True,
+    )
     thread = threading.Thread(target=server.serve_forever)
     thread.start()
     try:

@@ -29,6 +29,7 @@ class WebUiOptions(BaseModel, frozen=True):
     ] = None
     x18_port: int = osc.X18_OSC_PORT
     x18_log_dir: Path = Path(".")
+    twitcho_enabled: bool = False
     twitcho_config: Annotated[
         Path | None,
         tyro.conf.arg(help="start and supervise Twitcho with this config file"),
@@ -60,11 +61,12 @@ def run_web_ui(options: WebUiOptions) -> int:
             system=rehearsal.RehearsalSystemMonitor(),
             mixer=rehearsal.RehearsalMixerMonitor(),
             twitcho_supervisor=rehearsal.RehearsalTwitchoSupervisor(),
+            twitcho_enabled=True,
         )
         print(f"showco rehearsal listening on http://{options.host}:{options.port}")
     else:
         twitcho_supervisor = None
-        if options.twitcho_config:
+        if options.twitcho_enabled and options.twitcho_config:
             twitcho_supervisor = supervisor.TwitchoSupervisor(
                 options.twitcho_config,
                 policy=options.twitcho_restart_policy,
@@ -78,6 +80,7 @@ def run_web_ui(options: WebUiOptions) -> int:
                 protocol=options.mixer_protocol,
             ),
             twitcho_supervisor=twitcho_supervisor,
+            twitcho_enabled=options.twitcho_enabled,
         )
         print(f"showco listening on http://{options.host}:{options.port}")
     if options.x18_host:
