@@ -301,15 +301,17 @@ def x18_bridge_command(
         "sudo nmcli connection modify "
         f"{ethernet_connection} ifname {ethernet_interface} "
         f"connection.controller {bridge_interface} "
-        "ipv4.method disabled ipv6.method disabled connection.autoconnect yes",
-        f"if ! nmcli connection show {wifi_connection} >/dev/null 2>&1; then "
+        "connection.autoconnect yes",
+        f"if nmcli connection show {wifi_connection} >/dev/null 2>&1; then "
+        f"sudo nmcli connection delete {wifi_connection}; fi",
         "sudo nmcli connection add "
-        f"type wifi ifname {wifi_name} con-name {wifi_connection} ssid {wifi_ssid}; fi",
+        f"type wifi ifname {wifi_name} con-name {wifi_connection} "
+        f"controller {bridge_interface} ssid {wifi_ssid}",
         "sudo nmcli connection modify "
         f"{wifi_connection} ifname {wifi_name} "
         f"connection.controller {bridge_interface} "
         "802-11-wireless.mode ap "
-        "ipv4.method disabled ipv6.method disabled connection.autoconnect yes",
+        "connection.autoconnect yes",
     ]
     if network.password:
         script.append(

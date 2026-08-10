@@ -194,14 +194,14 @@ class NetworkConfigTests(unittest.TestCase):
                             "controller br-x18; fi",
                             "sudo nmcli connection modify showco-x18-ethernet "
                             "ifname eth0 connection.controller br-x18 "
-                            "ipv4.method disabled ipv6.method disabled "
                             "connection.autoconnect yes",
-                            "if ! nmcli connection show showco-private >/dev/null "
-                            "2>&1; then sudo nmcli connection add type wifi "
-                            "ifname wlan0 con-name showco-private ssid showbox; fi",
+                            "if nmcli connection show showco-private >/dev/null "
+                            "2>&1; then sudo nmcli connection delete "
+                            "showco-private; fi",
+                            "sudo nmcli connection add type wifi ifname wlan0 "
+                            "con-name showco-private controller br-x18 ssid showbox",
                             "sudo nmcli connection modify showco-private ifname wlan0 "
                             "connection.controller br-x18 802-11-wireless.mode ap "
-                            "ipv4.method disabled ipv6.method disabled "
                             "connection.autoconnect yes",
                             "sudo nmcli connection up showco-x18-bridge",
                             "sudo nmcli connection up showco-x18-ethernet",
