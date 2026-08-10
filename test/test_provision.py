@@ -237,8 +237,22 @@ class ProvisionTests(unittest.TestCase):
         capture_ssh.assert_called_once_with(
             config,
             "tom@recs-stage.local",
-            "nmcli -t -f DEVICE,TYPE,STATE device status",
+            "nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device status",
         )
+        self.assertEqual(topology, network_config.NetworkTopology.PRIVATE)
+
+    def test_network_preflight_reuses_existing_private_hotspot(self) -> None:
+        config = make_config(values(networks=networks(x18=False)))
+        with mock.patch(
+            "showco.provision.provision.capture_ssh",
+            return_value=(
+                "wlan0:wifi:connected:Livebox\nwlan1:wifi:connected:showco-private\n"
+            ),
+        ):
+            topology = provision.preflight_network_config(
+                config, "tom@recs-stage.local"
+            )
+
         self.assertEqual(topology, network_config.NetworkTopology.PRIVATE)
 
     def test_remote_script_is_removed_after_remote_failure(self) -> None:

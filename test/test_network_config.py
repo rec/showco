@@ -96,16 +96,37 @@ class NetworkConfigTests(unittest.TestCase):
             assignment.secondary.name if assignment.secondary else "", "wlan1"
         )
 
+    def test_existing_private_hotspot_is_reused(self) -> None:
+        assignment = network_config.assign_wifi(
+            [
+                network_config.WifiInterface(
+                    name="wlan0", connected=True, connection="Livebox"
+                ),
+                network_config.WifiInterface(
+                    name="wlan1",
+                    connected=True,
+                    connection=network_config.PRIVATE_WIFI_CONNECTION,
+                ),
+            ],
+            swap_wifi=False,
+        )
+
+        self.assertEqual(assignment.primary.name, "wlan1")
+
     def test_status_parser_marks_connected_wifi_interfaces(self) -> None:
         interfaces = network_config.wifi_interfaces_from_status(
-            "wlan0:wifi:disconnected\nwlan1:wifi:connected\n"
+            "wlan0:wifi:disconnected:\nwlan1:wifi:connected:showco-private\n"
         )
 
         self.assertEqual(
             interfaces,
             [
                 network_config.WifiInterface(name="wlan0"),
-                network_config.WifiInterface(name="wlan1", connected=True),
+                network_config.WifiInterface(
+                    name="wlan1",
+                    connected=True,
+                    connection="showco-private",
+                ),
             ],
         )
 
@@ -256,7 +277,16 @@ class NetworkConfigTests(unittest.TestCase):
 
         self.assertEqual(
             commands,
-            [["nmcli", "-t", "-f", "DEVICE,TYPE,STATE", "device", "status"]],
+            [
+                [
+                    "nmcli",
+                    "-t",
+                    "-f",
+                    "DEVICE,TYPE,STATE,CONNECTION",
+                    "device",
+                    "status",
+                ]
+            ],
         )
         self.assertIn("ifname wlan1", output.getvalue())
         self.assertIn("sudo nmcli connection up showco-x18", output.getvalue())
@@ -289,7 +319,7 @@ class NetworkConfigTests(unittest.TestCase):
                     "nmcli",
                     "-t",
                     "-f",
-                    "DEVICE,TYPE,STATE",
+                    "DEVICE,TYPE,STATE,CONNECTION",
                     "device",
                     "status",
                 ],
