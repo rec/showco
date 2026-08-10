@@ -1,5 +1,5 @@
 [network]
-host = "recs-stage.local"
+host = "bertrand.local"
 web_port = 17352
 swap_wifi = false
 topology = ""
