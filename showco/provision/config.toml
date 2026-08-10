@@ -19,7 +19,7 @@ dhcp_end = "10.43.0.200"
 name = "Livebox-F13E"
 
 [usb]
-x18_device_name = "X18/XR18"
+x18_device_name = "X18"
 
 [twitch]
 enabled = false
