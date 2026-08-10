@@ -8,6 +8,7 @@ from unittest import mock
 
 import tyro
 
+from showco import network_config
 from showco.provision import config, provision
 
 
@@ -229,13 +230,16 @@ class ProvisionTests(unittest.TestCase):
             "showco.provision.provision.capture_ssh",
             return_value="wlan0:wifi:disconnected\nwlan1:wifi:connected\n",
         ) as capture_ssh:
-            provision.preflight_network_config(config, "tom@recs-stage.local")
+            topology = provision.preflight_network_config(
+                config, "tom@recs-stage.local"
+            )
 
         capture_ssh.assert_called_once_with(
             config,
             "tom@recs-stage.local",
             "nmcli -t -f DEVICE,TYPE,STATE device status",
         )
+        self.assertEqual(topology, network_config.NetworkTopology.PRIVATE)
 
     def test_remote_script_is_removed_after_remote_failure(self) -> None:
         config = make_config(values(networks=networks(x18=False)))
@@ -247,7 +251,10 @@ class ProvisionTests(unittest.TestCase):
                 side_effect=[None, original_error, cleanup_error],
             ) as run_ssh,
             mock.patch("showco.provision.provision.wait_for_ssh"),
-            mock.patch("showco.provision.provision.preflight_network_config"),
+            mock.patch(
+                "showco.provision.provision.preflight_network_config",
+                return_value=network_config.NetworkTopology.PRIVATE,
+            ),
             mock.patch("showco.provision.provision.ensure_github_account_key"),
             mock.patch("showco.provision.provision.run_scp"),
             self.assertRaises(subprocess.CalledProcessError) as error,
@@ -319,7 +326,10 @@ class ProvisionTests(unittest.TestCase):
         result = [provision.VerificationResult(name="showco", error="")]
         with (
             mock.patch("showco.provision.provision.run_ssh"),
-            mock.patch("showco.provision.provision.preflight_network_config"),
+            mock.patch(
+                "showco.provision.provision.preflight_network_config",
+                return_value=network_config.NetworkTopology.PRIVATE,
+            ),
             mock.patch("showco.provision.provision.ensure_github_account_key"),
             mock.patch("showco.provision.provision.run_scp"),
             mock.patch("showco.provision.provision.wait_for_ssh") as initial_wait,
@@ -341,7 +351,11 @@ class ProvisionTests(unittest.TestCase):
 
         initial_wait.assert_called_once_with(config, "tom@recs-stage.local")
         wait.assert_called_once_with(config, "tom@recs-stage.local")
-        verify.assert_called_once_with(config, "tom@recs-stage.local")
+        verify.assert_called_once_with(
+            config,
+            "tom@recs-stage.local",
+            network_config.NetworkTopology.PRIVATE,
+        )
         report.assert_called_once_with(result)
 
     def test_initial_wait_for_ssh_retries_until_connected(self) -> None:
@@ -691,7 +705,11 @@ class ProvisionTests(unittest.TestCase):
             "reccy.subprocess.run",
             return_value=subprocess.CompletedProcess(["ssh"], 0, "", ""),
         ) as run:
-            results = provision.verify_provisioning(config, "tom@recs-stage.local")
+            results = provision.verify_provisioning(
+                config,
+                "tom@recs-stage.local",
+                network_config.NetworkTopology.MIXED,
+            )
 
         commands = [c.args[0][-1] for c in run.call_args_list]
         self.assertFalse([r for r in results if r.error])
@@ -703,6 +721,11 @@ class ProvisionTests(unittest.TestCase):
             "uid=$(id -u); XDG_RUNTIME_DIR=/run/user/$uid "
             'cd "$HOME/code/showco" && PATH="$HOME/.local/bin:$PATH" '
             "uv run --frozen showco run service-status recs",
+            commands,
+        )
+        self.assertIn(
+            "nmcli -t -f TYPE,STATE,CONNECTION device status "
+            "| grep -F -x 'wifi:connected:showco-private'",
             commands,
         )
         self.assertIn(

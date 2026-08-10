@@ -147,7 +147,7 @@ def provision_remote(
     uploaded = False
     print(f"Waiting for SSH connection to {ssh_target}...")
     wait_for_ssh(provision_config, ssh_target)
-    preflight_network_config(provision_config, ssh_target)
+    topology = preflight_network_config(provision_config, ssh_target)
     print(f"Checking {ssh_target}...")
     run_ssh(
         provision_config,
@@ -172,7 +172,9 @@ def provision_remote(
         wait_for_rebooted_ssh(provision_config, ssh_target)
 
         print(f"Checking provisioned services on {ssh_target}...")
-        report_verification_results(verify_provisioning(provision_config, ssh_target))
+        report_verification_results(
+            verify_provisioning(provision_config, ssh_target, topology)
+        )
     finally:
         if uploaded:
             try:
@@ -191,7 +193,9 @@ def provision_remote(
                 )
 
 
-def preflight_network_config(provision_config: config.Config, ssh_target: str) -> None:
+def preflight_network_config(
+    provision_config: config.Config, ssh_target: str
+) -> network_config.NetworkTopology:
     print(f"Checking Wi-Fi interfaces on {ssh_target}...")
     status = capture_ssh(provision_config, ssh_target, WIFI_STATUS_COMMAND)
     interfaces = network_config.wifi_interfaces_from_status(status)
@@ -202,6 +206,7 @@ def preflight_network_config(provision_config: config.Config, ssh_target: str) -
         provision_config, assignment.secondary is not None
     )
     network_config.network_commands(provision_config, assignment, topology)
+    return topology
 
 
 def validate_config(provision_config: config.Config) -> None:
@@ -386,8 +391,22 @@ def known_host_names(provision_config: config.Config, ssh_target: str) -> list[s
 
 
 def verify_provisioning(
-    provision_config: config.Config, ssh_target: str
+    provision_config: config.Config,
+    ssh_target: str,
+    topology: network_config.NetworkTopology | None = None,
 ) -> list[VerificationResult]:
+    private_wifi_verification = []
+    if topology is not None and topology != network_config.NetworkTopology.PUBLIC:
+        private_wifi_verification.append(
+            verify_remote_command(
+                provision_config,
+                ssh_target,
+                "private Wi-Fi hotspot is active",
+                "nmcli -t -f TYPE,STATE,CONNECTION device status "
+                f"| grep -F -x "
+                f"'wifi:connected:{network_config.PRIVATE_WIFI_CONNECTION}'",
+            )
+        )
     return [
         verify_remote_command(
             provision_config,
@@ -462,6 +481,7 @@ def verify_provisioning(
             "NetworkManager connection list is readable",
             "nmcli connection show >/dev/null",
         ),
+        *private_wifi_verification,
         verify_x18_usb_device(provision_config, ssh_target),
     ]
 
