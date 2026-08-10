@@ -615,7 +615,10 @@ class ProvisionTests(unittest.TestCase):
         network = provision.REMOTE_SCRIPT.index('phase "configuring network"')
         reboot = provision.REMOTE_SCRIPT.index('phase "rebooting"')
 
-        self.assertIn("sudo shutdown -r +0", provision.REMOTE_SCRIPT)
+        self.assertIn(
+            "sudo systemd-run --on-active=2s /usr/bin/systemctl reboot",
+            provision.REMOTE_SCRIPT,
+        )
         self.assertLess(network, reboot)
 
     def test_remote_script_configures_locale_before_package_updates(self) -> None:
