@@ -74,11 +74,13 @@ def update_from_provisioning_machine(
     run_command = run_command or run_command_with_timeout
     provision_config = provisioning_config()
     programs = programs_for_repositories(selected, code_dir)
+    if not check_main_branches(programs, run_command, output):
+        return 1
     results = []
     for program in programs:
         print(f"Pushing {program.name} in {program.directory}", file=output)
         output.flush()
-        result = push_program(program, run_command)
+        result = push_program(program, run_command, output)
         results.append(result)
         print_result(result, output)
         output.flush()
@@ -110,6 +112,8 @@ def update_target(
     code_dir = code_dir or Path.home() / "code"
     run_command = run_command or run_command_with_timeout
     programs = programs_for_repositories(selected, code_dir)
+    if not check_main_branches(programs, run_command, output):
+        return 1
     if "showco" in selected:
         return update_target_with_showco(programs, run_command, output)
     service_names = selected_service_names(programs)
@@ -233,7 +237,9 @@ def selected_service_names(programs: list[Program]) -> list[str]:
     return result
 
 
-def push_program(program: Program, run_command: RunCommand) -> StepResult:
+def push_program(
+    program: Program, run_command: RunCommand, output: TextIO | None = None
+) -> StepResult:
     clean = clean_worktree_step(program, run_command)
     if not clean.ok:
         return clean
@@ -262,11 +268,120 @@ def push_program(program: Program, run_command: RunCommand) -> StepResult:
             returncode=2,
             output=f"bad upstream {upstream.output.strip()}",
         )
-    return run_step(
+    push = run_step(
         program.name,
         "push",
         ["git", "-C", str(program.directory), "push", remote, f"HEAD:{branch}"],
         run_command,
+    )
+    if push.ok:
+        return push
+    fetch = run_step(
+        program.name,
+        "fetch upstream",
+        ["git", "-C", str(program.directory), "fetch", remote, branch],
+        run_command,
+    )
+    if not fetch.ok:
+        return StepResult(
+            program=program.name,
+            step=fetch.step,
+            command=fetch.command,
+            returncode=fetch.returncode,
+            output=(
+                f"regular push failed:\n{push.output.rstrip()}\n"
+                f"could not fetch current upstream commit:\n{fetch.output}"
+            ),
+        )
+    upstream_commit = run_step(
+        program.name,
+        "upstream commit",
+        [
+            "git",
+            "-C",
+            str(program.directory),
+            "log",
+            "-1",
+            "--format=%H%n%s",
+            f"{remote}/{branch}",
+        ],
+        run_command,
+    )
+    if not upstream_commit.ok:
+        return StepResult(
+            program=program.name,
+            step=upstream_commit.step,
+            command=upstream_commit.command,
+            returncode=upstream_commit.returncode,
+            output=(
+                f"regular push failed:\n{push.output.rstrip()}\n"
+                f"could not read current upstream commit:\n{upstream_commit.output}"
+            ),
+        )
+    if output:
+        print(f"{program.name} regular push failed:", file=output)
+        print(push.output.rstrip(), file=output)
+        print(f"{program.name} current upstream commit:", file=output)
+        print(upstream_commit.output.rstrip(), file=output)
+        output.flush()
+    force_push = run_step(
+        program.name,
+        "push --force-with-lease",
+        [
+            "git",
+            "-C",
+            str(program.directory),
+            "push",
+            "--force-with-lease",
+            remote,
+            f"HEAD:{branch}",
+        ],
+        run_command,
+    )
+    return StepResult(
+        program=program.name,
+        step=force_push.step,
+        command=force_push.command,
+        returncode=force_push.returncode,
+        output=force_push.output,
+    )
+
+
+def check_main_branches(
+    programs: list[Program], run_command: RunCommand, output: TextIO
+) -> bool:
+    results = [main_branch_step(p, run_command) for p in programs]
+    failures = [r for r in results if not r.ok]
+    if not failures:
+        return True
+    print_results(failures, output)
+    return False
+
+
+def main_branch_step(program: Program, run_command: RunCommand) -> StepResult:
+    result = run_step(
+        program.name,
+        "main branch",
+        ["git", "-C", str(program.directory), "branch", "--show-current"],
+        run_command,
+    )
+    if not result.ok:
+        return result
+    branch = result.output.strip()
+    if branch == "main":
+        return StepResult(
+            program=program.name,
+            step="main branch",
+            command=result.command,
+            returncode=0,
+            output="",
+        )
+    return StepResult(
+        program=program.name,
+        step="main branch",
+        command=result.command,
+        returncode=1,
+        output=f"repository is on {branch or 'a detached HEAD'}, expected main",
     )
 
 
