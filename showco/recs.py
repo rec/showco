@@ -4,9 +4,7 @@ import json
 import os
 import sys
 import time
-import uuid
 from pathlib import Path
-from typing import cast
 
 from pydantic import BaseModel
 from reccy import ipc
@@ -95,23 +93,17 @@ class RecsClient:
         )
 
     def calibrate(self) -> ActionResult:
-        message_id = str(uuid.uuid4())
-        reply = self._send_command(
-            gui_protocol.Command(
-                type="command",
-                id=message_id,
-                command="calibrate",
-            ),
-            send_error="could not send recs calibrate command",
+        response = self._send_request(
+            gui_protocol.Calibrate(type="calibrate"),
+            send_error="could not send recs calibrate request",
             failure_prefix="recs calibration failed",
-            reply_name="calibration",
         )
-        if isinstance(reply, ActionResult):
-            return reply
-        if reply.ok:
+        if isinstance(response, ActionResult):
+            return response
+        if isinstance(response, gui_protocol.Calibrated):
             return ActionResult(ok=True, message="recs calibration succeeded")
         return ActionResult(
-            ok=False, message=reply.message or "recs calibration failed"
+            ok=False, message="recs did not send calibrated response"
         )
 
     def set_track_name(
@@ -136,21 +128,17 @@ class RecsClient:
             )
 
         updated = replace_track_name(track_names, device, channel_number, track_name)
-        message_id = str(uuid.uuid4())
-        reply = self._send_command(
-            gui_protocol.Command(
-                type="command",
-                id=message_id,
-                command="set_track_names",
+        response = self._send_request(
+            gui_protocol.SetTrackNames(
+                type="set_track_names",
                 track_names=updated,
             ),
-            send_error="could not send recs track name command",
+            send_error="could not send recs track name request",
             failure_prefix="recs track name update failed",
-            reply_name="track name",
         )
-        if isinstance(reply, ActionResult):
-            return reply
-        if reply.ok:
+        if isinstance(response, ActionResult):
+            return response
+        if isinstance(response, gui_protocol.TrackNames):
             if track_name:
                 return ActionResult(
                     ok=True, message=f"recs track name set to {track_name}"
@@ -159,58 +147,41 @@ class RecsClient:
                 ok=True, message=f"recs track name cleared for {channel}"
             )
         return ActionResult(
-            ok=False,
-            message=reply.message or "recs track name update failed",
+            ok=False, message="recs did not send track_names response"
         )
 
     def track_names(self) -> DeviceTrackNames | ActionResult:
-        message_id = str(uuid.uuid4())
-        reply = self._send_command(
-            gui_protocol.Command(
-                type="command",
-                id=message_id,
-                command="get_track_names",
-            ),
+        response = self._send_request(
+            gui_protocol.GetTrackNames(type="get_track_names"),
             send_error="could not send recs track name request",
             failure_prefix="recs track name request failed",
-            reply_name="track name",
         )
-        if isinstance(reply, ActionResult):
-            return reply
-        if not reply.ok:
-            return ActionResult(
-                ok=False,
-                message=reply.message or "recs track name request failed",
-            )
-        track_names = result_track_names(reply.result)
-        if track_names is None:
+        if isinstance(response, ActionResult):
+            return response
+        if not isinstance(response, gui_protocol.TrackNames):
             return ActionResult(ok=False, message="recs sent invalid track names")
-        return track_names
+        return response.track_names
 
     def action(self, command: str, **fields: object) -> ActionResult:
-        message_id = str(uuid.uuid4())
-        payload: dict[str, object] = {
-            "type": "command",
-            "id": message_id,
-            "command": command,
-        }
+        payload: dict[str, object] = {"type": command}
         payload.update({k: v for k, v in fields.items() if v not in ("", None)})
-        reply = self._send_command(
-            gui_protocol.Command.model_validate(payload),
-            send_error=f"could not send recs {command} command",
+        request = gui_protocol.MESSAGE.validate_python(payload)
+        if not isinstance(request, gui_protocol.Request):
+            return ActionResult(ok=False, message=f"recs does not support {command}")
+        response = self._send_request(
+            request,
+            send_error=f"could not send recs {command} request",
             failure_prefix=f"recs {command} failed",
-            reply_name=command.replace("_", " "),
         )
-        if isinstance(reply, ActionResult):
-            return reply
-        if reply.ok:
+        if isinstance(response, ActionResult):
+            return response
+        if not isinstance(response, gui_protocol.Error):
             return ActionResult(
                 ok=True,
-                message=command_result_message(command, reply.result),
+                message=command_result_message(command, response),
             )
         return ActionResult(
-            ok=False,
-            message=reply.message or f"recs {command} failed",
+            ok=False, message=response.message
         )
 
     def shutdown(self) -> ActionResult:
@@ -240,14 +211,13 @@ class RecsClient:
         finally:
             connection.close()
 
-    def _send_command(
+    def _send_request(
         self,
-        command: gui_protocol.Command,
+        request: gui_protocol.Request,
         *,
         send_error: str,
         failure_prefix: str,
-        reply_name: str,
-    ) -> gui_protocol.Reply | ActionResult:
+    ) -> gui_protocol.Response | ActionResult:
         try:
             metadata = self._metadata()
         except (OSError, ValueError) as e:
@@ -267,10 +237,10 @@ class RecsClient:
             if error := _expect_daemon_hello(_read_message(connection)):
                 return ActionResult(ok=False, message=error)
 
-            if not connection.write(ipc.message_json(command, exclude_none=True)):
+            if not connection.write(ipc.message_json(request, exclude_none=True)):
                 return ActionResult(ok=False, message=send_error)
 
-            return _command_reply(_read_message(connection), command.id, reply_name)
+            return _response(_read_message(connection))
         except (OSError, ValueError) as e:
             return ActionResult(ok=False, message=f"{failure_prefix}: {e}")
         finally:
@@ -312,7 +282,9 @@ def _endpoint(endpoint: str) -> Path | str:
 
 
 def gui_hello() -> str:
-    return ipc.message_json(ipc.Hello(type="hello", role="gui", version=1))
+    return ipc.message_json(
+        ipc.Hello(type="hello", role="gui", version=gui_protocol.VERSION)
+    )
 
 
 def _read_message(connection: ipc.Connection) -> object:
@@ -329,35 +301,12 @@ def _expect_daemon_hello(message: object) -> str | None:
     return None
 
 
-def _command_reply(
-    message: object, message_id: str, reply_name: str
-) -> gui_protocol.Reply | ActionResult:
+def _response(message: object) -> gui_protocol.Response | ActionResult:
     if isinstance(message, ipc.Error):
         return ActionResult(ok=False, message=message.message)
-    if not isinstance(message, gui_protocol.Reply):
-        return ActionResult(ok=False, message=f"recs did not send {reply_name} reply")
-    if message.id != message_id:
-        return ActionResult(ok=False, message="recs sent reply for a different command")
-    return cast(gui_protocol.Reply, message)
-
-
-def result_track_names(result: dict[str, object] | None) -> DeviceTrackNames | None:
-    if result is None:
-        return None
-    value = result.get("track_names")
-    if not isinstance(value, dict):
-        return None
-    track_names: DeviceTrackNames = {}
-    for k, v in value.items():
-        if not isinstance(k, str) or not isinstance(v, dict):
-            return None
-        names: dict[str, int] = {}
-        for name, channel in v.items():
-            if not isinstance(name, str) or not isinstance(channel, int):
-                return None
-            names[name] = channel
-        track_names[k] = names
-    return track_names
+    if not isinstance(message, gui_protocol.Response):
+        return ActionResult(ok=False, message="recs did not send a response")
+    return message
 
 
 def track_channel(
@@ -388,10 +337,8 @@ def replace_track_name(
     return updated
 
 
-def command_result_message(command: str, result: dict[str, object] | None) -> str:
-    if result is None:
-        return f"recs {command} succeeded"
-    text = json.dumps(result, sort_keys=True)
+def command_result_message(command: str, response: BaseModel) -> str:
+    text = json.dumps(response.model_dump(exclude={"type"}), sort_keys=True)
     if len(text) > 500:
         text = text[:497] + "..."
     return f"recs {command} succeeded: {text}"
