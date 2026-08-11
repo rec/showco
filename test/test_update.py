@@ -52,6 +52,8 @@ class UpdateTests(unittest.TestCase):
 
         def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
             commands.append(list(command))
+            if command[-2:] == ["branch", "--show-current"]:
+                return subprocess.CompletedProcess(command, 0, "main\n", "")
             if command[-2:] == ["status", "--porcelain"]:
                 return subprocess.CompletedProcess(command, 0, "", "")
             if command[-2:] == ["rev-parse", "HEAD"]:
@@ -73,6 +75,7 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(
             commands,
             [
+                ["git", "-C", "/code/recs", "branch", "--show-current"],
                 ["systemctl", "--user", "stop", "recs.service"],
                 ["git", "-C", "/code/recs", "status", "--porcelain"],
                 ["git", "-C", "/code/recs", "rev-parse", "HEAD"],
@@ -87,6 +90,8 @@ class UpdateTests(unittest.TestCase):
 
         def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
             commands.append(list(command))
+            if command[-2:] == ["branch", "--show-current"]:
+                return subprocess.CompletedProcess(command, 0, "main\n", "")
             if command[-2:] == ["status", "--porcelain"]:
                 return subprocess.CompletedProcess(command, 0, "", "")
             if command[-2:] == ["rev-parse", "HEAD"]:
@@ -109,6 +114,7 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(
             commands,
             [
+                ["git", "-C", "/code/showco", "branch", "--show-current"],
                 ["systemctl", "--user", "stop", "showco.service"],
                 ["git", "-C", "/code/showco", "status", "--porcelain"],
                 ["git", "-C", "/code/showco", "rev-parse", "HEAD"],
@@ -123,6 +129,8 @@ class UpdateTests(unittest.TestCase):
 
         def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
             commands.append(list(command))
+            if command[-2:] == ["branch", "--show-current"]:
+                return subprocess.CompletedProcess(command, 0, "main\n", "")
             if command[-2:] == ["status", "--porcelain"]:
                 return subprocess.CompletedProcess(command, 0, "", "")
             if command[-2:] == ["rev-parse", "HEAD"]:
@@ -140,7 +148,15 @@ class UpdateTests(unittest.TestCase):
             )
 
         self.assertEqual(result, 0)
-        self.assertEqual(commands[0], ["systemctl", "--user", "stop", "showco.service"])
+        self.assertEqual(
+            commands[:4],
+            [
+                ["git", "-C", "/code/reccy", "branch", "--show-current"],
+                ["git", "-C", "/code/recs", "branch", "--show-current"],
+                ["git", "-C", "/code/showco", "branch", "--show-current"],
+                ["git", "-C", "/code/twitcho", "branch", "--show-current"],
+            ],
+        )
         self.assertEqual(
             commands[-1], ["systemctl", "--user", "start", "showco.service"]
         )
@@ -164,6 +180,8 @@ class UpdateTests(unittest.TestCase):
 
         def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
             commands.append(list(command))
+            if command[-2:] == ["branch", "--show-current"]:
+                return subprocess.CompletedProcess(command, 0, "main\n", "")
             if command[-2:] == ["status", "--porcelain"]:
                 return subprocess.CompletedProcess(command, 0, "", "")
             if command[-2:] == ["rev-parse", "HEAD"]:
@@ -194,6 +212,8 @@ class UpdateTests(unittest.TestCase):
 
         def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
             commands.append(list(command))
+            if command[-2:] == ["branch", "--show-current"]:
+                return subprocess.CompletedProcess(command, 0, "main\n", "")
             if command[-2:] == ["status", "--porcelain"]:
                 return subprocess.CompletedProcess(command, 0, "", "")
             if command[-1:] == ["@{upstream}"]:
@@ -243,6 +263,111 @@ class UpdateTests(unittest.TestCase):
         self.assertIn("showco push: ok", output.getvalue())
         self.assertIn("Updating target tom@bertrand.local", output.getvalue())
 
+    def test_provisioning_update_rejects_non_main_branches_before_pushing(self) -> None:
+        commands: list[list[str]] = []
+
+        def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+            commands.append(list(command))
+            branch = "feature" if command[2] == "/code/recs" else "main"
+            return subprocess.CompletedProcess(command, 0, f"{branch}\n", "")
+
+        output = StringIO()
+        with (
+            mock.patch(
+                "showco.update.provisioning_config",
+                return_value=make_config(),
+            ),
+            mock.patch("showco.update.run_remote_step") as remote_update,
+        ):
+            result = update.update_from_provisioning_machine(
+                ["recs", "showco"],
+                code_dir=Path("/code"),
+                run_command=run_command,
+                output=output,
+            )
+
+        self.assertEqual(result, 1)
+        self.assertEqual(
+            commands,
+            [
+                ["git", "-C", "/code/recs", "branch", "--show-current"],
+                ["git", "-C", "/code/showco", "branch", "--show-current"],
+            ],
+        )
+        self.assertIn("recs main branch: failed", output.getvalue())
+        self.assertIn("repository is on feature, expected main", output.getvalue())
+        remote_update.assert_not_called()
+
+    def test_target_update_rejects_non_main_branches_before_stopping_services(
+        self,
+    ) -> None:
+        commands: list[list[str]] = []
+
+        def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+            commands.append(list(command))
+            return subprocess.CompletedProcess(command, 0, "feature\n", "")
+
+        output = StringIO()
+        result = update.update_target(
+            ["recs"],
+            code_dir=Path("/code"),
+            run_command=run_command,
+            output=output,
+        )
+
+        self.assertEqual(result, 1)
+        self.assertEqual(
+            commands,
+            [["git", "-C", "/code/recs", "branch", "--show-current"]],
+        )
+        self.assertIn("repository is on feature, expected main", output.getvalue())
+
+    def test_push_program_force_pushes_with_current_upstream_commit(self) -> None:
+        commands: list[list[str]] = []
+
+        def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+            commands.append(list(command))
+            if command[-2:] == ["status", "--porcelain"]:
+                return subprocess.CompletedProcess(command, 0, "", "")
+            if command[-1:] == ["@{upstream}"]:
+                return subprocess.CompletedProcess(command, 0, "origin/main\n", "")
+            if command[-3:] == ["push", "origin", "HEAD:main"]:
+                return subprocess.CompletedProcess(command, 1, "", "rejected\n")
+            if command[-3:] == ["fetch", "origin", "main"]:
+                return subprocess.CompletedProcess(command, 0, "", "")
+            if command[-1:] == ["origin/main"]:
+                return subprocess.CompletedProcess(
+                    command,
+                    0,
+                    "1234567890abcdef\nRemote commit subject\n",
+                    "",
+                )
+            return subprocess.CompletedProcess(command, 0, "forced\n", "")
+
+        output = StringIO()
+        result = update.push_program(
+            update.Program(name="recs", directory=Path("/code/recs"), service_names=[]),
+            run_command,
+            output,
+        )
+
+        self.assertTrue(result.ok)
+        self.assertEqual(result.step, "push --force-with-lease")
+        self.assertIn("recs current upstream commit:", output.getvalue())
+        self.assertIn("1234567890abcdef\nRemote commit subject", output.getvalue())
+        self.assertEqual(
+            commands[-1],
+            [
+                "git",
+                "-C",
+                "/code/recs",
+                "push",
+                "--force-with-lease",
+                "origin",
+                "HEAD:main",
+            ],
+        )
+
     def test_remote_step_reports_remote_output(self) -> None:
         command = ["ssh", "tom@bertrand.local", "showco update"]
         with mock.patch(
@@ -265,6 +390,7 @@ class UpdateTests(unittest.TestCase):
                 "showco.update.provisioning_config",
                 return_value=make_config(),
             ),
+            mock.patch("showco.update.check_main_branches", return_value=True),
             mock.patch("showco.update.push_program"),
             mock.patch(
                 "showco.update.run_remote_step",
@@ -288,6 +414,7 @@ class UpdateTests(unittest.TestCase):
                 "showco.update.provisioning_config",
                 return_value=make_config(),
             ),
+            mock.patch("showco.update.check_main_branches", return_value=True),
             mock.patch("showco.update.push_program"),
             mock.patch(
                 "showco.update.run_remote_step",
@@ -312,6 +439,8 @@ class UpdateTests(unittest.TestCase):
 
         def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
             commands.append(list(command))
+            if command[-2:] == ["branch", "--show-current"]:
+                return subprocess.CompletedProcess(command, 0, "main\n", "")
             if command[-2:] == ["status", "--porcelain"]:
                 return subprocess.CompletedProcess(command, 0, " M file.py\n", "")
             return subprocess.CompletedProcess(command, 0, "", "")
@@ -330,7 +459,10 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(result, 1)
         self.assertEqual(
             commands,
-            [["git", "-C", "/code/recs", "status", "--porcelain"]],
+            [
+                ["git", "-C", "/code/recs", "branch", "--show-current"],
+                ["git", "-C", "/code/recs", "status", "--porcelain"],
+            ],
         )
 
     def test_provisioning_update_ignores_untracked_local_files(self) -> None:
@@ -338,6 +470,8 @@ class UpdateTests(unittest.TestCase):
 
         def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
             commands.append(list(command))
+            if command[-2:] == ["branch", "--show-current"]:
+                return subprocess.CompletedProcess(command, 0, "main\n", "")
             if command[-2:] == ["status", "--porcelain"]:
                 return subprocess.CompletedProcess(
                     command,
@@ -382,6 +516,8 @@ class UpdateTests(unittest.TestCase):
 
         def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
             commands.append(list(command))
+            if command[-2:] == ["branch", "--show-current"]:
+                return subprocess.CompletedProcess(command, 0, "main\n", "")
             if command[-2:] == ["status", "--porcelain"]:
                 return subprocess.CompletedProcess(command, 0, " M file.py\n", "")
             return subprocess.CompletedProcess(command, 0, "", "")
@@ -400,6 +536,7 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(
             commands,
             [
+                ["git", "-C", "/code/recs", "branch", "--show-current"],
                 ["systemctl", "--user", "stop", "recs.service"],
                 ["git", "-C", "/code/recs", "status", "--porcelain"],
                 ["systemctl", "--user", "start", "recs.service"],
@@ -411,6 +548,8 @@ class UpdateTests(unittest.TestCase):
 
         def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
             commands.append(list(command))
+            if command[-2:] == ["branch", "--show-current"]:
+                return subprocess.CompletedProcess(command, 0, "main\n", "")
             if command[-2:] == ["status", "--porcelain"]:
                 return subprocess.CompletedProcess(command, 0, "?? open-loop.mp4\n", "")
             if command[-2:] == ["rev-parse", "HEAD"]:
