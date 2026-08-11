@@ -75,7 +75,7 @@ class RecsTests(unittest.TestCase):
             "1",
         )
 
-    def test_calibrate_sends_recs_protocol_command(self) -> None:
+    def test_calibrate_sends_recs_protocol_request(self) -> None:
         with TemporaryDirectory() as directory:
             metadata = Path(directory) / "daemon.json"
             metadata.write_text(
@@ -87,16 +87,14 @@ class RecsTests(unittest.TestCase):
             )
             connection = FakeRecsConnection(
                 [
-                    '{"type":"hello","role":"daemon","version":1}\n',
-                    '{"type":"reply","id":"c1","ok":true}\n',
+                    '{"type":"hello","role":"daemon","version":2}\n',
+                    '{"type":"calibrated","measurements":{},"profiles":{},'
+                    '"profiles_path":"/tmp/profiles.json"}\n',
                 ]
             )
             client = RecsClient(metadata_path=metadata)
 
-            with (
-                mock.patch(CLIENT_CONNECTION, return_value=connection),
-                mock.patch("showco.recs.uuid.uuid4", return_value="c1"),
-            ):
+            with mock.patch(CLIENT_CONNECTION, return_value=connection):
                 result = client.calibrate()
 
         self.assertTrue(result.ok)
@@ -104,8 +102,8 @@ class RecsTests(unittest.TestCase):
         self.assertEqual(
             [json.loads(message) for message in connection.sent],
             [
-                {"type": "hello", "role": "gui", "version": 1},
-                {"type": "command", "id": "c1", "command": "calibrate"},
+                {"type": "hello", "role": "gui", "version": 2},
+                {"type": "calibrate"},
             ],
         )
         self.assertTrue(connection.closed)
@@ -143,7 +141,7 @@ class RecsTests(unittest.TestCase):
             result.message, "could not connect to recs: connection refused"
         )
 
-    def test_set_track_name_sends_recs_protocol_commands(self) -> None:
+    def test_set_track_name_sends_recs_protocol_requests(self) -> None:
         with TemporaryDirectory() as directory:
             metadata = Path(directory) / "daemon.json"
             metadata.write_text(
@@ -155,23 +153,17 @@ class RecsTests(unittest.TestCase):
             )
             connection = FakeRecsConnection(
                 [
-                    '{"type":"hello","role":"daemon","version":1}\n',
-                    '{"type":"reply","id":"get","ok":true,'
-                    '"result":{"track_names":{"Mic":{"Old Name":1}}}}\n',
-                    '{"type":"hello","role":"daemon","version":1}\n',
-                    '{"type":"reply","id":"set","ok":true,'
-                    '"result":{"track_names":{"Mic":{"Lead Vocal":1}}}}\n',
+                    '{"type":"hello","role":"daemon","version":2}\n',
+                    '{"type":"track_names","track_names":{"Mic":'
+                    '{"Old Name":1}}}\n',
+                    '{"type":"hello","role":"daemon","version":2}\n',
+                    '{"type":"track_names","track_names":{"Mic":'
+                    '{"Lead Vocal":1}}}\n',
                 ]
             )
             client = RecsClient(metadata_path=metadata)
 
-            with (
-                mock.patch(CLIENT_CONNECTION, return_value=connection),
-                mock.patch(
-                    "showco.recs.uuid.uuid4",
-                    side_effect=["get", "set"],
-                ),
-            ):
+            with mock.patch(CLIENT_CONNECTION, return_value=connection):
                 result = client.set_track_name("Mic", "Old Name", "Lead Vocal")
 
         self.assertTrue(result.ok)
@@ -179,19 +171,17 @@ class RecsTests(unittest.TestCase):
         self.assertEqual(
             [json.loads(message) for message in connection.sent],
             [
-                {"type": "hello", "role": "gui", "version": 1},
-                {"type": "command", "id": "get", "command": "get_track_names"},
-                {"type": "hello", "role": "gui", "version": 1},
+                {"type": "hello", "role": "gui", "version": 2},
+                {"type": "get_track_names"},
+                {"type": "hello", "role": "gui", "version": 2},
                 {
-                    "type": "command",
-                    "id": "set",
-                    "command": "set_track_names",
+                    "type": "set_track_names",
                     "track_names": {"Mic": {"Lead Vocal": 1}},
                 },
             ],
         )
 
-    def test_recs_action_sends_protocol_command_with_fields(self) -> None:
+    def test_recs_action_sends_protocol_request_with_fields(self) -> None:
         with TemporaryDirectory() as directory:
             metadata = Path(directory) / "daemon.json"
             metadata.write_text(
@@ -203,17 +193,14 @@ class RecsTests(unittest.TestCase):
             )
             connection = FakeRecsConnection(
                 [
-                    '{"type":"hello","role":"daemon","version":1}\n',
-                    '{"type":"reply","id":"c1","ok":true,'
-                    '"result":{"source":"Mic","noise_floor":42.5}}\n',
+                    '{"type":"hello","role":"daemon","version":2}\n',
+                    '{"type":"noise_floor_set","source":"Mic",'
+                    '"noise_floor":42.5}\n',
                 ]
             )
             client = RecsClient(metadata_path=metadata)
 
-            with (
-                mock.patch(CLIENT_CONNECTION, return_value=connection),
-                mock.patch("showco.recs.uuid.uuid4", return_value="c1"),
-            ):
+            with mock.patch(CLIENT_CONNECTION, return_value=connection):
                 result = client.action(
                     "set_noise_floor",
                     source="Mic",
@@ -224,11 +211,9 @@ class RecsTests(unittest.TestCase):
         self.assertEqual(
             [json.loads(message) for message in connection.sent],
             [
-                {"type": "hello", "role": "gui", "version": 1},
+                {"type": "hello", "role": "gui", "version": 2},
                 {
-                    "type": "command",
-                    "id": "c1",
-                    "command": "set_noise_floor",
+                    "type": "set_noise_floor",
                     "noise_floor": 42.5,
                     "source": "Mic",
                 },
@@ -247,7 +232,7 @@ class RecsTests(unittest.TestCase):
                 ).model_dump_json()
             )
             connection = FakeRecsConnection(
-                ['{"type":"hello","role":"daemon","version":1}\n']
+                ['{"type":"hello","role":"daemon","version":2}\n']
             )
             client = RecsClient(metadata_path=metadata)
 
@@ -258,7 +243,7 @@ class RecsTests(unittest.TestCase):
         self.assertEqual(
             [json.loads(message) for message in connection.sent],
             [
-                {"type": "hello", "role": "gui", "version": 1},
+                {"type": "hello", "role": "gui", "version": 2},
                 {"type": "shutdown"},
             ],
         )
