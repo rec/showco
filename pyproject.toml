@@ -11,6 +11,9 @@ dependencies = [
     "tyro>=1.0.15",
 ]
 
+[tool.uv]
+exclude-newer = "1 week"
+
 [tool.uv.sources]
 reccy = { path = "../reccy", editable = true }
 recs = { path = "../recs", editable = true }
