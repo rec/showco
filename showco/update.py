@@ -119,6 +119,12 @@ def update_from_provisioning_machine(
                     legacy_remote_update_command(root or provision_config.paths.root),
                 ),
             )
+            if target_result.ok:
+                target_result = run_remote_step(
+                    "target",
+                    "update",
+                    provision.ssh_command(provision_config, ssh_target, command),
+                )
         progress.update()
     if not target_result.ok:
         report_failure(target_result, output)
@@ -219,6 +225,23 @@ def update_program_on_target(
         run_command,
     )
     results.append(after)
+    if after.ok and after.output.strip() != commit:
+        dependencies = run_step(
+            program.name,
+            "sync dependencies",
+            ["uv", "sync", "--frozen", "--directory", str(program.directory)],
+            run_command,
+        )
+        results.append(dependencies)
+        if not dependencies.ok:
+            results.append(
+                run_step(
+                    program.name,
+                    "reset",
+                    ["git", "-C", str(program.directory), "reset", "--hard", commit],
+                    run_command,
+                )
+            )
     return results
 
 
@@ -628,7 +651,7 @@ def service_runner(
 
 
 def timeout(command: Sequence[str]) -> float:
-    if command and command[0] in ("git", "ssh"):
+    if command and command[0] in ("git", "ssh", "uv"):
         return 120.0
     return 30.0
 

@@ -159,9 +159,43 @@ class UpdateTests(unittest.TestCase):
                 ["git", "-C", "/code/recs", "rev-parse", "HEAD"],
                 ["git", "-C", "/code/recs", "pull", "--ff-only"],
                 ["git", "-C", "/code/recs", "rev-parse", "HEAD"],
+                ["uv", "sync", "--frozen", "--directory", "/code/recs"],
                 ["systemctl", "--user", "start", "recs.service"],
             ],
         )
+
+    def test_target_update_resets_repository_when_dependency_sync_fails(self) -> None:
+        commands: list[list[str]] = []
+
+        def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+            commands.append(list(command))
+            if command[-2:] == ["branch", "--show-current"]:
+                return subprocess.CompletedProcess(command, 0, "main\n", "")
+            if command[-2:] == ["status", "--porcelain"]:
+                return subprocess.CompletedProcess(command, 0, "", "")
+            if command[-2:] == ["rev-parse", "HEAD"]:
+                stdout = "old\n" if commands.count(list(command)) == 1 else "new\n"
+                return subprocess.CompletedProcess(command, 0, stdout, "")
+            if command[:3] == ["uv", "sync", "--frozen"]:
+                return subprocess.CompletedProcess(
+                    command, 1, "", "package unavailable\n"
+                )
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        with mock.patch(
+            "showco.services.service.current_platform", return_value=Platform.linux
+        ):
+            result = update.update_target(
+                ["recs"],
+                root=Path("/code"),
+                run_command=run_command,
+                output=StringIO(),
+            )
+
+        self.assertEqual(result, 1)
+        self.assertIn(["uv", "sync", "--frozen", "--directory", "/code/recs"], commands)
+        self.assertIn(["git", "-C", "/code/recs", "reset", "--hard", "old"], commands)
+        self.assertIn(["systemctl", "--user", "start", "recs.service"], commands)
 
     def test_target_update_rolls_back_failed_pull_and_restarts_service(self) -> None:
         commands: list[list[str]] = []
@@ -401,6 +435,13 @@ class UpdateTests(unittest.TestCase):
             returncode=0,
             output="",
         )
+        updated = update.StepResult(
+            program="target",
+            step="update",
+            command=["ssh"],
+            returncode=0,
+            output="",
+        )
         with (
             mock.patch(
                 "showco.update.provisioning_config",
@@ -408,7 +449,7 @@ class UpdateTests(unittest.TestCase):
             ),
             mock.patch(
                 "showco.update.run_remote_step",
-                side_effect=[rejected, succeeded],
+                side_effect=[rejected, succeeded, updated],
             ) as remote_update,
         ):
             result = update.update_from_provisioning_machine(
@@ -420,10 +461,14 @@ class UpdateTests(unittest.TestCase):
             )
 
         self.assertEqual(result, 0)
-        self.assertEqual(remote_update.call_count, 2)
+        self.assertEqual(remote_update.call_count, 3)
         self.assertEqual(
-            remote_update.call_args.args[2][-1],
+            remote_update.call_args_list[1].args[2][-1],
             'cd /code/showco && PATH="$HOME/.local/bin:$PATH" uv run showco update',
+        )
+        self.assertIn(
+            "uv run showco update --target-machine --root /code showco",
+            remote_update.call_args.args[2][-1],
         )
 
     def test_target_update_rejects_non_main_branches_before_stopping_services(
