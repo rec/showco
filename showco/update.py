@@ -58,8 +58,11 @@ def main(argv: list[str] | None = None) -> int:
         options.target_machine
         or machine_role.machine_role() == machine_role.TARGET_ROLE
     ):
-        return update_target(selected)
-    return update_from_provisioning_machine(selected, host=options.host)
+        result = update_target(selected)
+    else:
+        result = update_from_provisioning_machine(selected, host=options.host)
+    print("Success!" if result == 0 else "ERROR: update failed")
+    return result
 
 
 def update_from_provisioning_machine(
