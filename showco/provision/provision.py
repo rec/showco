@@ -55,6 +55,7 @@ class ProvisionOptions(BaseModel, frozen=True):
     host: str | None = None
     user: str | None = None
     port: int | None = None
+    root: Path | None = None
     reccy_repo: str | None = None
     recs_repo: str | None = None
     twitcho_repo: str | None = None
@@ -74,6 +75,8 @@ def main(argv: list[str] | None = None) -> int:
 def run(options: ProvisionOptions) -> int:
     if options.host is not None:
         persist_network_host(options.config_path, options.host)
+    if options.root is not None:
+        persist_paths_root(options.config_path, options.root)
     env = config.merge_values(
         config.read_toml(options.config_path), config.read_toml(options.secrets)
     )
@@ -82,6 +85,7 @@ def run(options: ProvisionOptions) -> int:
         host=options.host,
         user=options.user,
         port=options.port,
+        root=options.root,
         reccy_repo=options.reccy_repo,
         recs_repo=options.recs_repo,
         twitcho_repo=options.twitcho_repo,
@@ -110,20 +114,28 @@ def run(options: ProvisionOptions) -> int:
 
 
 def persist_network_host(config_path: Path, host: str) -> None:
+    persist_config_value(config_path, "network", "host", host)
+
+
+def persist_paths_root(config_path: Path, root: Path) -> None:
+    persist_config_value(config_path, "paths", "root", str(root))
+
+
+def persist_config_value(config_path: Path, table: str, key: str, value: str) -> None:
     path = config_path.expanduser()
     lines = path.read_text().splitlines()
-    host_line = f"host = {toml_string(host)}"
-    network_index = table_index(lines, "[network]")
-    if network_index is None:
-        path.write_text("[network]\n" + host_line + "\n\n" + "\n".join(lines) + "\n")
+    value_line = f"{key} = {toml_string(value)}"
+    table_index_value = table_index(lines, f"[{table}]")
+    if table_index_value is None:
+        path.write_text(f"[{table}]\n" + value_line + "\n\n" + "\n".join(lines) + "\n")
         return
-    next_table = next_table_index(lines, network_index + 1)
-    for index in range(network_index + 1, next_table):
-        if lines[index].lstrip().startswith("host"):
-            lines[index] = host_line
+    next_table = next_table_index(lines, table_index_value + 1)
+    for index in range(table_index_value + 1, next_table):
+        if lines[index].lstrip().startswith(key):
+            lines[index] = value_line
             path.write_text("\n".join(lines) + "\n")
             return
-    lines.insert(network_index + 1, host_line)
+    lines.insert(table_index_value + 1, value_line)
     path.write_text("\n".join(lines) + "\n")
 
 
@@ -235,8 +247,8 @@ def config_errors(provision_config: config.Config) -> list[str]:
     return errors
 
 
-def validate_local_repositories(code_dir: Path | None = None) -> None:
-    errors = local_repository_errors(code_dir or local_code_dir())
+def validate_local_repositories(root: Path | None = None) -> None:
+    errors = local_repository_errors(root or local_checkout_directory())
     if errors:
         sys.exit(
             "ERROR: local repositories are not ready for Raspberry Pi provisioning\n"
@@ -244,15 +256,15 @@ def validate_local_repositories(code_dir: Path | None = None) -> None:
         )
 
 
-def local_repository_errors(code_dir: Path) -> list[str]:
+def local_repository_errors(root: Path) -> list[str]:
     errors = []
-    for repository in local_repositories(code_dir):
+    for repository in local_repositories(root):
         errors.extend(repository_errors(repository))
     return errors
 
 
-def local_repositories(code_dir: Path) -> list[LocalRepository]:
-    return [LocalRepository(name=n, path=code_dir / n) for n in LOCAL_REPOSITORIES]
+def local_repositories(root: Path) -> list[LocalRepository]:
+    return [LocalRepository(name=n, path=root / n) for n in LOCAL_REPOSITORIES]
 
 
 def repository_errors(repository: LocalRepository) -> list[str]:
@@ -295,7 +307,7 @@ def repository_errors(repository: LocalRepository) -> list[str]:
     return errors
 
 
-def local_code_dir() -> Path:
+def local_checkout_directory() -> Path:
     return PROVISION_DIR.parents[2]
 
 
@@ -439,41 +451,41 @@ def verify_provisioning(
             provision_config,
             ssh_target,
             "reccy project status is clean",
-            project_status_command("reccy"),
+            project_status_command("reccy", provision_config.paths.root),
             expect_empty_stdout=True,
         ),
         verify_remote_command(
             provision_config,
             ssh_target,
             "recs project status is clean",
-            project_status_command("recs"),
+            project_status_command("recs", provision_config.paths.root),
             expect_empty_stdout=True,
         ),
         verify_remote_command(
             provision_config,
             ssh_target,
             "twitcho project status is clean",
-            project_status_command("twitcho"),
+            project_status_command("twitcho", provision_config.paths.root),
             expect_empty_stdout=True,
         ),
         verify_remote_command(
             provision_config,
             ssh_target,
             "showco project status is clean",
-            project_status_command("showco"),
+            project_status_command("showco", provision_config.paths.root),
             expect_empty_stdout=True,
         ),
         verify_remote_command(
             provision_config,
             ssh_target,
             "recs service is active",
-            showco_service_status_command("recs"),
+            showco_service_status_command("recs", provision_config.paths.root),
         ),
         verify_remote_command(
             provision_config,
             ssh_target,
             "showco service is active",
-            showco_service_status_command("showco"),
+            showco_service_status_command("showco", provision_config.paths.root),
         ),
         verify_remote_command(
             provision_config,
@@ -522,17 +534,17 @@ def wait_for_provisioning_ready(
         time.sleep(1)
 
 
-def project_status_command(project: str) -> str:
-    return f'git -C "$HOME/code/{project}" status --short'
+def project_status_command(project: str, root: Path) -> str:
+    return f"git -C {shlex.quote(str(root / project))} status --short"
 
 
 def user_systemctl_command(arguments: str) -> str:
     return user_session_command(f"systemctl --user {arguments}")
 
 
-def showco_service_status_command(service: str) -> str:
+def showco_service_status_command(service: str, root: Path) -> str:
     return user_session_command(
-        f'cd "$HOME/code/showco" && PATH="$HOME/.local/bin:$PATH" '
+        f'cd {shlex.quote(str(root / "showco"))} && PATH="$HOME/.local/bin:$PATH" '
         f"uv run --frozen showco run service-status {service}"
     )
 
@@ -727,7 +739,7 @@ def remote_command(provision_config: config.Config, remote_script: str) -> str:
     values = {
         "SHOW_USER": provision_config.network.user,
         "SHOWCO_HOST": provision_config.network.host,
-        "CODE_DIR": f"/home/{provision_config.network.user}/code",
+        "ROOT": str(provision_config.paths.root),
         "RECCY_REPO": provision_config.git.reccy.url,
         "RECCY_REFNAME": provision_config.git.reccy.refname,
         "RECS_REPO": provision_config.git.recs.url,

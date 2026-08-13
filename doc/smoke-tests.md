@@ -11,7 +11,7 @@ the local software contracts that can be verified on a development machine.
 Run:
 
 ```bash
-cd ~/code/showco
+cd <root>/showco
 uv run python -m unittest discover -s test
 ```
 
@@ -30,7 +30,7 @@ The smoke coverage includes:
 Run:
 
 ```bash
-cd ~/code/showco
+cd <root>/showco
 uv run showco --rehearsal --host 127.0.0.1 --port 17352
 ```
 

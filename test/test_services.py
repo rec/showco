@@ -66,15 +66,15 @@ class ServicesTests(unittest.TestCase):
                 ),
             ):
                 result = services.install_showco_service(
+                    root=Path("/srv/show-projects"),
                     host="0.0.0.0",
                     port=17352,
-                    executable=Path("/home/tom/code/showco/.venv/bin/showco"),
                 )
 
         self.assertEqual(result, 0)
         metadata = controller.install.call_args.args[0]
         self.assertEqual(
-            metadata.executable, Path("/home/tom/code/showco/.venv/bin/showco")
+            metadata.executable, Path("/srv/show-projects/showco/.venv/bin/showco")
         )
         self.assertEqual(
             metadata.argv[:5], ["run", "--host", "0.0.0.0", "--port", "17352"]
@@ -83,12 +83,13 @@ class ServicesTests(unittest.TestCase):
     def test_showco_daemon_uses_reccy_service_lifecycle(self) -> None:
         daemon = services.ShowcoDaemon(
             platform=Platform.linux,
-            executable=Path("/home/tom/code/showco/.venv/bin/showco"),
+            root=Path("/srv/show-projects"),
         )
 
         self.assertEqual(daemon.name, "showco")
         self.assertEqual(
-            daemon.daemon_executable(), Path("/home/tom/code/showco/.venv/bin/showco")
+            daemon.daemon_executable(),
+            Path("/srv/show-projects/showco/.venv/bin/showco"),
         )
 
     def test_showco_args_omit_twitcho_configuration_when_disabled(self) -> None:

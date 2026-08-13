@@ -7,7 +7,7 @@ from pathlib import Path
 from subprocess import CompletedProcess
 from typing import ClassVar
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from reccy import paths, reccy, service
 from reccy.models import ServiceSpec, StatusResult
 
@@ -38,12 +38,10 @@ SERVICES = {
 class ShowcoDaemon(reccy.Reccy, frozen=True):
     service_spec: ClassVar[ServiceSpec] = SHOWCO_SERVICE
 
-    executable: Path = Field(
-        default_factory=lambda: Path.home() / "code/showco/.venv/bin/showco"
-    )
+    root: Path
 
     def daemon_executable(self) -> Path:
-        return self.executable
+        return self.root / "showco/.venv/bin/showco"
 
 
 class RecsDaemonStatus(BaseModel, frozen=True):
@@ -56,6 +54,7 @@ STATUS_ERROR_LABELS = {"recs": "GUI IPC error"}
 
 
 def install_showco_service(
+    root: Path,
     host: str = "0.0.0.0",
     port: int = 17_352,
     mixer_host: str | None = None,
@@ -63,11 +62,10 @@ def install_showco_service(
     x18_log_dir: Path | None = None,
     twitcho_enabled: bool = False,
     twitcho_config: Path | None = None,
-    executable: Path | None = None,
 ) -> int:
     daemon = ShowcoDaemon(
         platform=paths.current_platform(),
-        executable=executable or Path.home() / "code/showco/.venv/bin/showco",
+        root=root,
     )
     result = daemon.install_service(
         [
@@ -148,6 +146,7 @@ def install_main(argv: list[str] | None = None) -> int:
     parser.add_argument("--x18-log-dir", type=Path)
     parser.add_argument("--twitcho-enabled", action="store_true")
     parser.add_argument("--twitcho-config", type=Path)
+    parser.add_argument("--root", required=True, type=Path)
     args = parser.parse_args(argv)
     return install_showco_service(
         host=args.host,
@@ -157,6 +156,7 @@ def install_main(argv: list[str] | None = None) -> int:
         x18_log_dir=args.x18_log_dir,
         twitcho_enabled=args.twitcho_enabled,
         twitcho_config=args.twitcho_config,
+        root=args.root,
     )
 
 

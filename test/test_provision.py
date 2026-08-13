@@ -19,12 +19,15 @@ class ProvisionTests(unittest.TestCase):
             args=[
                 "--host",
                 "bertrand.local",
+                "--root",
+                "/srv/show-projects",
                 "--recs-repo",
                 "git@github.com:rec/recs.git",
             ],
         )
 
         self.assertEqual(options.host, "bertrand.local")
+        self.assertEqual(options.root, Path("/srv/show-projects"))
         self.assertEqual(options.recs_repo, "git@github.com:rec/recs.git")
 
     def test_wired_x18_uses_configured_x18_host(self) -> None:
@@ -60,6 +63,25 @@ class ProvisionTests(unittest.TestCase):
         )
 
         self.assertEqual(config.network.web_port, 17353)
+
+    def test_root_is_read_from_paths_table(self) -> None:
+        parsed = make_config(values(paths={"root": "/srv/show-projects"}))
+
+        self.assertEqual(parsed.paths.root, Path("/srv/show-projects"))
+
+    def test_root_expands_environment_variables_and_home(self) -> None:
+        with mock.patch.dict(
+            "os.environ", {"SHOWCO_ROOT": "/srv/show-projects"}, clear=False
+        ):
+            environment_root = make_config(values(paths={"root": "$SHOWCO_ROOT"}))
+        home_root = make_config(values(paths={"root": "~/show-projects"}))
+
+        self.assertEqual(environment_root.paths.root, Path("/srv/show-projects"))
+        self.assertEqual(home_root.paths.root, Path.home() / "show-projects")
+
+    def test_root_rejects_relative_path(self) -> None:
+        with self.assertRaisesRegex(SystemExit, "paths.root must be an absolute"):
+            make_config(values(paths={"root": "show-projects"}))
 
     def test_config_validation_reports_missing_private_wifi_password(self) -> None:
         config = make_config(
@@ -183,9 +205,9 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn("recs", message)
         self.assertIn("twitcho", message)
 
-    def test_local_code_dir_is_parent_of_showco_checkout(self) -> None:
+    def test_local_checkout_directory_is_parent_of_showco_checkout(self) -> None:
         self.assertEqual(
-            provision.local_code_dir(),
+            provision.local_checkout_directory(),
             Path(__file__).resolve().parents[2],
         )
 
@@ -211,6 +233,19 @@ class ProvisionTests(unittest.TestCase):
             self.assertEqual(
                 path.read_text(),
                 '[network]\nhost = "bertrand.local"\nweb_port = 17352\n',
+            )
+
+    def test_persist_paths_root_adds_paths_table(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "config.toml"
+            path.write_text('[network]\nhost = "bertrand.local"\n')
+
+            provision.persist_paths_root(path, Path("/srv/show-projects"))
+
+            self.assertEqual(
+                path.read_text(),
+                '[paths]\nroot = "/srv/show-projects"\n\n'
+                '[network]\nhost = "bertrand.local"\n',
             )
 
     def test_network_preflight_rejects_connected_hotspot_interface(self) -> None:
@@ -697,12 +732,20 @@ class ProvisionTests(unittest.TestCase):
         command = provision.remote_command(config, "/tmp/provision.sh")
 
         self.assertIn("SHOWCO_HOST=recs-stage.local", command)
+        self.assertIn("ROOT=/srv/show-projects", command)
         self.assertIn("RECCY_REFNAME=''", command)
         self.assertIn("EXTERNAL_WIFI_SSID=Venue", command)
         self.assertIn("EXTERNAL_WIFI_PASSWORD='venue password'", command)
         self.assertIn("PRIVATE_WIFI_PASSWORD='private password'", command)
         self.assertIn("X18=false", command)
         self.assertIn("RECS_REFNAME=''", command)
+
+    def test_remote_command_quotes_root_with_spaces(self) -> None:
+        parsed = make_config(values(paths={"root": "/srv/show projects"}))
+
+        command = provision.remote_command(parsed, "/tmp/provision.sh")
+
+        self.assertIn("ROOT='/srv/show projects'", command)
 
     def test_remote_command_passes_git_refname(self) -> None:
         config = make_config(
@@ -755,13 +798,13 @@ class ProvisionTests(unittest.TestCase):
 
         commands = [c.args[0][-1] for c in run.call_args_list]
         self.assertFalse([r for r in results if r.error])
-        self.assertIn('git -C "$HOME/code/reccy" status --short', commands)
-        self.assertIn('git -C "$HOME/code/recs" status --short', commands)
-        self.assertIn('git -C "$HOME/code/twitcho" status --short', commands)
-        self.assertIn('git -C "$HOME/code/showco" status --short', commands)
+        self.assertIn("git -C /srv/show-projects/reccy status --short", commands)
+        self.assertIn("git -C /srv/show-projects/recs status --short", commands)
+        self.assertIn("git -C /srv/show-projects/twitcho status --short", commands)
+        self.assertIn("git -C /srv/show-projects/showco status --short", commands)
         self.assertIn(
             "uid=$(id -u); XDG_RUNTIME_DIR=/run/user/$uid "
-            'cd "$HOME/code/showco" && PATH="$HOME/.local/bin:$PATH" '
+            'cd /srv/show-projects/showco && PATH="$HOME/.local/bin:$PATH" '
             "uv run --frozen showco run service-status recs",
             commands,
         )
@@ -776,7 +819,7 @@ class ProvisionTests(unittest.TestCase):
         )
         self.assertIn(
             "uid=$(id -u); XDG_RUNTIME_DIR=/run/user/$uid "
-            'cd "$HOME/code/showco" && PATH="$HOME/.local/bin:$PATH" '
+            'cd /srv/show-projects/showco && PATH="$HOME/.local/bin:$PATH" '
             "uv run --frozen showco run service-status showco",
             commands,
         )
@@ -952,6 +995,7 @@ def values(**overrides: object) -> dict[str, object]:
             "user": "tom",
             "web_port": 17352,
         },
+        "paths": {"root": "/srv/show-projects"},
         "networks": networks(),
         "usb": {"x18_device_name": "X18/XR18"},
         "git": {

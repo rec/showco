@@ -33,7 +33,8 @@ access, but Showco has not yet provisioned it.
     `Success!`.
 
 12. On the Pi, check Showco and Recs with
-    `cd ~/code/showco && uv run showco run service-status recs showco`.
+    `cd <root>/showco && uv run showco run service-status recs showco`, where
+    `<root>` is `[paths].root` in the provisioning configuration.
 
 13. On the Pi, confirm the X18 USB device is visible with `arecord -l`.
 

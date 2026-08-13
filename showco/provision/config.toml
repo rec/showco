@@ -4,6 +4,9 @@ web_port = 17352
 swap_wifi = false
 topology = ""
 
+[paths]
+root = "/home/tom/code"
+
 [networks.internal.wired.x18]
 name = "x18"
 ip_address = "10.43.0.18"
