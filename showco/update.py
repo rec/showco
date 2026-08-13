@@ -11,6 +11,7 @@ from typing import Annotated, TextIO
 import tyro
 from pydantic import BaseModel, Field
 from reccy import subprocess
+from tqdm import tqdm
 
 from . import machine_role, services
 from .provision import config, provision
@@ -61,7 +62,7 @@ def main(argv: list[str] | None = None) -> int:
         result = update_target(selected)
     else:
         result = update_from_provisioning_machine(selected, host=options.host)
-    print("Success!" if result == 0 else "ERROR: update failed")
+    tqdm.write("Success!" if result == 0 else "ERROR: update failed")
     return result
 
 
@@ -79,30 +80,29 @@ def update_from_provisioning_machine(
     programs = programs_for_repositories(selected, code_dir)
     if not check_main_branches(programs, run_command, output):
         return 1
-    results = []
-    for program in programs:
-        print(f"Pushing {program.name} in {program.directory}", file=output)
-        output.flush()
-        result = push_program(program, run_command, output)
-        results.append(result)
-        print_result(result, output)
-        output.flush()
-        if not result.ok:
-            return 1
+    with progress_bar(len(programs) + 1, output) as progress:
+        for program in programs:
+            progress.set_description_str(f"Pushing {program.name}")
+            result = push_program(program, run_command, output)
+            progress.update()
+            if not result.ok:
+                report_failure(result, output)
+                return 1
 
-    target_host = host or provision_config.network.host
-    ssh_target = f"{provision_config.network.user}@{target_host}"
-    command = remote_update_command(selected)
-    print(f"Updating target {ssh_target}: {command}", file=output)
-    output.flush()
-    target_result = run_remote_step(
-        "target",
-        "update",
-        provision.ssh_command(provision_config, ssh_target, command),
-    )
-    results.append(target_result)
-    print_result(target_result, output)
-    return 0 if all(r.ok for r in results) else 1
+        target_host = host or provision_config.network.host
+        ssh_target = f"{provision_config.network.user}@{target_host}"
+        command = remote_update_command(selected)
+        progress.set_description_str(f"Updating {ssh_target}")
+        target_result = run_remote_step(
+            "target",
+            "update",
+            provision.ssh_command(provision_config, ssh_target, command),
+        )
+        progress.update()
+    if not target_result.ok:
+        report_failure(target_result, output)
+        return 1
+    return 0
 
 
 def update_target(
@@ -117,16 +117,18 @@ def update_target(
     programs = programs_for_repositories(selected, code_dir)
     if not check_main_branches(programs, run_command, output):
         return 1
-    if "showco" in selected:
-        return update_target_with_showco(programs, run_command, output)
-    service_names = selected_service_names(programs)
-    results = [run_service_step(n, "stop", run_command) for n in service_names]
-    for program in programs:
-        print(f"Pulling {program.name} in {program.directory}", file=output)
-        results.extend(update_program_on_target(program, run_command))
+    with progress_bar(len(programs), output) as progress:
+        if "showco" in selected:
+            return update_target_with_showco(programs, run_command, output, progress)
+        service_names = selected_service_names(programs)
+        results = [run_service_step(n, "stop", run_command) for n in service_names]
+        for program in programs:
+            progress.set_description_str(f"Updating {program.name}")
+            results.extend(update_program_on_target(program, run_command))
+            progress.update()
 
-    results.extend(run_service_step(n, "start", run_command) for n in service_names)
-    print_results(results, output)
+        results.extend(run_service_step(n, "start", run_command) for n in service_names)
+    report_failures(results, output)
     return 0 if all(r.ok for r in results) else 1
 
 
@@ -134,20 +136,23 @@ def update_target_with_showco(
     programs: list[Program],
     run_command: RunCommand,
     output: TextIO,
+    progress: tqdm,
 ) -> int:
     showco = program_named(programs, "showco")
     other_programs = [p for p in programs if p.name != "showco"]
     results = [run_service_step("showco", "stop", run_command)]
-    print(f"Pulling {showco.name} in {showco.directory}", file=output)
+    progress.set_description_str(f"Updating {showco.name}")
     results.extend(update_program_on_target(showco, run_command))
+    progress.update()
     for program in other_programs:
         service_names = [n for n in program.service_names if n != "showco"]
         results.extend(run_service_step(n, "stop", run_command) for n in service_names)
-        print(f"Pulling {program.name} in {program.directory}", file=output)
+        progress.set_description_str(f"Updating {program.name}")
         results.extend(update_program_on_target(program, run_command))
         results.extend(run_service_step(n, "start", run_command) for n in service_names)
+        progress.update()
     results.append(run_service_step("showco", "start", run_command))
-    print_results(results, output)
+    report_failures(results, output)
     return 0 if all(r.ok for r in results) else 1
 
 
@@ -322,11 +327,9 @@ def push_program(
             ),
         )
     if output:
-        print(f"{program.name} regular push failed:", file=output)
-        print(push.output.rstrip(), file=output)
-        print(f"{program.name} current upstream commit:", file=output)
-        print(upstream_commit.output.rstrip(), file=output)
-        output.flush()
+        report_failure(push, output)
+        tqdm.write(f"{program.name} current upstream commit:", file=output)
+        tqdm.write(upstream_commit.output.rstrip(), file=output)
     force_push = run_step(
         program.name,
         "push --force-with-lease",
@@ -357,7 +360,7 @@ def check_main_branches(
     failures = [r for r in results if not r.ok]
     if not failures:
         return True
-    print_results(failures, output)
+    report_failures(failures, output)
     return False
 
 
@@ -604,16 +607,27 @@ def timeout_output(error: TimeoutExpired) -> str:
     return f"command timed out after {error.timeout} seconds\n{output}{stderr}"
 
 
-def print_results(results: list[StepResult], output: TextIO) -> None:
+def progress_bar(total: int, output: TextIO) -> tqdm:
+    return tqdm(
+        total=total,
+        desc="Updating",
+        unit="repository",
+        file=output,
+        disable=not output.isatty(),
+    )
+
+
+def report_failures(results: list[StepResult], output: TextIO) -> None:
     for result in results:
-        print_result(result, output)
+        report_failure(result, output)
 
 
-def print_result(result: StepResult, output: TextIO) -> None:
-    status = "ok" if result.ok else "failed"
-    print(f"{result.program} {result.step}: {status}", file=output)
+def report_failure(result: StepResult, output: TextIO) -> None:
+    if result.ok:
+        return
+    tqdm.write(f"{result.program} {result.step}: failed", file=output)
     if result.output.strip():
-        print(result.output.rstrip(), file=output)
+        tqdm.write(result.output.rstrip(), file=output)
 
 
 REPOSITORY_NAMES = ["reccy", "recs", "showco", "twitcho"]
