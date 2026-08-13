@@ -109,6 +109,16 @@ def update_from_provisioning_machine(
             "update",
             provision.ssh_command(provision_config, ssh_target, command),
         )
+        if rejected_update_arguments(target_result):
+            target_result = run_remote_step(
+                "target",
+                "legacy update",
+                provision.ssh_command(
+                    provision_config,
+                    ssh_target,
+                    legacy_remote_update_command(root or provision_config.paths.root),
+                ),
+            )
         progress.update()
     if not target_result.ok:
         report_failure(target_result, output)
@@ -449,6 +459,17 @@ def remote_update_command(selected: list[str], root: Path) -> str:
         f'cd {shlex.quote(str(root / "showco"))} && PATH="$HOME/.local/bin:$PATH" '
         f"uv run showco update {arguments}"
     ).rstrip()
+
+
+def legacy_remote_update_command(root: Path) -> str:
+    return (
+        f'cd {shlex.quote(str(root / "showco"))} && PATH="$HOME/.local/bin:$PATH" '
+        "uv run showco update"
+    )
+
+
+def rejected_update_arguments(result: StepResult) -> bool:
+    return not result.ok and "Unrecognized options:" in result.output
 
 
 def run_service_step(
