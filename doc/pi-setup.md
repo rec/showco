@@ -83,7 +83,8 @@ uses the local `USER` environment variable as the Pi user name.
 Create directories:
 
 ```bash
-mkdir -p ~/code
+root=/home/tom/code
+mkdir -p "$root"
 mkdir -p ~/.config/recs
 mkdir -p ~/.config/twitcho
 mkdir -p ~/.config/showco
@@ -99,7 +100,8 @@ The final recording path should be on the external USB storage, not the SD card.
 Clone or copy the repositories:
 
 ```bash
-cd ~/code
+cd "$root"
+git clone git@github.com:rec/reccy.git
 git clone git@github.com:rec/recs.git
 git clone git@github.com:rec/twitcho.git
 git clone git@github.com:rec/showco.git
@@ -108,22 +110,26 @@ git clone git@github.com:rec/showco.git
 Install each project:
 
 ```bash
-cd ~/code/recs
+cd "$root/reccy"
 uv sync
 
-cd ~/code/twitcho
+cd "$root/recs"
 uv sync
 
-cd ~/code/showco
+cd "$root/twitcho"
+uv sync
+
+cd "$root/showco"
 uv sync
 ```
 
 Before field use, run each test suite on the Pi once:
 
 ```bash
-cd ~/code/recs && uv run pytest
-cd ~/code/twitcho && uv run pytest
-cd ~/code/showco && uv run python -m unittest discover -s test
+cd "$root/reccy" && uv run pytest
+cd "$root/recs" && uv run pytest
+cd "$root/twitcho" && uv run pytest
+cd "$root/showco" && uv run python -m unittest discover -s test
 ```
 
 ## USB audio check
@@ -240,7 +246,7 @@ Before hardware testing, run Showco without Recs, Twitcho, Twitch, or audio
 hardware:
 
 ```bash
-cd ~/code/showco
+cd "$root/showco"
 uv run showco --rehearsal --host 0.0.0.0 --port 17352
 ```
 

@@ -33,6 +33,7 @@ class UpdateOptions(BaseModel, frozen=True):
         default_factory=list
     )
     host: str | None = None
+    root: Path | None = None
     target_machine: bool = False
 
 
@@ -59,9 +60,17 @@ def main(argv: list[str] | None = None) -> int:
         options.target_machine
         or machine_role.machine_role() == machine_role.TARGET_ROLE
     ):
-        result = update_target(selected)
+        if options.root is None:
+            result = update_target(selected)
+        else:
+            result = update_target(selected, root=options.root)
     else:
-        result = update_from_provisioning_machine(selected, host=options.host)
+        if options.root is None:
+            result = update_from_provisioning_machine(selected, host=options.host)
+        else:
+            result = update_from_provisioning_machine(
+                selected, host=options.host, root=options.root
+            )
     tqdm.write("Success!" if result == 0 else "ERROR: update failed")
     return result
 
@@ -70,14 +79,16 @@ def update_from_provisioning_machine(
     selected: list[str],
     *,
     host: str | None = None,
-    code_dir: Path | None = None,
+    root: Path | None = None,
+    local_root: Path | None = None,
     run_command: RunCommand | None = None,
     output: TextIO = sys.stdout,
 ) -> int:
-    code_dir = code_dir or provision.local_code_dir()
     run_command = run_command or run_command_with_timeout
     provision_config = provisioning_config()
-    programs = programs_for_repositories(selected, code_dir)
+    programs = programs_for_repositories(
+        selected, local_root or provision.local_checkout_directory()
+    )
     if not check_main_branches(programs, run_command, output):
         return 1
     with progress_bar(len(programs) + 1, output) as progress:
@@ -91,7 +102,7 @@ def update_from_provisioning_machine(
 
         target_host = host or provision_config.network.host
         ssh_target = f"{provision_config.network.user}@{target_host}"
-        command = remote_update_command(selected)
+        command = remote_update_command(selected, root or provision_config.paths.root)
         progress.set_description_str(f"Updating {ssh_target}")
         target_result = run_remote_step(
             "target",
@@ -108,13 +119,13 @@ def update_from_provisioning_machine(
 def update_target(
     selected: list[str],
     *,
-    code_dir: Path | None = None,
+    root: Path | None = None,
     run_command: RunCommand | None = None,
     output: TextIO = sys.stdout,
 ) -> int:
-    code_dir = code_dir or Path.home() / "code"
+    root = root or provisioning_config().paths.root
     run_command = run_command or run_command_with_timeout
-    programs = programs_for_repositories(selected, code_dir)
+    programs = programs_for_repositories(selected, root)
     if not check_main_branches(programs, run_command, output):
         return 1
     with progress_bar(len(programs), output) as progress:
@@ -225,11 +236,11 @@ def selected_repositories(arguments: list[str]) -> list[str]:
     return result
 
 
-def programs_for_repositories(selected: list[str], code_dir: Path) -> list[Program]:
+def programs_for_repositories(selected: list[str], root: Path) -> list[Program]:
     return [
         Program(
             name=n,
-            directory=code_dir / n,
+            directory=root / n,
             service_names=SERVICES_BY_REPOSITORY[n],
         )
         for n in selected
@@ -432,11 +443,11 @@ def provisioning_config() -> config.Config:
     return config.config_from_values(values)
 
 
-def remote_update_command(selected: list[str]) -> str:
-    arguments = shlex.join(selected)
+def remote_update_command(selected: list[str], root: Path) -> str:
+    arguments = shlex.join(["--target-machine", "--root", str(root), *selected])
     return (
-        f'cd "$HOME/code/showco" && PATH="$HOME/.local/bin:$PATH" '
-        f"uv run showco update --target-machine {arguments}"
+        f'cd {shlex.quote(str(root / "showco"))} && PATH="$HOME/.local/bin:$PATH" '
+        f"uv run showco update {arguments}"
     ).rstrip()
 
 

@@ -32,6 +32,10 @@ class NetworkConfig(BaseModel, frozen=True):
     topology: str = ""
 
 
+class Paths(BaseModel, frozen=True):
+    root: Path
+
+
 class Usb(BaseModel, frozen=True):
     x18_device_name: str = ""
 
@@ -66,6 +70,7 @@ class Git(BaseModel, frozen=True):
 
 class Config(BaseModel, frozen=True):
     network: NetworkConfig
+    paths: Paths
     networks: dict[str, dict[str, dict[str, Network]]]
     usb: Usb
     twitch: Twitch
@@ -78,29 +83,39 @@ def config_from_values(
     host: str | None = None,
     user: str | None = None,
     port: int | None = None,
+    root: Path | None = None,
     reccy_repo: str | None = None,
     recs_repo: str | None = None,
     twitcho_repo: str | None = None,
     showco_repo: str | None = None,
 ) -> Config:
     network = table_value(values, "network")
+    network_config = NetworkConfig(
+        host=require_value("network.host", value_or_env(host, network, "host")),
+        user=require_value(
+            "network.user or USER",
+            value_or_env(
+                user,
+                network,
+                "user",
+                default=os.environ.get("USER", ""),
+            ),
+        ),
+        ssh_port=value_or_int(port, network, "ssh_port", default=22),
+        web_port=int_value(network, "web_port", default=17352),
+        swap_wifi=bool_value(network, "swap_wifi", default=False),
+        topology=string_value(network, "topology"),
+    )
+    paths = table_value(values, "paths")
     git = table_value(values, "git")
     return Config(
-        network=NetworkConfig(
-            host=require_value("network.host", value_or_env(host, network, "host")),
-            user=require_value(
-                "network.user or USER",
-                value_or_env(
-                    user,
-                    network,
-                    "user",
-                    default=os.environ.get("USER", ""),
-                ),
-            ),
-            ssh_port=value_or_int(port, network, "ssh_port", default=22),
-            web_port=int_value(network, "web_port", default=17352),
-            swap_wifi=bool_value(network, "swap_wifi", default=False),
-            topology=string_value(network, "topology"),
+        network=network_config,
+        paths=Paths(
+            root=path_value(
+                root,
+                paths,
+                default=Path("/home") / network_config.user / "code",
+            )
         ),
         networks=networks_value(table_value(values, "networks")),
         usb=Usb(
@@ -295,6 +310,14 @@ def value_or_int(
     if value is not None:
         return value
     return int_value(env, name, default=default)
+
+
+def path_value(value: Path | None, values: dict[str, object], *, default: Path) -> Path:
+    configured = value or Path(string_value(values, "root", default=str(default)))
+    path = configured.expanduser()
+    if not path.is_absolute():
+        sys.exit("ERROR: paths.root must be an absolute path")
+    return path
 
 
 def require_value(name: str, value: str) -> str:

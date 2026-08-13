@@ -84,7 +84,7 @@ Run real Recs and real Twitcho if possible, then run Showco normally, not
 rehearsal mode:
 
 ```bash
-cd ~/code/showco
+cd <root>/showco
 uv run showco --host 0.0.0.0 --port 17352
 ```
 

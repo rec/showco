@@ -191,7 +191,7 @@ sync_repo() {
   local name=$1
   local url=$2
   local refname=$3
-  local path="$CODE_DIR/$name"
+  local path="$ROOT/$name"
 
   prepare_checkout_path "$path"
   if [[ -d "$path/.git" ]]; then
@@ -309,7 +309,7 @@ configure_network() {
   set +e
   sudo -H -u "$SHOW_USER" env PATH="/home/$SHOW_USER/.local/bin:$PATH" \
     bash -lc \
-      "cd '$CODE_DIR/showco' && uv run --frozen showco run network-config --config '$config_file' --secrets '$secrets_file'"
+      "cd '$ROOT/showco' && uv run --frozen showco run network-config --config '$config_file' --secrets '$secrets_file'"
   status=$?
   set -e
   rm -f "$config_file" "$secrets_file"
@@ -367,8 +367,8 @@ install_recs_service() {
   fi
   sudo -H -u "$SHOW_USER" \
     env XDG_RUNTIME_DIR="/run/user/$uid" \
-    PATH="/home/$SHOW_USER/code/recs/.venv/bin:/home/$SHOW_USER/.local/bin:$PATH" \
-    bash -lc "cd '$CODE_DIR/recs' && uv run --frozen recs daemon install $quoted_args"
+    PATH="$ROOT/recs/.venv/bin:/home/$SHOW_USER/.local/bin:$PATH" \
+    bash -lc "cd '$ROOT/recs' && uv run --frozen recs daemon install $quoted_args"
 }
 
 install_showco_service() {
@@ -376,8 +376,8 @@ install_showco_service() {
   uid=$(id -u "$SHOW_USER")
   sudo -H -u "$SHOW_USER" \
     env XDG_RUNTIME_DIR="/run/user/$uid" \
-    PATH="/home/$SHOW_USER/code/showco/.venv/bin:/home/$SHOW_USER/.local/bin:$PATH" \
-    bash -lc "cd '$CODE_DIR/showco' && uv run --frozen showco run install-service $(showco_args)"
+    PATH="$ROOT/showco/.venv/bin:/home/$SHOW_USER/.local/bin:$PATH" \
+    bash -lc "cd '$ROOT/showco' && uv run --frozen showco run install-service --root '$ROOT' $(showco_args)"
 }
 
 write_provisioning_report() {
@@ -447,8 +447,8 @@ main() {
   sudo apt-get install -y "${packages[@]}"
 
   phase "creating directories"
-  sudo mkdir -p "$CODE_DIR"
-  sudo chown "$SHOW_USER:$SHOW_USER" "$CODE_DIR"
+  sudo mkdir -p "$ROOT"
+  sudo chown "$SHOW_USER:$SHOW_USER" "$ROOT"
   sudo -H -u "$SHOW_USER" mkdir -p \
     "/home/$SHOW_USER/.config/recs" \
     "/home/$SHOW_USER/.config/showco" \

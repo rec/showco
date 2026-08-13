@@ -37,6 +37,25 @@ class UpdateTests(unittest.TestCase):
         )
         write.assert_called_once_with("Success!")
 
+    def test_update_root_override_is_used_for_target_ssh(self) -> None:
+        with (
+            mock.patch(
+                "showco.update.machine_role.machine_role",
+                return_value="provisioning",
+            ),
+            mock.patch(
+                "showco.update.update_from_provisioning_machine", return_value=0
+            ) as update_from_provisioning_machine,
+            mock.patch("showco.update.tqdm.write"),
+        ):
+            result = update.main(["--root", "/srv/show-projects", "recs"])
+
+        self.assertEqual(result, 0)
+        self.assertEqual(
+            update_from_provisioning_machine.call_args.kwargs,
+            {"host": None, "root": Path("/srv/show-projects")},
+        )
+
     def test_target_machine_override_runs_target_update(self) -> None:
         with (
             mock.patch("showco.update.machine_role.machine_role", return_value=""),
@@ -60,6 +79,16 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(result, 1)
         write.assert_called_once_with("ERROR: update failed")
 
+    def test_remote_update_command_quotes_root_with_spaces(self) -> None:
+        command = update.remote_update_command(["recs"], Path("/srv/show projects"))
+
+        self.assertEqual(
+            command,
+            "cd '/srv/show projects/showco' && "
+            'PATH="$HOME/.local/bin:$PATH" '
+            "uv run showco update --target-machine --root '/srv/show projects' recs",
+        )
+
     def test_target_update_pulls_selected_repositories_and_restarts_services(
         self,
     ) -> None:
@@ -81,7 +110,7 @@ class UpdateTests(unittest.TestCase):
         ):
             result = update.update_target(
                 ["recs"],
-                code_dir=Path("/code"),
+                root=Path("/code"),
                 run_command=run_command,
                 output=StringIO(),
             )
@@ -120,7 +149,7 @@ class UpdateTests(unittest.TestCase):
         ):
             result = update.update_target(
                 ["showco"],
-                code_dir=Path("/code"),
+                root=Path("/code"),
                 run_command=run_command,
                 output=StringIO(),
             )
@@ -157,7 +186,7 @@ class UpdateTests(unittest.TestCase):
         ):
             result = update.update_target(
                 ["reccy", "recs", "showco", "twitcho"],
-                code_dir=Path("/code"),
+                root=Path("/code"),
                 run_command=run_command,
                 output=StringIO(),
             )
@@ -208,7 +237,7 @@ class UpdateTests(unittest.TestCase):
         ):
             result = update.update_target(
                 ["reccy"],
-                code_dir=Path("/code"),
+                root=Path("/code"),
                 run_command=run_command,
                 output=StringIO(),
             )
@@ -254,7 +283,8 @@ class UpdateTests(unittest.TestCase):
         ):
             result = update.update_from_provisioning_machine(
                 ["showco", "reccy"],
-                code_dir=Path("/code"),
+                root=Path("/code"),
+                local_root=Path("/code"),
                 run_command=run_command,
                 output=output,
             )
@@ -270,9 +300,9 @@ class UpdateTests(unittest.TestCase):
         )
         self.assertEqual(
             remote_update.call_args.args[2][-1],
-            'cd "$HOME/code/showco" && '
+            "cd /code/showco && "
             'PATH="$HOME/.local/bin:$PATH" '
-            "uv run showco update --target-machine showco reccy",
+            "uv run showco update --target-machine --root /code showco reccy",
         )
         self.assertIn("ConnectTimeout=2", remote_update.call_args.args[2])
         self.assertEqual(output.getvalue(), "")
@@ -295,7 +325,8 @@ class UpdateTests(unittest.TestCase):
         ):
             result = update.update_from_provisioning_machine(
                 ["recs", "showco"],
-                code_dir=Path("/code"),
+                root=Path("/code"),
+                local_root=Path("/code"),
                 run_command=run_command,
                 output=output,
             )
@@ -324,7 +355,7 @@ class UpdateTests(unittest.TestCase):
         output = StringIO()
         result = update.update_target(
             ["recs"],
-            code_dir=Path("/code"),
+            root=Path("/code"),
             run_command=run_command,
             output=output,
         )
@@ -467,7 +498,8 @@ class UpdateTests(unittest.TestCase):
         ):
             result = update.update_from_provisioning_machine(
                 ["recs"],
-                code_dir=Path("/code"),
+                root=Path("/code"),
+                local_root=Path("/code"),
                 run_command=run_command,
                 output=StringIO(),
             )
@@ -517,7 +549,8 @@ class UpdateTests(unittest.TestCase):
         ):
             result = update.update_from_provisioning_machine(
                 ["recs"],
-                code_dir=Path("/code"),
+                root=Path("/code"),
+                local_root=Path("/code"),
                 run_command=run_command,
                 output=StringIO(),
             )
@@ -543,7 +576,7 @@ class UpdateTests(unittest.TestCase):
         ):
             result = update.update_target(
                 ["recs"],
-                code_dir=Path("/code"),
+                root=Path("/code"),
                 run_command=run_command,
                 output=StringIO(),
             )
@@ -577,7 +610,7 @@ class UpdateTests(unittest.TestCase):
         ):
             result = update.update_target(
                 ["recs"],
-                code_dir=Path("/code"),
+                root=Path("/code"),
                 run_command=run_command,
                 output=StringIO(),
             )
@@ -601,6 +634,11 @@ def make_config() -> object:
 
     class Config:
         network = Network()
+
+        class Paths:
+            root = Path("/home/tom/code")
+
+        paths = Paths()
 
     return Config()
 

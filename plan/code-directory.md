@@ -17,32 +17,32 @@ may invoke `showco provision` or `showco update` from any directory.
 
    ```toml
    [paths]
-   code_dir = "/home/tom/code"
+   root = "/home/tom/code"
    ```
 
-   `code_dir` is the directory containing the `showco`, `reccy`, `recs`, and
+   `root` is the directory containing the `showco`, `reccy`, `recs`, and
    `twitcho` checkouts on the target machine. It is not the directory containing
    a developer's local checkouts.
 
-2. Add a frozen `Paths` Pydantic model with `code_dir: Path` and add
+2. Add a frozen `Paths` Pydantic model with `root: Path` and add
    `paths: Paths` to provisioning `Config`, preserving the TOML structure
    exactly. Parse environment variables and `~` before converting the value to
    a path. Reject an empty or relative value before opening an SSH connection.
 
-3. Add `--code-dir PATH` to `showco provision`. It overrides
-   `paths.code_dir` for that run and persists the value in the selected
+3. Add `--root PATH` to `showco provision`. It overrides
+   `paths.root` for that run and persists the value in the selected
    `config.toml`, matching the current behavior of `--host`.
 
-4. Add the same `--code-dir PATH` option to `showco update`.
+4. Add the same `--root PATH` option to `showco update`.
 
    - On a provisioning machine it overrides the remote target directory and is
      forwarded in the remote `showco update --target-machine` invocation.
    - On a target machine it overrides the configured target directory for that
      invocation.
-   - Without the option, both commands read `paths.code_dir` from their local
+   - Without the option, both commands read `paths.root` from their local
      provision configuration.
 
-5. Keep developer repository discovery separate. `provision.local_code_dir()`
+5. Keep developer repository discovery separate. `provision.local_checkout_directory()`
    should be renamed to describe its purpose, such as
    `local_checkout_directory()`, and continue to derive the parent of the
    installed Showco checkout rather than the process CWD. This supports local
@@ -51,22 +51,22 @@ may invoke `showco provision` or `showco update` from any directory.
 
 ## Provisioning Changes
 
-1. Pass `provision_config.paths.code_dir` as the existing `CODE_DIR` remote
+1. Pass `provision_config.paths.root` as the `ROOT` remote
    environment variable. Remove the constructed `/home/<user>/code` value.
 
 2. In `provision_locally.tmpl.sh`, replace every remaining literal
-   `/home/$SHOW_USER/code/...` with `$CODE_DIR/...`, including virtualenv
+   `/home/$SHOW_USER/code/...` with `$ROOT/...`, including virtualenv
    `PATH` entries for Recs and Showco.
 
 3. Keep the existing guarded directory creation and ownership change, but
-   operate on `$CODE_DIR`. Repository cloning, `uv sync`, service installation,
-   and the generated network configuration command already have a `CODE_DIR`
+   operate on `$ROOT`. Repository cloning, `uv sync`, service installation,
+   and the generated network configuration command use the `ROOT`
    variable and should use it exclusively.
 
-4. Add `--code-dir "$CODE_DIR"` to the remote `showco run install-service`
+4. Add `--root "$ROOT"` to the remote `showco run install-service`
    command. Extend `ShowcoDaemon` and the `install-service` Tyro options so
    the service metadata executable is
-   `<code_dir>/showco/.venv/bin/showco`, rather than deriving it from
+   `<root>/showco/.venv/bin/showco`, rather than deriving it from
    `Path.home() / "code"`.
 
 5. Continue to use the configured code root only for project checkouts. Leave
@@ -77,11 +77,11 @@ may invoke `showco provision` or `showco update` from any directory.
 
 1. Make `update_target()` obtain its default target root from provisioning
    configuration rather than `Path.home() / "code"`. Preserve its injectable
-   `code_dir` argument for focused tests.
+   `root` argument for focused tests.
 
 2. Change `remote_update_command()` to accept a target code directory, quote
-   it with `shlex.quote`, change into `<code_dir>/showco`, and forward
-   `--code-dir <code_dir>` to the target command. It must not interpolate
+   it with `shlex.quote`, change into `<root>/showco`, and forward
+   `--root <root>` to the target command. It must not interpolate
    `$HOME/code`.
 
 3. Thread the configured code directory through post-reboot verification:
@@ -96,7 +96,7 @@ may invoke `showco provision` or `showco update` from any directory.
 
 ## Tests And Documentation
 
-1. Add configuration tests for a configured root, a `--code-dir` override,
+1. Add configuration tests for a configured root, a `--root` override,
    environment/home expansion, and rejection of relative or missing values.
 
 2. Extend provisioning tests to assert the remote assignment, provisioning
