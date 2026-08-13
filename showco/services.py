@@ -5,9 +5,10 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 from subprocess import CompletedProcess
+from typing import ClassVar
 
-from pydantic import BaseModel
-from reccy import paths, renderers, service
+from pydantic import BaseModel, Field
+from reccy import paths, reccy, service
 from reccy.models import ServiceSpec, StatusResult
 
 from . import machine_role
@@ -34,6 +35,17 @@ SERVICES = {
 }
 
 
+class ShowcoDaemon(reccy.Reccy, frozen=True):
+    service_spec: ClassVar[ServiceSpec] = SHOWCO_SERVICE
+
+    executable: Path = Field(
+        default_factory=lambda: Path.home() / "code/showco/.venv/bin/showco"
+    )
+
+    def daemon_executable(self) -> Path:
+        return self.executable
+
+
 class RecsDaemonStatus(BaseModel, frozen=True):
     gui_ipc_error: str | None = None
 
@@ -53,12 +65,11 @@ def install_showco_service(
     twitcho_config: Path | None = None,
     executable: Path | None = None,
 ) -> int:
-    platform = paths.current_platform()
-    service_paths = paths.service_paths(SHOWCO_SERVICE, platform)
-    executable = executable or Path.home() / "code/showco/.venv/bin/showco"
-    metadata = renderers.service_metadata(
-        executable,
-        platform,
+    daemon = ShowcoDaemon(
+        platform=paths.current_platform(),
+        executable=executable or Path.home() / "code/showco/.venv/bin/showco",
+    )
+    result = daemon.install_service(
         [
             "run",
             *showco_args(
@@ -70,10 +81,8 @@ def install_showco_service(
                 twitcho_enabled,
                 twitcho_config,
             ),
-        ],
-        service_paths,
+        ]
     )
-    result = service.ServiceController(SHOWCO_SERVICE, platform).install(metadata)
     service.print_service_status("showco", result)
     return 0 if result.running else 1
 
