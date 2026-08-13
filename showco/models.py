@@ -28,6 +28,11 @@ class ChannelLevel(BaseModel, frozen=True):
     signal: float | None = None
 
 
+class ErrorRecord(BaseModel, frozen=True):
+    timestamp: str
+    message: str
+
+
 class RecsStatus(BaseModel, frozen=True):
     service: ServiceStatus
     recording: bool = False
@@ -37,7 +42,7 @@ class RecsStatus(BaseModel, frozen=True):
     file_count: int | None = None
     client_count: int = 0
     channels: list[ChannelLevel] = Field(default_factory=list)
-    errors: list[str] = Field(default_factory=list)
+    errors: list[ErrorRecord] = Field(default_factory=list)
 
 
 class TwitchoStatus(BaseModel, frozen=True):
@@ -65,4 +70,5 @@ class ShowStatus(BaseModel, frozen=True):
     twitcho: TwitchoStatus
     system: SystemStatus = Field(default_factory=SystemStatus)
     mixer: MixerStatus = Field(default_factory=MixerStatus)
+    run_started_at: float = 0.0
     generated_at: float = Field(default_factory=time.time)

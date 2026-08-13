@@ -24,7 +24,12 @@ class RecsTests(unittest.TestCase):
                 json.dumps(
                     {
                         "client_count": 2,
-                        "errors": ["disk almost full"],
+                        "errors": [
+                            {
+                                "timestamp": "2026-08-13T12:34:56.789Z",
+                                "message": "disk almost full",
+                            }
+                        ],
                         "recording": True,
                         "updated_at": time.time(),
                         "rows": [
@@ -43,7 +48,7 @@ class RecsTests(unittest.TestCase):
         self.assertEqual(status.file_count, 1)
         self.assertEqual(status.client_count, 2)
         self.assertEqual(status.channels[0].state, "healthy")
-        self.assertEqual(status.errors, ["disk almost full"])
+        self.assertEqual(status.errors[0].message, "disk almost full")
 
     def test_reports_missing_recs_status_as_offline(self) -> None:
         status = RecsClient(status_path=Path("/does/not/exist")).status()
@@ -87,8 +92,8 @@ class RecsTests(unittest.TestCase):
             )
             connection = FakeRecsConnection(
                 [
-                    '{"type":"hello","role":"daemon","version":2}\n',
-                    '{"type":"calibrated","measurements":{},"profiles":{},'
+                    '{"type":"hello","role":"daemon","version":3}\n',
+                    '{"type":"calibrated","measurements":{},"noise_floors":{},'
                     '"profiles_path":"/tmp/profiles.json"}\n',
                 ]
             )
@@ -102,8 +107,8 @@ class RecsTests(unittest.TestCase):
         self.assertEqual(
             [json.loads(message) for message in connection.sent],
             [
-                {"type": "hello", "role": "gui", "version": 2},
-                {"type": "calibrate"},
+                {"type": "hello", "role": "gui", "version": 3},
+                {"type": "calibrate", "channels": {}},
             ],
         )
         self.assertTrue(connection.closed)
@@ -153,12 +158,10 @@ class RecsTests(unittest.TestCase):
             )
             connection = FakeRecsConnection(
                 [
-                    '{"type":"hello","role":"daemon","version":2}\n',
-                    '{"type":"track_names","track_names":{"Mic":'
-                    '{"Old Name":1}}}\n',
-                    '{"type":"hello","role":"daemon","version":2}\n',
-                    '{"type":"track_names","track_names":{"Mic":'
-                    '{"Lead Vocal":1}}}\n',
+                    '{"type":"hello","role":"daemon","version":3}\n',
+                    '{"type":"track_names","track_names":{"Mic":{"Old Name":1}}}\n',
+                    '{"type":"hello","role":"daemon","version":3}\n',
+                    '{"type":"track_names","track_names":{"Mic":{"Lead Vocal":1}}}\n',
                 ]
             )
             client = RecsClient(metadata_path=metadata)
@@ -171,9 +174,9 @@ class RecsTests(unittest.TestCase):
         self.assertEqual(
             [json.loads(message) for message in connection.sent],
             [
-                {"type": "hello", "role": "gui", "version": 2},
+                {"type": "hello", "role": "gui", "version": 3},
                 {"type": "get_track_names"},
-                {"type": "hello", "role": "gui", "version": 2},
+                {"type": "hello", "role": "gui", "version": 3},
                 {
                     "type": "set_track_names",
                     "track_names": {"Mic": {"Lead Vocal": 1}},
@@ -193,8 +196,8 @@ class RecsTests(unittest.TestCase):
             )
             connection = FakeRecsConnection(
                 [
-                    '{"type":"hello","role":"daemon","version":2}\n',
-                    '{"type":"noise_floor_set","source":"Mic",'
+                    '{"type":"hello","role":"daemon","version":3}\n',
+                    '{"type":"noise_floor_set","source":"Mic","channel":1,'
                     '"noise_floor":42.5}\n',
                 ]
             )
@@ -204,6 +207,7 @@ class RecsTests(unittest.TestCase):
                 result = client.action(
                     "set_noise_floor",
                     source="Mic",
+                    channel=1,
                     noise_floor=42.5,
                 )
 
@@ -211,9 +215,10 @@ class RecsTests(unittest.TestCase):
         self.assertEqual(
             [json.loads(message) for message in connection.sent],
             [
-                {"type": "hello", "role": "gui", "version": 2},
+                {"type": "hello", "role": "gui", "version": 3},
                 {
                     "type": "set_noise_floor",
+                    "channel": 1,
                     "noise_floor": 42.5,
                     "source": "Mic",
                 },
@@ -232,7 +237,7 @@ class RecsTests(unittest.TestCase):
                 ).model_dump_json()
             )
             connection = FakeRecsConnection(
-                ['{"type":"hello","role":"daemon","version":2}\n']
+                ['{"type":"hello","role":"daemon","version":3}\n']
             )
             client = RecsClient(metadata_path=metadata)
 
@@ -243,7 +248,7 @@ class RecsTests(unittest.TestCase):
         self.assertEqual(
             [json.loads(message) for message in connection.sent],
             [
-                {"type": "hello", "role": "gui", "version": 2},
+                {"type": "hello", "role": "gui", "version": 3},
                 {"type": "shutdown"},
             ],
         )

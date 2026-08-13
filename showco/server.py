@@ -3,6 +3,7 @@ from __future__ import annotations
 import html
 import threading
 import time
+from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import ClassVar
 from urllib import parse
@@ -29,6 +30,7 @@ class ShowcoApp:
         self.system = system
         self.mixer = mixer
         self.twitcho_supervisor = twitcho_supervisor
+        self.run_started_at = time.time()
         self.action_log: list[models.ActionResult] = []
         self.action_log_lock = threading.Lock()
 
@@ -48,6 +50,7 @@ class ShowcoApp:
             twitcho=twitcho,
             system=self.system.status(),
             mixer=self.mixer.status(),
+            run_started_at=self.run_started_at,
         )
 
     def run_action(self, form: dict[str, str]) -> models.ActionResult:
@@ -226,7 +229,13 @@ def home_page(status: models.ShowStatus) -> str:
         <section>
           <h2>Health</h2>
           <p id="recs-health">recs: {_service_detail(recs.state, recs.last_error)}</p>
-          <div id="recs-errors">{_recs_errors(status.recs)}</div>
+          <label class="toggle">
+            <input id="show-all-errors" type="checkbox" role="switch">
+            Show all errors
+          </label>
+          <div id="recs-errors">{
+            _recs_errors(status.recs.errors, status.run_started_at)
+        }</div>
           <p id="twitcho-health">
             twitcho: {_service_detail(twitcho.state, twitcho.last_error)}
           </p>
@@ -247,7 +256,7 @@ def actions_page(
     noise_floor = field_action(
         "recs-set-noise-floor",
         "Set noise floor",
-        ["source", "noise_floor"],
+        ["source", "channel", "noise_floor"],
     )
     return page(
         "Actions",
@@ -432,18 +441,23 @@ def _mixer_latency(status: models.ShowStatus) -> str:
     return status.mixer.error or "unknown"
 
 
-def _recs_errors(status: models.RecsStatus) -> str:
-    if not status.errors:
+def _recs_errors(errors: list[models.ErrorRecord], run_started_at: float) -> str:
+    current_errors = [e for e in errors if _error_timestamp(e) >= run_started_at]
+    if not current_errors:
         return ""
-    timestamp = (
-        _time(status.service.updated_at) if status.service.updated_at else "unknown"
-    )
     items = "".join(
-        f'<li><time class="error-time">{timestamp}</time>'
-        f"<span>{html.escape(e)}</span></li>"
-        for e in status.errors
+        f'<li><time class="error-time">{html.escape(e.timestamp)}</time>'
+        f"<span>{html.escape(e.message)}</span></li>"
+        for e in current_errors
     )
     return f"<p>Recs errors:</p><ul>{items}</ul>"
+
+
+def _error_timestamp(error: models.ErrorRecord) -> float:
+    try:
+        return datetime.fromisoformat(error.timestamp).timestamp()
+    except ValueError:
+        return 0.0
 
 
 def _duration(seconds: float | None) -> str:
@@ -589,22 +603,28 @@ HOME_STATUS_SCRIPT = """
     )));
   }
 
-  function updateRecsErrors(errors, updatedAt) {
+  let latestErrors = [];
+  let showcoStartedAt = 0;
+
+  function updateRecsErrors(errors, runStartedAt) {
+    latestErrors = errors;
+    showcoStartedAt = runStartedAt;
     const container = document.getElementById("recs-errors");
     container.replaceChildren();
-    if (!errors.length) return;
+    const errorsToShow = document.getElementById("show-all-errors").checked
+      ? errors
+      : errors.filter(error => Date.parse(error.timestamp) / 1000 >= runStartedAt);
+    if (!errorsToShow.length) return;
     const heading = document.createElement("p");
     heading.textContent = "Recs errors:";
     const list = document.createElement("ul");
-    for (const error of errors) {
+    for (const error of errorsToShow) {
       const item = document.createElement("li");
       const timestamp = document.createElement("time");
       timestamp.className = "error-time";
-      timestamp.textContent = updatedAt === null
-        ? "unknown"
-        : new Date(updatedAt * 1000).toLocaleTimeString();
+      timestamp.textContent = new Date(error.timestamp).toLocaleTimeString();
       const message = document.createElement("span");
-      message.textContent = error;
+      message.textContent = error.message;
       item.append(timestamp, message);
       list.append(item);
     }
@@ -626,7 +646,7 @@ HOME_STATUS_SCRIPT = """
         "twitcho-health",
       );
       updateChannels(status.recs.channels);
-      updateRecsErrors(status.recs.errors, status.recs.service.updated_at);
+      updateRecsErrors(status.recs.errors, status.run_started_at);
       document.getElementById("temperature").textContent =
         status.system.temperature_c === null
         ? status.system.temperature_error || "unknown"
@@ -652,6 +672,10 @@ HOME_STATUS_SCRIPT = """
   function pollStatus() {
     updateStatus().then(() => setTimeout(pollStatus, 1000));
   }
+
+  document.getElementById("show-all-errors").addEventListener("change", () => {
+    updateRecsErrors(latestErrors, showcoStartedAt);
+  });
 
   pollStatus();
 </script>
@@ -708,6 +732,16 @@ main {
 }
 .error-time {
   font-family: ui-monospace, monospace;
+}
+.toggle {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+}
+.toggle input {
+  margin: 0;
+  min-height: 1rem;
+  width: auto;
 }
 .level {
   border-radius: 0.5rem;

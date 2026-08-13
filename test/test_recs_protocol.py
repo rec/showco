@@ -12,19 +12,19 @@ from recs.ui.key_events import KeyEvent
 class RecsProtocolTests(unittest.TestCase):
     def test_recs_handles_hello_key_events_and_calibrate_request(self) -> None:
         key_events: list[KeyEvent] = []
+
         def respond(request: gui_ipc.ControlRequest) -> None:
             request.respond(
                 gui_protocol.Calibrated(
                     type="calibrated",
                     measurements={},
-                    profiles={"Mic": {"noise_floor": 15.0}},
-                    profiles_path="/tmp/profiles.json",
+                    noise_floors={"Mic": {"noise_floor": 15.0}},
                 )
             )
 
         connection = FakeConnection(
             [
-                '{"type":"hello","role":"gui","version":2}\n',
+                '{"type":"hello","role":"gui","version":3}\n',
                 '{"type":"key_pressed","key":"g"}\n',
                 '{"type":"key_released","key":"g"}\n',
                 '{"type":"calibrate"}\n',
@@ -41,12 +41,11 @@ class RecsProtocolTests(unittest.TestCase):
         self.assertEqual(
             [json.loads(message) for message in connection.sent],
             [
-                {"type": "hello", "role": "daemon", "version": 2},
+                {"type": "hello", "role": "daemon", "version": 3},
                 {
                     "type": "calibrated",
                     "measurements": {},
-                    "profiles": {"Mic": {"noise_floor": 15.0}},
-                    "profiles_path": "/tmp/profiles.json",
+                    "noise_floors": {"Mic": {"noise_floor": 15.0}},
                 },
             ],
         )
@@ -57,10 +56,9 @@ class RecsProtocolTests(unittest.TestCase):
                 KeyEvent(type="key_released", key="g"),
             ],
         )
+
     def test_recs_rejects_requests_before_hello(self) -> None:
-        connection = FakeConnection(
-            ['{"type":"calibrate"}\n']
-        )
+        connection = FakeConnection(['{"type":"calibrate"}\n'])
         listener = gui_ipc.GuiListener(connection, lambda event: None)
 
         listener._read()
@@ -88,7 +86,7 @@ class RecsProtocolTests(unittest.TestCase):
                 {
                     "type": "error",
                     "message": (
-                        "GUI protocol version 1 is not supported; daemon requires 2"
+                        "GUI protocol version 1 is not supported; daemon requires 3"
                     ),
                 }
             ],
