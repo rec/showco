@@ -22,6 +22,7 @@ class UpdateTests(unittest.TestCase):
             mock.patch(
                 "showco.update.update_from_provisioning_machine", return_value=0
             ) as update_from_provisioning_machine,
+            mock.patch("builtins.print") as print,
         ):
             result = update.main(["--host", "other.local", "recs"])
 
@@ -34,16 +35,30 @@ class UpdateTests(unittest.TestCase):
             update_from_provisioning_machine.call_args.kwargs,
             {"host": "other.local"},
         )
+        print.assert_called_once_with("Success!")
 
     def test_target_machine_override_runs_target_update(self) -> None:
         with (
             mock.patch("showco.update.machine_role.machine_role", return_value=""),
             mock.patch("showco.update.update_target", return_value=0) as update_target,
+            mock.patch("builtins.print") as print,
         ):
             result = update.main(["--target-machine", "recs"])
 
         self.assertEqual(result, 0)
         self.assertEqual(update_target.call_args.args, (["recs"],))
+        print.assert_called_once_with("Success!")
+
+    def test_update_prints_failure_summary(self) -> None:
+        with (
+            mock.patch("showco.update.machine_role.machine_role", return_value=""),
+            mock.patch("showco.update.update_target", return_value=1),
+            mock.patch("builtins.print") as print,
+        ):
+            result = update.main(["--target-machine", "recs"])
+
+        self.assertEqual(result, 1)
+        print.assert_called_once_with("ERROR: update failed")
 
     def test_target_update_pulls_selected_repositories_and_restarts_services(
         self,
