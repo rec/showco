@@ -2,25 +2,28 @@ from __future__ import annotations
 
 import unittest
 
+from reccy import rpc
+
 from showco.twitcho.client import TwitchoClient
 
 
 class TwitchoTests(unittest.TestCase):
     def test_status_maps_successful_reply(self) -> None:
         client = FakeTwitchoClient(
-            {
-                "type": "reply",
-                "id": "1",
-                "ok": True,
-                "status": {
-                    "state": "streaming",
-                    "muted": True,
-                    "ffmpeg_alive": True,
-                    "audio_seconds": 12.0,
-                    "clipping": False,
-                    "output_bitrate_kbps": 312.5,
+            rpc.Response(
+                id="1",
+                ok=True,
+                result={
+                    "status": {
+                        "state": "streaming",
+                        "muted": True,
+                        "ffmpeg_alive": True,
+                        "audio_seconds": 12.0,
+                        "clipping": False,
+                        "output_bitrate_kbps": 312.5,
+                    }
                 },
-            }
+            )
         )
 
         status = client.status()
@@ -33,7 +36,7 @@ class TwitchoTests(unittest.TestCase):
 
     def test_status_reports_failed_command(self) -> None:
         client = FakeTwitchoClient(
-            {"type": "reply", "id": "1", "ok": False, "error": "not running"}
+            rpc.Response(id="1", ok=False, message="not running")
         )
 
         status = client.status()
@@ -43,11 +46,11 @@ class TwitchoTests(unittest.TestCase):
 
 
 class FakeTwitchoClient(TwitchoClient):
-    def __init__(self, reply: dict[str, object]) -> None:
+    def __init__(self, reply: rpc.Response) -> None:
         super().__init__()
         self.reply = reply
 
-    def _exchange(self, command: object) -> dict[str, object]:
+    def _call(self, command: str, **fields: object) -> rpc.Response:
         return self.reply
 
 

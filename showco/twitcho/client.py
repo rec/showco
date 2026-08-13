@@ -1,33 +1,22 @@
 from __future__ import annotations
 
-import json
-import socket
-import uuid
-from collections.abc import Mapping
-from typing import Protocol
+from pathlib import Path
 
 from pydantic import BaseModel
+from reccy import rpc
 
 from ..models import ActionResult, ServiceStatus, TwitchoStatus
 
-CONTROL_HOST = "127.0.0.1"
-CONTROL_PORT = 17_351
-CONTROL_TIMEOUT_SECONDS = 1.0
+CONTROL_ENDPOINT = Path.home() / ".local/state/twitcho/control.sock"
 
 
 class TwitchoClient:
     def __init__(
         self,
         *,
-        host: str = CONTROL_HOST,
-        port: int = CONTROL_PORT,
-        token: str | None = None,
-        timeout_seconds: float = CONTROL_TIMEOUT_SECONDS,
+        control_endpoint: Path = CONTROL_ENDPOINT,
     ) -> None:
-        self.host = host
-        self.port = port
-        self.token = token
-        self.timeout_seconds = timeout_seconds
+        self.control_endpoint = control_endpoint
 
     def status(self) -> TwitchoStatus:
         result = self.command("status")
@@ -68,65 +57,28 @@ class TwitchoClient:
         return ActionResult(ok=False, message=result.message)
 
     def command(self, command: str, **fields: object) -> TwitchoReply:
-        message: dict[str, object] = {
-            "type": "command",
-            "id": str(uuid.uuid4()),
-            "command": command,
-        }
-        message.update(fields)
         try:
-            reply = self._exchange(message)
-        except (OSError, TimeoutError, json.JSONDecodeError, ValueError) as e:
+            reply = self._call(command, **fields)
+        except (ConnectionError, OSError, TimeoutError, ValueError) as e:
             return TwitchoReply(
                 ok=False, message=f"twitcho command failed: {e}", payload={}
             )
-        if reply.get("ok") is True:
-            return TwitchoReply(ok=True, message="ok", payload=reply)
+        if reply.ok:
+            return TwitchoReply(ok=True, message="ok", payload=reply.result)
         return TwitchoReply(
             ok=False,
-            message=_string(reply.get("error")) or "twitcho command failed",
-            payload=reply,
+            message=reply.message or "twitcho command failed",
+            payload=reply.result,
         )
 
-    def _exchange(self, command: Mapping[str, object]) -> dict[str, object]:
-        with socket.create_connection(
-            (self.host, self.port), timeout=self.timeout_seconds
-        ) as sock:
-            sock.settimeout(self.timeout_seconds)
-            reader = sock.makefile()
-            hello = {"type": "hello", "version": 1, "client": "showco"}
-            if self.token is not None:
-                hello["token"] = self.token
-            _write(sock, hello)
-            hello_reply = _read_object(reader)
-            if hello_reply.get("type") != "hello" or hello_reply.get("version") != 1:
-                raise ValueError(f"unexpected twitcho hello reply: {hello_reply}")
-            _write(sock, command)
-            return _read_object(reader)
+    def _call(self, command: str, **fields: object) -> rpc.Response:
+        return rpc.Client(self.control_endpoint, role="showco").call(command, **fields)
 
 
 class TwitchoReply(BaseModel, frozen=True):
     ok: bool
     message: str
     payload: dict[str, object]
-
-
-class LineReader(Protocol):
-    def readline(self) -> str: ...
-
-
-def _write(sock: socket.socket, message: Mapping[str, object]) -> None:
-    sock.sendall(json.dumps(message, separators=(",", ":")).encode() + b"\n")
-
-
-def _read_object(reader: LineReader) -> dict[str, object]:
-    line = reader.readline()
-    if not line:
-        raise ConnectionError("connection closed")
-    message = json.loads(line)
-    if not isinstance(message, dict):
-        raise ValueError("reply is not an object")
-    return message
 
 
 def _string(value: object) -> str | None:
