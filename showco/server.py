@@ -226,7 +226,7 @@ def home_page(status: models.ShowStatus) -> str:
         <section>
           <h2>Health</h2>
           <p id="recs-health">recs: {_service_detail(recs.state, recs.last_error)}</p>
-          <div id="recs-errors">{_recs_errors(status)}</div>
+          <div id="recs-errors">{_recs_errors(status.recs)}</div>
           <p id="twitcho-health">
             twitcho: {_service_detail(twitcho.state, twitcho.last_error)}
           </p>
@@ -432,10 +432,17 @@ def _mixer_latency(status: models.ShowStatus) -> str:
     return status.mixer.error or "unknown"
 
 
-def _recs_errors(status: models.ShowStatus) -> str:
-    if not status.recs.errors:
+def _recs_errors(status: models.RecsStatus) -> str:
+    if not status.errors:
         return ""
-    items = "".join(f"<li>{html.escape(e)}</li>" for e in status.recs.errors)
+    timestamp = (
+        _time(status.service.updated_at) if status.service.updated_at else "unknown"
+    )
+    items = "".join(
+        f'<li><time class="error-time">{timestamp}</time>'
+        f"<span>{html.escape(e)}</span></li>"
+        for e in status.errors
+    )
     return f"<p>Recs errors:</p><ul>{items}</ul>"
 
 
@@ -582,7 +589,7 @@ HOME_STATUS_SCRIPT = """
     )));
   }
 
-  function updateRecsErrors(errors) {
+  function updateRecsErrors(errors, updatedAt) {
     const container = document.getElementById("recs-errors");
     container.replaceChildren();
     if (!errors.length) return;
@@ -591,7 +598,14 @@ HOME_STATUS_SCRIPT = """
     const list = document.createElement("ul");
     for (const error of errors) {
       const item = document.createElement("li");
-      item.textContent = error;
+      const timestamp = document.createElement("time");
+      timestamp.className = "error-time";
+      timestamp.textContent = updatedAt === null
+        ? "unknown"
+        : new Date(updatedAt * 1000).toLocaleTimeString();
+      const message = document.createElement("span");
+      message.textContent = error;
+      item.append(timestamp, message);
       list.append(item);
     }
     container.append(heading, list);
@@ -612,7 +626,7 @@ HOME_STATUS_SCRIPT = """
         "twitcho-health",
       );
       updateChannels(status.recs.channels);
-      updateRecsErrors(status.recs.errors);
+      updateRecsErrors(status.recs.errors, status.recs.service.updated_at);
       document.getElementById("temperature").textContent =
         status.system.temperature_c === null
         ? status.system.temperature_error || "unknown"
@@ -687,6 +701,14 @@ main {
 .connected { border-color: #14853d; }
 .stale { border-color: #b57900; }
 .offline, .error, .failed { border-color: #b3261e; }
+#recs-errors li {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: 5.5rem 1fr;
+}
+.error-time {
+  font-family: ui-monospace, monospace;
+}
 .level {
   border-radius: 0.5rem;
   color: white;
