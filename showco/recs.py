@@ -12,7 +12,7 @@ from recs.cfg.track_names import DeviceTrackNames
 from recs.daemon import gui_protocol
 from recs.daemon.models import DaemonMetadata
 
-from .models import ActionResult, ChannelLevel, RecsStatus, ServiceStatus
+from . import models
 
 STALE_AFTER_SECONDS = 3.0
 WINDOWS_PIPE = r"\\.\pipe\recs"
@@ -31,10 +31,10 @@ class RecsClient:
         self.metadata_path = metadata_path or paths.metadata
         self.stale_after_seconds = stale_after_seconds
 
-    def status(self) -> RecsStatus:
+    def status(self) -> models.RecsStatus:
         if not self.status_path.exists():
-            return RecsStatus(
-                service=ServiceStatus(
+            return models.RecsStatus(
+                service=models.ServiceStatus(
                     name="recs",
                     state="offline",
                     last_error=f"{self.status_path} does not exist",
@@ -44,16 +44,16 @@ class RecsClient:
         try:
             data = json.loads(self.status_path.read_text())
         except json.JSONDecodeError as e:
-            return RecsStatus(
-                service=ServiceStatus(
+            return models.RecsStatus(
+                service=models.ServiceStatus(
                     name="recs",
                     state="error",
                     last_error=f"invalid status JSON: {e.msg}",
                 )
             )
         except OSError as e:
-            return RecsStatus(
-                service=ServiceStatus(
+            return models.RecsStatus(
+                service=models.ServiceStatus(
                     name="recs",
                     state="error",
                     last_error=f"could not read status JSON: {e}",
@@ -61,8 +61,8 @@ class RecsClient:
             )
 
         if not isinstance(data, dict):
-            return RecsStatus(
-                service=ServiceStatus(
+            return models.RecsStatus(
+                service=models.ServiceStatus(
                     name="recs",
                     state="error",
                     last_error="status JSON is not an object",
@@ -75,8 +75,8 @@ class RecsClient:
         rows = _rows(data.get("rows"))
         totals = rows[0] if rows else {}
 
-        return RecsStatus(
-            service=ServiceStatus(
+        return models.RecsStatus(
+            service=models.ServiceStatus(
                 name="recs",
                 state=state,
                 last_error=gui_ipc_error,
@@ -89,40 +89,44 @@ class RecsClient:
             file_count=_int(totals.get("file_count")),
             client_count=_int(data.get("client_count")) or 0,
             channels=channel_levels(rows),
-            errors=_string_list(data.get("errors")),
+            errors=_error_records(data.get("errors")),
         )
 
-    def calibrate(self) -> ActionResult:
+    def calibrate(self) -> models.ActionResult:
         response = self._send_request(
             gui_protocol.Calibrate(type="calibrate"),
             send_error="could not send recs calibrate request",
             failure_prefix="recs calibration failed",
         )
-        if isinstance(response, ActionResult):
+        if isinstance(response, models.ActionResult):
             return response
         if isinstance(response, gui_protocol.Calibrated):
-            return ActionResult(ok=True, message="recs calibration succeeded")
-        return ActionResult(
+            return models.ActionResult(ok=True, message="recs calibration succeeded")
+        return models.ActionResult(
             ok=False, message="recs did not send calibrated response"
         )
 
     def set_track_name(
         self, device: str, channel: str, track_name: str
-    ) -> ActionResult:
+    ) -> models.ActionResult:
         device = device.strip()
         channel = channel.strip()
         track_name = track_name.strip()
         if not device:
-            return ActionResult(ok=False, message="recs track name device is missing")
+            return models.ActionResult(
+                ok=False, message="recs track name device is missing"
+            )
         if not channel:
-            return ActionResult(ok=False, message="recs track name channel is missing")
+            return models.ActionResult(
+                ok=False, message="recs track name channel is missing"
+            )
 
         track_names = self.track_names()
-        if isinstance(track_names, ActionResult):
+        if isinstance(track_names, models.ActionResult):
             return track_names
         channel_number = track_channel(device, channel, track_names)
         if channel_number is None:
-            return ActionResult(
+            return models.ActionResult(
                 ok=False,
                 message=f"could not resolve recs channel {channel} for {device}",
             )
@@ -136,78 +140,88 @@ class RecsClient:
             send_error="could not send recs track name request",
             failure_prefix="recs track name update failed",
         )
-        if isinstance(response, ActionResult):
+        if isinstance(response, models.ActionResult):
             return response
         if isinstance(response, gui_protocol.TrackNames):
             if track_name:
-                return ActionResult(
+                return models.ActionResult(
                     ok=True, message=f"recs track name set to {track_name}"
                 )
-            return ActionResult(
+            return models.ActionResult(
                 ok=True, message=f"recs track name cleared for {channel}"
             )
-        return ActionResult(
+        return models.ActionResult(
             ok=False, message="recs did not send track_names response"
         )
 
-    def track_names(self) -> DeviceTrackNames | ActionResult:
+    def track_names(self) -> DeviceTrackNames | models.ActionResult:
         response = self._send_request(
             gui_protocol.GetTrackNames(type="get_track_names"),
             send_error="could not send recs track name request",
             failure_prefix="recs track name request failed",
         )
-        if isinstance(response, ActionResult):
+        if isinstance(response, models.ActionResult):
             return response
         if not isinstance(response, gui_protocol.TrackNames):
-            return ActionResult(ok=False, message="recs sent invalid track names")
+            return models.ActionResult(
+                ok=False, message="recs sent invalid track names"
+            )
         return response.track_names
 
-    def action(self, command: str, **fields: object) -> ActionResult:
+    def action(self, command: str, **fields: object) -> models.ActionResult:
         payload: dict[str, object] = {"type": command}
         payload.update({k: v for k, v in fields.items() if v not in ("", None)})
         request = gui_protocol.MESSAGE.validate_python(payload)
         if not isinstance(request, gui_protocol.Request):
-            return ActionResult(ok=False, message=f"recs does not support {command}")
+            return models.ActionResult(
+                ok=False, message=f"recs does not support {command}"
+            )
         response = self._send_request(
             request,
             send_error=f"could not send recs {command} request",
             failure_prefix=f"recs {command} failed",
         )
-        if isinstance(response, ActionResult):
+        if isinstance(response, models.ActionResult):
             return response
         if not isinstance(response, gui_protocol.Error):
-            return ActionResult(
+            return models.ActionResult(
                 ok=True,
                 message=command_result_message(command, response),
             )
-        return ActionResult(
-            ok=False, message=response.message
-        )
+        return models.ActionResult(ok=False, message=response.message)
 
-    def shutdown(self) -> ActionResult:
+    def shutdown(self) -> models.ActionResult:
         try:
             metadata = self._metadata()
         except (OSError, ValueError) as e:
-            return ActionResult(ok=False, message=f"could not read recs metadata: {e}")
+            return models.ActionResult(
+                ok=False, message=f"could not read recs metadata: {e}"
+            )
         if metadata is None:
-            return ActionResult(
+            return models.ActionResult(
                 ok=False, message=f"{self.metadata_path} does not exist"
             )
 
         try:
             connection = ipc.client_connection(_endpoint(metadata.gui_endpoint))
         except OSError as e:
-            return ActionResult(ok=False, message=f"could not connect to recs: {e}")
+            return models.ActionResult(
+                ok=False, message=f"could not connect to recs: {e}"
+            )
         try:
             if not connection.write(gui_hello()):
-                return ActionResult(ok=False, message="could not send recs hello")
+                return models.ActionResult(
+                    ok=False, message="could not send recs hello"
+                )
             if error := _expect_daemon_hello(_read_message(connection)):
-                return ActionResult(ok=False, message=error)
+                return models.ActionResult(ok=False, message=error)
             if not connection.write(ipc.message_json(ipc.Shutdown(type="shutdown"))):
-                return ActionResult(ok=False, message="could not send recs shutdown")
-            return ActionResult(ok=True, message="recs shutdown requested")
+                return models.ActionResult(
+                    ok=False, message="could not send recs shutdown"
+                )
+            return models.ActionResult(ok=True, message="recs shutdown requested")
         except (OSError, ValueError) as e:
-            return ActionResult(ok=False, message=f"recs shutdown failed: {e}")
+            return models.ActionResult(ok=False, message=f"recs shutdown failed: {e}")
         finally:
             connection.close()
 
@@ -217,32 +231,38 @@ class RecsClient:
         *,
         send_error: str,
         failure_prefix: str,
-    ) -> gui_protocol.Response | ActionResult:
+    ) -> gui_protocol.Response | models.ActionResult:
         try:
             metadata = self._metadata()
         except (OSError, ValueError) as e:
-            return ActionResult(ok=False, message=f"could not read recs metadata: {e}")
+            return models.ActionResult(
+                ok=False, message=f"could not read recs metadata: {e}"
+            )
         if metadata is None:
-            return ActionResult(
+            return models.ActionResult(
                 ok=False, message=f"{self.metadata_path} does not exist"
             )
 
         try:
             connection = ipc.client_connection(_endpoint(metadata.gui_endpoint))
         except OSError as e:
-            return ActionResult(ok=False, message=f"could not connect to recs: {e}")
+            return models.ActionResult(
+                ok=False, message=f"could not connect to recs: {e}"
+            )
         try:
             if not connection.write(gui_hello()):
-                return ActionResult(ok=False, message="could not send recs hello")
+                return models.ActionResult(
+                    ok=False, message="could not send recs hello"
+                )
             if error := _expect_daemon_hello(_read_message(connection)):
-                return ActionResult(ok=False, message=error)
+                return models.ActionResult(ok=False, message=error)
 
             if not connection.write(ipc.message_json(request, exclude_none=True)):
-                return ActionResult(ok=False, message=send_error)
+                return models.ActionResult(ok=False, message=send_error)
 
             return _response(_read_message(connection))
         except (OSError, ValueError) as e:
-            return ActionResult(ok=False, message=f"{failure_prefix}: {e}")
+            return models.ActionResult(ok=False, message=f"{failure_prefix}: {e}")
         finally:
             connection.close()
 
@@ -301,11 +321,11 @@ def _expect_daemon_hello(message: object) -> str | None:
     return None
 
 
-def _response(message: object) -> gui_protocol.Response | ActionResult:
+def _response(message: object) -> gui_protocol.Response | models.ActionResult:
     if isinstance(message, ipc.Error):
-        return ActionResult(ok=False, message=message.message)
+        return models.ActionResult(ok=False, message=message.message)
     if not isinstance(message, gui_protocol.Response):
-        return ActionResult(ok=False, message="recs did not send a response")
+        return models.ActionResult(ok=False, message="recs did not send a response")
     return message
 
 
@@ -344,7 +364,7 @@ def command_result_message(command: str, response: BaseModel) -> str:
     return f"recs {command} succeeded: {text}"
 
 
-def channel_levels(rows: list[dict[str, object]]) -> list[ChannelLevel]:
+def channel_levels(rows: list[dict[str, object]]) -> list[models.ChannelLevel]:
     channels = []
     device = ""
     for row in rows:
@@ -354,7 +374,7 @@ def channel_levels(rows: list[dict[str, object]]) -> list[ChannelLevel]:
             continue
         signal = _float(row.get("signal"))
         channels.append(
-            ChannelLevel(
+            models.ChannelLevel(
                 name=name, state=level_state(signal), device=device, signal=signal
             )
         )
@@ -397,10 +417,18 @@ def _string(value: object) -> str | None:
     return value if isinstance(value, str) else None
 
 
-def _string_list(value: object) -> list[str]:
+def _error_records(value: object) -> list[models.ErrorRecord]:
     if not isinstance(value, list):
         return []
-    return [i for i in value if isinstance(i, str)]
+    errors = []
+    for v in value:
+        if not isinstance(v, dict):
+            continue
+        timestamp = _string(v.get("timestamp"))
+        message = _string(v.get("message"))
+        if timestamp is not None and message is not None:
+            errors.append(models.ErrorRecord(timestamp=timestamp, message=message))
+    return errors
 
 
 def _float(value: object) -> float | None:

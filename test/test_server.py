@@ -84,7 +84,12 @@ class ServerTests(unittest.TestCase):
                         state="connected",
                         updated_at=1_785_000_000,
                     ),
-                    errors=["disk almost full"],
+                    errors=[
+                        models.ErrorRecord(
+                            timestamp="2026-08-13T12:34:56.789Z",
+                            message="disk almost full",
+                        )
+                    ],
                 ),
                 twitcho=models.TwitchoStatus(
                     service=models.ServiceStatus(name="twitcho", state="connected")
@@ -94,10 +99,31 @@ class ServerTests(unittest.TestCase):
 
         self.assertIn("Recs errors", html)
         self.assertIn("disk almost full", html)
-        self.assertIn('<time class="error-time">', html)
         self.assertIn(
-            "updateRecsErrors(status.recs.errors, status.recs.service.updated_at)", html
+            '<input id="show-all-errors" type="checkbox" role="switch">', html
         )
+        self.assertIn("Show all errors", html)
+
+    def test_home_page_hides_errors_from_before_this_run(self) -> None:
+        html = home_page(
+            models.ShowStatus(
+                recs=models.RecsStatus(
+                    service=models.ServiceStatus(name="recs", state="connected"),
+                    errors=[
+                        models.ErrorRecord(
+                            timestamp="2026-08-13T12:34:56.789Z",
+                            message="old disk error",
+                        )
+                    ],
+                ),
+                twitcho=models.TwitchoStatus(
+                    service=models.ServiceStatus(name="twitcho", state="connected")
+                ),
+                run_started_at=1_800_000_000,
+            )
+        )
+
+        self.assertNotIn("old disk error", html)
 
     def test_home_page_has_track_name_editor_for_recs_channels(self) -> None:
         html = home_page(
@@ -217,6 +243,7 @@ class ServerTests(unittest.TestCase):
             {
                 "action": "recs-set-noise-floor",
                 "source": "Mic",
+                "channel": "1",
                 "noise_floor": "42.5",
             }
         )
@@ -236,6 +263,7 @@ class ServerTests(unittest.TestCase):
             {
                 "action": "recs-set-noise-floor",
                 "source": "Mic",
+                "channel": "1",
                 "noise_floor": "loud",
             }
         )
