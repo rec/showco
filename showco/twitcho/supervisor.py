@@ -7,6 +7,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
 
+from reccy import process
+
 from ..models import ActionResult, ServiceStatus
 
 EXTERNAL_RESTART_DELAYS = [0.2, 1.0, 10.0, 20.0]
@@ -103,18 +105,18 @@ class TwitchoSupervisor:
             with self.lock:
                 self.state = "starting"
             try:
-                process = self.run_process(self.command())
+                twitcho_process = self.run_process(self.command())
             except OSError as e:
                 if not self._restart_after_failure(str(e)):
                     return
                 continue
 
             with self.lock:
-                self.process = process
+                self.process = twitcho_process
                 self.state = "running"
                 self.last_error = None
 
-            return_code = self._wait_for_process(process)
+            return_code = self._wait_for_process(twitcho_process)
             if self.stop_requested.is_set():
                 return
             if self.restart_requested.is_set():
@@ -130,13 +132,13 @@ class TwitchoSupervisor:
             if not self._restart_after_failure(f"twitcho exited with {return_code}"):
                 return
 
-    def _wait_for_process(self, process: subprocess.Popen[bytes]) -> int | None:
+    def _wait_for_process(self, twitcho_process: subprocess.Popen[bytes]) -> int | None:
         while not self.stop_requested.is_set() and not self.restart_requested.is_set():
-            if (return_code := process.poll()) is not None:
+            if (return_code := twitcho_process.poll()) is not None:
                 return return_code
             self.stop_requested.wait(0.05)
         self._terminate_process()
-        return process.poll()
+        return twitcho_process.poll()
 
     def _restart_after_failure(self, error: str) -> bool:
         with self.lock:
@@ -154,12 +156,7 @@ class TwitchoSupervisor:
 
     def _terminate_process(self) -> None:
         with self.lock:
-            process = self.process
-        if not process or process.poll() is not None:
+            twitcho_process = self.process
+        if not twitcho_process:
             return
-        process.terminate()
-        try:
-            process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            process.wait()
+        process.terminate(twitcho_process)
