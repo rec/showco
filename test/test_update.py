@@ -22,7 +22,7 @@ class UpdateTests(unittest.TestCase):
             mock.patch(
                 "showco.update.update_from_provisioning_machine", return_value=0
             ) as update_from_provisioning_machine,
-            mock.patch("builtins.print") as print,
+            mock.patch("showco.update.tqdm.write") as write,
         ):
             result = update.main(["--host", "other.local", "recs"])
 
@@ -35,30 +35,30 @@ class UpdateTests(unittest.TestCase):
             update_from_provisioning_machine.call_args.kwargs,
             {"host": "other.local"},
         )
-        print.assert_called_once_with("Success!")
+        write.assert_called_once_with("Success!")
 
     def test_target_machine_override_runs_target_update(self) -> None:
         with (
             mock.patch("showco.update.machine_role.machine_role", return_value=""),
             mock.patch("showco.update.update_target", return_value=0) as update_target,
-            mock.patch("builtins.print") as print,
+            mock.patch("showco.update.tqdm.write") as write,
         ):
             result = update.main(["--target-machine", "recs"])
 
         self.assertEqual(result, 0)
         self.assertEqual(update_target.call_args.args, (["recs"],))
-        print.assert_called_once_with("Success!")
+        write.assert_called_once_with("Success!")
 
     def test_update_prints_failure_summary(self) -> None:
         with (
             mock.patch("showco.update.machine_role.machine_role", return_value=""),
             mock.patch("showco.update.update_target", return_value=1),
-            mock.patch("builtins.print") as print,
+            mock.patch("showco.update.tqdm.write") as write,
         ):
             result = update.main(["--target-machine", "recs"])
 
         self.assertEqual(result, 1)
-        print.assert_called_once_with("ERROR: update failed")
+        write.assert_called_once_with("ERROR: update failed")
 
     def test_target_update_pulls_selected_repositories_and_restarts_services(
         self,
@@ -275,8 +275,7 @@ class UpdateTests(unittest.TestCase):
             "uv run showco update --target-machine showco reccy",
         )
         self.assertIn("ConnectTimeout=2", remote_update.call_args.args[2])
-        self.assertIn("showco push: ok", output.getvalue())
-        self.assertIn("Updating target tom@bertrand.local", output.getvalue())
+        self.assertEqual(output.getvalue(), "")
 
     def test_provisioning_update_rejects_non_main_branches_before_pushing(self) -> None:
         commands: list[list[str]] = []
@@ -368,6 +367,8 @@ class UpdateTests(unittest.TestCase):
 
         self.assertTrue(result.ok)
         self.assertEqual(result.step, "push --force-with-lease")
+        self.assertIn("recs push: failed", output.getvalue())
+        self.assertIn("rejected", output.getvalue())
         self.assertIn("recs current upstream commit:", output.getvalue())
         self.assertIn("1234567890abcdef\nRemote commit subject", output.getvalue())
         self.assertEqual(
