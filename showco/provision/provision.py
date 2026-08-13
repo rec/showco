@@ -6,6 +6,7 @@ import shutil
 import sys
 import tempfile
 import time
+from collections.abc import Callable
 from pathlib import Path
 from subprocess import CalledProcessError, CompletedProcess
 from typing import Annotated
@@ -14,7 +15,7 @@ import tyro
 from pydantic import BaseModel
 from reccy import subprocess
 
-from .. import machine_role, network_config
+from .. import machine_role, network_config, recs
 from . import config
 
 PROVISION_DIR = Path(__file__).resolve().parent
@@ -28,6 +29,7 @@ LOCAL_REPOSITORIES = ["showco", "reccy", "recs", "twitcho"]
 WIFI_STATUS_COMMAND = "nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device status"
 STARTUP_CHECK_NAMES = [
     "recs service is active",
+    "recs status is advancing",
     "showco service is active",
     "showco service status is healthy",
     "X18 bridge has the configured address",
@@ -484,6 +486,13 @@ def verify_provisioning(
         verify_remote_command(
             provision_config,
             ssh_target,
+            "recs status is advancing",
+            recs.status_changes_command(),
+            summarize_error=recs.status_failure_summary,
+        ),
+        verify_remote_command(
+            provision_config,
+            ssh_target,
             "showco service is active",
             showco_service_status_command("showco", provision_config.paths.root),
         ),
@@ -592,6 +601,7 @@ def verify_remote_command(
     command: str,
     *,
     expect_empty_stdout: bool = False,
+    summarize_error: Callable[[str], str] | None = None,
 ) -> VerificationResult:
     completed = subprocess.run(
         ssh_command(provision_config, ssh_target, command, connect_timeout=1),
@@ -602,6 +612,8 @@ def verify_remote_command(
     output = f"{completed.stdout}{completed.stderr}".strip()
     if completed.returncode == 0 and (not expect_empty_stdout or not output):
         return VerificationResult(name=name, error="")
+    if summarize_error is not None:
+        output = summarize_error(output)
     if not output:
         output = f"command exited with status {completed.returncode}"
     return VerificationResult(name=name, error=output)

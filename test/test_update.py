@@ -161,8 +161,41 @@ class UpdateTests(unittest.TestCase):
                 ["git", "-C", "/code/recs", "rev-parse", "HEAD"],
                 ["uv", "sync", "--frozen", "--directory", "/code/recs"],
                 ["systemctl", "--user", "start", "recs.service"],
+                ["sh", "-c", update.recs.status_changes_command()],
             ],
         )
+
+    def test_target_update_reports_recs_status_that_does_not_advance(self) -> None:
+        def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+            if command[-2:] == ["branch", "--show-current"]:
+                return subprocess.CompletedProcess(command, 0, "main\n", "")
+            if command[-2:] == ["status", "--porcelain"]:
+                return subprocess.CompletedProcess(command, 0, "", "")
+            if command[-2:] == ["rev-parse", "HEAD"]:
+                return subprocess.CompletedProcess(command, 0, "same\n", "")
+            if command[:2] == ["sh", "-c"]:
+                return subprocess.CompletedProcess(
+                    command,
+                    1,
+                    '{"updated_at":1,"errors":[{"message":"device stalled"}]}\n',
+                    "",
+                )
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        output = StringIO()
+        with mock.patch(
+            "showco.services.service.current_platform", return_value=Platform.linux
+        ):
+            result = update.update_target(
+                ["recs"],
+                root=Path("/code"),
+                run_command=run_command,
+                output=output,
+            )
+
+        self.assertEqual(result, 1)
+        self.assertIn("recs status is advancing: failed", output.getvalue())
+        self.assertIn("Recent Recs errors:\n- device stalled", output.getvalue())
 
     def test_target_update_resets_repository_when_dependency_sync_fails(self) -> None:
         commands: list[list[str]] = []
@@ -270,7 +303,10 @@ class UpdateTests(unittest.TestCase):
             ],
         )
         self.assertEqual(
-            commands[-1], ["systemctl", "--user", "start", "showco.service"]
+            commands[-2], ["systemctl", "--user", "start", "showco.service"]
+        )
+        self.assertEqual(
+            commands[-1], ["sh", "-c", update.recs.status_changes_command()]
         )
         self.assertLess(
             commands.index(["git", "-C", "/code/showco", "pull", "--ff-only"]),
@@ -717,6 +753,7 @@ class UpdateTests(unittest.TestCase):
                 ["systemctl", "--user", "stop", "recs.service"],
                 ["git", "-C", "/code/recs", "status", "--porcelain"],
                 ["systemctl", "--user", "start", "recs.service"],
+                ["sh", "-c", update.recs.status_changes_command()],
             ],
         )
 

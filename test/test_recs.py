@@ -11,12 +11,43 @@ from unittest import mock
 from reccy.models import Platform
 from recs.daemon.models import DaemonMetadata
 
+from showco import recs
 from showco.recs import RecsClient, channel_levels, level_state, replace_track_name
 
 CLIENT_CONNECTION = "showco.recs.ipc.client_connection"
 
 
 class RecsTests(unittest.TestCase):
+    def test_status_changes_command_checks_successive_updated_at_values(self) -> None:
+        command = recs.status_changes_command()
+
+        self.assertIn('status="$HOME/.local/state/recs/status.json"', command)
+        self.assertIn("sleep 4", command)
+        self.assertIn("for sample in $(seq 3)", command)
+        self.assertIn("current=$(updated_at)", command)
+        self.assertIn('previous="$current"', command)
+
+    def test_status_failure_summary_shows_recent_error_messages(self) -> None:
+        summary = recs.status_failure_summary(
+            json.dumps(
+                {
+                    "updated_at": 123.0,
+                    "errors": [
+                        "first",
+                        {"message": "second"},
+                        "third",
+                        "fourth",
+                    ],
+                }
+            )
+        )
+
+        self.assertEqual(
+            summary,
+            "Recs status did not advance; updated_at=123.0\n"
+            "Recent Recs errors:\n- second\n- third\n- fourth",
+        )
+
     def test_reads_recs_status_file(self) -> None:
         with TemporaryDirectory() as directory:
             path = Path(directory) / "status.json"
