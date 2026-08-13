@@ -5,6 +5,8 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
+from reccy import process
+
 
 class X18RecorderSupervisor:
     def __init__(
@@ -20,26 +22,24 @@ class X18RecorderSupervisor:
         self.port = port
         self.log_dir = log_dir
         self.python = python
-        self.run_process = run_process or subprocess.Popen
-        self.process: subprocess.Popen[bytes] | None = None
+        self.managed_process = process.ManagedProcess(
+            self.command(),
+            run_process=run_process or subprocess.Popen,
+        )
+
+    @property
+    def process(self) -> subprocess.Popen[bytes] | None:
+        return self.managed_process.process
+
+    @process.setter
+    def process(self, value: subprocess.Popen[bytes] | None) -> None:
+        self.managed_process.process = value
 
     def start(self) -> None:
-        if self.process and self.process.poll() is None:
-            return
-        self.process = self.run_process(self.command())
+        self.managed_process.start()
 
     def close(self) -> None:
-        process = self.process
-        if not process or process.poll() is not None:
-            self.process = None
-            return
-        process.terminate()
-        try:
-            process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            process.wait()
-        self.process = None
+        self.managed_process.close()
 
     def command(self) -> list[str]:
         return [

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pydantic import BaseModel
 from reccy import rpc
 
 from ..models import ActionResult, ServiceStatus, TwitchoStatus
@@ -10,13 +9,17 @@ from ..models import ActionResult, ServiceStatus, TwitchoStatus
 CONTROL_ENDPOINT = Path.home() / ".local/state/twitcho/control.sock"
 
 
-class TwitchoClient:
+class TwitchoClient(rpc.ClientAdapter):
     def __init__(
         self,
         *,
         control_endpoint: Path = CONTROL_ENDPOINT,
     ) -> None:
-        self.control_endpoint = control_endpoint
+        super().__init__(
+            control_endpoint,
+            role="showco",
+            error_prefix="twitcho command failed",
+        )
 
     def status(self) -> TwitchoStatus:
         result = self.command("status")
@@ -26,7 +29,7 @@ class TwitchoClient:
                     name="twitcho", state="offline", last_error=result.message
                 )
             )
-        value = result.payload.get("status")
+        value = result.result.get("status")
         if not isinstance(value, dict):
             return TwitchoStatus(
                 service=ServiceStatus(
@@ -55,30 +58,6 @@ class TwitchoClient:
         if result.ok:
             return ActionResult(ok=True, message=f"twitcho {command} succeeded")
         return ActionResult(ok=False, message=result.message)
-
-    def command(self, command: str, **fields: object) -> TwitchoReply:
-        try:
-            reply = self._call(command, **fields)
-        except (ConnectionError, OSError, TimeoutError, ValueError) as e:
-            return TwitchoReply(
-                ok=False, message=f"twitcho command failed: {e}", payload={}
-            )
-        if reply.ok:
-            return TwitchoReply(ok=True, message="ok", payload=reply.result)
-        return TwitchoReply(
-            ok=False,
-            message=reply.message or "twitcho command failed",
-            payload=reply.result,
-        )
-
-    def _call(self, command: str, **fields: object) -> rpc.Response:
-        return rpc.Client(self.control_endpoint, role="showco").call(command, **fields)
-
-
-class TwitchoReply(BaseModel, frozen=True):
-    ok: bool
-    message: str
-    payload: dict[str, object]
 
 
 def _string(value: object) -> str | None:
