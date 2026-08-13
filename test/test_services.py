@@ -80,6 +80,17 @@ class ServicesTests(unittest.TestCase):
             metadata.argv[:5], ["run", "--host", "0.0.0.0", "--port", "17352"]
         )
 
+    def test_showco_daemon_uses_reccy_service_lifecycle(self) -> None:
+        daemon = services.ShowcoDaemon(
+            platform=Platform.linux,
+            executable=Path("/home/tom/code/showco/.venv/bin/showco"),
+        )
+
+        self.assertEqual(daemon.name, "showco")
+        self.assertEqual(
+            daemon.daemon_executable(), Path("/home/tom/code/showco/.venv/bin/showco")
+        )
+
     def test_showco_args_omit_twitcho_configuration_when_disabled(self) -> None:
         arguments = services.showco_args(
             "0.0.0.0",
