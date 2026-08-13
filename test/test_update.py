@@ -89,6 +89,40 @@ class UpdateTests(unittest.TestCase):
             "uv run showco update --target-machine --root '/srv/show projects' recs",
         )
 
+    def test_legacy_remote_update_command_has_no_update_arguments(self) -> None:
+        command = update.legacy_remote_update_command(Path("/srv/show projects"))
+
+        self.assertEqual(
+            command,
+            "cd '/srv/show projects/showco' && "
+            'PATH="$HOME/.local/bin:$PATH" '
+            "uv run showco update",
+        )
+
+    def test_rejected_update_arguments_requires_tyro_option_error(self) -> None:
+        self.assertTrue(
+            update.rejected_update_arguments(
+                update.StepResult(
+                    program="target",
+                    step="update",
+                    command=["ssh"],
+                    returncode=2,
+                    output="Unrecognized options: --root",
+                )
+            )
+        )
+        self.assertFalse(
+            update.rejected_update_arguments(
+                update.StepResult(
+                    program="target",
+                    step="update",
+                    command=["ssh"],
+                    returncode=1,
+                    output="git pull failed",
+                )
+            )
+        )
+
     def test_target_update_pulls_selected_repositories_and_restarts_services(
         self,
     ) -> None:
@@ -342,6 +376,55 @@ class UpdateTests(unittest.TestCase):
         self.assertIn("recs main branch: failed", output.getvalue())
         self.assertIn("repository is on feature, expected main", output.getvalue())
         remote_update.assert_not_called()
+
+    def test_provisioning_update_retries_old_target_without_arguments(self) -> None:
+        def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+            if command[-2:] == ["branch", "--show-current"]:
+                return subprocess.CompletedProcess(command, 0, "main\n", "")
+            if command[-2:] == ["status", "--porcelain"]:
+                return subprocess.CompletedProcess(command, 0, "", "")
+            if command[-1:] == ["@{upstream}"]:
+                return subprocess.CompletedProcess(command, 0, "origin/main\n", "")
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        rejected = update.StepResult(
+            program="target",
+            step="update",
+            command=["ssh"],
+            returncode=2,
+            output="Unrecognized options: --target-machine",
+        )
+        succeeded = update.StepResult(
+            program="target",
+            step="legacy update",
+            command=["ssh"],
+            returncode=0,
+            output="",
+        )
+        with (
+            mock.patch(
+                "showco.update.provisioning_config",
+                return_value=make_config(),
+            ),
+            mock.patch(
+                "showco.update.run_remote_step",
+                side_effect=[rejected, succeeded],
+            ) as remote_update,
+        ):
+            result = update.update_from_provisioning_machine(
+                ["showco"],
+                root=Path("/code"),
+                local_root=Path("/code"),
+                run_command=run_command,
+                output=StringIO(),
+            )
+
+        self.assertEqual(result, 0)
+        self.assertEqual(remote_update.call_count, 2)
+        self.assertEqual(
+            remote_update.call_args.args[2][-1],
+            'cd /code/showco && PATH="$HOME/.local/bin:$PATH" uv run showco update',
+        )
 
     def test_target_update_rejects_non_main_branches_before_stopping_services(
         self,
