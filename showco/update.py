@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from reccy import subprocess
 from tqdm import tqdm
 
-from . import machine_role, services
+from . import machine_role, recs, services
 from .provision import config, provision
 
 RunCommand = Callable[
@@ -155,6 +155,8 @@ def update_target(
             progress.update()
 
         results.extend(run_service_step(n, "start", run_command) for n in service_names)
+        if "recs" in service_names:
+            results.append(recs_status_changes_step(run_command))
     report_failures(results, output)
     return 0 if all(r.ok for r in results) else 1
 
@@ -179,6 +181,8 @@ def update_target_with_showco(
         results.extend(run_service_step(n, "start", run_command) for n in service_names)
         progress.update()
     results.append(run_service_step("showco", "start", run_command))
+    if "recs" in selected_service_names(programs):
+        results.append(recs_status_changes_step(run_command))
     report_failures(results, output)
     return 0 if all(r.ok for r in results) else 1
 
@@ -243,6 +247,20 @@ def update_program_on_target(
                 )
             )
     return results
+
+
+def recs_status_changes_step(run_command: RunCommand) -> StepResult:
+    result = run_step(
+        "recs",
+        "status is advancing",
+        ["sh", "-c", recs.status_changes_command()],
+        run_command,
+    )
+    if result.ok:
+        return result
+    return result.model_copy(
+        update={"output": recs.status_failure_summary(result.output)}
+    )
 
 
 def program_named(programs: list[Program], name: str) -> Program:

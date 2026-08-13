@@ -15,6 +15,9 @@ from recs.daemon.models import DaemonMetadata
 from . import models
 
 STALE_AFTER_SECONDS = 3.0
+STATUS_CHANGE_WAIT_SECONDS = 4
+STATUS_CHANGE_SAMPLE_COUNT = 3
+STATUS_ERROR_LIMIT = 3
 WINDOWS_PIPE = r"\\.\pipe\recs"
 
 
@@ -278,6 +281,49 @@ class RecsPaths(BaseModel, frozen=True):
     gui_endpoint: str
 
 
+def status_changes_command() -> str:
+    return (
+        'status="$HOME/.local/state/recs/status.json"; '
+        "updated_at() { sed -nE "
+        '\'s/.*"updated_at"[[:space:]]*:[[:space:]]*'
+        '([0-9]+([.][0-9]+)?).*/\\1/p\' "$status"; }; '
+        'previous=""; '
+        f"for sample in $(seq {STATUS_CHANGE_SAMPLE_COUNT}); do "
+        "current=$(updated_at); "
+        'if [ -z "$current" ] || '
+        '{ [ -n "$previous" ] && [ "$previous" = "$current" ]; }; then '
+        'cat "$status"; exit 1; fi; '
+        'previous="$current"; '
+        f'[ "$sample" = {STATUS_CHANGE_SAMPLE_COUNT} ] || '
+        f"sleep {STATUS_CHANGE_WAIT_SECONDS}; "
+        "done"
+    )
+
+
+def status_failure_summary(output: str) -> str:
+    try:
+        data = json.loads(output)
+    except json.JSONDecodeError:
+        return output.strip()
+    if not isinstance(data, dict):
+        return output.strip()
+    result = "Recs status did not advance"
+    if isinstance(updated_at := data.get("updated_at"), int | float):
+        result += f"; updated_at={updated_at}"
+    errors = data.get("errors")
+    if not isinstance(errors, list):
+        return result
+    messages = [error_message(e) for e in errors]
+    messages = [m for m in messages if m]
+    if not messages:
+        return result
+    return (
+        result
+        + "\nRecent Recs errors:\n"
+        + "\n".join(f"- {m}" for m in messages[-STATUS_ERROR_LIMIT:])
+    )
+
+
 def recs_paths(home: Path | None = None) -> RecsPaths:
     home = home or Path.home()
     if sys.platform == "win32":
@@ -435,6 +481,14 @@ def _float(value: object) -> float | None:
     if isinstance(value, int | float):
         return float(value)
     return None
+
+
+def error_message(value: object) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict) and isinstance(message := value.get("message"), str):
+        return message
+    return ""
 
 
 def _int(value: object) -> int | None:

@@ -823,6 +823,9 @@ class ProvisionTests(unittest.TestCase):
             "uv run --frozen showco run service-status showco",
             commands,
         )
+        self.assertTrue(
+            any('status="$HOME/.local/state/recs/status.json"' in c for c in commands)
+        )
 
     def test_missing_x18_usb_device_is_note_not_error(self) -> None:
         config = make_config(values())
