@@ -79,7 +79,11 @@ class ServerTests(unittest.TestCase):
         html = home_page(
             models.ShowStatus(
                 recs=models.RecsStatus(
-                    service=models.ServiceStatus(name="recs", state="connected"),
+                    service=models.ServiceStatus(
+                        name="recs",
+                        state="connected",
+                        updated_at=1_785_000_000,
+                    ),
                     errors=["disk almost full"],
                 ),
                 twitcho=models.TwitchoStatus(
@@ -90,6 +94,10 @@ class ServerTests(unittest.TestCase):
 
         self.assertIn("Recs errors", html)
         self.assertIn("disk almost full", html)
+        self.assertIn('<time class="error-time">', html)
+        self.assertIn(
+            "updateRecsErrors(status.recs.errors, status.recs.service.updated_at)", html
+        )
 
     def test_home_page_has_track_name_editor_for_recs_channels(self) -> None:
         html = home_page(
