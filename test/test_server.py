@@ -150,6 +150,35 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(html.count(">Revert</button>"), 1)
         self.assertNotIn(">healthy</span>", html)
 
+    def test_home_page_has_mutable_recs_attributes(self) -> None:
+        html = home_page(
+            models.ShowStatus(
+                recs=models.RecsStatus(
+                    service=models.ServiceStatus(name="recs", state="connected")
+                ),
+                twitcho=models.TwitchoStatus(
+                    service=models.ServiceStatus(name="twitcho", state="connected")
+                ),
+            ),
+            [
+                models.MutableAttribute(
+                    address="recording.noise_floor",
+                    value=70.0,
+                ),
+                models.MutableAttribute(
+                    address="recording.record_everything",
+                    value=False,
+                ),
+            ],
+        )
+
+        self.assertIn("Recs attributes", html)
+        self.assertIn('id="mutable-attributes"', html)
+        self.assertIn('data-address="recording.noise_floor"', html)
+        self.assertIn('type="number" data-value-type="number" value="70.0"', html)
+        self.assertIn('type="checkbox" data-value-type="boolean"', html)
+        self.assertIn("saveMutableAttribute", html)
+
     def test_actions_page_has_twitch_restart_button(self) -> None:
         html = actions_page([])
 
@@ -233,6 +262,26 @@ class ServerTests(unittest.TestCase):
 
         self.assertTrue(result.ok)
         self.assertEqual(recs.rehearsal_track_names, {"X18/XR18": {"Lead Vocal": 1}})
+
+    def test_set_attr_action_uses_recs_client(self) -> None:
+        recs = rehearsal.RehearsalRecsClient()
+        app = ShowcoApp(
+            recs,
+            rehearsal.RehearsalTwitchoClient(),
+            rehearsal.RehearsalSystemMonitor(),
+            rehearsal.RehearsalMixerMonitor(),
+        )
+
+        result = app.run_action(
+            {
+                "action": "recs-set-attr",
+                "address": "recording.record_everything",
+                "value": "true",
+            }
+        )
+
+        self.assertTrue(result.ok)
+        self.assertTrue(recs.rehearsal_attributes["recording.record_everything"])
 
     def test_recs_action_uses_recs_client(self) -> None:
         recs = rehearsal.RehearsalRecsClient()

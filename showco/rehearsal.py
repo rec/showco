@@ -15,6 +15,10 @@ class RehearsalRecsClient(RecsClient):
         self.started_at = time.time()
         self.calibration_count = 0
         self.rehearsal_track_names: dict[str, dict[str, int]] = {}
+        self.rehearsal_attributes: dict[str, object] = {
+            "recording.longest_file_time": 0.0,
+            "recording.record_everything": False,
+        }
 
     def status(self) -> models.RecsStatus:
         elapsed = time.time() - self.started_at
@@ -61,6 +65,21 @@ class RehearsalRecsClient(RecsClient):
         return models.ActionResult(
             ok=True, message=f"rehearsal recs track name {track_name}"
         )
+
+    def mutable_attributes(self) -> list[models.MutableAttribute]:
+        return [
+            models.MutableAttribute(address=a, value=v)
+            for a, v in self.rehearsal_attributes.items()
+        ]
+
+    def set_attr(self, address: str, value: object) -> models.ActionResult:
+        if address not in self.rehearsal_attributes:
+            return models.ActionResult(
+                ok=False,
+                message=f"rehearsal recs unknown attribute {address}",
+            )
+        self.rehearsal_attributes[address] = value
+        return models.ActionResult(ok=True, message=f"rehearsal recs set {address}")
 
     def action(self, command: str, **fields: object) -> models.ActionResult:
         if fields:

@@ -28,6 +28,11 @@ class ChannelLevel(BaseModel, frozen=True):
     signal: float | None = None
 
 
+class MutableAttribute(BaseModel, frozen=True):
+    address: str
+    value: object
+
+
 class ErrorRecord(BaseModel, frozen=True):
     timestamp: str
     message: str

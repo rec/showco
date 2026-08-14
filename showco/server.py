@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import json
 import threading
 import time
 from datetime import datetime
@@ -63,6 +64,16 @@ class ShowcoApp:
                 form.get("channel", ""),
                 form.get("track_name", ""),
             )
+        elif action == "recs-set-attr":
+            try:
+                value = json.loads(form.get("value", ""))
+            except json.JSONDecodeError:
+                result = models.ActionResult(
+                    ok=False,
+                    message="recs attribute value must be valid JSON",
+                )
+            else:
+                result = self.recs.set_attr(form.get("address", ""), value)
         elif action == "recs-shutdown":
             if form.get("confirmation") == "shutdown":
                 result = self.recs.shutdown()
@@ -118,7 +129,7 @@ class ShowcoHandler(BaseHTTPRequestHandler):
             self._json(self.app.status())
             return
         if self.path in {"/", "/home"}:
-            self._html(home_page(self.app.status()))
+            self._html(home_page(self.app.status(), self.app.recs.mutable_attributes()))
             return
         if self.path == "/actions":
             self._html(
@@ -212,7 +223,12 @@ def make_server(
     return server
 
 
-def home_page(status: models.ShowStatus) -> str:
+def home_page(
+    status: models.ShowStatus,
+    mutable_attributes: list[models.MutableAttribute]
+    | models.ActionResult
+    | None = None,
+) -> str:
     recs = status.recs.service
     twitcho = status.twitcho.service
     channel_html = "".join(
@@ -259,6 +275,7 @@ def home_page(status: models.ShowStatus) -> str:
           <p>Mixer latency: <span id="mixer-latency">{_mixer_latency(status)}</span></p>
           <p>Generated: <span id="generated-at">{_time(status.generated_at)}</span></p>
         </section>
+        {mutable_attributes_section(mutable_attributes)}
         """,
         script=HOME_STATUS_SCRIPT,
     )
@@ -375,6 +392,55 @@ def channel_indicator(state: str) -> str:
     if state in {"present", "healthy"}:
         return "indicator-green"
     return "indicator-red"
+
+
+def mutable_attributes_section(
+    attributes: list[models.MutableAttribute] | models.ActionResult | None,
+) -> str:
+    if isinstance(attributes, models.ActionResult):
+        body = f"<p>{html.escape(attributes.message)}</p>"
+    elif attributes:
+        body = (
+            '<div class="attributes" id="mutable-attributes">'
+            + "".join(mutable_attribute(a) for a in attributes)
+            + "</div>"
+        )
+    else:
+        body = "<p>No mutable Recs attributes.</p>"
+    return f"""
+        <section>
+          <h2>Recs attributes</h2>
+          {body}
+        </section>
+    """
+
+
+def mutable_attribute(attribute: models.MutableAttribute) -> str:
+    value = attribute.value
+    input_type = "text"
+    value_type = "text"
+    if isinstance(value, bool):
+        input_type = "checkbox"
+        value_type = "boolean"
+        value_html = " checked" if value else ""
+    elif isinstance(value, int | float):
+        input_type = "number"
+        value_type = "number"
+        value_html = f' value="{value}" step="any"'
+    elif isinstance(value, str):
+        value_html = f' value="{html.escape(value)}"'
+    else:
+        value_type = "json"
+        value_html = f' value="{html.escape(json.dumps(value, separators=(",", ":")))}"'
+    saved_value = html.escape(json.dumps(value, separators=(",", ":")))
+    address = html.escape(attribute.address)
+    return f"""
+      <label class="mutable-attribute" data-address="{address}"
+             data-saved-value="{saved_value}">
+        {address}
+        <input type="{input_type}" data-value-type="{value_type}"{value_html}>
+      </label>
+    """
 
 
 def button(action: str, label: str, *, confirm: bool = False) -> str:
@@ -631,6 +697,55 @@ HOME_STATUS_SCRIPT = """
     for (const form of channelForms()) revertTrackName(form);
   }
 
+  function mutableAttributeValue(input) {
+    if (input.dataset.valueType === "boolean") return input.checked;
+    if (input.dataset.valueType === "number") return Number(input.value);
+    if (input.dataset.valueType === "json") return JSON.parse(input.value);
+    return input.value;
+  }
+
+  function saveMutableAttribute(event) {
+    const input = event.currentTarget;
+    const attribute = input.closest(".mutable-attribute");
+    input.setCustomValidity("");
+    let value;
+    try {
+      value = mutableAttributeValue(input);
+    } catch (error) {
+      input.setCustomValidity(error.message);
+      input.reportValidity();
+      return;
+    }
+    const savedValue = JSON.stringify(value);
+    if (savedValue === attribute.dataset.savedValue) return;
+    fetch("/actions", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        action: "recs-set-attr",
+        address: attribute.dataset.address,
+        value: savedValue,
+      }),
+    })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`attribute request failed: ${response.status}`);
+        }
+        return response.json();
+      })
+      .then(result => {
+        if (!result.ok) throw new Error(result.message);
+        attribute.dataset.savedValue = savedValue;
+      })
+      .catch(error => {
+        input.setCustomValidity(error.message);
+        input.reportValidity();
+      });
+  }
+
   function channelForm(channel, trackName, savedTrackName) {
     const form = document.createElement("div");
     form.className = `level ${channel.state}`;
@@ -759,6 +874,9 @@ HOME_STATUS_SCRIPT = """
   document.getElementById("revert-track-names").addEventListener(
     "click", revertTrackNames,
   );
+  for (const input of document.querySelectorAll("#mutable-attributes input")) {
+    input.addEventListener("blur", saveMutableAttribute);
+  }
 
   pollStatus();
 </script>
@@ -849,6 +967,14 @@ main {
 }
 .channel-actions button {
   width: auto;
+}
+.attributes {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+}
+.mutable-attribute {
+  margin: 0;
 }
 .channel-state {
   align-self: end;
