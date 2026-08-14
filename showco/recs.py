@@ -7,9 +7,9 @@ import time
 from pathlib import Path
 
 from pydantic import BaseModel
-from reccy import ipc
+from reccy import ipc, rpc
 from recs.cfg.track_names import DeviceTrackNames
-from recs.daemon import gui_protocol
+from recs.daemon import gui_protocol, paths
 from recs.daemon.models import DaemonMetadata
 
 from . import models
@@ -171,6 +171,51 @@ class RecsClient:
             )
         return response.track_names
 
+    def mutable_attributes(
+        self,
+    ) -> list[models.MutableAttribute] | models.ActionResult:
+        response = self._external_command("mutable_attributes")
+        if isinstance(response, models.ActionResult):
+            return response
+        if not isinstance(response, dict):
+            return models.ActionResult(
+                ok=False,
+                message="recs did not send mutable attributes",
+            )
+        addresses = response.get("mutable_attributes")
+        if not isinstance(addresses, list) or not all(
+            isinstance(a, str) for a in addresses
+        ):
+            return models.ActionResult(
+                ok=False,
+                message="recs sent invalid mutable attributes",
+            )
+        attributes: list[models.MutableAttribute] = []
+        for address in addresses:
+            value = self._external_command("get_cfg", address=address)
+            if isinstance(value, models.ActionResult):
+                return value
+            if not isinstance(value, dict) or value.get("address") != address:
+                return models.ActionResult(
+                    ok=False,
+                    message=f"recs did not send {address} value",
+                )
+            attributes.append(
+                models.MutableAttribute(address=address, value=value.get("value"))
+            )
+        return attributes
+
+    def set_attr(self, address: str, value: object) -> models.ActionResult:
+        response = self._external_command("set_cfg", address=address, value=value)
+        if isinstance(response, models.ActionResult):
+            return response
+        if response != "ok":
+            return models.ActionResult(
+                ok=False,
+                message=f"recs did not set {address}",
+            )
+        return models.ActionResult(ok=True, message=f"recs set {address}")
+
     def action(self, command: str, **fields: object) -> models.ActionResult:
         payload: dict[str, object] = {"type": command}
         payload.update({k: v for k, v in fields.items() if v not in ("", None)})
@@ -268,6 +313,19 @@ class RecsClient:
             return models.ActionResult(ok=False, message=f"{failure_prefix}: {e}")
         finally:
             connection.close()
+
+    def _external_command(
+        self, command: str, **parameters: object
+    ) -> str | dict[str, object] | models.ActionResult:
+        try:
+            return rpc.Client(paths.external_control_endpoint(), role="showco").call(
+                command,
+                **parameters,
+            )
+        except (ConnectionError, OSError, TimeoutError, ValueError) as error:
+            return models.ActionResult(
+                ok=False, message=f"recs {command} failed: {error}"
+            )
 
     def _metadata(self) -> DaemonMetadata | None:
         if not self.metadata_path.exists():

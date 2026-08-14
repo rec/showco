@@ -11,7 +11,7 @@ from unittest import mock
 from reccy.models import Platform
 from recs.daemon.models import DaemonMetadata
 
-from showco import recs
+from showco import models, recs
 from showco.recs import RecsClient, channel_levels, level_state, replace_track_name
 
 CLIENT_CONNECTION = "showco.recs.ipc.client_connection"
@@ -256,6 +256,63 @@ class RecsTests(unittest.TestCase):
             ],
         )
         self.assertIn("recs set_noise_floor succeeded", result.message)
+
+    def test_mutable_attributes_uses_public_recs_protocol(self) -> None:
+        client = RecsClient()
+        with mock.patch("showco.recs.rpc.Client") as rpc_client:
+            rpc_client.return_value.call.side_effect = [
+                {
+                    "type": "mutable_attributes_result",
+                    "mutable_attributes": [
+                        "recording.noise_floor",
+                        "recording.record_everything",
+                    ],
+                },
+                {
+                    "type": "cfg_value",
+                    "address": "recording.noise_floor",
+                    "value": 70.0,
+                },
+                {
+                    "type": "cfg_value",
+                    "address": "recording.record_everything",
+                    "value": False,
+                },
+            ]
+
+            attributes = client.mutable_attributes()
+
+        self.assertEqual(
+            attributes,
+            [
+                models.MutableAttribute(address="recording.noise_floor", value=70.0),
+                models.MutableAttribute(
+                    address="recording.record_everything", value=False
+                ),
+            ],
+        )
+        self.assertEqual(
+            rpc_client.return_value.call.call_args_list,
+            [
+                mock.call("mutable_attributes"),
+                mock.call("get_cfg", address="recording.noise_floor"),
+                mock.call("get_cfg", address="recording.record_everything"),
+            ],
+        )
+
+    def test_set_attr_uses_public_recs_protocol(self) -> None:
+        client = RecsClient()
+        with mock.patch("showco.recs.rpc.Client") as rpc_client:
+            rpc_client.return_value.call.return_value = "ok"
+
+            result = client.set_attr("recording.noise_floor", 72.5)
+
+        self.assertTrue(result.ok)
+        rpc_client.return_value.call.assert_called_once_with(
+            "set_cfg",
+            address="recording.noise_floor",
+            value=72.5,
+        )
 
     def test_shutdown_sends_recs_shutdown_message(self) -> None:
         with TemporaryDirectory() as directory:
