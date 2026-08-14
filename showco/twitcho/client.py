@@ -9,36 +9,33 @@ from ..models import ActionResult, ServiceStatus, TwitchoStatus
 CONTROL_ENDPOINT = Path.home() / ".local/state/twitcho/control.sock"
 
 
-class TwitchoClient(rpc.ClientAdapter):
+class TwitchoClient:
     def __init__(
         self,
         *,
         control_endpoint: Path = CONTROL_ENDPOINT,
     ) -> None:
-        super().__init__(
-            control_endpoint,
-            role="showco",
-            error_prefix="twitcho command failed",
-        )
+        self.control_endpoint = control_endpoint
 
     def status(self) -> TwitchoStatus:
-        result = self.command("status")
-        if not result.ok:
+        try:
+            status = self._call("status")
+        except (ConnectionError, OSError, TimeoutError, ValueError) as error:
             return TwitchoStatus(
                 service=ServiceStatus(
-                    name="twitcho", state="offline", last_error=result.message
+                    name="twitcho",
+                    state="offline",
+                    last_error=str(error),
                 )
             )
-        value = result.result.get("status")
-        if not isinstance(value, dict):
+        if not isinstance(status, dict):
             return TwitchoStatus(
                 service=ServiceStatus(
                     name="twitcho",
                     state="error",
-                    last_error="status reply missing status",
+                    last_error="twitcho status reply is not an object",
                 )
             )
-        status = dict(value)
         return TwitchoStatus(
             service=ServiceStatus(
                 name="twitcho",
@@ -54,10 +51,19 @@ class TwitchoClient(rpc.ClientAdapter):
         )
 
     def action(self, command: str, **fields: object) -> ActionResult:
-        result = self.command(command, **fields)
-        if result.ok:
-            return ActionResult(ok=True, message=f"twitcho {command} succeeded")
-        return ActionResult(ok=False, message=result.message)
+        try:
+            result = self._call(command, **fields)
+        except (ConnectionError, OSError, TimeoutError, ValueError) as error:
+            return ActionResult(
+                ok=False,
+                message=str(error),
+            )
+        if isinstance(result, str):
+            return ActionResult(ok=True, message=result)
+        return ActionResult(ok=True, message=f"twitcho {command} succeeded")
+
+    def _call(self, command: str, **fields: object) -> str | dict[str, object]:
+        return rpc.Client(self.control_endpoint, role="showco").call(command, **fields)
 
 
 def _string(value: object) -> str | None:

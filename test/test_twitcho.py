@@ -2,28 +2,20 @@ from __future__ import annotations
 
 import unittest
 
-from reccy import rpc
-
 from showco.twitcho.client import TwitchoClient
 
 
 class TwitchoTests(unittest.TestCase):
     def test_status_maps_successful_reply(self) -> None:
         client = FakeTwitchoClient(
-            rpc.Response(
-                id="1",
-                ok=True,
-                result={
-                    "status": {
-                        "state": "streaming",
-                        "muted": True,
-                        "ffmpeg_alive": True,
-                        "audio_seconds": 12.0,
-                        "clipping": False,
-                        "output_bitrate_kbps": 312.5,
-                    }
-                },
-            )
+            {
+                "state": "streaming",
+                "muted": True,
+                "ffmpeg_alive": True,
+                "audio_seconds": 12.0,
+                "clipping": False,
+                "output_bitrate_kbps": 312.5,
+            }
         )
 
         status = client.status()
@@ -35,9 +27,7 @@ class TwitchoTests(unittest.TestCase):
         self.assertEqual(status.output_bitrate_kbps, 312.5)
 
     def test_status_reports_failed_command(self) -> None:
-        client = FakeTwitchoClient(
-            rpc.Response(id="1", ok=False, message="not running")
-        )
+        client = FakeTwitchoClient(ConnectionError("not running"))
 
         status = client.status()
 
@@ -46,11 +36,12 @@ class TwitchoTests(unittest.TestCase):
 
 
 class FakeTwitchoClient(TwitchoClient):
-    def __init__(self, reply: rpc.Response) -> None:
-        super().__init__()
+    def __init__(self, reply: str | dict[str, object] | ConnectionError) -> None:
         self.reply = reply
 
-    def _call(self, command: str, **fields: object) -> rpc.Response:
+    def _call(self, command: str, **fields: object) -> str | dict[str, object]:
+        if isinstance(self.reply, ConnectionError):
+            raise self.reply
         return self.reply
 
 
