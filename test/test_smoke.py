@@ -43,6 +43,29 @@ class SmokeTests(unittest.TestCase):
             self.assertEqual(recs.calibration_count, 1)
             self.assertIn("rehearsal recs calibration 1", response.read().decode())
 
+    def test_rehearsal_server_returns_track_name_result_as_json(self) -> None:
+        recs = RehearsalRecsClient()
+        twitcho = RehearsalTwitchoClient()
+        with running_rehearsal_server(recs, twitcho) as url:
+            response = post_json_form(
+                f"{url}/actions",
+                {
+                    "action": "recs-track-name",
+                    "device": "X18/XR18",
+                    "channel": "1",
+                    "track_name": "Lead Vocal",
+                },
+            )
+
+            self.assertEqual(response.status, 200)
+            self.assertEqual(
+                json.loads(response.read()),
+                {
+                    "ok": True,
+                    "message": "rehearsal recs track name Lead Vocal",
+                },
+            )
+
 
 @contextmanager
 def running_rehearsal_server(
@@ -78,6 +101,14 @@ def post_form(url: str, form: dict[str, str]) -> object:
     data = parse.urlencode(form).encode()
     opener = request.build_opener(NoRedirectHandler)
     return opener.open(url, data=data, timeout=2)
+
+
+def post_json_form(url: str, form: dict[str, str]) -> object:
+    data = parse.urlencode(form).encode()
+    request_data = request.Request(
+        url, data=data, headers={"Accept": "application/json"}
+    )
+    return request.urlopen(request_data, timeout=2)
 
 
 def stop_server(server: ThreadingHTTPServer, thread: threading.Thread) -> None:

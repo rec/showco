@@ -140,11 +140,15 @@ class ServerTests(unittest.TestCase):
             )
         )
 
-        self.assertIn('value="recs-track-name"', html)
-        self.assertIn('method="post" action="/actions"', html)
-        self.assertIn('name="device" value="Mic"', html)
-        self.assertIn('name="channel" value="1"', html)
         self.assertIn('name="track_name" value="1"', html)
+        self.assertIn('data-saved-track-name="1"', html)
+        self.assertIn('class="channel-state indicator-green"', html)
+        self.assertIn(">•</span>", html)
+        self.assertEqual(html.count('id="save-track-names"'), 1)
+        self.assertEqual(html.count('id="revert-track-names"'), 1)
+        self.assertEqual(html.count(">Save</button>"), 1)
+        self.assertEqual(html.count(">Revert</button>"), 1)
+        self.assertNotIn(">healthy</span>", html)
 
     def test_actions_page_has_twitch_restart_button(self) -> None:
         html = actions_page([])

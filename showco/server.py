@@ -135,7 +135,10 @@ class ShowcoHandler(BaseHTTPRequestHandler):
             self.send_error(404)
             return
         form = self._form()
-        self.app.run_action(form)
+        result = self.app.run_action(form)
+        if self.headers.get("Accept") == "application/json":
+            self._json_action(result)
+            return
         self.send_response(303)
         self.send_header("Location", "/actions")
         self.end_headers()
@@ -161,6 +164,14 @@ class ShowcoHandler(BaseHTTPRequestHandler):
         data = value.model_dump_json().encode()
         self.send_response(200)
         self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _json_action(self, value: models.ActionResult) -> None:
+        data = value.model_dump_json().encode()
+        self.send_response(200)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
@@ -224,6 +235,10 @@ def home_page(status: models.ShowStatus) -> str:
           <h2>Recording channels</h2>
           <div class="levels" id="channels">
             {channel_html}
+          </div>
+          <div class="channel-actions">
+            <button type="button" id="save-track-names">Save</button>
+            <button type="button" id="revert-track-names">Revert</button>
           </div>
         </section>
         <section>
@@ -344,19 +359,22 @@ def level(device: str, name: str, state: str) -> str:
     safe_name = html.escape(name)
     safe_state = html.escape(state)
     return f"""
-    <form class="level {safe_state}" method="post" action="/actions"
-          data-device="{safe_device}" data-channel="{safe_name}">
-      <input type="hidden" name="action" value="recs-track-name">
-      <input type="hidden" name="device" value="{safe_device}">
-      <input type="hidden" name="channel" value="{safe_name}">
+    <div class="level {safe_state}" data-device="{safe_device}"
+         data-channel="{safe_name}" data-saved-track-name="{safe_name}">
       <label>
         <b>{safe_name}</b>
         <input name="track_name" value="{safe_name}">
       </label>
-      <span class="channel-state">{safe_state}</span>
-      <button>Save</button>
-    </form>
+      <span class="channel-state {channel_indicator(state)}"
+            aria-label="{safe_state}" title="{safe_state}">•</span>
+    </div>
     """
+
+
+def channel_indicator(state: str) -> str:
+    if state in {"present", "healthy"}:
+        return "indicator-green"
+    return "indicator-red"
 
 
 def button(action: str, label: str, *, confirm: bool = False) -> str:
@@ -554,24 +572,71 @@ HOME_STATUS_SCRIPT = """
     }: ${serviceDetail(service)}`;
   }
 
-  function hiddenInput(name, value) {
-    const input = document.createElement("input");
-    input.type = "hidden";
-    input.name = name;
-    input.value = value;
-    return input;
+  function trackKey(channel) {
+    return `${channel.device}\\u0000${channel.name}`;
   }
 
-  function channelForm(channel, trackName) {
-    const form = document.createElement("form");
+  function revertTrackName(form) {
+    const input = form.querySelector("[name=track_name]");
+    input.value = form.dataset.savedTrackName;
+    input.setCustomValidity("");
+  }
+
+  function saveTrackName(form) {
+    const input = form.querySelector("[name=track_name]");
+    if (input.value === form.dataset.savedTrackName) return Promise.resolve();
+    input.setCustomValidity("");
+    return fetch("/actions", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        action: "recs-track-name",
+        device: form.dataset.device,
+        channel: form.dataset.channel,
+        track_name: input.value,
+      }),
+    })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`track name request failed: ${response.status}`);
+        }
+        return response.json();
+      })
+      .then(result => {
+        if (!result.ok) throw new Error(result.message);
+        form.dataset.savedTrackName = input.value;
+      })
+      .catch(error => {
+        input.setCustomValidity(error.message);
+        input.reportValidity();
+      });
+  }
+
+  function channelForms() {
+    return [...document.querySelectorAll("#channels .level")];
+  }
+
+  function saveTrackNames() {
+    let saved = Promise.resolve();
+    for (const form of channelForms()) {
+      saved = saved.then(() => saveTrackName(form));
+    }
+    return saved;
+  }
+
+  function revertTrackNames() {
+    for (const form of channelForms()) revertTrackName(form);
+  }
+
+  function channelForm(channel, trackName, savedTrackName) {
+    const form = document.createElement("div");
     form.className = `level ${channel.state}`;
-    form.method = "post";
-    form.action = "/actions";
     form.dataset.device = channel.device;
     form.dataset.channel = channel.name;
-    form.append(hiddenInput("action", "recs-track-name"));
-    form.append(hiddenInput("device", channel.device));
-    form.append(hiddenInput("channel", channel.name));
+    form.dataset.savedTrackName = savedTrackName;
     const label = document.createElement("label");
     const title = document.createElement("b");
     title.textContent = channel.name;
@@ -580,11 +645,15 @@ HOME_STATUS_SCRIPT = """
     input.value = trackName;
     label.append(title, input);
     const state = document.createElement("span");
-    state.className = "channel-state";
-    state.textContent = channel.state;
-    const button = document.createElement("button");
-    button.textContent = "Save";
-    form.append(label, state, button);
+    state.className = `channel-state ${
+      channel.state === "present" || channel.state === "healthy"
+        ? "indicator-green"
+        : "indicator-red"
+    }`;
+    state.setAttribute("aria-label", channel.state);
+    state.title = channel.state;
+    state.textContent = "•";
+    form.append(label, state);
     return form;
   }
 
@@ -594,13 +663,20 @@ HOME_STATUS_SCRIPT = """
     const names = new Map(
       [...container.querySelectorAll(".level")].map(form => [
         `${form.dataset.device}\\u0000${form.dataset.channel}`,
-        form.querySelector("[name=track_name]").value,
+        {
+          trackName: form.querySelector("[name=track_name]").value,
+          savedTrackName: form.dataset.savedTrackName,
+        },
       ]),
     );
-    container.replaceChildren(...channels.map(channel => channelForm(
-      channel,
-      names.get(`${channel.device}\\u0000${channel.name}`) ?? channel.name,
-    )));
+    container.replaceChildren(...channels.map(channel => {
+      const name = names.get(trackKey(channel));
+      return channelForm(
+        channel,
+        name?.trackName ?? channel.name,
+        name?.savedTrackName ?? channel.name,
+      );
+    }));
   }
 
   let latestErrors = [];
@@ -677,6 +753,13 @@ HOME_STATUS_SCRIPT = """
     updateRecsErrors(latestErrors, showcoStartedAt);
   });
 
+  document.getElementById("save-track-names").addEventListener(
+    "click", saveTrackNames,
+  );
+  document.getElementById("revert-track-names").addEventListener(
+    "click", revertTrackNames,
+  );
+
   pollStatus();
 </script>
 """
@@ -748,20 +831,33 @@ main {
   color: white;
   display: grid;
   gap: 0.5rem;
-  grid-template-columns: minmax(8rem, 1fr) auto auto;
+  grid-template-columns: minmax(8rem, 1fr) 4.5rem;
   align-items: end;
   padding: 0.75rem;
 }
 .level label {
   margin: 0;
 }
-.level input, .level button {
+.level input {
   margin: 0.25rem 0 0;
   min-height: 2rem;
 }
-.level button {
+.channel-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+.channel-actions button {
   width: auto;
 }
+.channel-state {
+  align-self: end;
+  font-size: 1.5rem;
+  line-height: 2rem;
+  text-align: center;
+}
+.indicator-green { color: #14853d; }
+.indicator-red { color: #b3261e; }
 .silent { background: #777; }
 .present { background: #3366cc; }
 .healthy { background: #14853d; }
