@@ -125,25 +125,8 @@ class RehearsalTwitchoClient(TwitchoClient):
         )
 
 
-class RehearsalTwitchoSupervisor:
-    def __init__(self) -> None:
-        self.restart_count = 0
-
-    def start(self) -> None:
-        return
-
-    def restart(self) -> models.ActionResult:
-        self.restart_count += 1
-        return models.ActionResult(
-            ok=True,
-            message=f"rehearsal twitcho restart {self.restart_count} requested",
-        )
-
-    def close(self) -> None:
-        return
-
-    def status(self) -> models.ServiceStatus:
-        return models.ServiceStatus(name="twitcho", state="running")
+def restart_twitcho() -> models.ActionResult:
+    return models.ActionResult(ok=True, message="rehearsal twitcho restart requested")
 
 
 class RehearsalSystemMonitor(SystemMonitor):

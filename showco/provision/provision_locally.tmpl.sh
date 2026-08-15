@@ -340,9 +340,6 @@ showco_args() {
   fi
   if [[ "$TWITCHO_ENABLED" == true ]]; then
     args+=(--twitcho-enabled)
-    if [[ -f "/home/$SHOW_USER/.config/twitcho/config.json" ]]; then
-      args+=(--twitcho-config "/home/$SHOW_USER/.config/twitcho/config.json")
-    fi
   fi
   printf '%q ' "${args[@]}"
 }
@@ -384,6 +381,27 @@ install_showco_service() {
     env XDG_RUNTIME_DIR="/run/user/$uid" \
     PATH="$ROOT/showco/.venv/bin:/home/$SHOW_USER/.local/bin:$PATH" \
     bash -lc "cd '$ROOT/showco' && uv run --frozen showco run install-service --root '$ROOT' $(showco_args)"
+}
+
+install_twitcho_service() {
+  local config_path
+  local quoted_config
+  local uid
+  if [[ "$TWITCHO_ENABLED" != true ]]; then
+    printf 'Twitcho service is disabled.\n'
+    return
+  fi
+  config_path="/home/$SHOW_USER/.config/twitcho/config.json"
+  if [[ ! -f "$config_path" ]]; then
+    printf 'ERROR: Twitcho configuration does not exist: %s\n' "$config_path" >&2
+    return 1
+  fi
+  quoted_config=$(printf '%q' "$config_path")
+  uid=$(id -u "$SHOW_USER")
+  sudo -H -u "$SHOW_USER" \
+    env XDG_RUNTIME_DIR="/run/user/$uid" \
+    PATH="$ROOT/twitcho/.venv/bin:/home/$SHOW_USER/.local/bin:$PATH" \
+    bash -lc "cd '$ROOT/twitcho' && uv run --frozen twitcho daemon install --config $quoted_config"
 }
 
 install_lyte_service() {
@@ -442,6 +460,14 @@ write_provisioning_report() {
       user_systemctl is-active lyte-midi.service || true
     else
       printf 'lyte-midi service: disabled\n'
+    fi
+    printf '\nTwitcho:\n'
+    printf 'enabled: %s\n' "$TWITCHO_ENABLED"
+    if [[ "$TWITCHO_ENABLED" == true ]]; then
+      printf 'twitcho service: '
+      user_systemctl is-active twitcho.service || true
+    else
+      printf 'twitcho service: disabled\n'
     fi
   } | tee "$report"
   sudo install -o "$SHOW_USER" -g "$SHOW_USER" -m 0644 \
@@ -526,6 +552,9 @@ main() {
 
   phase "installing recs service"
   install_recs_service
+
+  phase "installing Twitcho service"
+  install_twitcho_service
 
   phase "installing showco service"
   install_showco_service

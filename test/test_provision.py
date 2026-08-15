@@ -704,6 +704,7 @@ class ProvisionTests(unittest.TestCase):
             "uv run --frozen showco run network-config", provision.REMOTE_SCRIPT
         )
         self.assertIn("uv run --frozen recs daemon install", provision.REMOTE_SCRIPT)
+        self.assertIn("uv run --frozen twitcho daemon install", provision.REMOTE_SCRIPT)
         self.assertIn("uv run --frozen lyte daemon install", provision.REMOTE_SCRIPT)
         self.assertIn(
             "uv run --frozen showco run install-service", provision.REMOTE_SCRIPT
@@ -717,6 +718,8 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn("iw dev", provision.REMOTE_SCRIPT)
         self.assertIn("Lyte:", provision.REMOTE_SCRIPT)
         self.assertIn("lyte-midi service:", provision.REMOTE_SCRIPT)
+        self.assertIn("Twitcho:", provision.REMOTE_SCRIPT)
+        self.assertIn("twitcho service:", provision.REMOTE_SCRIPT)
         self.assertIn("PROVISIONING-REPORT.txt", provision.REMOTE_SCRIPT)
 
     def test_remote_script_marks_target_machine(self) -> None:

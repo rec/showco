@@ -88,7 +88,8 @@ def update_from_provisioning_machine(
     run_command = run_command or run_command_with_timeout
     provision_config = target_config or provisioning_config()
     programs = programs_for_repositories(
-        selected, local_root or provision.local_checkout_directory()
+        selected,
+        local_root or provision.local_checkout_directory(),
     )
     if not check_main_branches(programs, run_command, output):
         return 1
@@ -142,7 +143,11 @@ def update_target(
 ) -> int:
     root = root or provisioning_config().paths.root
     run_command = run_command or run_command_with_timeout
-    programs = programs_for_repositories(selected, root)
+    programs = programs_for_repositories(
+        selected,
+        root,
+        provisioning_config().twitch.enabled,
+    )
     if not check_main_branches(programs, run_command, output):
         return 1
     with progress_bar(len(programs), output) as progress:
@@ -333,12 +338,18 @@ def selected_repositories(arguments: list[str]) -> list[str]:
     return result
 
 
-def programs_for_repositories(selected: list[str], root: Path) -> list[Program]:
+def programs_for_repositories(
+    selected: list[str], root: Path, twitcho_enabled: bool = True
+) -> list[Program]:
     return [
         Program(
             name=n,
             directory=root / n,
-            service_names=SERVICES_BY_REPOSITORY[n],
+            service_names=[
+                s
+                for s in SERVICES_BY_REPOSITORY[n]
+                if twitcho_enabled or s != "twitcho"
+            ],
         )
         for n in selected
     ]
@@ -787,9 +798,9 @@ def report_failure(result: StepResult, output: TextIO) -> None:
 
 REPOSITORY_NAMES = ["reccy", "recs", "showco", "twitcho", "lyte"]
 SERVICES_BY_REPOSITORY = {
-    "reccy": ["recs", "showco", "lyte-midi"],
+    "reccy": ["recs", "showco", "twitcho", "lyte-midi"],
     "recs": ["recs"],
     "showco": ["showco"],
-    "twitcho": ["showco"],
+    "twitcho": ["twitcho"],
     "lyte": ["lyte-midi"],
 }

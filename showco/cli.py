@@ -11,7 +11,7 @@ from . import machine_role, network_config, rehearsal, services, update
 from .mixer import MixerMonitor
 from .provision import provision
 from .server import make_server
-from .twitcho import auth, supervisor
+from .twitcho import auth
 from .x18 import osc, recorder_supervisor
 
 
@@ -30,14 +30,6 @@ class WebUiOptions(BaseModel, frozen=True):
     x18_port: int = osc.X18_OSC_PORT
     x18_log_dir: Path = Path(".")
     twitcho_enabled: bool = False
-    twitcho_config: Annotated[
-        Path | None,
-        tyro.conf.arg(help="start and supervise Twitcho with this config file"),
-    ] = None
-    twitcho_restart_policy: Annotated[
-        Literal["internal", "external"],
-        tyro.conf.arg(help="restart policy for the supervised Twitcho process"),
-    ] = "external"
     rehearsal_mode: Annotated[
         bool,
         tyro.conf.arg(
@@ -60,17 +52,11 @@ def run_web_ui(options: WebUiOptions) -> int:
             twitcho=rehearsal.RehearsalTwitchoClient(),
             system=rehearsal.RehearsalSystemMonitor(),
             mixer=rehearsal.RehearsalMixerMonitor(),
-            twitcho_supervisor=rehearsal.RehearsalTwitchoSupervisor(),
+            twitcho_restart=rehearsal.restart_twitcho,
             twitcho_enabled=True,
         )
         print(f"showco rehearsal listening on http://{options.host}:{options.port}")
     else:
-        twitcho_supervisor = None
-        if options.twitcho_enabled and options.twitcho_config:
-            twitcho_supervisor = supervisor.TwitchoSupervisor(
-                options.twitcho_config,
-                policy=options.twitcho_restart_policy,
-            )
         server = make_server(
             options.host,
             options.port,
@@ -79,7 +65,6 @@ def run_web_ui(options: WebUiOptions) -> int:
                 port=options.mixer_port,
                 protocol=options.mixer_protocol,
             ),
-            twitcho_supervisor=twitcho_supervisor,
             twitcho_enabled=options.twitcho_enabled,
         )
         print(f"showco listening on http://{options.host}:{options.port}")

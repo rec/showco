@@ -10,8 +10,9 @@ from typing import ClassVar
 from pydantic import BaseModel
 from reccy import paths, reccy, service
 from reccy.models import ServiceSpec, StatusResult
+from twitcho import daemon
 
-from . import machine_role
+from . import machine_role, models
 
 SHOWCO_SERVICE = ServiceSpec(
     name="showco",
@@ -41,6 +42,7 @@ SERVICES = {
     "lyte-midi": LYTE_MIDI_SERVICE,
     "recs": RECS_SERVICE,
     "showco": SHOWCO_SERVICE,
+    "twitcho": daemon.TWITCHO_SERVICE,
 }
 
 
@@ -70,7 +72,6 @@ def install_showco_service(
     x18_host: str | None = None,
     x18_log_dir: Path | None = None,
     twitcho_enabled: bool = False,
-    twitcho_config: Path | None = None,
 ) -> int:
     daemon = ShowcoDaemon(
         platform=paths.current_platform(),
@@ -86,7 +87,6 @@ def install_showco_service(
                 x18_host,
                 x18_log_dir or Path.home() / "recordings",
                 twitcho_enabled,
-                twitcho_config,
             ),
         ]
     )
@@ -101,7 +101,6 @@ def showco_args(
     x18_host: str | None,
     x18_log_dir: Path,
     twitcho_enabled: bool,
-    twitcho_config: Path | None,
 ) -> list[str]:
     result = ["--host", host, "--port", str(port)]
     if mixer_host:
@@ -110,9 +109,14 @@ def showco_args(
         result.extend(["--x18-host", x18_host, "--x18-log-dir", str(x18_log_dir)])
     if twitcho_enabled:
         result.append("--twitcho-enabled")
-    if twitcho_enabled and twitcho_config:
-        result.extend(["--twitcho-config", str(twitcho_config)])
     return result
+
+
+def restart_twitcho_service() -> models.ActionResult:
+    result = service_registry().controller("twitcho").restart()
+    if result.running:
+        return models.ActionResult(ok=True, message="twitcho restart requested")
+    return models.ActionResult(ok=False, message="twitcho service did not start")
 
 
 def report_service_status(service_names: list[str]) -> int:
@@ -154,7 +158,6 @@ def install_main(argv: list[str] | None = None) -> int:
     parser.add_argument("--x18-host")
     parser.add_argument("--x18-log-dir", type=Path)
     parser.add_argument("--twitcho-enabled", action="store_true")
-    parser.add_argument("--twitcho-config", type=Path)
     parser.add_argument("--root", required=True, type=Path)
     args = parser.parse_args(argv)
     return install_showco_service(
@@ -164,7 +167,6 @@ def install_main(argv: list[str] | None = None) -> int:
         x18_host=args.x18_host,
         x18_log_dir=args.x18_log_dir,
         twitcho_enabled=args.twitcho_enabled,
-        twitcho_config=args.twitcho_config,
         root=args.root,
     )
 
@@ -173,6 +175,6 @@ def status_main(argv: list[str] | None = None) -> int:
     machine_role.require_target_machine("showco run service-status")
     arguments = sys.argv[1:] if argv is None else argv
     if not arguments or arguments[:1] in (["-h"], ["--help"]):
-        print("Usage: showco run service-status {lyte-midi,recs,showco} ...")
+        print("Usage: showco run service-status {lyte-midi,recs,showco,twitcho} ...")
         return 0
     return report_service_status(arguments)
