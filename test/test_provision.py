@@ -860,13 +860,23 @@ class ProvisionTests(unittest.TestCase):
 
     def test_remote_script_configures_locale_before_package_updates(self) -> None:
         locale = provision.REMOTE_SCRIPT.index('phase "configuring locale"')
+        journal = provision.REMOTE_SCRIPT.index(
+            'phase "configuring persistent journal"'
+        )
         update = provision.REMOTE_SCRIPT.index("sudo apt-get update")
         upgrade = provision.REMOTE_SCRIPT.index("sudo apt-get upgrade -y")
         install = provision.REMOTE_SCRIPT.index("sudo apt-get install -y")
 
         self.assertLess(locale, update)
+        self.assertLess(locale, journal)
+        self.assertLess(journal, update)
         self.assertLess(update, upgrade)
         self.assertLess(upgrade, install)
+
+    def test_remote_script_configures_persistent_journal(self) -> None:
+        self.assertIn("Storage=persistent", provision.REMOTE_SCRIPT)
+        self.assertIn("/var/log/journal", provision.REMOTE_SCRIPT)
+        self.assertIn("systemctl restart systemd-journald", provision.REMOTE_SCRIPT)
 
     def test_remote_script_exports_locale_before_package_updates(self) -> None:
         export = provision.REMOTE_SCRIPT.index("export LC_CTYPE=en_US.UTF-8")
@@ -1027,6 +1037,9 @@ class ProvisionTests(unittest.TestCase):
         )
         self.assertTrue(
             any('status="$HOME/.local/state/recs/status.json"' in c for c in commands)
+        )
+        self.assertTrue(
+            any("systemd-cat --identifier=showco-provisioning" in c for c in commands)
         )
 
     def test_missing_x18_usb_device_is_note_not_error(self) -> None:
