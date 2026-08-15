@@ -154,12 +154,14 @@ def update_target(
     run_command: RunCommand | None = None,
     output: TextIO = sys.stdout,
 ) -> int:
-    root = root or provisioning_config().paths.root
+    provision_config = provisioning_config()
+    root = root or provision_config.paths.root
     run_command = run_command or run_command_with_timeout
     programs = programs_for_repositories(
         selected,
         root,
-        provisioning_config().twitch.enabled,
+        provision_config.twitch.enabled,
+        provision_config.lyte.enabled,
     )
     if not check_main_branches(programs, run_command, output):
         return 1
@@ -353,7 +355,10 @@ def selected_repositories(arguments: list[str]) -> list[str]:
 
 
 def programs_for_repositories(
-    selected: list[str], root: Path, twitcho_enabled: bool = True
+    selected: list[str],
+    root: Path,
+    twitcho_enabled: bool = True,
+    lyte_enabled: bool = True,
 ) -> list[Program]:
     return [
         Program(
@@ -362,7 +367,8 @@ def programs_for_repositories(
             service_names=[
                 s
                 for s in SERVICES_BY_REPOSITORY[n]
-                if twitcho_enabled or s != "twitcho"
+                if (twitcho_enabled or s != "twitcho")
+                and (lyte_enabled or s != "lyte-midi")
             ],
         )
         for n in selected
