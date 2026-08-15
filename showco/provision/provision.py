@@ -26,6 +26,9 @@ REBOOT_WAIT_SECONDS = 300
 POST_REBOOT_READY_WAIT_SECONDS = 60
 SSH_CONNECT_TIMEOUT_SECONDS = 2
 SSH_VERIFICATION_TIMEOUT_SECONDS = 15
+SSH_CLEANUP_TIMEOUT_SECONDS = 15
+SCP_TIMEOUT_SECONDS = 60
+REMOTE_PROVISION_TIMEOUT_SECONDS = 1_800
 LOCAL_REPOSITORIES = ["showco", "reccy", "recs", "twitcho", "lyte"]
 WIFI_STATUS_COMMAND = "nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device status"
 STARTUP_CHECK_NAMES = [
@@ -204,6 +207,7 @@ def provision_remote(
         provision_config,
         ssh_target,
         "set -e; uname -a; id; command -v sudo; command -v apt-get",
+        timeout_seconds=SSH_VERIFICATION_TIMEOUT_SECONDS,
     )
     ensure_github_account_key(provision_config, ssh_target)
 
@@ -217,6 +221,7 @@ def provision_remote(
             provision_config,
             ssh_target,
             remote_command(provision_config, remote_script),
+            timeout_seconds=REMOTE_PROVISION_TIMEOUT_SECONDS,
         )
 
         print(f"Waiting for {ssh_target} to reboot...")
@@ -238,6 +243,7 @@ def provision_remote(
                     ssh_target,
                     f"rm -f {shlex.quote(remote_script)}",
                     exit_on_error=False,
+                    timeout_seconds=SSH_CLEANUP_TIMEOUT_SECONDS,
                 )
             except CalledProcessError as e:
                 if sys.exc_info()[0] is None:
@@ -939,12 +945,14 @@ def run_ssh(
     command: str,
     *,
     exit_on_error: bool = True,
+    timeout_seconds: int = SSH_VERIFICATION_TIMEOUT_SECONDS,
 ) -> None:
     try:
         run_command(
             ssh_command(provision_config, target, command, allocate_tty=True),
+            timeout_seconds=timeout_seconds,
         )
-    except CalledProcessError as e:
+    except (CalledProcessError, TimeoutExpired) as e:
         if not exit_on_error:
             raise
         sys.exit(ssh_error_message(target, e))
@@ -962,8 +970,9 @@ def run_scp(provision_config: config.Config, source: Path, target: str) -> None:
                 str(source),
                 target,
             ],
+            timeout_seconds=SCP_TIMEOUT_SECONDS,
         )
-    except CalledProcessError as e:
+    except (CalledProcessError, TimeoutExpired) as e:
         sys.exit(ssh_error_message(target, e))
 
 
@@ -972,13 +981,14 @@ def capture_ssh(provision_config: config.Config, target: str, command: str) -> s
         completed = run_command(
             ssh_command(provision_config, target, command),
             capture_output=True,
+            timeout_seconds=SSH_VERIFICATION_TIMEOUT_SECONDS,
         )
-    except CalledProcessError as e:
+    except (CalledProcessError, TimeoutExpired) as e:
         sys.exit(ssh_error_message(target, e))
     return completed.stdout.strip()
 
 
-def ssh_error_message(target: str, error: CalledProcessError) -> str:
+def ssh_error_message(target: str, error: CalledProcessError | TimeoutExpired) -> str:
     output = f"{error.stdout or ''}{error.stderr or ''}".strip()
     message = (
         f"ERROR: SSH connection or command failed for {target}. "
@@ -1011,12 +1021,21 @@ def run_command(
     command: list[str],
     *,
     capture_output: bool = False,
+    timeout_seconds: int | None = None,
 ) -> CompletedProcess[str]:
+    if timeout_seconds is None:
+        return subprocess.run(
+            command,
+            capture_output=capture_output,
+            check=True,
+            text=True,
+        )
     return subprocess.run(
         command,
         capture_output=capture_output,
         check=True,
         text=True,
+        timeout=timeout_seconds,
     )
 
 
