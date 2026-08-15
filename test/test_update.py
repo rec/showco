@@ -510,6 +510,9 @@ class UpdateTests(unittest.TestCase):
             ["git", "-C", "/code/reccy", "push", "origin", "HEAD:main"],
             commands,
         )
+        self.assertFalse(
+            any(command[0] == "git" and "reset" in command for command in commands)
+        )
         remote_command = remote_update.call_args.args[2][-1]
         self.assertIn("cd /code/showco &&", remote_command)
         self.assertIn('git reset --hard "$remote/$branch"', remote_command)

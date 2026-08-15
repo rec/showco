@@ -192,12 +192,19 @@ sync_repo() {
   local url=$2
   local refname=$3
   local path="$ROOT/$name"
+  local upstream
+  local remote
+  local branch
 
   prepare_checkout_path "$path"
   if [[ -d "$path/.git" ]]; then
-    sudo -H -u "$SHOW_USER" git -C "$path" reset --hard HEAD
-    sudo -H -u "$SHOW_USER" git -C "$path" fetch --all --prune
-    sudo -H -u "$SHOW_USER" git -C "$path" pull --ff-only
+    upstream=$(sudo -H -u "$SHOW_USER" git -C "$path" rev-parse \
+      --abbrev-ref --symbolic-full-name '@{upstream}')
+    remote=${upstream%%/*}
+    branch=${upstream#*/}
+    sudo -H -u "$SHOW_USER" git -C "$path" fetch "$remote" \
+      "+refs/heads/$branch:refs/remotes/$remote/$branch"
+    sudo -H -u "$SHOW_USER" git -C "$path" reset --hard "$remote/$branch"
   else
     sudo -H -u "$SHOW_USER" git clone "$url" "$path"
   fi
