@@ -12,7 +12,7 @@ from showco import services
 
 class ServicesTests(unittest.TestCase):
     def test_registry_includes_managed_services(self) -> None:
-        self.assertEqual(services.SERVICES["lyte-midi"], services.LYTE_MIDI_SERVICE)
+        self.assertEqual(services.SERVICES["lyte"], services.LYTE_SERVICE)
         self.assertEqual(services.SERVICES["twitcho"].name, "twitcho")
 
     def test_showco_args_include_optional_services(self) -> None:

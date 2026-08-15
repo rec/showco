@@ -367,8 +367,7 @@ def programs_for_repositories(
             service_names=[
                 s
                 for s in SERVICES_BY_REPOSITORY[n]
-                if (twitcho_enabled or s != "twitcho")
-                and (lyte_enabled or s != "lyte-midi")
+                if (twitcho_enabled or s != "twitcho") and (lyte_enabled or s != "lyte")
             ],
         )
         for n in selected
@@ -919,9 +918,9 @@ def report_failure(result: StepResult, output: TextIO) -> None:
 
 REPOSITORY_NAMES = ["reccy", "recs", "showco", "twitcho", "lyte"]
 SERVICES_BY_REPOSITORY = {
-    "reccy": ["recs", "showco", "twitcho", "lyte-midi"],
+    "reccy": ["recs", "showco", "twitcho", "lyte"],
     "recs": ["recs"],
     "showco": ["showco"],
     "twitcho": ["twitcho"],
-    "lyte": ["lyte-midi"],
+    "lyte": ["lyte"],
 }

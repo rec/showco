@@ -433,7 +433,7 @@ class UpdateTests(unittest.TestCase):
         self.assertIn(["systemctl", "--user", "start", "recs.service"], commands)
         self.assertIn(["systemctl", "--user", "start", "showco.service"], commands)
 
-    def test_target_update_restarts_lyte_midi_service(self) -> None:
+    def test_target_update_restarts_lyte_service(self) -> None:
         commands: list[list[str]] = []
 
         def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
@@ -463,8 +463,8 @@ class UpdateTests(unittest.TestCase):
 
         self.assertEqual(result, 0)
         self.assertIn(["git", "-C", "/code/lyte", "pull", "--ff-only"], commands)
-        self.assertIn(["systemctl", "--user", "stop", "lyte-midi.service"], commands)
-        self.assertIn(["systemctl", "--user", "start", "lyte-midi.service"], commands)
+        self.assertIn(["systemctl", "--user", "stop", "lyte.service"], commands)
+        self.assertIn(["systemctl", "--user", "start", "lyte.service"], commands)
 
     def test_provisioning_update_pushes_selected_repos_then_ssh_updates_target(
         self,
@@ -1143,7 +1143,7 @@ class UpdateTests(unittest.TestCase):
             ["reccy", "lyte"], Path("/code"), lyte_enabled=False
         )
 
-        self.assertNotIn("lyte-midi", programs[0].service_names)
+        self.assertNotIn("lyte", programs[0].service_names)
         self.assertEqual(programs[1].service_names, [])
 
     def test_selected_repositories_rejects_unknown_names(self) -> None:

@@ -1,7 +1,7 @@
 # Lyte Provisioning And Updates
 
 Lyte will be deployed as a fifth sibling project alongside `reccy`, `recs`,
-`showco`, and `twitcho`. Its daemon is the existing `lyte-midi.service`,
+`showco`, and `twitcho`. Its daemon is the existing `lyte.service`,
 installed through `lyte daemon install`. The initial repair path for an
 already-provisioned Pi will be:
 
@@ -35,7 +35,7 @@ it can clone a project that is absent from the target machine.
    and run its locked `uv sync` through the existing repository synchronization
    flow.
 
-5. When Lyte is enabled, install or refresh `lyte-midi.service` after the
+5. When Lyte is enabled, install or refresh `lyte.service` after the
    checkout is synchronized, using the established Lyte daemon command. Do
    not install or start the service when Lyte is disabled. Add Lyte's service
    status to the post-reboot verification and report unavailable lighting
@@ -44,7 +44,7 @@ it can clone a project that is absent from the target machine.
 
 6. Add `lyte` to `showco update`: local updates must check, push, and
    force-with-lease Lyte exactly like the other sibling repositories; target
-   updates must stop `lyte-midi.service`, record its commit, pull or reset to
+   updates must stop `lyte.service`, record its commit, pull or reset to
    its upstream commit, synchronize dependencies after a change, and restart
    the service. Include Lyte in the no-argument update set.
 
@@ -60,7 +60,7 @@ it can clone a project that is absent from the target machine.
    by verifying a missing `$ROOT/lyte` checkout is created by provisioning.
 
 9. Update the provisioning report and setup documentation to list the Lyte
-   checkout and `lyte-midi.service`, the selected daemon configuration, and
+   checkout and `lyte.service`, the selected daemon configuration, and
    the command to verify its service status.
 
 ## Additional work beyond the prompt

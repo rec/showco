@@ -474,10 +474,10 @@ write_provisioning_report() {
       printf 'checkout: missing\n'
     fi
     if [[ "$LYTE_ENABLED" == true ]]; then
-      printf 'lyte-midi service: '
-      user_systemctl is-active lyte-midi.service || true
+      printf 'lyte service: '
+      user_systemctl is-active lyte.service || true
     else
-      printf 'lyte-midi service: disabled\n'
+      printf 'lyte service: disabled\n'
     fi
     printf '\nTwitcho:\n'
     printf 'enabled: %s\n' "$TWITCHO_ENABLED"
@@ -543,7 +543,7 @@ main() {
     "/home/$SHOW_USER/.local/state/recs" \
     "/home/$SHOW_USER/.local/state/showco" \
     "/home/$SHOW_USER/.local/state/twitcho" \
-    "/home/$SHOW_USER/.local/state/lyte-midi" \
+    "/home/$SHOW_USER/.local/state/lyte" \
     "/home/$SHOW_USER/recordings"
   printf 'target\n' | sudo -H -u "$SHOW_USER" tee \
     "/home/$SHOW_USER/.config/showco/machine-role" >/dev/null

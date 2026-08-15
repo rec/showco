@@ -818,7 +818,7 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn("nmcli device status", provision.REMOTE_SCRIPT)
         self.assertIn("iw dev", provision.REMOTE_SCRIPT)
         self.assertIn("Lyte:", provision.REMOTE_SCRIPT)
-        self.assertIn("lyte-midi service:", provision.REMOTE_SCRIPT)
+        self.assertIn("lyte service:", provision.REMOTE_SCRIPT)
         self.assertIn("Twitcho:", provision.REMOTE_SCRIPT)
         self.assertIn("twitcho service:", provision.REMOTE_SCRIPT)
         self.assertIn("PROVISIONING-REPORT.txt", provision.REMOTE_SCRIPT)
