@@ -56,6 +56,7 @@ class ProvisionTests(unittest.TestCase):
             mock.patch(
                 "showco.provision.provision.validate_local_repositories",
             ),
+            mock.patch("showco.provision.provision.autosquash_local_repositories"),
             mock.patch(
                 "showco.provision.provision.provision_remote",
             ),
@@ -97,6 +98,7 @@ class ProvisionTests(unittest.TestCase):
             mock.patch(
                 "showco.provision.provision.validate_local_repositories",
             ),
+            mock.patch("showco.provision.provision.autosquash_local_repositories"),
             mock.patch(
                 "showco.provision.provision.provision_remote",
             ),
@@ -108,6 +110,38 @@ class ProvisionTests(unittest.TestCase):
 
         self.assertEqual(result, 0)
         update_from_provisioning_machine.assert_not_called()
+
+    def test_run_autosquashes_before_validating_repositories(self) -> None:
+        options = provision.ProvisionOptions(
+            config_path=Path("config.toml"), secrets=Path("secrets.toml"), update=False
+        )
+        steps: list[str] = []
+
+        with (
+            mock.patch(
+                "showco.provision.provision.config.read_toml",
+                side_effect=[values(), {}],
+            ),
+            mock.patch("showco.provision.provision.validate_config"),
+            mock.patch(
+                "showco.provision.provision.autosquash_local_repositories",
+                side_effect=lambda: steps.append("autosquash"),
+            ),
+            mock.patch(
+                "showco.provision.provision.validate_local_repositories",
+                side_effect=lambda: steps.append("validate"),
+            ),
+            mock.patch("showco.provision.provision.provision_remote"),
+        ):
+            provision.run(options)
+
+        self.assertEqual(steps, ["autosquash", "validate"])
+
+    def test_autosquash_local_repositories_uses_update_default_window(self) -> None:
+        with mock.patch("showco.update.autosquash_programs", return_value=True) as run:
+            provision.autosquash_local_repositories()
+
+        self.assertEqual(run.call_args.args[1], 50)
 
     def test_lyte_defaults_to_disabled(self) -> None:
         parsed = make_config(values())

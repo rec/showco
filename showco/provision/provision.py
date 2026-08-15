@@ -107,6 +107,7 @@ def run(options: ProvisionOptions) -> int:
         lyte_daemon_config=options.lyte_daemon_config,
     )
     validate_config(parsed_config)
+    autosquash_local_repositories()
     validate_local_repositories()
     ssh_target = f"{parsed_config.network.user}@{parsed_config.network.host}"
     remote_script = "/tmp/showco-provision-pi.sh"
@@ -141,6 +142,22 @@ def run(options: ProvisionOptions) -> int:
             target_config=parsed_config,
         )
     return 0
+
+
+def autosquash_local_repositories() -> None:
+    from .. import update
+
+    programs = update.programs_for_repositories(
+        update.REPOSITORY_NAMES,
+        local_checkout_directory(),
+    )
+    if not update.autosquash_programs(
+        programs,
+        50,
+        update.run_command_with_timeout,
+        sys.stdout,
+    ):
+        sys.exit("ERROR: could not autosquash local repositories before provisioning")
 
 
 def persist_network_host(config_path: Path, host: str) -> None:
