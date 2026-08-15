@@ -81,11 +81,12 @@ def update_from_provisioning_machine(
     host: str | None = None,
     root: Path | None = None,
     local_root: Path | None = None,
+    target_config: config.Config | None = None,
     run_command: RunCommand | None = None,
     output: TextIO = sys.stdout,
 ) -> int:
     run_command = run_command or run_command_with_timeout
-    provision_config = provisioning_config()
+    provision_config = target_config or provisioning_config()
     programs = programs_for_repositories(
         selected, local_root or provision.local_checkout_directory()
     )
