@@ -615,7 +615,10 @@ def missing_fixup_targets(output: str) -> list[str]:
 
 def log_commits(output: str) -> list[tuple[str, str]]:
     values = output.split("\0")
-    return list(zip(values[::2], values[1::2], strict=False))
+    return [
+        (commit.strip(), subject.strip())
+        for commit, subject in zip(values[::2], values[1::2], strict=False)
+    ]
 
 
 def main_branch_step(program: Program, run_command: RunCommand) -> StepResult:

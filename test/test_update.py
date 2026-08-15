@@ -686,6 +686,40 @@ class UpdateTests(unittest.TestCase):
         self.assertIn("No rebase was started", result.output)
         self.assertFalse(any("rebase" in command for command in commands))
 
+    def test_autosquash_strips_git_record_newlines_from_commit_hashes(self) -> None:
+        program = update.Program(
+            name="showco", directory=Path("/code/showco"), service_names=[]
+        )
+        commands: list[list[str]] = []
+
+        def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+            commands.append(list(command))
+            if command[3:5] == ["log", "-n"]:
+                return subprocess.CompletedProcess(
+                    command,
+                    0,
+                    "new\0fixup! target\0\nold\0target\0",
+                    "",
+                )
+            if command[-2:] == ["rev-parse", "new^"]:
+                return subprocess.CompletedProcess(command, 0, "parent\n", "")
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        result = update.autosquash_program(program, 50, run_command)
+
+        self.assertIsNotNone(result)
+        self.assertTrue(result.ok if result else False)
+        self.assertIn(
+            [
+                "git",
+                "-C",
+                "/code/showco",
+                "rev-parse",
+                "new^",
+            ],
+            commands,
+        )
+
     def test_run_command_uses_noninteractive_editor_for_rebase(self) -> None:
         command = ["git", "-C", "/code/recs", "rebase", "--interactive"]
         with mock.patch(
