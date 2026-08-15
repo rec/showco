@@ -340,7 +340,7 @@ def x18_bridge_command(
             f"sudo nmcli connection delete {legacy_connection}; fi",
         ]
     )
-    return ["sh", "-c", "\n".join(script)]
+    return ["bash", "-c", "\n".join(script)]
 
 
 def x18_bridge_address(provision_config: config.Config) -> str:

@@ -170,7 +170,7 @@ class NetworkConfigTests(unittest.TestCase):
             network_config.NetworkTopology.PRIVATE,
         )
 
-        self.assertEqual(commands[0][:2], ["sh", "-c"])
+        self.assertEqual(commands[0][:2], ["bash", "-c"])
         script = commands[0][2]
         self.assertIn("trap rollback ERR", script)
         self.assertIn("showco-private-rollback", script)
