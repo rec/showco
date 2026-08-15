@@ -25,7 +25,7 @@ REMOTE_GITHUB_KEY_TEMPLATE = "remote_github_key.tmpl.sh"
 REBOOT_WAIT_SECONDS = 300
 POST_REBOOT_READY_WAIT_SECONDS = 60
 SSH_CONNECT_TIMEOUT_SECONDS = 2
-LOCAL_REPOSITORIES = ["showco", "reccy", "recs", "twitcho"]
+LOCAL_REPOSITORIES = ["showco", "reccy", "recs", "twitcho", "lyte"]
 WIFI_STATUS_COMMAND = "nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device status"
 STARTUP_CHECK_NAMES = [
     "recs service is active",
@@ -62,6 +62,9 @@ class ProvisionOptions(BaseModel, frozen=True):
     recs_repo: str | None = None
     twitcho_repo: str | None = None
     showco_repo: str | None = None
+    lyte_repo: str | None = None
+    lyte_enabled: bool | None = None
+    lyte_daemon_config: Path | None = None
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -92,6 +95,9 @@ def run(options: ProvisionOptions) -> int:
         recs_repo=options.recs_repo,
         twitcho_repo=options.twitcho_repo,
         showco_repo=options.showco_repo,
+        lyte_repo=options.lyte_repo,
+        lyte_enabled=options.lyte_enabled,
+        lyte_daemon_config=options.lyte_daemon_config,
     )
     validate_config(parsed_config)
     validate_local_repositories()
@@ -246,7 +252,21 @@ def config_errors(provision_config: config.Config) -> list[str]:
         errors.append("- networks.external.wifi.external.name is required")
     if not private.password or private.password == "TODO":
         errors.append("- networks.internal.wifi.private.password is required")
+    if (
+        provision_config.lyte.enabled
+        and not lyte_daemon_config_path(
+            provision_config, local_checkout_directory()
+        ).is_file()
+    ):
+        errors.append(
+            "- lyte.daemon_config does not exist: "
+            f"{lyte_daemon_config_path(provision_config, local_checkout_directory())}"
+        )
     return errors
+
+
+def lyte_daemon_config_path(provision_config: config.Config, root: Path) -> Path:
+    return root / "lyte" / provision_config.lyte.daemon_config
 
 
 def validate_local_repositories(root: Path | None = None) -> None:
@@ -473,6 +493,13 @@ def verify_provisioning(
         verify_remote_command(
             provision_config,
             ssh_target,
+            "lyte project status is clean",
+            project_status_command("lyte", provision_config.paths.root),
+            expect_empty_stdout=True,
+        ),
+        verify_remote_command(
+            provision_config,
+            ssh_target,
             "showco project status is clean",
             project_status_command("showco", provision_config.paths.root),
             expect_empty_stdout=True,
@@ -523,6 +550,7 @@ def verify_provisioning(
             "nmcli connection show >/dev/null",
         ),
         *private_wifi_verification,
+        verify_lyte_midi_service(provision_config, ssh_target),
         verify_x18_usb_device(provision_config, ssh_target),
     ]
 
@@ -560,6 +588,34 @@ def showco_service_status_command(service: str, root: Path) -> str:
 
 def user_session_command(command: str) -> str:
     return f"uid=$(id -u); XDG_RUNTIME_DIR=/run/user/$uid {command}"
+
+
+def verify_lyte_midi_service(
+    provision_config: config.Config, ssh_target: str
+) -> VerificationResult:
+    if not provision_config.lyte.enabled:
+        return VerificationResult(name="Lyte MIDI service", error="", note="disabled")
+    installed = verify_remote_command(
+        provision_config,
+        ssh_target,
+        "Lyte MIDI service is installed",
+        user_systemctl_command("is-enabled --quiet lyte-midi.service"),
+    )
+    if installed.error:
+        return installed
+    active = verify_remote_command(
+        provision_config,
+        ssh_target,
+        "Lyte MIDI service",
+        user_systemctl_command("is-active --quiet lyte-midi.service"),
+    )
+    if not active.error:
+        return active
+    return VerificationResult(
+        name="Lyte MIDI service",
+        error="",
+        note=f"not active: {active.error}",
+    )
 
 
 def verify_x18_usb_device(
@@ -758,6 +814,8 @@ def remote_command(provision_config: config.Config, remote_script: str) -> str:
         "RECS_REFNAME": provision_config.git.recs.refname,
         "TWITCHO_REPO": provision_config.git.twitcho.url,
         "TWITCHO_REFNAME": provision_config.git.twitcho.refname,
+        "LYTE_REPO": provision_config.git.lyte.url,
+        "LYTE_REFNAME": provision_config.git.lyte.refname,
         "SHOWCO_REPO": provision_config.git.showco.url,
         "SHOWCO_REFNAME": provision_config.git.showco.refname,
         "SHOWCO_PORT": str(provision_config.network.web_port),
@@ -765,6 +823,8 @@ def remote_command(provision_config: config.Config, remote_script: str) -> str:
         "SWAP_WIFI": shell_bool(provision_config.network.swap_wifi),
         "NETWORK_TOPOLOGY": provision_config.network.topology,
         "TWITCHO_ENABLED": shell_bool(provision_config.twitch.enabled),
+        "LYTE_ENABLED": shell_bool(provision_config.lyte.enabled),
+        "LYTE_DAEMON_CONFIG": str(provision_config.lyte.daemon_config),
         "PRIVATE_WIFI_SSID": config.string_or_default(private.name, "showbox"),
         "PRIVATE_WIFI_PASSWORD": private.password,
         "EXTERNAL_WIFI_SSID": external.name,

@@ -266,6 +266,9 @@ write_network_config_files() {
     write_toml_network_values "$EXTERNAL_WIFI_SSID" "" ""
     printf '\n[twitch]\n'
     printf 'enabled = %s\n' "$TWITCHO_ENABLED"
+    printf '\n[lyte]\n'
+    printf 'enabled = %s\n' "$LYTE_ENABLED"
+    write_toml_string daemon_config "$LYTE_DAEMON_CONFIG"
     printf '\n[git.reccy]\n'
     write_toml_string url "$RECCY_REPO"
     write_toml_string refname "$RECCY_REFNAME"
@@ -275,6 +278,9 @@ write_network_config_files() {
     printf '\n[git.twitcho]\n'
     write_toml_string url "$TWITCHO_REPO"
     write_toml_string refname "$TWITCHO_REFNAME"
+    printf '\n[git.lyte]\n'
+    write_toml_string url "$LYTE_REPO"
+    write_toml_string refname "$LYTE_REFNAME"
     printf '\n[git.showco]\n'
     write_toml_string url "$SHOWCO_REPO"
     write_toml_string refname "$SHOWCO_REFNAME"
@@ -380,6 +386,27 @@ install_showco_service() {
     bash -lc "cd '$ROOT/showco' && uv run --frozen showco run install-service --root '$ROOT' $(showco_args)"
 }
 
+install_lyte_service() {
+  local config_path
+  local quoted_config
+  local uid
+  if [[ "$LYTE_ENABLED" != true ]]; then
+    printf 'Lyte MIDI service is disabled.\n'
+    return
+  fi
+  config_path="$ROOT/lyte/$LYTE_DAEMON_CONFIG"
+  if [[ ! -f "$config_path" ]]; then
+    printf 'ERROR: Lyte daemon configuration does not exist: %s\n' "$config_path" >&2
+    return 1
+  fi
+  quoted_config=$(printf '%q' "$config_path")
+  uid=$(id -u "$SHOW_USER")
+  sudo -H -u "$SHOW_USER" \
+    env XDG_RUNTIME_DIR="/run/user/$uid" \
+    PATH="$ROOT/lyte/.venv/bin:/home/$SHOW_USER/.local/bin:$PATH" \
+    bash -lc "cd '$ROOT/lyte' && uv run --frozen lyte daemon install --config $quoted_config"
+}
+
 write_provisioning_report() {
   local report="/tmp/SHOWCO-PROVISIONING-REPORT.txt"
   {
@@ -400,6 +427,21 @@ write_provisioning_report() {
       iw dev || true
     else
       printf 'iw not installed\n'
+    fi
+    printf '\nLyte:\n'
+    printf 'enabled: %s\n' "$LYTE_ENABLED"
+    printf 'daemon config: %s\n' "$LYTE_DAEMON_CONFIG"
+    if [[ -d "$ROOT/lyte/.git" ]]; then
+      printf 'checkout: '
+      git -C "$ROOT/lyte" rev-parse --short HEAD
+    else
+      printf 'checkout: missing\n'
+    fi
+    if [[ "$LYTE_ENABLED" == true ]]; then
+      printf 'lyte-midi service: '
+      user_systemctl is-active lyte-midi.service || true
+    else
+      printf 'lyte-midi service: disabled\n'
     fi
   } | tee "$report"
   sudo install -o "$SHOW_USER" -g "$SHOW_USER" -m 0644 \
@@ -453,9 +495,11 @@ main() {
     "/home/$SHOW_USER/.config/recs" \
     "/home/$SHOW_USER/.config/showco" \
     "/home/$SHOW_USER/.config/twitcho" \
+    "/home/$SHOW_USER/.config/lyte" \
     "/home/$SHOW_USER/.local/state/recs" \
     "/home/$SHOW_USER/.local/state/showco" \
     "/home/$SHOW_USER/.local/state/twitcho" \
+    "/home/$SHOW_USER/.local/state/lyte-midi" \
     "/home/$SHOW_USER/recordings"
   printf 'target\n' | sudo -H -u "$SHOW_USER" tee \
     "/home/$SHOW_USER/.config/showco/machine-role" >/dev/null
@@ -466,10 +510,15 @@ main() {
   phase "installing uv"
   install_uv
 
+  phase "installing Lyte Python"
+  sudo -H -u "$SHOW_USER" env PATH="/home/$SHOW_USER/.local/bin:$PATH" \
+    bash -lc "uv python install 3.13"
+
   phase "syncing repositories"
   sync_repo reccy "$RECCY_REPO" "$RECCY_REFNAME"
   sync_repo recs "$RECS_REPO" "$RECS_REFNAME"
   sync_repo twitcho "$TWITCHO_REPO" "$TWITCHO_REFNAME"
+  sync_repo lyte "$LYTE_REPO" "$LYTE_REFNAME"
   sync_repo showco "$SHOWCO_REPO" "$SHOWCO_REFNAME"
 
   phase "enabling user service autostart"
@@ -481,6 +530,9 @@ main() {
   phase "installing showco service"
   install_showco_service
 
+  phase "installing Lyte MIDI service"
+  install_lyte_service
+
   phase "writing provisioning report"
   write_provisioning_report
 
@@ -491,9 +543,10 @@ Provisioning completed.
 Next manual steps:
 
 1. Fill final twitcho config values if Twitch streaming is required.
-2. Fill Wi-Fi password values and rerun provisioning if network configuration was skipped.
-3. Confirm the X18 USB device name.
-4. Run the acceptance tests in showco/doc/acceptance-tests.md.
+2. Configure and enable Lyte if lighting control is required.
+3. Fill Wi-Fi password values and rerun provisioning if network configuration was skipped.
+4. Confirm the X18 USB device name.
+5. Run the acceptance tests in showco/doc/acceptance-tests.md.
 TEXT
   sudo install -o "$SHOW_USER" -g "$SHOW_USER" -m 0644 \
     /tmp/PROVISIONING-NEXT-STEPS.txt \

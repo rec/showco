@@ -422,6 +422,7 @@ class NetworkConfigTests(unittest.TestCase):
                     "reccy": {"url": "git@github.com:rec/reccy.git"},
                     "recs": {"url": "git@github.com:rec/recs.git"},
                     "twitcho": {"url": "git@github.com:rec/twitcho.git"},
+                    "lyte": {"url": "git@github.com:rec/lyte.git"},
                     "showco": {"url": "git@github.com:rec/showco.git"},
                 },
             }
@@ -479,6 +480,7 @@ def make_network_config(
                 "reccy": {"url": "git@github.com:rec/reccy.git"},
                 "recs": {"url": "git@github.com:rec/recs.git"},
                 "twitcho": {"url": "git@github.com:rec/twitcho.git"},
+                "lyte": {"url": "git@github.com:rec/lyte.git"},
                 "showco": {"url": "git@github.com:rec/showco.git"},
             },
         }
