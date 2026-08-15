@@ -8,7 +8,7 @@ import tempfile
 import time
 from collections.abc import Callable
 from pathlib import Path
-from subprocess import CalledProcessError, CompletedProcess
+from subprocess import CalledProcessError, CompletedProcess, TimeoutExpired
 from typing import Annotated
 
 import tyro
@@ -25,13 +25,14 @@ REMOTE_GITHUB_KEY_TEMPLATE = "remote_github_key.tmpl.sh"
 REBOOT_WAIT_SECONDS = 300
 POST_REBOOT_READY_WAIT_SECONDS = 60
 SSH_CONNECT_TIMEOUT_SECONDS = 2
+SSH_VERIFICATION_TIMEOUT_SECONDS = 15
 LOCAL_REPOSITORIES = ["showco", "reccy", "recs", "twitcho", "lyte"]
 WIFI_STATUS_COMMAND = "nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device status"
 STARTUP_CHECK_NAMES = [
     "recs service is active",
     "recs status is advancing",
     "showco service is active",
-    "showco service status is healthy",
+    "showco web UI revision",
     "Twitcho service",
     "X18 bridge has the configured address",
     "private Wi-Fi hotspot is active",
@@ -537,8 +538,8 @@ def verify_provisioning(
         verify_remote_command(
             provision_config,
             ssh_target,
-            "showco service status is healthy",
-            user_systemctl_command("status showco.service --no-pager >/dev/null"),
+            "showco web UI revision",
+            showco_revision_command(provision_config.paths.root),
         ),
         verify_remote_command(
             provision_config,
@@ -598,6 +599,17 @@ def showco_service_status_command(service: str, root: Path) -> str:
     )
 
 
+def showco_revision_command(root: Path) -> str:
+    showco_directory = shlex.quote(str(root / "showco"))
+    return (
+        f"expected=$(git -C {showco_directory} rev-parse HEAD) && "
+        'password=$(cat "$HOME/.config/showco/control-password") && '
+        "curl --fail --silent --show-error --max-time 5 "
+        '--user "showco:$password" http://127.0.0.1:17352/status | '
+        'grep --fixed-strings "\\"revision\\":\\"$expected\\""'
+    )
+
+
 def user_session_command(command: str) -> str:
     return f"uid=$(id -u); XDG_RUNTIME_DIR=/run/user/$uid {command}"
 
@@ -652,12 +664,20 @@ def verify_x18_usb_device(
     device_names = x18_device_names(provision_config.usb.x18_device_name)
     selectors = " ".join(f"-e {shlex.quote(name)}" for name in device_names)
     command = f"arecord -l | grep -Fi {selectors} >/dev/null"
-    completed = subprocess.run(
-        ssh_command(provision_config, ssh_target, command, connect_timeout=1),
-        capture_output=True,
-        check=False,
-        text=True,
-    )
+    try:
+        completed = subprocess.run(
+            ssh_command(provision_config, ssh_target, command, connect_timeout=1),
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=SSH_VERIFICATION_TIMEOUT_SECONDS,
+        )
+    except TimeoutExpired:
+        return VerificationResult(
+            name="X18 USB device",
+            error="",
+            note=f"detection timed out after {SSH_VERIFICATION_TIMEOUT_SECONDS}s",
+        )
     if completed.returncode == 0:
         return VerificationResult(name="X18 USB device", error="")
     return VerificationResult(
@@ -680,12 +700,19 @@ def verify_remote_command(
     expect_empty_stdout: bool = False,
     summarize_error: Callable[[str], str] | None = None,
 ) -> VerificationResult:
-    completed = subprocess.run(
-        ssh_command(provision_config, ssh_target, command, connect_timeout=1),
-        capture_output=True,
-        check=False,
-        text=True,
-    )
+    try:
+        completed = subprocess.run(
+            ssh_command(provision_config, ssh_target, command, connect_timeout=1),
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=SSH_VERIFICATION_TIMEOUT_SECONDS,
+        )
+    except TimeoutExpired:
+        return VerificationResult(
+            name=name,
+            error=f"command timed out after {SSH_VERIFICATION_TIMEOUT_SECONDS}s",
+        )
     output = f"{completed.stdout}{completed.stderr}".strip()
     if completed.returncode == 0 and (not expect_empty_stdout or not output):
         return VerificationResult(name=name, error="")
