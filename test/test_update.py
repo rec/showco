@@ -33,7 +33,7 @@ class UpdateTests(unittest.TestCase):
         )
         self.assertEqual(
             update_from_provisioning_machine.call_args.kwargs,
-            {"host": "other.local"},
+            {"host": "other.local", "autosquash": 50},
         )
         write.assert_called_once_with("Success!")
 
@@ -53,7 +53,30 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(result, 0)
         self.assertEqual(
             update_from_provisioning_machine.call_args.kwargs,
-            {"host": None, "root": Path("/srv/show-projects")},
+            {
+                "host": None,
+                "root": Path("/srv/show-projects"),
+                "autosquash": 50,
+            },
+        )
+
+    def test_update_accepts_zero_autosquash(self) -> None:
+        with (
+            mock.patch(
+                "showco.update.machine_role.machine_role",
+                return_value="provisioning",
+            ),
+            mock.patch(
+                "showco.update.update_from_provisioning_machine", return_value=0
+            ) as update_from_provisioning_machine,
+            mock.patch("showco.update.tqdm.write"),
+        ):
+            result = update.main(["--autosquash=0", "recs"])
+
+        self.assertEqual(result, 0)
+        self.assertEqual(
+            update_from_provisioning_machine.call_args.kwargs,
+            {"host": None, "autosquash": 0},
         )
 
     def test_target_machine_override_runs_target_update(self) -> None:
@@ -535,6 +558,120 @@ class UpdateTests(unittest.TestCase):
         self.assertIn("repository is on feature, expected main", output.getvalue())
         remote_update.assert_not_called()
 
+    def test_provisioning_update_autosquashes_from_oldest_fixup_parent(self) -> None:
+        commands: list[list[str]] = []
+
+        def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+            commands.append(list(command))
+            if command[-2:] == ["branch", "--show-current"]:
+                return subprocess.CompletedProcess(command, 0, "main\n", "")
+            if command[3:5] == ["log", "-n"]:
+                return subprocess.CompletedProcess(
+                    command,
+                    0,
+                    "new\0fixup! newer\0old\0fixup! older\0base\0feature\0",
+                    "",
+                )
+            if command[-2:] == ["rev-parse", "old^"]:
+                return subprocess.CompletedProcess(command, 0, "parent\n", "")
+            if command[-2:] == ["status", "--porcelain"]:
+                return subprocess.CompletedProcess(command, 0, "", "")
+            if command[-1:] == ["@{upstream}"]:
+                return subprocess.CompletedProcess(command, 0, "origin/main\n", "")
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        with (
+            mock.patch(
+                "showco.update.provisioning_config",
+                return_value=make_config(),
+            ),
+            mock.patch(
+                "showco.update.run_remote_step",
+                return_value=update.StepResult(
+                    program="target",
+                    step="update",
+                    command=["ssh"],
+                    returncode=0,
+                    output="",
+                ),
+            ),
+        ):
+            result = update.update_from_provisioning_machine(
+                ["recs"],
+                root=Path("/code"),
+                local_root=Path("/code"),
+                run_command=run_command,
+                output=StringIO(),
+            )
+
+        self.assertEqual(result, 0)
+        self.assertIn(
+            [
+                "git",
+                "-C",
+                "/code/recs",
+                "rebase",
+                "--interactive",
+                "--autosquash",
+                "parent",
+            ],
+            commands,
+        )
+
+    def test_provisioning_update_skips_autosquash_without_fixup_commits(self) -> None:
+        commands: list[list[str]] = []
+
+        def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+            commands.append(list(command))
+            if command[-2:] == ["branch", "--show-current"]:
+                return subprocess.CompletedProcess(command, 0, "main\n", "")
+            if command[3:5] == ["log", "-n"]:
+                return subprocess.CompletedProcess(command, 0, "head\0feature\0", "")
+            if command[-2:] == ["status", "--porcelain"]:
+                return subprocess.CompletedProcess(command, 0, "", "")
+            if command[-1:] == ["@{upstream}"]:
+                return subprocess.CompletedProcess(command, 0, "origin/main\n", "")
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        with (
+            mock.patch(
+                "showco.update.provisioning_config",
+                return_value=make_config(),
+            ),
+            mock.patch(
+                "showco.update.run_remote_step",
+                return_value=update.StepResult(
+                    program="target",
+                    step="update",
+                    command=["ssh"],
+                    returncode=0,
+                    output="",
+                ),
+            ),
+        ):
+            result = update.update_from_provisioning_machine(
+                ["recs"],
+                root=Path("/code"),
+                local_root=Path("/code"),
+                run_command=run_command,
+                output=StringIO(),
+            )
+
+        self.assertEqual(result, 0)
+        self.assertFalse(any("rebase" in command for command in commands))
+
+    def test_run_command_uses_noninteractive_editor_for_rebase(self) -> None:
+        command = ["git", "-C", "/code/recs", "rebase", "--interactive"]
+        with mock.patch(
+            "showco.update.subprocess.run",
+            return_value=subprocess.CompletedProcess(command, 0, "", ""),
+        ) as run:
+            update.run_command_with_timeout(command)
+
+        environment = run.call_args.kwargs["env"]
+        self.assertEqual(environment["GIT_SEQUENCE_EDITOR"], ":")
+        self.assertEqual(environment["GIT_EDITOR"], ":")
+
     def test_provisioning_update_retries_old_target_without_arguments(self) -> None:
         def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
             if command[-2:] == ["branch", "--show-current"]:
@@ -779,6 +916,16 @@ class UpdateTests(unittest.TestCase):
             commands,
             [
                 ["git", "-C", "/code/recs", "branch", "--show-current"],
+                [
+                    "git",
+                    "-C",
+                    "/code/recs",
+                    "log",
+                    "-n",
+                    "50",
+                    "--format=%H%x00%s%x00",
+                    "HEAD",
+                ],
                 ["git", "-C", "/code/recs", "status", "--porcelain"],
             ],
         )
