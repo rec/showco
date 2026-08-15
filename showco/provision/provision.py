@@ -384,12 +384,55 @@ def git_push(repository: Path, upstream: str) -> None:
             ["git", "push"],
             stderr=f"bad upstream {upstream}",
         )
-    subprocess.run(
-        ["git", "-C", str(repository), "push", remote, f"HEAD:{branch}"],
-        capture_output=True,
-        check=True,
-        text=True,
-    )
+    command = ["git", "-C", str(repository)]
+    try:
+        subprocess.run(
+            [*command, "push", remote, f"HEAD:{branch}"],
+            capture_output=True,
+            check=True,
+            text=True,
+        )
+        return
+    except CalledProcessError as error:
+        push_error = error
+    try:
+        subprocess.run(
+            [
+                *command,
+                "fetch",
+                remote,
+                f"+refs/heads/{branch}:refs/remotes/{remote}/{branch}",
+            ],
+            capture_output=True,
+            check=True,
+            text=True,
+        )
+        upstream_commit = git_output(
+            repository,
+            ["rev-parse", f"{remote}/{branch}"],
+        )
+        subprocess.run(
+            [
+                *command,
+                "push",
+                f"--force-with-lease=refs/heads/{branch}:{upstream_commit}",
+                remote,
+                f"HEAD:{branch}",
+            ],
+            capture_output=True,
+            check=True,
+            text=True,
+        )
+    except CalledProcessError as recovery_error:
+        raise CalledProcessError(
+            recovery_error.returncode,
+            recovery_error.cmd,
+            output=recovery_error.stdout,
+            stderr=(
+                f"regular push failed:\n{git_error_output(push_error)}\n"
+                f"force-with-lease recovery failed:\n{git_error_output(recovery_error)}"
+            ),
+        ) from recovery_error
 
 
 def git_error_output(error: CalledProcessError) -> str:

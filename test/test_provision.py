@@ -252,13 +252,56 @@ class ProvisionTests(unittest.TestCase):
                         ["git", "push"],
                         stderr="rejected\n",
                     ),
+                    subprocess.CalledProcessError(
+                        1,
+                        ["git", "fetch"],
+                        stderr="fetch failed\n",
+                    ),
                 ],
             ):
                 errors = provision.repository_errors(repository)
 
         self.assertEqual(
             errors,
-            ["- recs: could not push 2 local commit(s) to origin/main: rejected"],
+            [
+                "- recs: could not push 2 local commit(s) to origin/main: "
+                "regular push failed:\nrejected\n"
+                "force-with-lease recovery failed:\nfetch failed"
+            ],
+        )
+
+    def test_local_repository_errors_force_pushes_rejected_branch(self) -> None:
+        with TemporaryDirectory() as directory:
+            repository = provision.LocalRepository(name="recs", path=Path(directory))
+            with mock.patch(
+                "reccy.subprocess.run",
+                side_effect=[
+                    subprocess.CompletedProcess(["git"], 0, "true\n", ""),
+                    subprocess.CompletedProcess(["git"], 0, "origin/main\n", ""),
+                    subprocess.CompletedProcess(["git"], 0, "2\n", ""),
+                    subprocess.CalledProcessError(
+                        1, ["git", "push"], stderr="rejected"
+                    ),
+                    subprocess.CompletedProcess(["git"], 0, "", ""),
+                    subprocess.CompletedProcess(["git"], 0, "abc123\n", ""),
+                    subprocess.CompletedProcess(["git"], 0, "", ""),
+                    subprocess.CompletedProcess(["git"], 0, "0\n", ""),
+                ],
+            ) as run:
+                errors = provision.repository_errors(repository)
+
+        self.assertEqual(errors, [])
+        self.assertEqual(
+            run.call_args_list[6].args[0],
+            [
+                "git",
+                "-C",
+                str(Path(directory)),
+                "push",
+                "--force-with-lease=refs/heads/main:abc123",
+                "origin",
+                "HEAD:main",
+            ],
         )
 
     def test_local_repository_errors_reports_missing_upstream(self) -> None:
