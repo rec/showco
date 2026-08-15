@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import html
 import json
+import subprocess
 import threading
 import time
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from typing import ClassVar
 from urllib import parse
 
@@ -31,6 +33,7 @@ class ShowcoApp:
         self.system = system
         self.mixer = mixer
         self.twitcho_supervisor = twitcho_supervisor
+        self.revision = source_revision()
         self.run_started_at = time.time()
         self.action_log: list[models.ActionResult] = []
         self.action_log_lock = threading.Lock()
@@ -51,6 +54,7 @@ class ShowcoApp:
             twitcho=twitcho,
             system=self.system.status(),
             mixer=self.mixer.status(),
+            revision=self.revision,
             run_started_at=self.run_started_at,
         )
 
@@ -166,6 +170,7 @@ class ShowcoHandler(BaseHTTPRequestHandler):
     def _html(self, body: str) -> None:
         data = body.encode()
         self.send_response(200)
+        self.send_header("Cache-Control", "no-store")
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
@@ -195,6 +200,21 @@ class ShowcoServer(ThreadingHTTPServer):
     def server_close(self) -> None:
         self.app.close()
         super().server_close()
+
+
+def source_revision() -> str | None:
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(Path(__file__).parent.parent), "rev-parse", "HEAD"],
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+    except FileNotFoundError:
+        return None
+    if result.returncode:
+        return None
+    return result.stdout.strip() or None
 
 
 def make_server(

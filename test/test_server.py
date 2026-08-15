@@ -1,12 +1,37 @@
 from __future__ import annotations
 
 import unittest
+from io import BytesIO
+from unittest import mock
 
 from showco import models, rehearsal
-from showco.server import ShowcoApp, actions_page, home_page
+from showco.server import ShowcoApp, ShowcoHandler, actions_page, home_page
 
 
 class ServerTests(unittest.TestCase):
+    @mock.patch("showco.server.source_revision", return_value="revision")
+    def test_status_includes_server_revision(self, source_revision: mock.Mock) -> None:
+        app = ShowcoApp(
+            rehearsal.RehearsalRecsClient(),
+            rehearsal.RehearsalTwitchoClient(),
+            rehearsal.RehearsalSystemMonitor(),
+            rehearsal.RehearsalMixerMonitor(),
+        )
+
+        self.assertEqual(app.status().revision, "revision")
+        source_revision.assert_called_once_with()
+
+    def test_html_is_not_cacheable(self) -> None:
+        handler = object.__new__(ShowcoHandler)
+        handler.send_response = mock.Mock()
+        handler.send_header = mock.Mock()
+        handler.end_headers = mock.Mock()
+        handler.wfile = BytesIO()
+
+        handler._html("page")
+
+        handler.send_header.assert_any_call("Cache-Control", "no-store")
+
     def test_home_page_has_two_screen_navigation(self) -> None:
         html = home_page(
             models.ShowStatus(
