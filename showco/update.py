@@ -35,6 +35,7 @@ class UpdateOptions(BaseModel, frozen=True):
     host: str | None = None
     root: Path | None = None
     target_machine: bool = False
+    autosquash: int = Field(default=50, ge=0)
 
 
 class StepResult(BaseModel, frozen=True):
@@ -66,10 +67,17 @@ def main(argv: list[str] | None = None) -> int:
             result = update_target(selected, root=options.root)
     else:
         if options.root is None:
-            result = update_from_provisioning_machine(selected, host=options.host)
+            result = update_from_provisioning_machine(
+                selected,
+                host=options.host,
+                autosquash=options.autosquash,
+            )
         else:
             result = update_from_provisioning_machine(
-                selected, host=options.host, root=options.root
+                selected,
+                host=options.host,
+                root=options.root,
+                autosquash=options.autosquash,
             )
     tqdm.write("Success!" if result == 0 else "ERROR: update failed")
     return result
@@ -84,6 +92,7 @@ def update_from_provisioning_machine(
     target_config: config.Config | None = None,
     run_command: RunCommand | None = None,
     output: TextIO = sys.stdout,
+    autosquash: int = 50,
 ) -> int:
     run_command = run_command or run_command_with_timeout
     provision_config = target_config or provisioning_config()
@@ -92,6 +101,10 @@ def update_from_provisioning_machine(
         local_root or provision.local_checkout_directory(),
     )
     if not check_main_branches(programs, run_command, output):
+        return 1
+    if autosquash and not autosquash_programs(
+        programs, autosquash, run_command, output
+    ):
         return 1
     with progress_bar(len(programs) + 1, output) as progress:
         for program in programs:
@@ -509,6 +522,72 @@ def check_main_branches(
     return False
 
 
+def autosquash_programs(
+    programs: list[Program], limit: int, run_command: RunCommand, output: TextIO
+) -> bool:
+    for program in programs:
+        result = autosquash_program(program, limit, run_command)
+        if result is None:
+            continue
+        if not result.ok:
+            report_failure(result, output)
+            return False
+    return True
+
+
+def autosquash_program(
+    program: Program, limit: int, run_command: RunCommand
+) -> StepResult | None:
+    recent_commits = run_step(
+        program.name,
+        "recent commits",
+        [
+            "git",
+            "-C",
+            str(program.directory),
+            "log",
+            "-n",
+            str(limit),
+            "--format=%H%x00%s%x00",
+            "HEAD",
+        ],
+        run_command,
+    )
+    if not recent_commits.ok:
+        return recent_commits
+    if (fixup_commit := oldest_fixup_commit(recent_commits.output)) is None:
+        return None
+    parent = run_step(
+        program.name,
+        "fixup parent",
+        ["git", "-C", str(program.directory), "rev-parse", f"{fixup_commit}^"],
+        run_command,
+    )
+    if not parent.ok:
+        return parent
+    return run_step(
+        program.name,
+        "autosquash",
+        [
+            "git",
+            "-C",
+            str(program.directory),
+            "rebase",
+            "--interactive",
+            "--autosquash",
+            parent.output.strip(),
+        ],
+        run_command,
+    )
+
+
+def oldest_fixup_commit(output: str) -> str | None:
+    values = output.split("\0")
+    commits = zip(values[::2], values[1::2], strict=False)
+    fixups = [commit for commit, subject in commits if subject.startswith("fixup! ")]
+    return fixups[-1] if fixups else None
+
+
 def main_branch_step(program: Program, run_command: RunCommand) -> StepResult:
     result = run_step(
         program.name,
@@ -728,6 +807,9 @@ def run_command_with_timeout(command: Sequence[str]) -> CompletedProcess[str]:
     env = dict(os.environ)
     if command and command[0] == "git":
         env["GIT_TERMINAL_PROMPT"] = "0"
+        if "rebase" in command:
+            env["GIT_SEQUENCE_EDITOR"] = ":"
+            env["GIT_EDITOR"] = ":"
     return subprocess.run(
         command,
         capture_output=True,
