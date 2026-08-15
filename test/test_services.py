@@ -11,6 +11,9 @@ from showco import services
 
 
 class ServicesTests(unittest.TestCase):
+    def test_registry_includes_lyte_midi_service(self) -> None:
+        self.assertEqual(services.SERVICES["lyte-midi"], services.LYTE_MIDI_SERVICE)
+
     def test_showco_args_include_optional_services(self) -> None:
         self.assertEqual(
             services.showco_args(
