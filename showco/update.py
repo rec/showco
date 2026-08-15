@@ -556,6 +556,18 @@ def autosquash_program(
     )
     if not recent_commits.ok:
         return recent_commits
+    if missing_targets := missing_fixup_targets(recent_commits.output):
+        return StepResult(
+            program=program.name,
+            step="validate fixup targets",
+            command=recent_commits.command,
+            returncode=1,
+            output=(
+                "fixup target is not in the selected autosquash history: "
+                + ", ".join(missing_targets)
+                + "\nNo rebase was started."
+            ),
+        )
     if (fixup_commit := oldest_fixup_commit(recent_commits.output)) is None:
         return None
     parent = run_step(
@@ -583,10 +595,27 @@ def autosquash_program(
 
 
 def oldest_fixup_commit(output: str) -> str | None:
-    values = output.split("\0")
-    commits = zip(values[::2], values[1::2], strict=False)
-    fixups = [commit for commit, subject in commits if subject.startswith("fixup! ")]
+    fixups = [
+        commit
+        for commit, subject in log_commits(output)
+        if subject.startswith("fixup! ")
+    ]
     return fixups[-1] if fixups else None
+
+
+def missing_fixup_targets(output: str) -> list[str]:
+    subjects = {subject for _, subject in log_commits(output)}
+    return [
+        subject.removeprefix("fixup! ")
+        for _, subject in log_commits(output)
+        if subject.startswith("fixup! ")
+        and subject.removeprefix("fixup! ") not in subjects
+    ]
+
+
+def log_commits(output: str) -> list[tuple[str, str]]:
+    values = output.split("\0")
+    return list(zip(values[::2], values[1::2], strict=False))
 
 
 def main_branch_step(program: Program, run_command: RunCommand) -> StepResult:
