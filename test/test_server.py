@@ -253,20 +253,25 @@ class ServerTests(unittest.TestCase):
         self.assertIn('value="recs-shutdown"', html)
         self.assertIn('<option value="cancel" selected>Cancel</option>', html)
 
-    def test_twitch_restart_action_uses_supervisor(self) -> None:
-        supervisor = rehearsal.RehearsalTwitchoSupervisor()
+    def test_twitch_restart_action_uses_service_restart(self) -> None:
+        restart = mock.Mock(
+            return_value=models.ActionResult(
+                ok=True,
+                message="twitcho restart requested",
+            )
+        )
         app = ShowcoApp(
             rehearsal.RehearsalRecsClient(),
             rehearsal.RehearsalTwitchoClient(),
             rehearsal.RehearsalSystemMonitor(),
             rehearsal.RehearsalMixerMonitor(),
-            supervisor,
+            restart,
         )
 
         result = app.run_action({"action": "twitcho-restart"})
 
         self.assertTrue(result.ok)
-        self.assertEqual(supervisor.restart_count, 1)
+        restart.assert_called_once_with()
 
     def test_track_name_action_uses_recs_client(self) -> None:
         recs = rehearsal.RehearsalRecsClient()

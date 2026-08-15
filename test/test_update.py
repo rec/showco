@@ -916,6 +916,14 @@ class UpdateTests(unittest.TestCase):
     def test_selected_repositories_defaults_to_all(self) -> None:
         self.assertEqual(update.selected_repositories([]), update.REPOSITORY_NAMES)
 
+    def test_disabled_twitcho_has_no_service_to_restart(self) -> None:
+        programs = update.programs_for_repositories(
+            ["reccy", "twitcho"], Path("/code"), twitcho_enabled=False
+        )
+
+        self.assertNotIn("twitcho", programs[0].service_names)
+        self.assertEqual(programs[1].service_names, [])
+
     def test_selected_repositories_rejects_unknown_names(self) -> None:
         with self.assertRaisesRegex(SystemExit, "unknown update target"):
             update.selected_repositories(["bogus"])

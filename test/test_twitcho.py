@@ -1,11 +1,18 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 
 from showco.twitcho.client import TwitchoClient
 
 
 class TwitchoTests(unittest.TestCase):
+    def test_control_endpoint_uses_twitcho_service_socket(self) -> None:
+        self.assertEqual(
+            TwitchoClient().control_endpoint,
+            Path.home() / ".local/state/twitcho/gui.sock",
+        )
+
     def test_status_maps_successful_reply(self) -> None:
         client = FakeTwitchoClient(
             {

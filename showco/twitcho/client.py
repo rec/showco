@@ -6,7 +6,7 @@ from reccy import rpc
 
 from ..models import ActionResult, ServiceStatus, TwitchoStatus
 
-CONTROL_ENDPOINT = Path.home() / ".local/state/twitcho/control.sock"
+CONTROL_ENDPOINT = Path.home() / ".local/state/twitcho/gui.sock"
 
 
 class TwitchoClient:

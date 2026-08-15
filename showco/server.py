@@ -5,18 +5,18 @@ import json
 import subprocess
 import threading
 import time
+from collections.abc import Callable
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import ClassVar
 from urllib import parse
 
-from . import models
+from . import models, services
 from .mixer import MixerMonitor
 from .recs import RecsClient
 from .system import SystemMonitor
 from .twitcho.client import TwitchoClient
-from .twitcho.supervisor import TwitchoSupervisorLike
 
 
 class ShowcoApp:
@@ -26,13 +26,13 @@ class ShowcoApp:
         twitcho: TwitchoClient | None,
         system: SystemMonitor,
         mixer: MixerMonitor,
-        twitcho_supervisor: TwitchoSupervisorLike | None = None,
+        twitcho_restart: Callable[[], models.ActionResult] | None = None,
     ) -> None:
         self.recs = recs
         self.twitcho = twitcho
         self.system = system
         self.mixer = mixer
-        self.twitcho_supervisor = twitcho_supervisor
+        self.twitcho_restart = twitcho_restart or services.restart_twitcho_service
         self.revision = source_revision()
         self.run_started_at = time.time()
         self.action_log: list[models.ActionResult] = []
@@ -45,10 +45,6 @@ class ShowcoApp:
             )
         else:
             twitcho = self.twitcho.status()
-            if self.twitcho_supervisor and not twitcho.service.fresh:
-                twitcho = twitcho.model_copy(
-                    update={"service": self.twitcho_supervisor.status()}
-                )
         return models.ShowStatus(
             recs=self.recs.status(),
             twitcho=twitcho,
@@ -93,12 +89,7 @@ class ShowcoApp:
         elif action == "twitcho-restart" and self.twitcho is None:
             result = models.ActionResult(ok=False, message="twitcho is disabled")
         elif action == "twitcho-restart":
-            if self.twitcho_supervisor:
-                result = self.twitcho_supervisor.restart()
-            else:
-                result = models.ActionResult(
-                    ok=False, message="twitcho supervisor is not configured"
-                )
+            result = self.twitcho_restart()
         elif action in TWITCHO_ACTIONS:
             if self.twitcho is None:
                 result = models.ActionResult(ok=False, message="twitcho is disabled")
@@ -115,14 +106,6 @@ class ShowcoApp:
     def recent_actions(self) -> list[models.ActionResult]:
         with self.action_log_lock:
             return list(self.action_log)
-
-    def start(self) -> None:
-        if self.twitcho_supervisor:
-            self.twitcho_supervisor.start()
-
-    def close(self) -> None:
-        if self.twitcho_supervisor:
-            self.twitcho_supervisor.close()
 
 
 class ShowcoHandler(BaseHTTPRequestHandler):
@@ -197,10 +180,6 @@ class ShowcoHandler(BaseHTTPRequestHandler):
 class ShowcoServer(ThreadingHTTPServer):
     app: ShowcoApp
 
-    def server_close(self) -> None:
-        self.app.close()
-        super().server_close()
-
 
 def source_revision() -> str | None:
     try:
@@ -225,7 +204,7 @@ def make_server(
     twitcho: TwitchoClient | None = None,
     system: SystemMonitor | None = None,
     mixer: MixerMonitor | None = None,
-    twitcho_supervisor: TwitchoSupervisorLike | None = None,
+    twitcho_restart: Callable[[], models.ActionResult] | None = None,
     twitcho_enabled: bool = False,
 ) -> ThreadingHTTPServer:
     handler = type("ConfiguredShowcoHandler", (ShowcoHandler,), {})
@@ -234,12 +213,11 @@ def make_server(
         (twitcho or TwitchoClient()) if twitcho_enabled else None,
         system or SystemMonitor(),
         mixer or MixerMonitor(),
-        twitcho_supervisor if twitcho_enabled else None,
+        twitcho_restart if twitcho_enabled else None,
     )
     handler.app = app
     server = ShowcoServer((host, port), handler)
     server.app = app
-    app.start()
     return server
 
 

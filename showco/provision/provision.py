@@ -32,6 +32,7 @@ STARTUP_CHECK_NAMES = [
     "recs status is advancing",
     "showco service is active",
     "showco service status is healthy",
+    "Twitcho service",
     "X18 bridge has the configured address",
     "private Wi-Fi hotspot is active",
 ]
@@ -561,6 +562,7 @@ def verify_provisioning(
         ),
         *private_wifi_verification,
         verify_lyte_midi_service(provision_config, ssh_target),
+        verify_twitcho_service(provision_config, ssh_target),
         verify_x18_usb_device(provision_config, ssh_target),
     ]
 
@@ -625,6 +627,19 @@ def verify_lyte_midi_service(
         name="Lyte MIDI service",
         error="",
         note=f"not active: {active.error}",
+    )
+
+
+def verify_twitcho_service(
+    provision_config: config.Config, ssh_target: str
+) -> VerificationResult:
+    if not provision_config.twitch.enabled:
+        return VerificationResult(name="Twitcho service", error="", note="disabled")
+    return verify_remote_command(
+        provision_config,
+        ssh_target,
+        "Twitcho service",
+        showco_service_status_command("twitcho", provision_config.paths.root),
     )
 
 
