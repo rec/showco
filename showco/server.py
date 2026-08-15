@@ -399,11 +399,13 @@ def level(device: str, name: str, state: str) -> str:
     <div class="level {safe_state}" data-device="{safe_device}"
          data-channel="{safe_name}" data-saved-track-name="{safe_name}">
       <label>
-        <b>{safe_name}</b>
+        <span class="channel-caption">
+          <span class="channel-state {channel_indicator(state)}"
+                aria-label="{safe_state}" title="{safe_state}">•</span>
+          <b>Channel {safe_name}</b>
+        </span>
         <input name="track_name" value="{safe_name}">
       </label>
-      <span class="channel-state {channel_indicator(state)}"
-            aria-label="{safe_state}" title="{safe_state}">•</span>
     </div>
     """
 
@@ -773,8 +775,10 @@ HOME_STATUS_SCRIPT = """
     form.dataset.channel = channel.name;
     form.dataset.savedTrackName = savedTrackName;
     const label = document.createElement("label");
+    const caption = document.createElement("span");
+    caption.className = "channel-caption";
     const title = document.createElement("b");
-    title.textContent = channel.name;
+    title.textContent = `Channel ${channel.name}`;
     const input = document.createElement("input");
     input.name = "track_name";
     input.value = trackName;
@@ -788,7 +792,9 @@ HOME_STATUS_SCRIPT = """
     state.setAttribute("aria-label", channel.state);
     state.title = channel.state;
     state.textContent = "•";
-    form.append(label, state);
+    caption.append(state, title);
+    label.append(caption, input);
+    form.append(label);
     return form;
   }
 
@@ -969,12 +975,15 @@ main {
   color: white;
   display: grid;
   gap: 0.5rem;
-  grid-template-columns: minmax(8rem, 1fr) 4.5rem;
-  align-items: end;
   padding: 0.75rem;
 }
 .level label {
   margin: 0;
+}
+.channel-caption {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
 }
 .level input {
   margin: 0.25rem 0 0;
@@ -997,10 +1006,8 @@ main {
   margin: 0;
 }
 .channel-state {
-  align-self: end;
-  font-size: 1.5rem;
-  line-height: 2rem;
-  text-align: center;
+  font-size: 3rem;
+  line-height: 1;
 }
 .indicator-green { color: #14853d; }
 .indicator-red { color: #b3261e; }

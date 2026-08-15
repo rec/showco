@@ -168,6 +168,7 @@ class ServerTests(unittest.TestCase):
         self.assertIn('name="track_name" value="1"', html)
         self.assertIn('data-saved-track-name="1"', html)
         self.assertIn('class="channel-state indicator-green"', html)
+        self.assertIn("Channel 1", html)
         self.assertIn(">•</span>", html)
         self.assertEqual(html.count('id="save-track-names"'), 1)
         self.assertEqual(html.count('id="revert-track-names"'), 1)
