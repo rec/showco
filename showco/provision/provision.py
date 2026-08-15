@@ -623,11 +623,7 @@ def verify_lyte_midi_service(
     )
     if not active.error:
         return active
-    return VerificationResult(
-        name="Lyte MIDI service",
-        error="",
-        note=f"not active: {active.error}",
-    )
+    return active
 
 
 def verify_twitcho_service(
