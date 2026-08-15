@@ -41,6 +41,14 @@ class TwitchoTests(unittest.TestCase):
         self.assertEqual(status.service.state, "offline")
         self.assertEqual(status.service.last_error, "not running")
 
+    def test_status_reports_stream_failure(self) -> None:
+        client = FakeTwitchoClient({"state": "failed", "last_error": "encoder exited"})
+
+        status = client.status()
+
+        self.assertEqual(status.service.state, "error")
+        self.assertEqual(status.service.last_error, "encoder exited")
+
 
 class FakeTwitchoClient(TwitchoClient):
     def __init__(self, reply: str | dict[str, object] | ConnectionError) -> None:
