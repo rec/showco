@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import base64
 import html
 import json
-import secrets
 import subprocess
 import threading
 import time
@@ -118,10 +116,9 @@ class ShowcoApp:
 
 class ShowcoHandler(BaseHTTPRequestHandler):
     app: ClassVar[ShowcoApp]
-    control_password: ClassVar[str | None] = None
 
     def do_GET(self) -> None:
-        if not self._authorized() or not self._acquire_request():
+        if not self._acquire_request():
             return
         try:
             self._do_get()
@@ -146,7 +143,7 @@ class ShowcoHandler(BaseHTTPRequestHandler):
         self.send_error(404)
 
     def do_POST(self) -> None:
-        if not self._authorized() or not self._acquire_request():
+        if not self._acquire_request():
             return
         try:
             self._do_post()
@@ -184,31 +181,6 @@ class ShowcoHandler(BaseHTTPRequestHandler):
         body = self.rfile.read(length).decode()
         parsed = parse.parse_qs(body)
         return {k: v[-1] for k, v in parsed.items() if v}
-
-    def _authorized(self) -> bool:
-        if self.control_password is None:
-            return True
-        header = self.headers.get("Authorization", "")
-        prefix = "Basic "
-        if not header.startswith(prefix):
-            self._request_authentication()
-            return False
-        try:
-            token = base64.b64decode(header[len(prefix) :], validate=True).decode()
-        except (UnicodeDecodeError, ValueError):
-            self._request_authentication()
-            return False
-        _, separator, password = token.partition(":")
-        if not separator or not secrets.compare_digest(password, self.control_password):
-            self._request_authentication()
-            return False
-        return True
-
-    def _request_authentication(self) -> None:
-        self.send_response(401)
-        self.send_header("WWW-Authenticate", 'Basic realm="Showco"')
-        self.send_header("Content-Length", "0")
-        self.end_headers()
 
     def _acquire_request(self) -> bool:
         if cast(ShowcoServer, self.server).request_slots.acquire(blocking=False):
@@ -286,7 +258,6 @@ def make_server(
     mixer: MixerMonitor | None = None,
     twitcho_restart: Callable[[], models.ActionResult] | None = None,
     twitcho_enabled: bool = False,
-    control_password: str | None = None,
     x18_status: Callable[[], models.RecorderStatus] | None = None,
 ) -> ThreadingHTTPServer:
     handler = type("ConfiguredShowcoHandler", (ShowcoHandler,), {})
@@ -299,7 +270,6 @@ def make_server(
         x18_status,
     )
     handler.app = app
-    handler.control_password = control_password
     server = ShowcoServer((host, port), handler)
     server.app = app
     return server
