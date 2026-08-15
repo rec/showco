@@ -18,6 +18,13 @@ configure_locale() {
   unset LC_ALL
 }
 
+configure_journal() {
+  sudo install -d -m 2755 /etc/systemd/journald.conf.d /var/log/journal
+  printf '[Journal]\nStorage=persistent\n' \
+    | sudo tee /etc/systemd/journald.conf.d/showco.conf >/dev/null
+  sudo systemctl restart systemd-journald
+}
+
 home_disk() {
   local source
   local disk
@@ -495,6 +502,9 @@ main() {
 
   phase "configuring locale"
   configure_locale
+
+  phase "configuring persistent journal"
+  configure_journal
 
   phase "installing base packages"
   packages=(

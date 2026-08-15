@@ -657,10 +657,8 @@ def verify_provisioning(
         verify_remote_command(
             provision_config,
             ssh_target,
-            "showco journal is readable",
-            user_session_command(
-                "journalctl --user -u showco.service -n 100 --no-pager >/dev/null"
-            ),
+            "persistent journal is readable",
+            persistent_journal_command(),
         ),
         verify_remote_command(
             provision_config,
@@ -719,6 +717,15 @@ def showco_revision_command(root: Path) -> str:
         "curl --fail --silent --show-error --max-time 5 "
         "http://127.0.0.1:17352/status | "
         'grep --fixed-strings "\\"revision\\":\\"$expected\\""'
+    )
+
+
+def persistent_journal_command() -> str:
+    return (
+        "sudo systemd-cat --identifier=showco-provisioning "
+        "/usr/bin/printf '%s\\n' 'Showco journal check' && "
+        "sudo journalctl -t showco-provisioning -n 1 --no-pager --output=cat "
+        "| grep --fixed-strings --line-regexp 'Showco journal check'"
     )
 
 
