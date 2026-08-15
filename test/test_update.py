@@ -410,6 +410,34 @@ class UpdateTests(unittest.TestCase):
         self.assertIn(["systemctl", "--user", "start", "recs.service"], commands)
         self.assertIn(["systemctl", "--user", "start", "showco.service"], commands)
 
+    def test_target_update_restarts_lyte_midi_service(self) -> None:
+        commands: list[list[str]] = []
+
+        def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+            commands.append(list(command))
+            if command[-2:] == ["branch", "--show-current"]:
+                return subprocess.CompletedProcess(command, 0, "main\n", "")
+            if command[-2:] == ["status", "--porcelain"]:
+                return subprocess.CompletedProcess(command, 0, "", "")
+            if command[-2:] == ["rev-parse", "HEAD"]:
+                return subprocess.CompletedProcess(command, 0, "same\n", "")
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        with mock.patch(
+            "showco.services.service.current_platform", return_value=Platform.linux
+        ):
+            result = update.update_target(
+                ["lyte"],
+                root=Path("/code"),
+                run_command=run_command,
+                output=StringIO(),
+            )
+
+        self.assertEqual(result, 0)
+        self.assertIn(["git", "-C", "/code/lyte", "pull", "--ff-only"], commands)
+        self.assertIn(["systemctl", "--user", "stop", "lyte-midi.service"], commands)
+        self.assertIn(["systemctl", "--user", "start", "lyte-midi.service"], commands)
+
     def test_provisioning_update_pushes_selected_repos_then_ssh_updates_target(
         self,
     ) -> None:

@@ -29,7 +29,16 @@ RECS_SERVICE = ServiceSpec(
     daemon_env_var="RECS_DAEMON",
     windows_pipe=r"\\.\pipe\recs",
 )
+LYTE_MIDI_SERVICE = ServiceSpec(
+    name="lyte-midi",
+    display_name="Lyte MIDI",
+    description="Lyte MIDI patch player",
+    launchd_label="com.swirly.lyte-midi",
+    daemon_env_var="LYTE_MIDI_DAEMON",
+    windows_pipe=r"\\.\pipe\lyte-midi",
+)
 SERVICES = {
+    "lyte-midi": LYTE_MIDI_SERVICE,
     "recs": RECS_SERVICE,
     "showco": SHOWCO_SERVICE,
 }
@@ -164,6 +173,6 @@ def status_main(argv: list[str] | None = None) -> int:
     machine_role.require_target_machine("showco run service-status")
     arguments = sys.argv[1:] if argv is None else argv
     if not arguments or arguments[:1] in (["-h"], ["--help"]):
-        print("Usage: showco run service-status {recs,showco} ...")
+        print("Usage: showco run service-status {lyte-midi,recs,showco} ...")
         return 0
     return report_service_status(arguments)

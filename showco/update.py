@@ -784,10 +784,11 @@ def report_failure(result: StepResult, output: TextIO) -> None:
         tqdm.write(result.output.rstrip(), file=output)
 
 
-REPOSITORY_NAMES = ["reccy", "recs", "showco", "twitcho"]
+REPOSITORY_NAMES = ["reccy", "recs", "showco", "twitcho", "lyte"]
 SERVICES_BY_REPOSITORY = {
-    "reccy": ["recs", "showco"],
+    "reccy": ["recs", "showco", "lyte-midi"],
     "recs": ["recs"],
     "showco": ["showco"],
     "twitcho": ["showco"],
+    "lyte": ["lyte-midi"],
 }
