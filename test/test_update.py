@@ -270,7 +270,7 @@ class UpdateTests(unittest.TestCase):
 
         self.assertEqual(result, 1)
         self.assertEqual(
-            commands,
+            commands[:-1],
             [
                 ["git", "-C", "/code/showco", "branch", "--show-current"],
                 ["systemctl", "--user", "stop", "showco.service"],
@@ -282,6 +282,8 @@ class UpdateTests(unittest.TestCase):
                 ["systemctl", "--user", "start", "showco.service"],
             ],
         )
+        self.assertEqual(commands[-1][:2], ["sh", "-c"])
+        self.assertIn("http://127.0.0.1:17352/status", commands[-1][2])
 
     def test_target_update_resets_to_force_pushed_upstream(self) -> None:
         commands: list[list[str]] = []
@@ -356,8 +358,10 @@ class UpdateTests(unittest.TestCase):
             ],
         )
         self.assertEqual(
-            commands[-2], ["systemctl", "--user", "start", "showco.service"]
+            commands[-3], ["systemctl", "--user", "start", "showco.service"]
         )
+        self.assertEqual(commands[-2][:2], ["sh", "-c"])
+        self.assertIn("http://127.0.0.1:17352/status", commands[-2][2])
         self.assertEqual(
             commands[-1], ["sh", "-c", update.recs.status_changes_command()]
         )
@@ -856,6 +860,30 @@ class UpdateTests(unittest.TestCase):
 
         self.assertEqual(result, 0)
         self.assertIn(["git", "-C", "/code/recs", "pull", "--ff-only"], commands)
+
+    def test_showco_revision_step_checks_running_web_ui(self) -> None:
+        commands: list[list[str]] = []
+
+        def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+            commands.append(list(command))
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        result = update.showco_revision_step(Path("/code"), run_command)
+
+        self.assertTrue(result.ok)
+        self.assertEqual(
+            commands,
+            [
+                [
+                    "sh",
+                    "-c",
+                    "expected=$(git -C /code/showco rev-parse HEAD) && "
+                    "curl --fail --silent --show-error --retry 5 --retry-connrefused "
+                    "--retry-delay 1 http://127.0.0.1:17352/status | "
+                    'grep --fixed-strings "\\"revision\\":\\"$expected\\""',
+                ]
+            ],
+        )
 
     def test_selected_repositories_defaults_to_all(self) -> None:
         self.assertEqual(update.selected_repositories([]), update.REPOSITORY_NAMES)

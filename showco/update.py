@@ -155,6 +155,8 @@ def update_target(
             progress.update()
 
         results.extend(run_service_step(n, "start", run_command) for n in service_names)
+        if "showco" in service_names:
+            results.append(showco_revision_step(root, run_command))
         if "recs" in service_names:
             results.append(recs_status_changes_step(run_command))
     report_failures(results, output)
@@ -181,6 +183,7 @@ def update_target_with_showco(
         results.extend(run_service_step(n, "start", run_command) for n in service_names)
         progress.update()
     results.append(run_service_step("showco", "start", run_command))
+    results.append(showco_revision_step(showco.directory.parent, run_command))
     if "recs" in selected_service_names(programs):
         results.append(recs_status_changes_step(run_command))
     report_failures(results, output)
@@ -292,6 +295,17 @@ def recs_status_changes_step(run_command: RunCommand) -> StepResult:
     return result.model_copy(
         update={"output": recs.status_failure_summary(result.output)}
     )
+
+
+def showco_revision_step(root: Path, run_command: RunCommand) -> StepResult:
+    showco_directory = shlex.quote(str(root / "showco"))
+    command = (
+        f"expected=$(git -C {showco_directory} rev-parse HEAD) && "
+        "curl --fail --silent --show-error --retry 5 --retry-connrefused "
+        "--retry-delay 1 http://127.0.0.1:17352/status | "
+        'grep --fixed-strings "\\"revision\\":\\"$expected\\""'
+    )
+    return run_step("showco", "web UI revision", ["sh", "-c", command], run_command)
 
 
 def program_named(programs: list[Program], name: str) -> Program:

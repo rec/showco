@@ -75,5 +75,6 @@ class ShowStatus(BaseModel, frozen=True):
     twitcho: TwitchoStatus
     system: SystemStatus = Field(default_factory=SystemStatus)
     mixer: MixerStatus = Field(default_factory=MixerStatus)
+    revision: str | None = None
     run_started_at: float = 0.0
     generated_at: float = Field(default_factory=time.time)
