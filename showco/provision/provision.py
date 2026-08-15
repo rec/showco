@@ -65,6 +65,7 @@ class ProvisionOptions(BaseModel, frozen=True):
     lyte_repo: str | None = None
     lyte_enabled: bool | None = None
     lyte_daemon_config: Path | None = None
+    update: bool = True
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -118,6 +119,15 @@ def run(options: ProvisionOptions) -> int:
         local_script.unlink(missing_ok=True)
 
     print(f"Provisioned {ssh_target}.")
+    if options.update:
+        from .. import update
+
+        return update.update_from_provisioning_machine(
+            update.selected_repositories([]),
+            host=parsed_config.network.host,
+            root=parsed_config.paths.root,
+            target_config=parsed_config,
+        )
     return 0
 
 

@@ -27,6 +27,7 @@ class ProvisionTests(unittest.TestCase):
                 "True",
                 "--lyte-daemon-config",
                 "patches/test-daemon.toml",
+                "--no-update",
             ],
         )
 
@@ -35,6 +36,78 @@ class ProvisionTests(unittest.TestCase):
         self.assertEqual(options.recs_repo, "git@github.com:rec/recs.git")
         self.assertTrue(options.lyte_enabled)
         self.assertEqual(options.lyte_daemon_config, Path("patches/test-daemon.toml"))
+        self.assertFalse(options.update)
+
+    def test_run_updates_all_projects_after_successful_provisioning(self) -> None:
+        parsed_config = make_config(values())
+        options = provision.ProvisionOptions(
+            config_path=Path("config.toml"),
+            secrets=Path("secrets.toml"),
+        )
+
+        with (
+            mock.patch(
+                "showco.provision.provision.config.read_toml",
+                side_effect=[values(), {}],
+            ),
+            mock.patch(
+                "showco.provision.provision.validate_config",
+            ),
+            mock.patch(
+                "showco.provision.provision.validate_local_repositories",
+            ),
+            mock.patch(
+                "showco.provision.provision.provision_remote",
+            ),
+            mock.patch(
+                "showco.update.update_from_provisioning_machine", return_value=0
+            ) as update_from_provisioning_machine,
+        ):
+            result = provision.run(options)
+
+        self.assertEqual(result, 0)
+        self.assertEqual(
+            update_from_provisioning_machine.call_args.args,
+            (["reccy", "recs", "showco", "twitcho", "lyte"],),
+        )
+        self.assertEqual(
+            update_from_provisioning_machine.call_args.kwargs,
+            {
+                "host": parsed_config.network.host,
+                "root": parsed_config.paths.root,
+                "target_config": parsed_config,
+            },
+        )
+
+    def test_run_skips_update_when_disabled(self) -> None:
+        options = provision.ProvisionOptions(
+            config_path=Path("config.toml"),
+            secrets=Path("secrets.toml"),
+            update=False,
+        )
+
+        with (
+            mock.patch(
+                "showco.provision.provision.config.read_toml",
+                side_effect=[values(), {}],
+            ),
+            mock.patch(
+                "showco.provision.provision.validate_config",
+            ),
+            mock.patch(
+                "showco.provision.provision.validate_local_repositories",
+            ),
+            mock.patch(
+                "showco.provision.provision.provision_remote",
+            ),
+            mock.patch(
+                "showco.update.update_from_provisioning_machine"
+            ) as update_from_provisioning_machine,
+        ):
+            result = provision.run(options)
+
+        self.assertEqual(result, 0)
+        update_from_provisioning_machine.assert_not_called()
 
     def test_lyte_defaults_to_disabled(self) -> None:
         parsed = make_config(values())
