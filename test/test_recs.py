@@ -96,6 +96,18 @@ class RecsTests(unittest.TestCase):
         self.assertEqual(status.service.state, "error")
         self.assertIn("gone", status.service.last_error or "")
 
+    def test_reports_status_without_updated_at_as_error(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "status.json"
+            path.write_text("{}")
+
+            status = RecsClient(status_path=path).status()
+
+        self.assertEqual(status.service.state, "error")
+        self.assertEqual(
+            status.service.last_error, "status JSON does not have numeric updated_at"
+        )
+
     def test_level_state_uses_four_display_states(self) -> None:
         self.assertEqual(level_state(None), "silent")
         self.assertEqual(level_state(0.0), "silent")

@@ -74,6 +74,14 @@ class RecsClient:
 
         updated_at = _float(data.get("updated_at"))
         gui_ipc_error = _string(data.get("gui_ipc_error"))
+        if updated_at is None:
+            return models.RecsStatus(
+                service=models.ServiceStatus(
+                    name="recs",
+                    state="error",
+                    last_error="status JSON does not have numeric updated_at",
+                )
+            )
         state = _connection_state(updated_at, self.stale_after_seconds)
         rows = _rows(data.get("rows"))
         totals = rows[0] if rows else {}
