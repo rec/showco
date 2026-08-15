@@ -68,6 +68,7 @@ class ProvisionOptions(BaseModel, frozen=True):
     lyte_enabled: bool | None = None
     lyte_daemon_config: Path | None = None
     update: bool = True
+    accept_changed_host_key: bool = False
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -116,7 +117,13 @@ def run(options: ProvisionOptions) -> int:
         local_script = Path(fp.name)
         fp.write(REMOTE_SCRIPT)
     try:
-        provision_remote(parsed_config, ssh_target, local_script, remote_script)
+        provision_remote(
+            parsed_config,
+            ssh_target,
+            local_script,
+            remote_script,
+            accept_changed_host_key=options.accept_changed_host_key,
+        )
     finally:
         local_script.unlink(missing_ok=True)
 
@@ -183,10 +190,14 @@ def provision_remote(
     ssh_target: str,
     local_script: Path,
     remote_script: str,
+    *,
+    accept_changed_host_key: bool = False,
 ) -> None:
     uploaded = False
     print(f"Waiting for SSH connection to {ssh_target}...")
-    wait_for_ssh(provision_config, ssh_target)
+    wait_for_ssh(
+        provision_config, ssh_target, accept_changed_host_key=accept_changed_host_key
+    )
     topology = preflight_network_config(provision_config, ssh_target)
     print(f"Checking {ssh_target}...")
     run_ssh(
@@ -209,7 +220,11 @@ def provision_remote(
         )
 
         print(f"Waiting for {ssh_target} to reboot...")
-        wait_for_rebooted_ssh(provision_config, ssh_target)
+        wait_for_rebooted_ssh(
+            provision_config,
+            ssh_target,
+            accept_changed_host_key=accept_changed_host_key,
+        )
 
         print(f"Checking provisioned services on {ssh_target}...")
         report_verification_results(
@@ -378,15 +393,31 @@ def git_error_output(error: CalledProcessError) -> str:
     return str(error)
 
 
-def wait_for_rebooted_ssh(provision_config: config.Config, ssh_target: str) -> None:
-    wait_for_ssh_disconnect(provision_config, ssh_target)
-    wait_for_ssh(provision_config, ssh_target, timeout_seconds=REBOOT_WAIT_SECONDS)
+def wait_for_rebooted_ssh(
+    provision_config: config.Config,
+    ssh_target: str,
+    *,
+    accept_changed_host_key: bool = False,
+) -> None:
+    wait_for_ssh_disconnect(provision_config, ssh_target, accept_changed_host_key)
+    wait_for_ssh(
+        provision_config,
+        ssh_target,
+        timeout_seconds=REBOOT_WAIT_SECONDS,
+        accept_changed_host_key=accept_changed_host_key,
+    )
 
 
-def wait_for_ssh_disconnect(provision_config: config.Config, ssh_target: str) -> None:
+def wait_for_ssh_disconnect(
+    provision_config: config.Config, ssh_target: str, accept_changed_host_key: bool
+) -> None:
     deadline = time.monotonic() + 60
     while time.monotonic() < deadline:
-        if not ssh_is_reachable(provision_config, ssh_target):
+        if not ssh_is_reachable(
+            provision_config,
+            ssh_target,
+            accept_changed_host_key=accept_changed_host_key,
+        ):
             return
         time.sleep(1)
     sys.exit(f"ERROR: {ssh_target} did not drop SSH before reboot")
@@ -397,18 +428,28 @@ def wait_for_ssh(
     ssh_target: str,
     *,
     timeout_seconds: int | None = None,
+    accept_changed_host_key: bool = False,
 ) -> None:
     deadline = None
     if timeout_seconds is not None:
         deadline = time.monotonic() + timeout_seconds
     while deadline is None or time.monotonic() < deadline:
-        if ssh_is_reachable(provision_config, ssh_target):
+        if ssh_is_reachable(
+            provision_config,
+            ssh_target,
+            accept_changed_host_key=accept_changed_host_key,
+        ):
             return
         time.sleep(1)
     sys.exit(f"ERROR: {ssh_target} did not accept SSH within {timeout_seconds}s")
 
 
-def ssh_is_reachable(provision_config: config.Config, ssh_target: str) -> bool:
+def ssh_is_reachable(
+    provision_config: config.Config,
+    ssh_target: str,
+    *,
+    accept_changed_host_key: bool = False,
+) -> bool:
     completed = subprocess.run(
         ssh_command(provision_config, ssh_target, "true", connect_timeout=1),
         capture_output=True,
@@ -416,6 +457,12 @@ def ssh_is_reachable(provision_config: config.Config, ssh_target: str) -> bool:
         text=True,
     )
     if has_changed_host_key(completed):
+        if not accept_changed_host_key:
+            sys.exit(
+                "ERROR: SSH host key changed for "
+                f"{ssh_target}. Verify the new key and rerun with "
+                "--accept-changed-host-key after reflashing."
+            )
         remove_known_host(provision_config, ssh_target)
         return False
     return completed.returncode == 0
