@@ -840,6 +840,7 @@ def remote_command(provision_config: config.Config, remote_script: str) -> str:
         "SHOWCO_REPO": provision_config.git.showco.url,
         "SHOWCO_REFNAME": provision_config.git.showco.refname,
         "SHOWCO_PORT": str(provision_config.network.web_port),
+        "SHOWCO_CONTROL_PASSWORD": private.password,
         "X18": shell_bool(x18_network is not None),
         "SWAP_WIFI": shell_bool(provision_config.network.swap_wifi),
         "NETWORK_TOPOLOGY": provision_config.network.topology,

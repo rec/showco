@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import base64
 import html
 import json
+import secrets
 import subprocess
 import threading
 import time
@@ -9,7 +11,7 @@ from collections.abc import Callable
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import ClassVar
+from typing import ClassVar, cast
 from urllib import parse
 
 from . import models, services
@@ -17,6 +19,9 @@ from .mixer import MixerMonitor
 from .recs import RecsClient
 from .system import SystemMonitor
 from .twitcho.client import TwitchoClient
+
+MAX_ACTION_BYTES = 65_536
+MAX_CONCURRENT_REQUESTS = 8
 
 
 class ShowcoApp:
@@ -110,8 +115,17 @@ class ShowcoApp:
 
 class ShowcoHandler(BaseHTTPRequestHandler):
     app: ClassVar[ShowcoApp]
+    control_password: ClassVar[str | None] = None
 
     def do_GET(self) -> None:
+        if not self._authorized() or not self._acquire_request():
+            return
+        try:
+            self._do_get()
+        finally:
+            cast(ShowcoServer, self.server).request_slots.release()
+
+    def _do_get(self) -> None:
         if self.path == "/status":
             self._json(self.app.status())
             return
@@ -129,11 +143,24 @@ class ShowcoHandler(BaseHTTPRequestHandler):
         self.send_error(404)
 
     def do_POST(self) -> None:
+        if not self._authorized() or not self._acquire_request():
+            return
+        try:
+            self._do_post()
+        finally:
+            cast(ShowcoServer, self.server).request_slots.release()
+
+    def _do_post(self) -> None:
         if self.path != "/actions":
             self.send_error(404)
             return
-        form = self._form()
+        try:
+            form = self._form()
+        except ValueError as error:
+            self.send_error(413, str(error))
+            return
         result = self.app.run_action(form)
+        self._log_action(form.get("action", ""), result)
         if self.headers.get("Accept") == "application/json":
             self._json_action(result)
             return
@@ -145,10 +172,54 @@ class ShowcoHandler(BaseHTTPRequestHandler):
         return
 
     def _form(self) -> dict[str, str]:
-        length = int(self.headers.get("Content-Length", "0"))
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            raise ValueError("invalid Content-Length") from None
+        if length < 0 or length > MAX_ACTION_BYTES:
+            raise ValueError(f"action body exceeds {MAX_ACTION_BYTES} bytes")
         body = self.rfile.read(length).decode()
         parsed = parse.parse_qs(body)
         return {k: v[-1] for k, v in parsed.items() if v}
+
+    def _authorized(self) -> bool:
+        if self.control_password is None:
+            return True
+        header = self.headers.get("Authorization", "")
+        prefix = "Basic "
+        if not header.startswith(prefix):
+            self._request_authentication()
+            return False
+        try:
+            token = base64.b64decode(header[len(prefix) :], validate=True).decode()
+        except (UnicodeDecodeError, ValueError):
+            self._request_authentication()
+            return False
+        _, separator, password = token.partition(":")
+        if not separator or not secrets.compare_digest(password, self.control_password):
+            self._request_authentication()
+            return False
+        return True
+
+    def _request_authentication(self) -> None:
+        self.send_response(401)
+        self.send_header("WWW-Authenticate", 'Basic realm="Showco"')
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+    def _acquire_request(self) -> bool:
+        if cast(ShowcoServer, self.server).request_slots.acquire(blocking=False):
+            return True
+        self.send_error(503, "Showco is busy")
+        return False
+
+    def _log_action(self, action: str, result: models.ActionResult) -> None:
+        detail = result.message.replace("\n", " ")[:240]
+        print(
+            f"showco action source={self.client_address[0]} action={action!r} "
+            f"ok={result.ok} detail={detail!r}",
+            flush=True,
+        )
 
     def _html(self, body: str) -> None:
         data = body.encode()
@@ -179,6 +250,12 @@ class ShowcoHandler(BaseHTTPRequestHandler):
 
 class ShowcoServer(ThreadingHTTPServer):
     app: ShowcoApp
+    request_slots: threading.BoundedSemaphore
+
+    def __init__(self, address: tuple[str, int], handler: type[ShowcoHandler]) -> None:
+        super().__init__(address, handler)
+        self.request_slots = threading.BoundedSemaphore(MAX_CONCURRENT_REQUESTS)
+        self.daemon_threads = True
 
 
 def source_revision() -> str | None:
@@ -206,6 +283,7 @@ def make_server(
     mixer: MixerMonitor | None = None,
     twitcho_restart: Callable[[], models.ActionResult] | None = None,
     twitcho_enabled: bool = False,
+    control_password: str | None = None,
 ) -> ThreadingHTTPServer:
     handler = type("ConfiguredShowcoHandler", (ShowcoHandler,), {})
     app = ShowcoApp(
@@ -216,6 +294,7 @@ def make_server(
         twitcho_restart if twitcho_enabled else None,
     )
     handler.app = app
+    handler.control_password = control_password
     server = ShowcoServer((host, port), handler)
     server.app = app
     return server
