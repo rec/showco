@@ -341,6 +341,8 @@ showco_args() {
   if [[ -n "$SHOWCO_X18_HOST" && "$SHOWCO_X18_HOST" != TODO ]]; then
     args+=(
       --mixer-host "$SHOWCO_X18_HOST"
+      --mixer-port 10024
+      --mixer-protocol udp
       --x18-host "$SHOWCO_X18_HOST"
       --x18-log-dir "/home/$SHOW_USER/recordings"
     )
