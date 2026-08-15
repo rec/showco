@@ -320,8 +320,9 @@ def showco_revision_step(root: Path, run_command: RunCommand) -> StepResult:
     showco_directory = shlex.quote(str(root / "showco"))
     command = (
         f"expected=$(git -C {showco_directory} rev-parse HEAD) && "
+        'password=$(cat "$HOME/.config/showco/control-password") && '
         "curl --fail --silent --show-error --retry 5 --retry-connrefused "
-        "--retry-delay 1 http://127.0.0.1:17352/status | "
+        '--retry-delay 1 --user "showco:$password" http://127.0.0.1:17352/status | '
         'grep --fixed-strings "\\"revision\\":\\"$expected\\""'
     )
     return run_step("showco", "web UI revision", ["sh", "-c", command], run_command)
