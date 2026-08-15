@@ -284,8 +284,17 @@ def x18_bridge_command(
     wifi_ssid = shlex_quote(config.string_or_default(network.name, "showbox"))
     script = [
         "set -e",
-        f"if nmcli connection show {legacy_connection} >/dev/null 2>&1; then "
-        f"sudo nmcli connection delete {legacy_connection}; fi",
+        "rollback() {",
+        "  status=$?",
+        "  if nmcli connection show showco-private-rollback >/dev/null 2>&1; then "
+        "sudo nmcli connection up showco-private-rollback || true; fi",
+        "  exit $status",
+        "}",
+        f"if nmcli connection show {wifi_connection} >/dev/null 2>&1; then "
+        "sudo nmcli connection delete showco-private-rollback "
+        ">/dev/null 2>&1 || true; "
+        f"sudo nmcli connection clone {wifi_connection} showco-private-rollback; fi",
+        "trap rollback ERR",
         f"if ! nmcli connection show {bridge_connection} >/dev/null 2>&1; then "
         "sudo nmcli connection add "
         f"type bridge ifname {bridge_interface} con-name {bridge_connection}; fi",
@@ -324,6 +333,11 @@ def x18_bridge_command(
             f"sudo nmcli connection up {bridge_connection}",
             f"sudo nmcli connection up {ethernet_connection}",
             f"sudo nmcli connection up {wifi_connection}",
+            "trap - ERR",
+            "sudo nmcli connection delete showco-private-rollback "
+            ">/dev/null 2>&1 || true",
+            f"if nmcli connection show {legacy_connection} >/dev/null 2>&1; then "
+            f"sudo nmcli connection delete {legacy_connection}; fi",
         ]
     )
     return ["sh", "-c", "\n".join(script)]

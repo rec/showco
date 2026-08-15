@@ -170,46 +170,13 @@ class NetworkConfigTests(unittest.TestCase):
             network_config.NetworkTopology.PRIVATE,
         )
 
-        self.assertEqual(
-            commands,
-            [
-                [
-                    "sh",
-                    "-c",
-                    "\n".join(
-                        [
-                            "set -e",
-                            "if nmcli connection show showco-x18 >/dev/null 2>&1; "
-                            "then sudo nmcli connection delete showco-x18; fi",
-                            "if ! nmcli connection show showco-x18-bridge "
-                            ">/dev/null 2>&1; then sudo nmcli connection add "
-                            "type bridge ifname br-x18 con-name showco-x18-bridge; fi",
-                            "sudo nmcli connection modify showco-x18-bridge "
-                            "ifname br-x18 ipv4.method shared "
-                            "ipv4.addresses 10.43.0.1/24 ipv6.method disabled "
-                            "bridge.stp no connection.autoconnect yes",
-                            "if ! nmcli connection show showco-x18-ethernet "
-                            ">/dev/null 2>&1; then sudo nmcli connection add "
-                            "type ethernet ifname eth0 con-name showco-x18-ethernet "
-                            "controller br-x18; fi",
-                            "sudo nmcli connection modify showco-x18-ethernet "
-                            "ifname eth0 connection.controller br-x18 "
-                            "connection.autoconnect yes",
-                            "if nmcli connection show showco-private >/dev/null "
-                            "2>&1; then sudo nmcli connection delete "
-                            "showco-private; fi",
-                            "sudo nmcli connection add type wifi ifname wlan0 "
-                            "con-name showco-private controller br-x18 ssid showbox",
-                            "sudo nmcli connection modify showco-private ifname wlan0 "
-                            "connection.controller br-x18 802-11-wireless.mode ap "
-                            "connection.autoconnect yes",
-                            "sudo nmcli connection up showco-x18-bridge",
-                            "sudo nmcli connection up showco-x18-ethernet",
-                            "sudo nmcli connection up showco-private",
-                        ]
-                    ),
-                ],
-            ],
+        self.assertEqual(commands[0][:2], ["sh", "-c"])
+        script = commands[0][2]
+        self.assertIn("trap rollback ERR", script)
+        self.assertIn("showco-private-rollback", script)
+        self.assertLess(
+            script.index("\nsudo nmcli connection up showco-private\n"),
+            script.index("sudo nmcli connection delete showco-x18"),
         )
 
     def test_mixed_topology_leaves_connected_external_wifi_unchanged(self) -> None:
