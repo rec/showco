@@ -82,11 +82,24 @@ class UpdateTests(unittest.TestCase):
     def test_remote_update_command_quotes_root_with_spaces(self) -> None:
         command = update.remote_update_command(["recs"], Path("/srv/show projects"))
 
-        self.assertEqual(
+        self.assertTrue(command.startswith("cd '/srv/show projects/showco' && "))
+        self.assertIn(
+            "git status --porcelain --untracked-files=no",
             command,
-            "cd '/srv/show projects/showco' && "
-            'PATH="$HOME/.local/bin:$PATH" '
-            "uv run showco update --target-machine --root '/srv/show projects' recs",
+        )
+        self.assertIn(
+            'git fetch "$remote" "+refs/heads/$branch:refs/remotes/$remote/$branch"',
+            command,
+        )
+        self.assertIn('git reset --hard "$remote/$branch"', command)
+        self.assertIn(
+            "uv sync --frozen --directory '/srv/show projects/showco'",
+            command,
+        )
+        self.assertTrue(
+            command.endswith(
+                "uv run showco update --target-machine --root '/srv/show projects' recs"
+            )
         )
 
     def test_legacy_remote_update_command_has_no_update_arguments(self) -> None:
@@ -264,10 +277,50 @@ class UpdateTests(unittest.TestCase):
                 ["git", "-C", "/code/showco", "status", "--porcelain"],
                 ["git", "-C", "/code/showco", "rev-parse", "HEAD"],
                 ["git", "-C", "/code/showco", "pull", "--ff-only"],
+                ["git", "-C", "/code/showco", "rev-parse", "@{upstream}"],
                 ["git", "-C", "/code/showco", "reset", "--hard", "saved"],
                 ["systemctl", "--user", "start", "showco.service"],
             ],
         )
+
+    def test_target_update_resets_to_force_pushed_upstream(self) -> None:
+        commands: list[list[str]] = []
+
+        def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+            commands.append(list(command))
+            if command[-2:] == ["branch", "--show-current"]:
+                return subprocess.CompletedProcess(command, 0, "main\n", "")
+            if command[-2:] == ["status", "--porcelain"]:
+                return subprocess.CompletedProcess(command, 0, "", "")
+            if command[-2:] == ["rev-parse", "HEAD"]:
+                stdout = "old\n" if commands.count(list(command)) == 1 else "new\n"
+                return subprocess.CompletedProcess(command, 0, stdout, "")
+            if command[-1:] == ["@{upstream}"]:
+                return subprocess.CompletedProcess(command, 0, "new\n", "")
+            if command[-2:] == ["pull", "--ff-only"]:
+                return subprocess.CompletedProcess(command, 1, "", "diverged\n")
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        with mock.patch(
+            "showco.services.service.current_platform", return_value=Platform.linux
+        ):
+            result = update.update_target(
+                ["showco"],
+                root=Path("/code"),
+                run_command=run_command,
+                output=StringIO(),
+            )
+
+        self.assertEqual(result, 0)
+        self.assertIn(
+            ["git", "-C", "/code/showco", "reset", "--hard", "new"],
+            commands,
+        )
+        self.assertIn(
+            ["uv", "sync", "--frozen", "--directory", "/code/showco"],
+            commands,
+        )
+        self.assertIn(["systemctl", "--user", "start", "showco.service"], commands)
 
     def test_target_update_updates_showco_first_and_starts_showco_last(self) -> None:
         commands: list[list[str]] = []
@@ -402,11 +455,14 @@ class UpdateTests(unittest.TestCase):
             ["git", "-C", "/code/reccy", "push", "origin", "HEAD:main"],
             commands,
         )
-        self.assertEqual(
-            remote_update.call_args.args[2][-1],
-            "cd /code/showco && "
-            'PATH="$HOME/.local/bin:$PATH" '
-            "uv run showco update --target-machine --root /code showco reccy",
+        remote_command = remote_update.call_args.args[2][-1]
+        self.assertIn("cd /code/showco &&", remote_command)
+        self.assertIn('git reset --hard "$remote/$branch"', remote_command)
+        self.assertIn("uv sync --frozen --directory /code/showco", remote_command)
+        self.assertTrue(
+            remote_command.endswith(
+                "uv run showco update --target-machine --root /code showco reccy"
+            )
         )
         self.assertIn("ConnectTimeout=2", remote_update.call_args.args[2])
         self.assertEqual(output.getvalue(), "")
@@ -506,6 +562,10 @@ class UpdateTests(unittest.TestCase):
             "uv run showco update --target-machine --root /code showco",
             remote_update.call_args.args[2][-1],
         )
+        self.assertIn(
+            'git reset --hard "$remote/$branch"',
+            remote_update.call_args.args[2][-1],
+        )
 
     def test_target_update_rejects_non_main_branches_before_stopping_services(
         self,
@@ -542,7 +602,10 @@ class UpdateTests(unittest.TestCase):
                 return subprocess.CompletedProcess(command, 0, "origin/main\n", "")
             if command[-3:] == ["push", "origin", "HEAD:main"]:
                 return subprocess.CompletedProcess(command, 1, "", "rejected\n")
-            if command[-3:] == ["fetch", "origin", "main"]:
+            if command[-2:] == [
+                "origin",
+                "+refs/heads/main:refs/remotes/origin/main",
+            ]:
                 return subprocess.CompletedProcess(command, 0, "", "")
             if command[-1:] == ["origin/main"]:
                 return subprocess.CompletedProcess(
@@ -562,10 +625,21 @@ class UpdateTests(unittest.TestCase):
 
         self.assertTrue(result.ok)
         self.assertEqual(result.step, "push --force-with-lease")
-        self.assertIn("recs push: failed", output.getvalue())
-        self.assertIn("rejected", output.getvalue())
+        self.assertIn("recs regular push rejected", output.getvalue())
         self.assertIn("recs current upstream commit:", output.getvalue())
         self.assertIn("1234567890abcdef\nRemote commit subject", output.getvalue())
+        self.assertIn("recs push --force-with-lease: ok", output.getvalue())
+        self.assertIn(
+            [
+                "git",
+                "-C",
+                "/code/recs",
+                "fetch",
+                "origin",
+                "+refs/heads/main:refs/remotes/origin/main",
+            ],
+            commands,
+        )
         self.assertEqual(
             commands[-1],
             [
@@ -573,7 +647,7 @@ class UpdateTests(unittest.TestCase):
                 "-C",
                 "/code/recs",
                 "push",
-                "--force-with-lease",
+                "--force-with-lease=refs/heads/main:1234567890abcdef",
                 "origin",
                 "HEAD:main",
             ],

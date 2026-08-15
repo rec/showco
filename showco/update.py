@@ -211,17 +211,48 @@ def update_program_on_target(
         ["git", "-C", str(program.directory), "pull", "--ff-only"],
         run_command,
     )
-    results.append(pull)
     if not pull.ok:
-        results.append(
-            run_step(
+        upstream = run_step(
+            program.name,
+            "upstream commit",
+            ["git", "-C", str(program.directory), "rev-parse", "@{upstream}"],
+            run_command,
+        )
+        results.append(upstream)
+        upstream_commit = upstream.output.strip()
+        if upstream.ok and upstream_commit and upstream_commit != commit:
+            reset = run_step(
                 program.name,
-                "reset",
-                ["git", "-C", str(program.directory), "reset", "--hard", commit],
+                "reset to upstream",
+                [
+                    "git",
+                    "-C",
+                    str(program.directory),
+                    "reset",
+                    "--hard",
+                    upstream_commit,
+                ],
                 run_command,
             )
-        )
-        return results
+            results.append(reset)
+            if reset.ok:
+                pull = reset
+            else:
+                results.append(pull)
+        else:
+            results.append(pull)
+        if not pull.ok:
+            results.append(
+                run_step(
+                    program.name,
+                    "reset",
+                    ["git", "-C", str(program.directory), "reset", "--hard", commit],
+                    run_command,
+                )
+            )
+            return results
+    else:
+        results.append(pull)
     after = run_step(
         program.name,
         "new commit",
@@ -349,7 +380,14 @@ def push_program(
     fetch = run_step(
         program.name,
         "fetch upstream",
-        ["git", "-C", str(program.directory), "fetch", remote, branch],
+        [
+            "git",
+            "-C",
+            str(program.directory),
+            "fetch",
+            remote,
+            f"+refs/heads/{branch}:refs/remotes/{remote}/{branch}",
+        ],
         run_command,
     )
     if not fetch.ok:
@@ -388,8 +426,20 @@ def push_program(
                 f"could not read current upstream commit:\n{upstream_commit.output}"
             ),
         )
+    upstream_sha, _, _ = upstream_commit.output.partition("\n")
+    if not upstream_sha:
+        return StepResult(
+            program=program.name,
+            step=upstream_commit.step,
+            command=upstream_commit.command,
+            returncode=2,
+            output=(
+                f"regular push failed:\n{push.output.rstrip()}\n"
+                "current upstream commit is empty"
+            ),
+        )
     if output:
-        report_failure(push, output)
+        tqdm.write(f"{program.name} regular push rejected", file=output)
         tqdm.write(f"{program.name} current upstream commit:", file=output)
         tqdm.write(upstream_commit.output.rstrip(), file=output)
     force_push = run_step(
@@ -400,18 +450,25 @@ def push_program(
             "-C",
             str(program.directory),
             "push",
-            "--force-with-lease",
+            f"--force-with-lease=refs/heads/{branch}:{upstream_sha}",
             remote,
             f"HEAD:{branch}",
         ],
         run_command,
     )
+    if force_push.ok:
+        if output:
+            tqdm.write(f"{program.name} push --force-with-lease: ok", file=output)
+        return force_push
     return StepResult(
         program=program.name,
         step=force_push.step,
         command=force_push.command,
         returncode=force_push.returncode,
-        output=force_push.output,
+        output=(
+            f"regular push failed:\n{push.output.rstrip()}\n"
+            f"force push failed:\n{force_push.output.rstrip()}"
+        ),
     )
 
 
@@ -496,8 +553,18 @@ def provisioning_config() -> config.Config:
 
 def remote_update_command(selected: list[str], root: Path) -> str:
     arguments = shlex.join(["--target-machine", "--root", str(root), *selected])
+    showco_directory = shlex.quote(str(root / "showco"))
     return (
-        f'cd {shlex.quote(str(root / "showco"))} && PATH="$HOME/.local/bin:$PATH" '
+        f"cd {showco_directory} && "
+        'if [ -n "$(git status --porcelain --untracked-files=no)" ]; then '
+        'echo "showco target worktree has tracked changes" >&2; exit 1; fi && '
+        'upstream=$(git rev-parse --abbrev-ref --symbolic-full-name "@{upstream}") && '
+        "remote=${upstream%%/*} && branch=${upstream#*/} && "
+        'git fetch "$remote" "+refs/heads/$branch:refs/remotes/$remote/$branch" && '
+        'git reset --hard "$remote/$branch" && '
+        'PATH="$HOME/.local/bin:$PATH" uv sync --frozen --directory '
+        f"{showco_directory} && "
+        'PATH="$HOME/.local/bin:$PATH" '
         f"uv run showco update {arguments}"
     ).rstrip()
 
