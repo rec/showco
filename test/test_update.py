@@ -572,7 +572,8 @@ class UpdateTests(unittest.TestCase):
                 return subprocess.CompletedProcess(
                     command,
                     0,
-                    "new\0fixup! newer\0old\0fixup! older\0base\0feature\0",
+                    "new\0fixup! newer\0newer-commit\0newer\0old\0"
+                    "fixup! older\0older-commit\0older\0",
                     "",
                 )
             if command[-2:] == ["rev-parse", "old^"]:
@@ -661,6 +662,28 @@ class UpdateTests(unittest.TestCase):
             )
 
         self.assertEqual(result, 0)
+
+    def test_autosquash_rejects_unknown_fixup_target(self) -> None:
+        program = update.Program(
+            name="showco", directory=Path("/code/showco"), service_names=[]
+        )
+        commands: list[list[str]] = []
+
+        def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+            commands.append(list(command))
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                "new\0fixup! missing target\0old\0other commit\0",
+                "",
+            )
+
+        result = update.autosquash_program(program, 50, run_command)
+
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertFalse(result.ok)
+        self.assertIn("No rebase was started", result.output)
         self.assertFalse(any("rebase" in command for command in commands))
 
     def test_run_command_uses_noninteractive_editor_for_rebase(self) -> None:
