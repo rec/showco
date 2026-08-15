@@ -675,7 +675,7 @@ def verify_provisioning(
             "nmcli connection show >/dev/null",
         ),
         *private_wifi_verification,
-        verify_lyte_midi_service(provision_config, ssh_target),
+        verify_lyte_service(provision_config, ssh_target),
         verify_twitcho_service(provision_config, ssh_target),
         verify_x18_usb_device(provision_config, ssh_target),
     ]
@@ -727,7 +727,7 @@ def user_session_command(command: str) -> str:
     return f"uid=$(id -u); XDG_RUNTIME_DIR=/run/user/$uid {command}"
 
 
-def verify_lyte_midi_service(
+def verify_lyte_service(
     provision_config: config.Config, ssh_target: str
 ) -> VerificationResult:
     if not provision_config.lyte.enabled:
@@ -735,16 +735,16 @@ def verify_lyte_midi_service(
     installed = verify_remote_command(
         provision_config,
         ssh_target,
-        "Lyte MIDI service is installed",
-        user_systemctl_command("is-enabled --quiet lyte-midi.service"),
+        "Lyte service is installed",
+        user_systemctl_command("is-enabled --quiet lyte.service"),
     )
     if installed.error:
         return installed
     active = verify_remote_command(
         provision_config,
         ssh_target,
-        "Lyte MIDI service",
-        user_systemctl_command("is-active --quiet lyte-midi.service"),
+        "Lyte service",
+        user_systemctl_command("is-active --quiet lyte.service"),
     )
     if not active.error:
         return active

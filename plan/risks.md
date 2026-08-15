@@ -40,8 +40,8 @@ Plan:
 
 ## P1: Provisioning can report success while enabled Lyte is inactive
 
-[verify_lyte_midi_service](../showco/provision/provision.py#L605) converts an
-enabled but inactive `lyte-midi.service` into a note with an empty error.
+[verify_lyte_service](../showco/provision/provision.py#L605) converts an
+enabled but inactive `lyte.service` into a note with an empty error.
 [report_verification_results](../showco/provision/provision.py#L703) prints
 `Success!` whenever errors are empty, so that note does not fail provisioning.
 The startup retry set also omits Lyte.
