@@ -716,9 +716,8 @@ def showco_revision_command(root: Path) -> str:
     showco_directory = shlex.quote(str(root / "showco"))
     return (
         f"expected=$(git -C {showco_directory} rev-parse HEAD) && "
-        'password=$(cat "$HOME/.config/showco/control-password") && '
         "curl --fail --silent --show-error --max-time 5 "
-        '--user "showco:$password" http://127.0.0.1:17352/status | '
+        "http://127.0.0.1:17352/status | "
         'grep --fixed-strings "\\"revision\\":\\"$expected\\""'
     )
 
@@ -980,7 +979,6 @@ def remote_command(provision_config: config.Config, remote_script: str) -> str:
         "SHOWCO_REPO": provision_config.git.showco.url,
         "SHOWCO_REFNAME": provision_config.git.showco.refname,
         "SHOWCO_PORT": str(provision_config.network.web_port),
-        "SHOWCO_CONTROL_PASSWORD": private.password,
         "X18": shell_bool(x18_network is not None),
         "SWAP_WIFI": shell_bool(provision_config.network.swap_wifi),
         "NETWORK_TOPOLOGY": provision_config.network.topology,

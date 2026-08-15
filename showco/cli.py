@@ -29,7 +29,6 @@ class WebUiOptions(BaseModel, frozen=True):
     ] = None
     x18_port: int = osc.X18_OSC_PORT
     x18_log_dir: Path = Path(".")
-    control_password_file: Path = Path.home() / ".config/showco/control-password"
     twitcho_enabled: bool = False
     rehearsal_mode: Annotated[
         bool,
@@ -44,17 +43,6 @@ def run_web_ui(options: WebUiOptions) -> int:
     if not options.rehearsal_mode:
         machine_role.require_target_machine("showco run")
     x18_recorder = None
-
-    control_password = None
-    if not options.rehearsal_mode:
-        try:
-            control_password = options.control_password_file.read_text().strip()
-        except OSError as error:
-            raise SystemExit(
-                f"ERROR: cannot read Showco control password: {error}"
-            ) from None
-        if not control_password:
-            raise SystemExit("ERROR: Showco control password is empty")
 
     if options.x18_host:
         x18_recorder = recorder_supervisor.X18RecorderSupervisor(
@@ -86,7 +74,6 @@ def run_web_ui(options: WebUiOptions) -> int:
                 protocol=options.mixer_protocol,
             ),
             twitcho_enabled=options.twitcho_enabled,
-            control_password=control_password,
             x18_status=x18_recorder.status if x18_recorder else None,
         )
         print(f"showco listening on http://{options.host}:{options.port}")

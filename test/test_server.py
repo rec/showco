@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import base64
 import unittest
 from io import BytesIO
 from unittest import mock
@@ -32,25 +31,6 @@ class ServerTests(unittest.TestCase):
         handler._html("page")
 
         handler.send_header.assert_any_call("Cache-Control", "no-store")
-
-    def test_handler_requires_control_password(self) -> None:
-        handler = object.__new__(ShowcoHandler)
-        handler.control_password = "password"
-        handler.headers = {}
-        handler.send_response = mock.Mock()
-        handler.send_header = mock.Mock()
-        handler.end_headers = mock.Mock()
-
-        self.assertFalse(handler._authorized())
-        handler.send_response.assert_called_once_with(401)
-
-    def test_handler_accepts_matching_control_password(self) -> None:
-        handler = object.__new__(ShowcoHandler)
-        token = base64.b64encode(b"tablet:password").decode()
-        handler.control_password = "password"
-        handler.headers = {"Authorization": f"Basic {token}"}
-
-        self.assertTrue(handler._authorized())
 
     def test_form_rejects_large_request(self) -> None:
         handler = object.__new__(ShowcoHandler)

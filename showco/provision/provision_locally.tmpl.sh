@@ -302,14 +302,6 @@ write_network_config_files() {
   sudo chmod 600 "$config_file" "$secrets_file"
 }
 
-write_showco_control_password() {
-  local directory="/home/$SHOW_USER/.config/showco"
-  sudo install -d -m 700 -o "$SHOW_USER" -g "$SHOW_USER" "$directory"
-  printf '%s\n' "$SHOWCO_CONTROL_PASSWORD" \
-    | sudo -H -u "$SHOW_USER" tee "$directory/control-password" >/dev/null
-  sudo chmod 600 "$directory/control-password"
-}
-
 configure_network() {
   local config_file
   local secrets_file
@@ -327,7 +319,6 @@ configure_network() {
   config_file=$(mktemp)
   secrets_file=$(mktemp)
   write_network_config_files "$config_file" "$secrets_file"
-  write_showco_control_password
   set +e
   sudo -H -u "$SHOW_USER" env PATH="/home/$SHOW_USER/.local/bin:$PATH" \
     bash -lc \
