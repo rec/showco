@@ -61,11 +61,17 @@ class Twitch(BaseModel, frozen=True):
     callback_url_or_code: str = ""
 
 
+class Lyte(BaseModel, frozen=True):
+    enabled: bool = False
+    daemon_config: Path = Path("patches/wearable-daemon.toml")
+
+
 class Git(BaseModel, frozen=True):
     reccy: GitRepo
     recs: GitRepo
     twitcho: GitRepo
     showco: GitRepo
+    lyte: GitRepo
 
 
 class Config(BaseModel, frozen=True):
@@ -74,6 +80,7 @@ class Config(BaseModel, frozen=True):
     networks: dict[str, dict[str, dict[str, Network]]]
     usb: Usb
     twitch: Twitch
+    lyte: Lyte
     git: Git
 
 
@@ -88,6 +95,9 @@ def config_from_values(
     recs_repo: str | None = None,
     twitcho_repo: str | None = None,
     showco_repo: str | None = None,
+    lyte_repo: str | None = None,
+    lyte_enabled: bool | None = None,
+    lyte_daemon_config: Path | None = None,
 ) -> Config:
     network = table_value(values, "network")
     network_config = NetworkConfig(
@@ -122,6 +132,11 @@ def config_from_values(
             x18_device_name=string_value(table_value(values, "usb"), "x18_device_name")
         ),
         twitch=twitch_value(table_value(values, "twitch")),
+        lyte=lyte_value(
+            table_value(values, "lyte"),
+            enabled=lyte_enabled,
+            daemon_config=lyte_daemon_config,
+        ),
         git=Git(
             reccy=git_repo("reccy", table_value(git, "reccy"), override=reccy_repo),
             recs=git_repo("recs", table_value(git, "recs"), override=recs_repo),
@@ -135,6 +150,7 @@ def config_from_values(
                 table_value(git, "showco"),
                 override=showco_repo,
             ),
+            lyte=git_repo("lyte", table_value(git, "lyte"), override=lyte_repo),
         ),
     )
 
@@ -243,6 +259,22 @@ def twitch_value(values: dict[str, object]) -> Twitch:
         client_secret=string_value(values, "client_secret"),
         oath_token=string_value(values, "oath_token"),
         callback_url_or_code=string_value(values, "callback_url_or_code"),
+    )
+
+
+def lyte_value(
+    values: dict[str, object], *, enabled: bool | None, daemon_config: Path | None
+) -> Lyte:
+    daemon_config = daemon_config or Path(
+        string_value(values, "daemon_config", default="patches/wearable-daemon.toml")
+    )
+    if daemon_config.is_absolute() or ".." in daemon_config.parts:
+        sys.exit("ERROR: lyte.daemon_config must be relative to the Lyte checkout")
+    return Lyte(
+        enabled=bool_value(values, "enabled", default=False)
+        if enabled is None
+        else enabled,
+        daemon_config=daemon_config,
     )
 
 

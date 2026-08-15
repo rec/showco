@@ -24,8 +24,8 @@ access, but Showco has not yet provisioned it.
    `ssh tom@bertrand.local true`.
 
 9. In `showco/provision/config.toml` and `showco/provision/secrets.toml`, confirm
-   the Pi host, user, X18 network, internal Wi-Fi, external Wi-Fi, Twitch, and USB
-   device settings are correct for this test.
+   the Pi host, user, X18 network, internal Wi-Fi, external Wi-Fi, Twitch, Lyte, and
+   USB device settings are correct for this test.
 
 10. From the developer machine, run `uv run showco provision`.
 
@@ -34,7 +34,8 @@ access, but Showco has not yet provisioned it.
 
 12. On the Pi, check Showco and Recs with
     `cd <root>/showco && uv run showco run service-status recs showco`, where
-    `<root>` is `[paths].root` in the provisioning configuration.
+    `<root>` is `[paths].root` in the provisioning configuration. If Lyte is
+    enabled, also run `uv run showco run service-status lyte-midi`.
 
 13. On the Pi, confirm the X18 USB device is visible with `arecord -l`.
 

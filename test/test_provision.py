@@ -23,12 +23,30 @@ class ProvisionTests(unittest.TestCase):
                 "/srv/show-projects",
                 "--recs-repo",
                 "git@github.com:rec/recs.git",
+                "--lyte-enabled",
+                "True",
+                "--lyte-daemon-config",
+                "patches/test-daemon.toml",
             ],
         )
 
         self.assertEqual(options.host, "bertrand.local")
         self.assertEqual(options.root, Path("/srv/show-projects"))
         self.assertEqual(options.recs_repo, "git@github.com:rec/recs.git")
+        self.assertTrue(options.lyte_enabled)
+        self.assertEqual(options.lyte_daemon_config, Path("patches/test-daemon.toml"))
+
+    def test_lyte_defaults_to_disabled(self) -> None:
+        parsed = make_config(values())
+
+        self.assertFalse(parsed.lyte.enabled)
+        self.assertEqual(
+            parsed.lyte.daemon_config, Path("patches/wearable-daemon.toml")
+        )
+
+    def test_lyte_daemon_config_must_be_within_lyte_checkout(self) -> None:
+        with self.assertRaisesRegex(SystemExit, "must be relative"):
+            make_config(values(lyte={"daemon_config": "/etc/lyte.toml"}))
 
     def test_wired_x18_uses_configured_x18_host(self) -> None:
         config = make_config(
@@ -598,6 +616,9 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn(
             'sync_repo recs "$RECS_REPO" "$RECS_REFNAME"', provision.REMOTE_SCRIPT
         )
+        self.assertIn(
+            'sync_repo lyte "$LYTE_REPO" "$LYTE_REFNAME"', provision.REMOTE_SCRIPT
+        )
 
     def test_remote_script_reinstalls_broken_uv(self) -> None:
         self.assertIn("uv --version", provision.REMOTE_SCRIPT)
@@ -610,6 +631,7 @@ class ProvisionTests(unittest.TestCase):
             "uv run --frozen showco run network-config", provision.REMOTE_SCRIPT
         )
         self.assertIn("uv run --frozen recs daemon install", provision.REMOTE_SCRIPT)
+        self.assertIn("uv run --frozen lyte daemon install", provision.REMOTE_SCRIPT)
         self.assertIn(
             "uv run --frozen showco run install-service", provision.REMOTE_SCRIPT
         )
@@ -620,6 +642,8 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn("Wi-Fi interfaces discovered:", provision.REMOTE_SCRIPT)
         self.assertIn("nmcli device status", provision.REMOTE_SCRIPT)
         self.assertIn("iw dev", provision.REMOTE_SCRIPT)
+        self.assertIn("Lyte:", provision.REMOTE_SCRIPT)
+        self.assertIn("lyte-midi service:", provision.REMOTE_SCRIPT)
         self.assertIn("PROVISIONING-REPORT.txt", provision.REMOTE_SCRIPT)
 
     def test_remote_script_marks_target_machine(self) -> None:
@@ -637,6 +661,7 @@ class ProvisionTests(unittest.TestCase):
         )
         self.assertIn('write_toml_string host "$SHOWCO_HOST"', provision.REMOTE_SCRIPT)
         self.assertIn("printf '\\n[git.reccy]\\n'", provision.REMOTE_SCRIPT)
+        self.assertIn("printf '\\n[git.lyte]\\n'", provision.REMOTE_SCRIPT)
         self.assertIn("Skipping network configuration", provision.REMOTE_SCRIPT)
 
     def test_remote_script_installs_showco_service_through_showco(self) -> None:
@@ -1005,6 +1030,7 @@ def values(**overrides: object) -> dict[str, object]:
             "reccy": {"url": "git@github.com:rec/reccy.git"},
             "recs": {"url": "git@github.com:rec/recs.git"},
             "twitcho": {"url": "git@github.com:rec/twitcho.git"},
+            "lyte": {"url": "git@github.com:rec/lyte.git"},
             "showco": {"url": "git@github.com:rec/showco.git"},
         },
     }

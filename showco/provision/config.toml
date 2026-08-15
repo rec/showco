@@ -53,6 +53,10 @@ scopes = "channel:manage:broadcast chat:edit chat:read moderator:manage:announce
 config_dir = "$HOME/.config/twitcho"
 state = "SaqhIYFnE124j25yv7OJm8FQ9yLIceEh"
 
+[lyte]
+enabled = false
+daemon_config = "patches/wearable-daemon.toml"
+
 [git.reccy]
 url = "git@github.com:rec/reccy.git"
 
@@ -61,6 +65,9 @@ url = "git@github.com:rec/recs.git"
 
 [git.twitcho]
 url = "git@github.com:rec/twitcho.git"
+
+[git.lyte]
+url = "git@github.com:rec/lyte.git"
 
 [git.showco]
 url = "git@github.com:rec/showco.git"
