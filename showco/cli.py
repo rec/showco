@@ -56,6 +56,14 @@ def run_web_ui(options: WebUiOptions) -> int:
         if not control_password:
             raise SystemExit("ERROR: Showco control password is empty")
 
+    if options.x18_host:
+        x18_recorder = recorder_supervisor.X18RecorderSupervisor(
+            options.x18_host,
+            port=options.x18_port,
+            log_dir=options.x18_log_dir,
+        )
+        x18_recorder.start()
+
     if options.rehearsal_mode:
         server = make_server(
             options.host,
@@ -79,15 +87,9 @@ def run_web_ui(options: WebUiOptions) -> int:
             ),
             twitcho_enabled=options.twitcho_enabled,
             control_password=control_password,
+            x18_status=x18_recorder.status if x18_recorder else None,
         )
         print(f"showco listening on http://{options.host}:{options.port}")
-    if options.x18_host:
-        x18_recorder = recorder_supervisor.X18RecorderSupervisor(
-            options.x18_host,
-            port=options.x18_port,
-            log_dir=options.x18_log_dir,
-        )
-        x18_recorder.start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:

@@ -4,6 +4,7 @@ import base64
 import json
 import socket
 import struct
+import sys
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -17,6 +18,9 @@ from .. import machine_role
 X18_OSC_PORT = 10_024
 XREMOTE_INTERVAL_SECONDS = 8.0
 SOCKET_TIMEOUT_SECONDS = 0.2
+MAX_LOG_BYTES = 64 * 1024 * 1024
+MAX_LOG_FILES = 20
+REOPEN_INTERVAL_SECONDS = 5.0
 
 
 class X18RecorderOptions(BaseModel, frozen=True):
@@ -58,6 +62,10 @@ def padding(length: int) -> int:
 def log_path(log_dir: Path, timestamp: datetime | None = None) -> Path:
     timestamp = timestamp or datetime.now(UTC)
     return log_dir / f"x18-{timestamp.strftime('%Y%m%dT%H%M%SZ')}.jsonl"
+
+
+def recorder_status_path(log_dir: Path) -> Path:
+    return log_dir / "x18-recorder-status.json"
 
 
 def decode_osc(data: bytes) -> list[dict[str, object]]:
@@ -154,48 +162,55 @@ class X18OscRecorder:
         log_dir: Path = Path("."),
         subscribe_interval: float = XREMOTE_INTERVAL_SECONDS,
         socket_timeout: float = SOCKET_TIMEOUT_SECONDS,
+        max_log_bytes: int = MAX_LOG_BYTES,
+        max_log_files: int = MAX_LOG_FILES,
     ) -> None:
         self.host = host
         self.port = port
         self.log_dir = log_dir
         self.subscribe_interval = subscribe_interval
         self.socket_timeout = socket_timeout
+        self.max_log_bytes = max_log_bytes
+        self.max_log_files = max_log_files
         self.path = log_path(log_dir)
+        self.bytes_written = 0
+        self.last_write_error: str | None = None
+        self.next_open_at = 0.0
 
     def run_forever(self) -> None:
-        self.log_dir.mkdir(parents=True, exist_ok=True)
-        with self.path.open("ab") as output:
-            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-                sock.settimeout(self.socket_timeout)
-                next_subscribe = 0.0
-                while True:
-                    now = time.monotonic()
-                    if now >= next_subscribe:
-                        self.send_xremote(sock, output)
-                        next_subscribe = now + self.subscribe_interval
-                    try:
-                        data, source = sock.recvfrom(65_535)
-                    except TimeoutError:
-                        continue
-                    self.write_datagram(output, "in", data, source=source)
+        output = self.open_output()
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.settimeout(self.socket_timeout)
+            next_subscribe = 0.0
+            while True:
+                now = time.monotonic()
+                if now >= next_subscribe:
+                    output = self.send_xremote(sock, output)
+                    next_subscribe = now + self.subscribe_interval
+                try:
+                    data, source = sock.recvfrom(65_535)
+                except TimeoutError:
+                    continue
+                output = self.write_datagram(output, "in", data, source=source)
 
-    def send_xremote(self, sock: socket.socket, output: BinaryIO) -> None:
+    def send_xremote(
+        self, sock: socket.socket, output: BinaryIO | None
+    ) -> BinaryIO | None:
         data = xremote_message()
         target = (self.host, self.port)
         try:
             sock.sendto(data, target)
         except OSError as e:
-            self.write_error(output, "out", target, str(e))
-            return
-        self.write_datagram(output, "out", data, target=target)
+            return self.write_error(output, "out", target, str(e))
+        return self.write_datagram(output, "out", data, target=target)
 
     def write_error(
         self,
-        output: BinaryIO,
+        output: BinaryIO | None,
         direction: str,
         target: tuple[str, int],
         error: str,
-    ) -> None:
+    ) -> BinaryIO | None:
         record: dict[str, object] = {
             "time": time.time(),
             "monotonic": time.monotonic(),
@@ -204,18 +219,17 @@ class X18OscRecorder:
             "target": [target[0], target[1]],
             "error": error,
         }
-        output.write(json.dumps(record, separators=(",", ":")).encode() + b"\n")
-        output.flush()
+        return self.write_record(output, record)
 
     def write_datagram(
         self,
-        output: BinaryIO,
+        output: BinaryIO | None,
         direction: str,
         data: bytes,
         *,
         source: tuple[str, int] | None = None,
         target: tuple[str, int] | None = None,
-    ) -> None:
+    ) -> BinaryIO | None:
         record: dict[str, object] = {
             "time": time.time(),
             "monotonic": time.monotonic(),
@@ -228,5 +242,89 @@ class X18OscRecorder:
             record["source"] = [source[0], source[1]]
         if target:
             record["target"] = [target[0], target[1]]
-        output.write(json.dumps(record, separators=(",", ":")).encode() + b"\n")
-        output.flush()
+        return self.write_record(output, record)
+
+    def open_output(self) -> BinaryIO | None:
+        if time.monotonic() < self.next_open_at:
+            return None
+        try:
+            self.log_dir.mkdir(parents=True, exist_ok=True)
+            self.path = next_log_path(self.log_dir)
+            output = self.path.open("ab")
+            self.bytes_written = self.path.stat().st_size
+            self.last_write_error = None
+            self.remove_old_logs()
+            self.write_status()
+            return output
+        except OSError as error:
+            self.report_write_error(error)
+            return None
+
+    def write_record(
+        self, output: BinaryIO | None, record: dict[str, object]
+    ) -> BinaryIO | None:
+        if output is None:
+            output = self.open_output()
+            if output is None:
+                return None
+        assert output is not None
+        data = json.dumps(record, separators=(",", ":")).encode() + b"\n"
+        try:
+            if (
+                self.bytes_written
+                and self.bytes_written + len(data) > self.max_log_bytes
+            ):
+                output.close()
+                output = self.open_output()
+                if output is None:
+                    return None
+            output.write(data)
+            output.flush()
+            self.bytes_written += len(data)
+            self.write_status()
+            return output
+        except OSError as error:
+            if output is not None:
+                try:
+                    output.close()
+                except OSError:
+                    pass
+            self.report_write_error(error)
+            return None
+
+    def remove_old_logs(self) -> None:
+        try:
+            paths = sorted(self.log_dir.glob("x18-*.jsonl"))
+            for path in paths[: -self.max_log_files]:
+                path.unlink()
+        except OSError as error:
+            self.report_write_error(error)
+
+    def report_write_error(self, error: OSError) -> None:
+        self.last_write_error = str(error)
+        self.next_open_at = time.monotonic() + REOPEN_INTERVAL_SECONDS
+        print(f"X18 recorder log write failed: {error}", file=sys.stderr, flush=True)
+        self.write_status()
+
+    def write_status(self) -> None:
+        try:
+            recorder_status_path(self.log_dir).write_text(
+                json.dumps(
+                    {
+                        "path": str(self.path),
+                        "size": self.bytes_written,
+                        "last_error": self.last_write_error,
+                    }
+                )
+            )
+        except OSError:
+            pass
+
+
+def next_log_path(log_dir: Path) -> Path:
+    path = log_path(log_dir)
+    suffix = 1
+    while path.exists():
+        path = log_dir / f"{log_path(log_dir).stem}-{suffix}.jsonl"
+        suffix += 1
+    return path

@@ -32,12 +32,14 @@ class ShowcoApp:
         system: SystemMonitor,
         mixer: MixerMonitor,
         twitcho_restart: Callable[[], models.ActionResult] | None = None,
+        x18_status: Callable[[], models.RecorderStatus] | None = None,
     ) -> None:
         self.recs = recs
         self.twitcho = twitcho
         self.system = system
         self.mixer = mixer
         self.twitcho_restart = twitcho_restart or services.restart_twitcho_service
+        self.x18_status = x18_status
         self.revision = source_revision()
         self.run_started_at = time.time()
         self.action_log: list[models.ActionResult] = []
@@ -55,6 +57,7 @@ class ShowcoApp:
             twitcho=twitcho,
             system=self.system.status(),
             mixer=self.mixer.status(),
+            x18=self.x18_status() if self.x18_status else models.RecorderStatus(),
             revision=self.revision,
             run_started_at=self.run_started_at,
         )
@@ -284,6 +287,7 @@ def make_server(
     twitcho_restart: Callable[[], models.ActionResult] | None = None,
     twitcho_enabled: bool = False,
     control_password: str | None = None,
+    x18_status: Callable[[], models.RecorderStatus] | None = None,
 ) -> ThreadingHTTPServer:
     handler = type("ConfiguredShowcoHandler", (ShowcoHandler,), {})
     app = ShowcoApp(
@@ -292,6 +296,7 @@ def make_server(
         system or SystemMonitor(),
         mixer or MixerMonitor(),
         twitcho_restart if twitcho_enabled else None,
+        x18_status,
     )
     handler.app = app
     handler.control_password = control_password
@@ -350,6 +355,8 @@ def home_page(
           <p>Pi temperature: <span id="temperature">{_temperature(status)}</span></p>
           <p>Twitch bitrate: <span id="bitrate">{_bitrate(status)}</span></p>
           <p>Mixer latency: <span id="mixer-latency">{_mixer_latency(status)}</span></p>
+          <p>X18 OSC recorder:
+            <span id="x18-recorder">{_x18_recorder(status)}</span></p>
           <p>Generated: <span id="generated-at">{_time(status.generated_at)}</span></p>
         </section>
         {mutable_attributes_section(mutable_attributes)}
@@ -602,6 +609,18 @@ def _mixer_latency(status: models.ShowStatus) -> str:
     if status.mixer.latency_ms is not None:
         return f"{status.mixer.latency_ms:.1f} ms"
     return status.mixer.error or "unknown"
+
+
+def _x18_recorder(status: models.ShowStatus) -> str:
+    if status.x18.state == "disabled":
+        return "disabled"
+    if status.x18.last_error:
+        return status.x18.last_error
+    if status.x18.log_path and status.x18.log_size is not None:
+        return (
+            f"{status.x18.state}: {status.x18.log_path} ({status.x18.log_size} bytes)"
+        )
+    return status.x18.state
 
 
 def _recs_errors(errors: list[models.ErrorRecord], run_started_at: float) -> str:
@@ -933,6 +952,10 @@ HOME_STATUS_SCRIPT = """
         status.mixer.latency_ms === null
         ? status.mixer.error || "unknown"
         : `${status.mixer.latency_ms.toFixed(1)} ms`;
+      document.getElementById("x18-recorder").textContent =
+        status.x18.last_error || status.x18.log_path === null
+        ? status.x18.last_error || status.x18.state
+        : `${status.x18.state}: ${status.x18.log_path} (${status.x18.log_size} bytes)`;
       document.getElementById("generated-at").textContent = new Date(
         status.generated_at * 1000,
       ).toLocaleTimeString();

@@ -70,11 +70,19 @@ class MixerStatus(BaseModel, frozen=True):
     error: str | None = None
 
 
+class RecorderStatus(BaseModel, frozen=True):
+    state: str = "disabled"
+    log_path: str | None = None
+    log_size: int | None = None
+    last_error: str | None = None
+
+
 class ShowStatus(BaseModel, frozen=True):
     recs: RecsStatus
     twitcho: TwitchoStatus
     system: SystemStatus = Field(default_factory=SystemStatus)
     mixer: MixerStatus = Field(default_factory=MixerStatus)
+    x18: RecorderStatus = Field(default_factory=RecorderStatus)
     revision: str | None = None
     run_started_at: float = 0.0
     generated_at: float = Field(default_factory=time.time)

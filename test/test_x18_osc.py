@@ -74,6 +74,12 @@ class X18OscTests(unittest.TestCase):
         self.assertEqual(record["target"], ["10.43.0.18", 10_024])
         self.assertEqual(record["error"], "network unreachable")
 
+    def test_write_error_does_not_escape_when_log_is_unavailable(self) -> None:
+        recorder = osc.X18OscRecorder("10.43.0.18", log_dir=Path("/logs"))
+
+        self.assertIsNone(recorder.write_datagram(FailingOutput(), "out", b"data"))
+        self.assertIsNotNone(recorder.last_write_error)
+
     def test_supervisor_command_runs_recorder_subcommand(self) -> None:
         supervisor = X18RecorderSupervisor(
             "10.43.0.18",
@@ -118,6 +124,17 @@ class X18OscTests(unittest.TestCase):
 class BrokenSocket:
     def sendto(self, data: bytes, target: tuple[str, int]) -> None:
         raise OSError("network unreachable")
+
+
+class FailingOutput:
+    def write(self, data: bytes) -> int:
+        raise OSError("disk full")
+
+    def flush(self) -> None:
+        return
+
+    def close(self) -> None:
+        return
 
 
 class FakeProcess:

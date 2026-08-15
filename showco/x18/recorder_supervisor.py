@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from collections.abc import Callable
 from pathlib import Path
 
 from reccy import process
+
+from .. import models
+from . import osc
 
 
 class X18RecorderSupervisor:
@@ -40,6 +44,29 @@ class X18RecorderSupervisor:
 
     def close(self) -> None:
         self.managed_process.close()
+
+    def status(self) -> models.RecorderStatus:
+        process = self.process
+        if process is None:
+            return models.RecorderStatus(state="stopped")
+        if (returncode := process.poll()) is not None:
+            return models.RecorderStatus(
+                state="error",
+                last_error=f"X18 recorder exited with status {returncode}",
+            )
+        try:
+            value = json.loads(osc.recorder_status_path(self.log_dir).read_text())
+        except (OSError, json.JSONDecodeError):
+            return models.RecorderStatus(state="running")
+        path = value.get("path")
+        size = value.get("size")
+        error = value.get("last_error")
+        return models.RecorderStatus(
+            state="error" if isinstance(error, str) and error else "running",
+            log_path=path if isinstance(path, str) else None,
+            log_size=size if isinstance(size, int) else None,
+            last_error=error if isinstance(error, str) else None,
+        )
 
     def command(self) -> list[str]:
         return [
