@@ -446,8 +446,13 @@ class UpdateTests(unittest.TestCase):
                 return subprocess.CompletedProcess(command, 0, "same\n", "")
             return subprocess.CompletedProcess(command, 0, "", "")
 
-        with mock.patch(
-            "showco.services.service.current_platform", return_value=Platform.linux
+        with (
+            mock.patch(
+                "showco.services.service.current_platform", return_value=Platform.linux
+            ),
+            mock.patch(
+                "showco.update.provisioning_config", return_value=make_config(True)
+            ),
         ):
             result = update.update_target(
                 ["lyte"],
@@ -1133,12 +1138,20 @@ class UpdateTests(unittest.TestCase):
         self.assertNotIn("twitcho", programs[0].service_names)
         self.assertEqual(programs[1].service_names, [])
 
+    def test_disabled_lyte_has_no_service_to_restart(self) -> None:
+        programs = update.programs_for_repositories(
+            ["reccy", "lyte"], Path("/code"), lyte_enabled=False
+        )
+
+        self.assertNotIn("lyte-midi", programs[0].service_names)
+        self.assertEqual(programs[1].service_names, [])
+
     def test_selected_repositories_rejects_unknown_names(self) -> None:
         with self.assertRaisesRegex(SystemExit, "unknown update target"):
             update.selected_repositories(["bogus"])
 
 
-def make_config() -> object:
+def make_config(lyte_enabled: bool = False) -> object:
     class Network:
         user = "tom"
         host = "bertrand.local"
@@ -1146,6 +1159,16 @@ def make_config() -> object:
 
     class Config:
         network = Network()
+
+        class Twitch:
+            enabled = False
+
+        twitch = Twitch()
+
+        class Lyte:
+            enabled = lyte_enabled
+
+        lyte = Lyte()
 
         class Paths:
             root = Path("/home/tom/code")
