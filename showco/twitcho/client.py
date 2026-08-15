@@ -36,16 +36,22 @@ class TwitchoClient:
                     last_error="twitcho status reply is not an object",
                 )
             )
+        stream_state = _string(status.get("state")) or "unknown"
+        last_error = _string(status.get("last_error"))
+        service_state = (
+            "error" if last_error or stream_state == "failed" else "connected"
+        )
         return TwitchoStatus(
             service=ServiceStatus(
                 name="twitcho",
-                state="connected",
-                last_error=_string(status.get("last_error")),
+                state=service_state,
+                last_error=last_error,
             ),
-            stream_state=_string(status.get("state")) or "unknown",
+            stream_state=stream_state,
             muted=bool(status.get("muted")),
             ffmpeg_alive=bool(status.get("ffmpeg_alive")),
             audio_seconds=_float(status.get("audio_seconds")),
+            last_audio_at=_float(status.get("last_audio_at")),
             clipping=bool(status.get("clipping")),
             output_bitrate_kbps=_float(status.get("output_bitrate_kbps")),
         )

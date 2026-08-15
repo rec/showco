@@ -56,6 +56,7 @@ class TwitchoStatus(BaseModel, frozen=True):
     muted: bool = False
     ffmpeg_alive: bool = False
     audio_seconds: float | None = None
+    last_audio_at: float | None = None
     clipping: bool = False
     output_bitrate_kbps: float | None = None
 
