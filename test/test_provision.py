@@ -489,8 +489,12 @@ class ProvisionTests(unittest.TestCase):
                 "/tmp/remote.sh",
             )
 
-        initial_wait.assert_called_once_with(config, "tom@recs-stage.local")
-        wait.assert_called_once_with(config, "tom@recs-stage.local")
+        initial_wait.assert_called_once_with(
+            config, "tom@recs-stage.local", accept_changed_host_key=False
+        )
+        wait.assert_called_once_with(
+            config, "tom@recs-stage.local", accept_changed_host_key=False
+        )
         verify.assert_called_once_with(
             config,
             "tom@recs-stage.local",
@@ -550,13 +554,26 @@ class ProvisionTests(unittest.TestCase):
         with mock.patch(
             "reccy.subprocess.run", side_effect=[changed_key, removed, connected]
         ) as run:
-            self.assertFalse(provision.ssh_is_reachable(config, "tom@recs-stage.local"))
+            self.assertFalse(
+                provision.ssh_is_reachable(
+                    config, "tom@recs-stage.local", accept_changed_host_key=True
+                )
+            )
             self.assertTrue(provision.ssh_is_reachable(config, "tom@recs-stage.local"))
 
         self.assertEqual(
             run.call_args_list[1].args[0],
             ["ssh-keygen", "-R", "recs-stage.local"],
         )
+
+    def test_changed_host_key_requires_explicit_acceptance(self) -> None:
+        config = make_config(values(networks=networks(x18=False)))
+        changed_key = subprocess.CompletedProcess(
+            ["ssh"], 255, "", "WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!"
+        )
+        with mock.patch("reccy.subprocess.run", return_value=changed_key):
+            with self.assertRaisesRegex(SystemExit, "accept-changed-host-key"):
+                provision.ssh_is_reachable(config, "tom@recs-stage.local")
 
     def test_ssh_retry_uses_non_interactive_host_key_options(self) -> None:
         config = make_config(values(networks=networks(x18=False)))
