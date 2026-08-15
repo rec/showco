@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -33,6 +34,7 @@ class RecsClient:
         self.status_path = status_path or paths.status
         self.metadata_path = metadata_path or paths.metadata
         self.stale_after_seconds = stale_after_seconds
+        self.track_name_lock = threading.Lock()
 
     def status(self) -> models.RecsStatus:
         if not self.status_path.exists():
@@ -132,25 +134,28 @@ class RecsClient:
                 ok=False, message="recs track name channel is missing"
             )
 
-        track_names = self.track_names()
-        if isinstance(track_names, models.ActionResult):
-            return track_names
-        channel_number = track_channel(device, channel, track_names)
-        if channel_number is None:
-            return models.ActionResult(
-                ok=False,
-                message=f"could not resolve recs channel {channel} for {device}",
-            )
+        with self.track_name_lock:
+            track_names = self.track_names()
+            if isinstance(track_names, models.ActionResult):
+                return track_names
+            channel_number = track_channel(device, channel, track_names)
+            if channel_number is None:
+                return models.ActionResult(
+                    ok=False,
+                    message=f"could not resolve recs channel {channel} for {device}",
+                )
 
-        updated = replace_track_name(track_names, device, channel_number, track_name)
-        response = self._send_request(
-            gui_protocol.SetTrackNames(
-                type="set_track_names",
-                track_names=updated,
-            ),
-            send_error="could not send recs track name request",
-            failure_prefix="recs track name update failed",
-        )
+            updated = replace_track_name(
+                track_names, device, channel_number, track_name
+            )
+            response = self._send_request(
+                gui_protocol.SetTrackNames(
+                    type="set_track_names",
+                    track_names=updated,
+                ),
+                send_error="could not send recs track name request",
+                failure_prefix="recs track name update failed",
+            )
         if isinstance(response, models.ActionResult):
             return response
         if isinstance(response, gui_protocol.TrackNames):
