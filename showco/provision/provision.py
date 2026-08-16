@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import shlex
-import shutil
 import sys
 import tempfile
 import time
@@ -21,7 +20,6 @@ from . import config
 PROVISION_DIR = Path(__file__).resolve().parent
 REMOTE_SCRIPT_TEMPLATE = "provision_locally.tmpl.sh"
 REMOTE_SCRIPT = (PROVISION_DIR / REMOTE_SCRIPT_TEMPLATE).read_text()
-REMOTE_GITHUB_KEY_TEMPLATE = "remote_github_key.tmpl.sh"
 REBOOT_WAIT_SECONDS = 300
 POST_REBOOT_READY_WAIT_SECONDS = 60
 SSH_CONNECT_TIMEOUT_SECONDS = 2
@@ -217,8 +215,6 @@ def provision_remote(
         "set -e; uname -a; id; command -v sudo; command -v apt-get",
         timeout_seconds=SSH_VERIFICATION_TIMEOUT_SECONDS,
     )
-    ensure_github_account_key(provision_config, ssh_target)
-
     try:
         print("Copying provisioning script...")
         run_scp(provision_config, local_script, f"{ssh_target}:{remote_script}")
@@ -884,99 +880,6 @@ def report_verification_results(results: list[VerificationResult]) -> None:
         for note in notes:
             print(f"- {note.name}: {note.note}")
     sys.exit(1)
-
-
-def ensure_github_account_key(provision_config: config.Config, ssh_target: str) -> None:
-    if not shutil.which("gh"):
-        sys.exit(
-            "ERROR: gh is required on the provisioning machine "
-            "to add the Pi SSH key to GitHub."
-        )
-    print("Creating or reusing Raspberry Pi GitHub SSH key...")
-    public_key = capture_ssh(
-        provision_config, ssh_target, remote_github_key_command(provision_config)
-    )
-    if not public_key.startswith("ssh-ed25519 "):
-        sys.exit(f"ERROR: Unexpected SSH public key from {ssh_target}: {public_key}")
-    title = github_key_title(provision_config)
-    if github_key_exists(public_key):
-        print(f"GitHub SSH key already exists: {title}")
-        return
-    with tempfile.NamedTemporaryFile(
-        "w",
-        delete=False,
-        prefix="showco-pi-github-key.",
-        suffix=".pub",
-    ) as fp:
-        key_file = Path(fp.name)
-        fp.write(public_key + "\n")
-    try:
-        add_github_key(key_file, title)
-    finally:
-        key_file.unlink(missing_ok=True)
-
-
-def add_github_key(key_file: Path, title: str) -> None:
-    try:
-        subprocess.run(
-            ["gh", "ssh-key", "add", str(key_file), "--title", title],
-            capture_output=True,
-            check=True,
-            text=True,
-        )
-    except CalledProcessError as e:
-        sys.exit(
-            gh_error_message(
-                "Could not add the Pi SSH key to GitHub from the provisioning machine.",
-                e,
-            )
-        )
-
-
-def github_key_exists(public_key: str) -> bool:
-    try:
-        completed = subprocess.run(
-            ["gh", "api", "user/keys", "--jq", ".[].key"],
-            capture_output=True,
-            check=True,
-            text=True,
-        )
-    except CalledProcessError as e:
-        sys.exit(
-            gh_error_message(
-                "Could not list GitHub SSH keys from the provisioning machine.",
-                e,
-            )
-        )
-    key = github_key_material(public_key)
-    return any(
-        github_key_material(line) == key for line in completed.stdout.splitlines()
-    )
-
-
-def gh_error_message(message: str, error: CalledProcessError) -> str:
-    details = (error.stderr or error.stdout or "").strip()
-    result = f"ERROR: {message} Run `gh auth status` on this machine."
-    if details:
-        result += f"\ngh said: {details}"
-    return result
-
-
-def github_key_material(public_key: str) -> str:
-    fields = public_key.split()
-    if len(fields) < 2:
-        return public_key
-    return " ".join(fields[:2])
-
-
-def github_key_title(provision_config: config.Config) -> str:
-    return f"showco {provision_config.network.host}"
-
-
-def remote_github_key_command(provision_config: config.Config) -> str:
-    comment = shlex.quote(github_key_title(provision_config))
-    template = script_dir() / REMOTE_GITHUB_KEY_TEMPLATE
-    return template.read_text().replace("{comment}", comment)
 
 
 def shell_bool(value: bool) -> str:

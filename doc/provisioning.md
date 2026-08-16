@@ -51,13 +51,13 @@ name = "Venue WiFi"
 enabled = false
 
 [git.recs]
-url = "git@github.com:rec/recs.git"
+url = "https://github.com/rec/recs.git"
 
 [git.twitcho]
-url = "git@github.com:rec/twitcho.git"
+url = "https://github.com/rec/twitcho.git"
 
 [git.showco]
-url = "git@github.com:rec/showco.git"
+url = "https://github.com/rec/showco.git"
 ```
 
 If `network.user` is omitted, the provisioning script uses the local `USER`
@@ -143,7 +143,7 @@ The script:
 - configures `en_US.UTF-8` as the system locale
 - installs `uv` for the configured user if needed
 - creates code, config, state, and recording directories
-- clones or updates `recs`, `twitcho`, and `showco`
+- clones or updates `reccy`, `recs`, `twitcho`, `lyte`, and `showco` from public HTTPS URLs
 - runs `uv sync` in each checkout
 - enables lingering for the configured user so user services start at boot
 - installs and starts the `recs` user service
