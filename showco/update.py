@@ -702,6 +702,7 @@ def provisioning_config() -> config.Config:
 def remote_update_command(selected: list[str], root: Path) -> str:
     arguments = shlex.join(["--target-machine", "--root", str(root), *selected])
     showco_directory = shlex.quote(str(root / "showco"))
+    reccy_directory = shlex.quote(str(root / "reccy"))
     return (
         f"cd {showco_directory} && "
         "status=$(git status --porcelain --untracked-files=no) && "
@@ -709,6 +710,11 @@ def remote_update_command(selected: list[str], root: Path) -> str:
         'if [ -n "$status" ]; then '
         'printf "%s\\n" "showco target worktree has tracked changes" >&2; '
         'printf "%s\\n" "$status" >&2; exit 1; fi && '
+        'upstream=$(git rev-parse --abbrev-ref --symbolic-full-name "@{upstream}") && '
+        "remote=${upstream%%/*} && branch=${upstream#*/} && "
+        'git fetch "$remote" "+refs/heads/$branch:refs/remotes/$remote/$branch" && '
+        'git reset --hard "$remote/$branch" && '
+        f"cd {reccy_directory} && "
         'upstream=$(git rev-parse --abbrev-ref --symbolic-full-name "@{upstream}") && '
         "remote=${upstream%%/*} && branch=${upstream#*/} && "
         'git fetch "$remote" "+refs/heads/$branch:refs/remotes/$remote/$branch" && '
