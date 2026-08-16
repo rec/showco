@@ -123,6 +123,11 @@ class UpdateTests(unittest.TestCase):
             "uv sync --frozen --directory '/srv/show projects/showco'",
             command,
         )
+        self.assertIn(
+            "uv sync --frozen --directory '/srv/show projects/showco' "
+            "&& cd '/srv/show projects/showco' && ",
+            command,
+        )
         self.assertTrue(
             command.endswith(
                 "uv run showco update --target-machine --root '/srv/show projects' recs"
