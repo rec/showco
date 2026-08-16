@@ -8,7 +8,6 @@ dependencies = [
     "reccy",
     "recs",
     "tqdm>=4.70.0",
-    "twitcho",
     "tyro>=1.0.15",
 ]
 
@@ -18,7 +17,6 @@ exclude-newer = "1 week"
 [tool.uv.sources]
 reccy = { path = "../reccy", editable = true }
 recs = { path = "../recs", editable = true }
-twitcho = { path = "../twitcho", editable = true }
 
 [project.scripts]
 showco = "showco.cli:main"
