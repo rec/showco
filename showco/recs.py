@@ -195,10 +195,14 @@ class RecsClient:
                 ok=False,
                 message="recs did not send mutable attributes",
             )
-        addresses = response.get("mutable_attributes")
-        if not isinstance(addresses, list) or not all(
-            isinstance(a, str) for a in addresses
-        ):
+        address_values = response.get("mutable_attributes")
+        if not isinstance(address_values, list):
+            return models.ActionResult(
+                ok=False,
+                message="recs sent invalid mutable attributes",
+            )
+        addresses = [a for a in address_values if isinstance(a, str)]
+        if len(addresses) != len(address_values):
             return models.ActionResult(
                 ok=False,
                 message="recs sent invalid mutable attributes",
@@ -208,13 +212,18 @@ class RecsClient:
             value = self._external_command("get_cfg", address=address)
             if isinstance(value, models.ActionResult):
                 return value
-            if not isinstance(value, dict) or value.get("address") != address:
+            if (attribute_value := _object_dict(value)) is None or attribute_value.get(
+                "address"
+            ) != address:
                 return models.ActionResult(
                     ok=False,
                     message=f"recs did not send {address} value",
                 )
             attributes.append(
-                models.MutableAttribute(address=address, value=value.get("value"))
+                models.MutableAttribute(
+                    address=address,
+                    value=attribute_value.get("value"),
+                )
             )
         return attributes
 
@@ -521,13 +530,20 @@ def _rows(value: object) -> list[dict[str, object]]:
         return []
     rows: list[dict[str, object]] = []
     for r in value:
-        if isinstance(r, dict):
-            row: dict[str, object] = {}
-            for k, v in r.items():
-                if isinstance(k, str):
-                    row[k] = v
+        if (row := _object_dict(r)) is not None:
             rows.append(row)
     return rows
+
+
+def _object_dict(value: object) -> dict[str, object] | None:
+    if not isinstance(value, dict):
+        return None
+    result: dict[str, object] = {}
+    for k, v in value.items():
+        if not isinstance(k, str):
+            return None
+        result[k] = v
+    return result
 
 
 def _string(value: object) -> str | None:
@@ -539,10 +555,10 @@ def _error_records(value: object) -> list[models.ErrorRecord]:
         return []
     errors = []
     for v in value:
-        if not isinstance(v, dict):
+        if (error := _object_dict(v)) is None:
             continue
-        timestamp = _string(v.get("timestamp"))
-        message = _string(v.get("message"))
+        timestamp = _string(error.get("timestamp"))
+        message = _string(error.get("message"))
         if timestamp is not None and message is not None:
             errors.append(models.ErrorRecord(timestamp=timestamp, message=message))
     return errors
@@ -557,7 +573,9 @@ def _float(value: object) -> float | None:
 def error_message(value: object) -> str:
     if isinstance(value, str):
         return value
-    if isinstance(value, dict) and isinstance(message := value.get("message"), str):
+    if (error := _object_dict(value)) is not None and isinstance(
+        message := error.get("message"), str
+    ):
         return message
     return ""
 
