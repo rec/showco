@@ -8,41 +8,23 @@ from subprocess import CompletedProcess
 from typing import ClassVar
 
 from pydantic import BaseModel
-from reccy import paths, reccy, service
+from reccy import paths, reccy, service, service_spec
 from reccy.models import ServiceSpec, StatusResult
-from twitcho import daemon
 
 from . import machine_role, models
 
-SHOWCO_SERVICE = ServiceSpec(
-    name="showco",
-    display_name="Showco",
-    description="Showco local show control",
-    launchd_label="com.swirly.showco",
-    daemon_env_var="SHOWCO_DAEMON",
-    windows_pipe=r"\\.\pipe\showco",
-)
-RECS_SERVICE = ServiceSpec(
-    name="recs",
-    display_name="recs",
-    description="recs background recorder",
-    launchd_label="com.swirly.recs",
-    daemon_env_var="RECS_DAEMON",
-    windows_pipe=r"\\.\pipe\recs",
-)
-LYTE_SERVICE = ServiceSpec(
-    name="lyte",
-    display_name="Lyte MIDI",
-    description="Lyte MIDI patch player",
-    launchd_label="com.swirly.lyte",
-    daemon_env_var="LYTE_DAEMON",
-    windows_pipe=r"\\.\pipe\lyte",
+PROJECT_ROOT = Path(__file__).parent.parent
+SHOWCO_SERVICE = service_spec.load(Path(__file__).with_name("service.toml"))
+RECS_SERVICE = service_spec.load(PROJECT_ROOT.parent / "recs/recs/daemon/service.toml")
+LYTE_SERVICE = service_spec.load(PROJECT_ROOT.parent / "lyte/lyte/service.toml")
+TWITCHO_SERVICE = service_spec.load(
+    PROJECT_ROOT.parent / "twitcho/twitcho/service.toml"
 )
 SERVICES = {
     "lyte": LYTE_SERVICE,
     "recs": RECS_SERVICE,
     "showco": SHOWCO_SERVICE,
-    "twitcho": daemon.TWITCHO_SERVICE,
+    "twitcho": TWITCHO_SERVICE,
 }
 
 
