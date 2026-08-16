@@ -8,6 +8,7 @@ dependencies = [
     "reccy",
     "recs",
     "tqdm>=4.70.0",
+    "typing-extensions>=4.10.0",
     "tyro>=1.0.15",
 ]
 

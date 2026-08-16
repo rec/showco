@@ -712,6 +712,7 @@ dependencies = [
     { name = "reccy" },
     { name = "recs" },
     { name = "tqdm" },
+    { name = "typing-extensions" },
     { name = "tyro" },
 ]
 
@@ -726,6 +727,7 @@ requires-dist = [
     { name = "reccy", editable = "../reccy" },
     { name = "recs", editable = "../recs" },
     { name = "tqdm", specifier = ">=4.70.0" },
+    { name = "typing-extensions", specifier = ">=4.10.0" },
     { name = "tyro", specifier = ">=1.0.15" },
 ]
 
