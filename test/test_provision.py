@@ -27,7 +27,6 @@ class ProvisionTests(unittest.TestCase):
                 "True",
                 "--lyte-daemon-config",
                 "patches/test-daemon.toml",
-                "--no-update",
             ],
         )
 
@@ -36,10 +35,8 @@ class ProvisionTests(unittest.TestCase):
         self.assertEqual(options.recs_repo, "git@github.com:rec/recs.git")
         self.assertTrue(options.lyte_enabled)
         self.assertEqual(options.lyte_daemon_config, Path("patches/test-daemon.toml"))
-        self.assertFalse(options.update)
 
-    def test_run_updates_all_projects_after_successful_provisioning(self) -> None:
-        parsed_config = make_config(values())
+    def test_run_finishes_after_successful_provisioning(self) -> None:
         options = provision.ProvisionOptions(
             config_path=Path("config.toml"),
             secrets=Path("secrets.toml"),
@@ -60,60 +57,14 @@ class ProvisionTests(unittest.TestCase):
             mock.patch(
                 "showco.provision.provision.provision_remote",
             ),
-            mock.patch(
-                "showco.update.update_from_provisioning_machine", return_value=0
-            ) as update_from_provisioning_machine,
         ):
             result = provision.run(options)
 
         self.assertEqual(result, 0)
-        self.assertEqual(
-            update_from_provisioning_machine.call_args.args,
-            (["reccy", "recs", "showco", "twitcho", "lyte"],),
-        )
-        self.assertEqual(
-            update_from_provisioning_machine.call_args.kwargs,
-            {
-                "host": parsed_config.network.host,
-                "root": parsed_config.paths.root,
-                "target_config": parsed_config,
-            },
-        )
-
-    def test_run_skips_update_when_disabled(self) -> None:
-        options = provision.ProvisionOptions(
-            config_path=Path("config.toml"),
-            secrets=Path("secrets.toml"),
-            update=False,
-        )
-
-        with (
-            mock.patch(
-                "showco.provision.provision.config.read_toml",
-                side_effect=[values(), {}],
-            ),
-            mock.patch(
-                "showco.provision.provision.validate_config",
-            ),
-            mock.patch(
-                "showco.provision.provision.validate_local_repositories",
-            ),
-            mock.patch("showco.provision.provision.autosquash_local_repositories"),
-            mock.patch(
-                "showco.provision.provision.provision_remote",
-            ),
-            mock.patch(
-                "showco.update.update_from_provisioning_machine"
-            ) as update_from_provisioning_machine,
-        ):
-            result = provision.run(options)
-
-        self.assertEqual(result, 0)
-        update_from_provisioning_machine.assert_not_called()
 
     def test_run_autosquashes_before_validating_repositories(self) -> None:
         options = provision.ProvisionOptions(
-            config_path=Path("config.toml"), secrets=Path("secrets.toml"), update=False
+            config_path=Path("config.toml"), secrets=Path("secrets.toml")
         )
         steps: list[str] = []
 
@@ -524,6 +475,10 @@ class ProvisionTests(unittest.TestCase):
             mock.patch("showco.provision.provision.wait_for_ssh"),
             mock.patch("showco.provision.provision.wait_for_rebooted_ssh"),
             mock.patch(
+                "showco.provision.provision.provisioning_reboot_required",
+                return_value=False,
+            ),
+            mock.patch(
                 "showco.provision.provision.verify_provisioning",
                 return_value=[],
             ),
@@ -550,6 +505,11 @@ class ProvisionTests(unittest.TestCase):
             mock.patch("showco.provision.provision.ensure_github_account_key"),
             mock.patch("showco.provision.provision.run_scp"),
             mock.patch("showco.provision.provision.wait_for_ssh") as initial_wait,
+            mock.patch(
+                "showco.provision.provision.provisioning_reboot_required",
+                return_value=True,
+            ),
+            mock.patch("showco.provision.provision.schedule_remote_reboot") as schedule,
             mock.patch("showco.provision.provision.wait_for_rebooted_ssh") as wait,
             mock.patch(
                 "showco.provision.provision.verify_provisioning",
@@ -572,12 +532,45 @@ class ProvisionTests(unittest.TestCase):
         wait.assert_called_once_with(
             config, "tom@recs-stage.local", accept_changed_host_key=False
         )
+        schedule.assert_called_once_with(config, "tom@recs-stage.local")
         verify.assert_called_once_with(
             config,
             "tom@recs-stage.local",
             network_config.NetworkTopology.PRIVATE,
         )
         report.assert_called_once_with(result)
+
+    def test_provision_does_not_wait_for_reboot_when_not_required(self) -> None:
+        config = make_config(values(networks=networks(x18=False)))
+        with (
+            mock.patch("showco.provision.provision.run_ssh"),
+            mock.patch(
+                "showco.provision.provision.preflight_network_config",
+                return_value=network_config.NetworkTopology.PRIVATE,
+            ),
+            mock.patch("showco.provision.provision.ensure_github_account_key"),
+            mock.patch("showco.provision.provision.run_scp"),
+            mock.patch("showco.provision.provision.wait_for_ssh"),
+            mock.patch(
+                "showco.provision.provision.provisioning_reboot_required",
+                return_value=False,
+            ),
+            mock.patch("showco.provision.provision.schedule_remote_reboot") as schedule,
+            mock.patch("showco.provision.provision.wait_for_rebooted_ssh") as wait,
+            mock.patch(
+                "showco.provision.provision.verify_provisioning", return_value=[]
+            ),
+            mock.patch("showco.provision.provision.report_verification_results"),
+        ):
+            provision.provision_remote(
+                config,
+                "tom@recs-stage.local",
+                Path("/tmp/local.sh"),
+                "/tmp/remote.sh",
+            )
+
+        schedule.assert_not_called()
+        wait.assert_not_called()
 
     def test_wait_for_provisioning_ready_retries_startup_checks(self) -> None:
         starting = [
@@ -797,8 +790,9 @@ class ProvisionTests(unittest.TestCase):
     def test_remote_script_reinstalls_broken_uv(self) -> None:
         self.assertIn("uv --version", provision.REMOTE_SCRIPT)
 
-    def test_remote_script_uses_frozen_uv_sync(self) -> None:
+    def test_remote_script_checks_before_syncing_unchanged_environments(self) -> None:
         self.assertIn("uv sync --frozen", provision.REMOTE_SCRIPT)
+        self.assertIn("uv sync --frozen --check", provision.REMOTE_SCRIPT)
 
     def test_remote_script_uses_frozen_uv_run(self) -> None:
         self.assertIn(
@@ -848,11 +842,15 @@ class ProvisionTests(unittest.TestCase):
         self.assertNotIn('tee "$service_file"', provision.REMOTE_SCRIPT)
         self.assertNotIn("ExecStart=$command", provision.REMOTE_SCRIPT)
 
-    def test_remote_script_reboots_after_successful_network_config(self) -> None:
+    def test_remote_script_marks_required_reboots(self) -> None:
         network = provision.REMOTE_SCRIPT.index('phase "configuring network"')
         reboot = provision.REMOTE_SCRIPT.index('phase "rebooting"')
 
         self.assertIn(
+            "sudo touch /run/showco-provision-reboot-required",
+            provision.REMOTE_SCRIPT,
+        )
+        self.assertNotIn(
             "sudo systemd-run --on-active=2s /usr/bin/systemctl reboot",
             provision.REMOTE_SCRIPT,
         )
