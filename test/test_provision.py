@@ -597,6 +597,15 @@ class ProvisionTests(unittest.TestCase):
         self.assertEqual(verify.call_count, 2)
         sleep.assert_called_once_with(1)
 
+    def test_lyte_service_is_a_startup_check(self) -> None:
+        self.assertIn("Lyte service", provision.STARTUP_CHECK_NAMES)
+
+    def test_twitcho_health_command_uses_target_showco(self) -> None:
+        command = provision.showco_twitcho_health_command(Path("/code"))
+
+        self.assertIn("cd /code/showco", command)
+        self.assertIn("uv run --frozen showco run twitcho-health", command)
+
     def test_initial_wait_for_ssh_retries_until_connected(self) -> None:
         config = make_config(values(networks=networks(x18=False)))
         with (

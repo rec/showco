@@ -41,6 +41,7 @@ class ShowcoApp:
         self.revision = source_revision()
         self.run_started_at = time.time()
         self.action_log: list[models.ActionResult] = []
+        self.action_lock = threading.Lock()
         self.action_log_lock = threading.Lock()
 
     def status(self) -> models.ShowStatus:
@@ -61,53 +62,60 @@ class ShowcoApp:
         )
 
     def run_action(self, form: dict[str, str]) -> models.ActionResult:
-        action = form.get("action", "")
-        if action == "recs-calibrate":
-            result = self.recs.calibrate()
-        elif action == "recs-track-name":
-            result = self.recs.set_track_name(
-                form.get("device", ""),
-                form.get("channel", ""),
-                form.get("track_name", ""),
-            )
-        elif action == "recs-set-attr":
-            try:
-                value = json.loads(form.get("value", ""))
-            except json.JSONDecodeError:
-                result = models.ActionResult(
-                    ok=False,
-                    message="recs attribute value must be valid JSON",
+        with self.action_lock:
+            action = form.get("action", "")
+            if action == "recs-calibrate":
+                result = self.recs.calibrate()
+            elif action == "recs-track-name":
+                result = self.recs.set_track_name(
+                    form.get("device", ""),
+                    form.get("channel", ""),
+                    form.get("track_name", ""),
                 )
-            else:
-                result = self.recs.set_attr(form.get("address", ""), value)
-        elif action == "recs-shutdown":
-            if form.get("confirmation") == "shutdown":
-                result = self.recs.shutdown()
-            else:
-                result = models.ActionResult(ok=True, message="recs shutdown canceled")
-        elif action in RECS_ACTIONS:
-            try:
-                fields = _recs_fields(form)
-            except ValueError as e:
-                result = models.ActionResult(ok=False, message=str(e))
-            else:
-                result = self.recs.action(RECS_ACTIONS[action], **fields)
-        elif action == "twitcho-restart" and self.twitcho is None:
-            result = models.ActionResult(ok=False, message="twitcho is disabled")
-        elif action == "twitcho-restart":
-            result = self.twitcho_restart()
-        elif action in TWITCHO_ACTIONS:
-            if self.twitcho is None:
+            elif action == "recs-set-attr":
+                try:
+                    value = json.loads(form.get("value", ""))
+                except json.JSONDecodeError:
+                    result = models.ActionResult(
+                        ok=False,
+                        message="recs attribute value must be valid JSON",
+                    )
+                else:
+                    result = self.recs.set_attr(form.get("address", ""), value)
+            elif action == "recs-shutdown":
+                if form.get("confirmation") == "shutdown":
+                    result = self.recs.shutdown()
+                else:
+                    result = models.ActionResult(
+                        ok=True, message="recs shutdown canceled"
+                    )
+            elif action in RECS_ACTIONS:
+                try:
+                    fields = _recs_fields(form)
+                except ValueError as e:
+                    result = models.ActionResult(ok=False, message=str(e))
+                else:
+                    result = self.recs.action(RECS_ACTIONS[action], **fields)
+            elif action == "twitcho-restart" and self.twitcho is None:
                 result = models.ActionResult(ok=False, message="twitcho is disabled")
+            elif action == "twitcho-restart":
+                result = self.twitcho_restart()
+            elif action in TWITCHO_ACTIONS:
+                if self.twitcho is None:
+                    result = models.ActionResult(
+                        ok=False, message="twitcho is disabled"
+                    )
+                else:
+                    result = self.twitcho.action(
+                        TWITCHO_ACTIONS[action], **_twitcho_fields(form)
+                    )
             else:
-                result = self.twitcho.action(
-                    TWITCHO_ACTIONS[action], **_twitcho_fields(form)
+                result = models.ActionResult(
+                    ok=False, message=f"unknown action {action}"
                 )
-        else:
-            result = models.ActionResult(ok=False, message=f"unknown action {action}")
-        with self.action_log_lock:
-            self.action_log = [result, *self.action_log[:9]]
-        return result
+            with self.action_log_lock:
+                self.action_log = [result, *self.action_log[:9]]
+            return result
 
     def recent_actions(self) -> list[models.ActionResult]:
         with self.action_log_lock:
