@@ -6,13 +6,13 @@ import sys
 import threading
 import time
 from pathlib import Path
-from typing import TypeGuard
 
 from pydantic import BaseModel
 from reccy import ipc, rpc
 from recs.cfg.track_names import SourceTrackNames
 from recs.daemon import gui_protocol, paths
 from recs.daemon.models import DaemonMetadata
+from typing_extensions import TypeIs
 
 from . import models
 
@@ -534,7 +534,7 @@ def _rows(value: object) -> list[dict[str, object]]:
     return rows
 
 
-def _object_dict(value: object) -> TypeGuard[dict[str, object]]:
+def _object_dict(value: object) -> TypeIs[dict[str, object]]:
     return isinstance(value, dict) and all(isinstance(k, str) for k in value)
 
 
