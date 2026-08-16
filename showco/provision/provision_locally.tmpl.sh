@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+NETWORK_CHANGED=false
+
 install_uv() {
   if sudo -H -u "$SHOW_USER" env PATH="/home/$SHOW_USER/.local/bin:$PATH" \
     bash -lc "uv --version >/dev/null 2>&1"; then
@@ -199,12 +201,16 @@ sync_repo() {
   local url=$2
   local refname=$3
   local path="$ROOT/$name"
+  local before=
+  local after
+  local changed=false
   local upstream
   local remote
   local branch
 
   prepare_checkout_path "$path"
   if [[ -d "$path/.git" ]]; then
+    before=$(sudo -H -u "$SHOW_USER" git -C "$path" rev-parse HEAD)
     upstream=$(sudo -H -u "$SHOW_USER" git -C "$path" rev-parse \
       --abbrev-ref --symbolic-full-name '@{upstream}')
     remote=${upstream%%/*}
@@ -214,13 +220,24 @@ sync_repo() {
     sudo -H -u "$SHOW_USER" git -C "$path" reset --hard "$remote/$branch"
   else
     sudo -H -u "$SHOW_USER" git clone "$url" "$path"
+    changed=true
   fi
   if [[ -n "$refname" && "$refname" != TODO ]]; then
     sudo -H -u "$SHOW_USER" git -C "$path" checkout "$refname"
   fi
 
-  sudo -H -u "$SHOW_USER" env PATH="/home/$SHOW_USER/.local/bin:$PATH" \
-    bash -lc "cd '$path' && uv sync --frozen"
+  after=$(sudo -H -u "$SHOW_USER" git -C "$path" rev-parse HEAD)
+  if [[ "$before" != "$after" ]]; then
+    changed=true
+  fi
+  if [[ "$changed" == true ]] || ! sudo -H -u "$SHOW_USER" \
+    env PATH="/home/$SHOW_USER/.local/bin:$PATH" \
+    bash -lc "cd '$path' && uv sync --frozen --check"; then
+    sudo -H -u "$SHOW_USER" env PATH="/home/$SHOW_USER/.local/bin:$PATH" \
+      bash -lc "cd '$path' && uv sync --frozen"
+  else
+    printf '%s environment is already synchronized.\n' "$name"
+  fi
 }
 
 toml_string() {
@@ -312,6 +329,8 @@ write_network_config_files() {
 configure_network() {
   local config_file
   local secrets_file
+  local state_file="/home/$SHOW_USER/.config/showco/network-config.sha256"
+  local configuration_hash
   local status
 
   if [[ -z "$EXTERNAL_WIFI_SSID" || "$EXTERNAL_WIFI_SSID" == TODO ]]; then
@@ -326,6 +345,16 @@ configure_network() {
   config_file=$(mktemp)
   secrets_file=$(mktemp)
   write_network_config_files "$config_file" "$secrets_file"
+  configuration_hash=$(printf '%s\0' \
+    "$NETWORK_TOPOLOGY" "$X18" "$SWAP_WIFI" "$SHOWCO_PI_X18_SUBNET" \
+    "$SHOWCO_X18_HOST" "$PRIVATE_WIFI_SSID" "$PRIVATE_WIFI_PASSWORD" \
+    "$EXTERNAL_WIFI_SSID" "$EXTERNAL_WIFI_PASSWORD" "$TWITCHO_ENABLED" \
+    | sha256sum | awk '{print $1}')
+  if [[ -f "$state_file" && "$(cat "$state_file")" == "$configuration_hash" ]]; then
+    printf 'Network configuration is unchanged.\n'
+    rm -f "$config_file" "$secrets_file"
+    return
+  fi
   set +e
   sudo -H -u "$SHOW_USER" env PATH="/home/$SHOW_USER/.local/bin:$PATH" \
     bash -lc \
@@ -333,11 +362,13 @@ configure_network() {
   status=$?
   set -e
   rm -f "$config_file" "$secrets_file"
+  if [[ "$status" -eq 0 ]]; then
+    printf '%s\n' "$configuration_hash" \
+      | sudo -H -u "$SHOW_USER" tee "$state_file" >/dev/null
+    sudo chmod 600 "$state_file"
+    NETWORK_CHANGED=true
+  fi
   return "$status"
-}
-
-schedule_reboot() {
-  sudo systemd-run --on-active=2s /usr/bin/systemctl reboot
 }
 
 showco_args() {
@@ -605,7 +636,12 @@ TEXT
   configure_network
 
   phase "rebooting"
-  schedule_reboot
+  if [[ "$NETWORK_CHANGED" == true || -f /var/run/reboot-required ]]; then
+    sudo touch /run/showco-provision-reboot-required
+    printf 'Reboot required.\n'
+  else
+    printf 'Reboot not required.\n'
+  fi
 }
 
 main "$@"

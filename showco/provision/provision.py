@@ -70,7 +70,6 @@ class ProvisionOptions(BaseModel, frozen=True):
     lyte_repo: str | None = None
     lyte_enabled: bool | None = None
     lyte_daemon_config: Path | None = None
-    update: bool = True
     accept_changed_host_key: bool = False
 
 
@@ -132,15 +131,6 @@ def run(options: ProvisionOptions) -> int:
         local_script.unlink(missing_ok=True)
 
     print(f"Provisioned {ssh_target}.")
-    if options.update:
-        from .. import update
-
-        return update.update_from_provisioning_machine(
-            update.selected_repositories([]),
-            host=parsed_config.network.host,
-            root=parsed_config.paths.root,
-            target_config=parsed_config,
-        )
     return 0
 
 
@@ -241,12 +231,16 @@ def provision_remote(
             timeout_seconds=REMOTE_PROVISION_TIMEOUT_SECONDS,
         )
 
-        print(f"Waiting for {ssh_target} to reboot...")
-        wait_for_rebooted_ssh(
-            provision_config,
-            ssh_target,
-            accept_changed_host_key=accept_changed_host_key,
-        )
+        if provisioning_reboot_required(provision_config, ssh_target):
+            print(f"Waiting for {ssh_target} to reboot...")
+            schedule_remote_reboot(provision_config, ssh_target)
+            wait_for_rebooted_ssh(
+                provision_config,
+                ssh_target,
+                accept_changed_host_key=accept_changed_host_key,
+            )
+        else:
+            print(f"No reboot is required for {ssh_target}.")
 
         print(f"Checking provisioned services on {ssh_target}...")
         report_verification_results(
@@ -471,6 +465,27 @@ def wait_for_rebooted_ssh(
         ssh_target,
         timeout_seconds=REBOOT_WAIT_SECONDS,
         accept_changed_host_key=accept_changed_host_key,
+    )
+
+
+def provisioning_reboot_required(
+    provision_config: config.Config, ssh_target: str
+) -> bool:
+    return (
+        capture_ssh(
+            provision_config,
+            ssh_target,
+            "test -f /run/showco-provision-reboot-required && echo true || echo false",
+        )
+        == "true"
+    )
+
+
+def schedule_remote_reboot(provision_config: config.Config, ssh_target: str) -> None:
+    run_ssh(
+        provision_config,
+        ssh_target,
+        "sudo systemd-run --on-active=2s /usr/bin/systemctl reboot",
     )
 
 
