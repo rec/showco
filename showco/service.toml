@@ -1,0 +1,6 @@
+name = "showco"
+display_name = "Showco"
+description = "Showco local show control"
+launchd_label = "com.swirly.showco"
+daemon_env_var = "SHOWCO_DAEMON"
+windows_pipe = "\\\\.\\pipe\\showco"
