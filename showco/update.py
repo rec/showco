@@ -721,6 +721,7 @@ def remote_update_command(selected: list[str], root: Path) -> str:
         'git reset --hard "$remote/$branch" && '
         'PATH="$HOME/.local/bin:$PATH" uv sync --frozen --directory '
         f"{showco_directory} && "
+        f"cd {showco_directory} && "
         'PATH="$HOME/.local/bin:$PATH" '
         f"uv run showco update {arguments}"
     ).rstrip()
