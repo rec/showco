@@ -6,6 +6,7 @@ import sys
 import threading
 import time
 from pathlib import Path
+from typing import TypeGuard
 
 from pydantic import BaseModel
 from reccy import ipc, rpc
@@ -195,10 +196,14 @@ class RecsClient:
                 ok=False,
                 message="recs did not send mutable attributes",
             )
-        addresses = response.get("mutable_attributes")
-        if not isinstance(addresses, list) or not all(
-            isinstance(a, str) for a in addresses
-        ):
+        address_values = response.get("mutable_attributes")
+        if not isinstance(address_values, list):
+            return models.ActionResult(
+                ok=False,
+                message="recs sent invalid mutable attributes",
+            )
+        addresses = [a for a in address_values if isinstance(a, str)]
+        if len(addresses) != len(address_values):
             return models.ActionResult(
                 ok=False,
                 message="recs sent invalid mutable attributes",
@@ -208,13 +213,16 @@ class RecsClient:
             value = self._external_command("get_cfg", address=address)
             if isinstance(value, models.ActionResult):
                 return value
-            if not isinstance(value, dict) or value.get("address") != address:
+            if not _object_dict(value) or value.get("address") != address:
                 return models.ActionResult(
                     ok=False,
                     message=f"recs did not send {address} value",
                 )
             attributes.append(
-                models.MutableAttribute(address=address, value=value.get("value"))
+                models.MutableAttribute(
+                    address=address,
+                    value=value.get("value"),
+                )
             )
         return attributes
 
@@ -521,13 +529,13 @@ def _rows(value: object) -> list[dict[str, object]]:
         return []
     rows: list[dict[str, object]] = []
     for r in value:
-        if isinstance(r, dict):
-            row: dict[str, object] = {}
-            for k, v in r.items():
-                if isinstance(k, str):
-                    row[k] = v
-            rows.append(row)
+        if _object_dict(r):
+            rows.append(r)
     return rows
+
+
+def _object_dict(value: object) -> TypeGuard[dict[str, object]]:
+    return isinstance(value, dict) and all(isinstance(k, str) for k in value)
 
 
 def _string(value: object) -> str | None:
@@ -539,7 +547,7 @@ def _error_records(value: object) -> list[models.ErrorRecord]:
         return []
     errors = []
     for v in value:
-        if not isinstance(v, dict):
+        if not _object_dict(v):
             continue
         timestamp = _string(v.get("timestamp"))
         message = _string(v.get("message"))
@@ -557,7 +565,7 @@ def _float(value: object) -> float | None:
 def error_message(value: object) -> str:
     if isinstance(value, str):
         return value
-    if isinstance(value, dict) and isinstance(message := value.get("message"), str):
+    if _object_dict(value) and isinstance(message := value.get("message"), str):
         return message
     return ""
 
