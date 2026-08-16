@@ -83,10 +83,6 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def run(options: ProvisionOptions) -> int:
-    if options.host is not None:
-        persist_network_host(options.config_path, options.host)
-    if options.root is not None:
-        persist_paths_root(options.config_path, options.root)
     env = config.merge_values(
         config.read_toml(options.config_path), config.read_toml(options.secrets)
     )
@@ -105,8 +101,13 @@ def run(options: ProvisionOptions) -> int:
         lyte_daemon_config=options.lyte_daemon_config,
     )
     validate_config(parsed_config)
+    validate_local_worktrees()
     autosquash_local_repositories()
     validate_local_repositories()
+    if options.host is not None:
+        persist_network_host(options.config_path, options.host)
+    if options.root is not None:
+        persist_paths_root(options.config_path, options.root)
     ssh_target = f"{parsed_config.network.user}@{parsed_config.network.host}"
     remote_script = "/tmp/showco-provision-pi.sh"
 
@@ -207,6 +208,7 @@ def provision_remote(
     wait_for_ssh(
         provision_config, ssh_target, accept_changed_host_key=accept_changed_host_key
     )
+    validate_remote_worktrees(provision_config, ssh_target)
     topology = preflight_network_config(provision_config, ssh_target)
     print(f"Checking {ssh_target}...")
     run_ssh(
@@ -319,6 +321,19 @@ def validate_local_repositories(root: Path | None = None) -> None:
         )
 
 
+def validate_local_worktrees(root: Path | None = None) -> None:
+    errors = local_worktree_errors(root or local_checkout_directory())
+    if errors:
+        sys.exit("ERROR: local repositories have tracked changes\n" + "\n".join(errors))
+
+
+def local_worktree_errors(root: Path) -> list[str]:
+    errors = []
+    for repository in local_repositories(root):
+        errors.extend(repository_worktree_errors(repository))
+    return errors
+
+
 def local_repository_errors(root: Path) -> list[str]:
     errors = []
     for repository in local_repositories(root):
@@ -331,12 +346,8 @@ def local_repositories(root: Path) -> list[LocalRepository]:
 
 
 def repository_errors(repository: LocalRepository) -> list[str]:
-    if not repository.path.exists():
-        return [f"- {repository.name}: {repository.path} does not exist"]
-    try:
-        git_output(repository.path, ["rev-parse", "--is-inside-work-tree"])
-    except CalledProcessError as e:
-        return [f"- {repository.name}: {repository.path} is not a Git repository: {e}"]
+    if errors := repository_worktree_errors(repository):
+        return errors
 
     errors = []
     try:
@@ -370,6 +381,61 @@ def repository_errors(repository: LocalRepository) -> list[str]:
     return errors
 
 
+def repository_worktree_errors(repository: LocalRepository) -> list[str]:
+    if not repository.path.exists():
+        return [f"- {repository.name}: {repository.path} does not exist"]
+    try:
+        git_output(repository.path, ["rev-parse", "--is-inside-work-tree"])
+    except CalledProcessError as e:
+        return [f"- {repository.name}: {repository.path} is not a Git repository: {e}"]
+    try:
+        status = git_status_output(repository.path)
+    except CalledProcessError as e:
+        return [f"- {repository.name}: git status failed: {git_error_output(e)}"]
+    if not status:
+        return []
+    return [f"- {repository.name}:\n{status}"]
+
+
+def validate_remote_worktrees(provision_config: config.Config, ssh_target: str) -> None:
+    print(f"Checking target repository worktrees on {ssh_target}...")
+    run_ssh(
+        provision_config,
+        ssh_target,
+        remote_worktree_command(provision_config.paths.root),
+    )
+
+
+def remote_worktree_command(root: Path) -> str:
+    names = " ".join(LOCAL_REPOSITORIES)
+    script = f"""root={shlex.quote(str(root))}
+failed=false
+for name in {names}; do
+  path="$root/$name"
+  if [[ -e "$path" && ! -d "$path/.git" ]]; then
+    printf '%s: not a Git checkout: %s\\n' "$name" "$path"
+    failed=true
+    continue
+  fi
+  if [[ ! -d "$path/.git" ]]; then
+    continue
+  fi
+  if ! status=$(git -C "$path" status --short --untracked-files=no); then
+    printf '%s: git status failed\\n' "$name"
+    failed=true
+    continue
+  fi
+  if [[ -n "$status" ]]; then
+    printf '%s:\\n%s\\n' "$name" "$status"
+    failed=true
+  fi
+done
+if [[ "$failed" == true ]]; then
+  exit 1
+fi"""
+    return f"bash -c {shlex.quote(script)}"
+
+
 def local_checkout_directory() -> Path:
     return PROVISION_DIR.parents[2]
 
@@ -382,6 +448,16 @@ def git_output(repository: Path, arguments: list[str]) -> str:
         text=True,
     )
     return completed.stdout.strip()
+
+
+def git_status_output(repository: Path) -> str:
+    completed = subprocess.run(
+        ["git", "-C", str(repository), "status", "--short", "--untracked-files=no"],
+        capture_output=True,
+        check=True,
+        text=True,
+    )
+    return completed.stdout.rstrip()
 
 
 def git_push(repository: Path, upstream: str) -> None:
