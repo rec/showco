@@ -40,6 +40,12 @@ class CliTests(unittest.TestCase):
 
         update.assert_called_once_with(["recs"])
 
+    def test_dispatches_logs_subcommand(self) -> None:
+        with patch.object(cli.logs, "main", return_value=7) as logs:
+            self.assertEqual(cli.main(["logs", "--lines=50", "recs"]), 7)
+
+        logs.assert_called_once_with(["--lines=50", "recs"])
+
     def test_rejects_unknown_subcommand(self) -> None:
         self.assertEqual(cli.main(["unknown"]), 2)
 
