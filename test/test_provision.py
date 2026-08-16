@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shlex
 import subprocess
 import unittest
 from pathlib import Path
@@ -53,6 +54,7 @@ class ProvisionTests(unittest.TestCase):
             mock.patch(
                 "showco.provision.provision.validate_local_repositories",
             ),
+            mock.patch("showco.provision.provision.validate_local_worktrees"),
             mock.patch("showco.provision.provision.autosquash_local_repositories"),
             mock.patch(
                 "showco.provision.provision.provision_remote",
@@ -62,7 +64,7 @@ class ProvisionTests(unittest.TestCase):
 
         self.assertEqual(result, 0)
 
-    def test_run_autosquashes_before_validating_repositories(self) -> None:
+    def test_run_checks_worktrees_before_autosquashing(self) -> None:
         options = provision.ProvisionOptions(
             config_path=Path("config.toml"), secrets=Path("secrets.toml")
         )
@@ -75,6 +77,10 @@ class ProvisionTests(unittest.TestCase):
             ),
             mock.patch("showco.provision.provision.validate_config"),
             mock.patch(
+                "showco.provision.provision.validate_local_worktrees",
+                side_effect=lambda: steps.append("worktrees"),
+            ),
+            mock.patch(
                 "showco.provision.provision.autosquash_local_repositories",
                 side_effect=lambda: steps.append("autosquash"),
             ),
@@ -86,7 +92,7 @@ class ProvisionTests(unittest.TestCase):
         ):
             provision.run(options)
 
-        self.assertEqual(steps, ["autosquash", "validate"])
+        self.assertEqual(steps, ["worktrees", "autosquash", "validate"])
 
     def test_autosquash_local_repositories_uses_update_default_window(self) -> None:
         with mock.patch("showco.update.autosquash_programs", return_value=True) as run:
@@ -204,6 +210,7 @@ class ProvisionTests(unittest.TestCase):
                 "reccy.subprocess.run",
                 side_effect=[
                     subprocess.CompletedProcess(["git"], 0, "true\n", ""),
+                    subprocess.CompletedProcess(["git"], 0, "", ""),
                     subprocess.CompletedProcess(["git"], 0, "origin/main\n", ""),
                     subprocess.CompletedProcess(["git"], 0, "2\n", ""),
                     subprocess.CompletedProcess(["git"], 0, "", ""),
@@ -213,7 +220,7 @@ class ProvisionTests(unittest.TestCase):
                 errors = provision.repository_errors(repository)
 
         self.assertEqual(errors, [])
-        push_command = run.call_args_list[3].args[0]
+        push_command = run.call_args_list[4].args[0]
         self.assertEqual(
             push_command,
             ["git", "-C", str(Path(directory)), "push", "origin", "HEAD:main"],
@@ -230,6 +237,7 @@ class ProvisionTests(unittest.TestCase):
                 "reccy.subprocess.run",
                 side_effect=[
                     subprocess.CompletedProcess(["git"], 0, "true\n", ""),
+                    subprocess.CompletedProcess(["git"], 0, "", ""),
                     subprocess.CompletedProcess(["git"], 0, "origin/main\n", ""),
                     subprocess.CompletedProcess(["git"], 0, "2\n", ""),
                     subprocess.CalledProcessError(
@@ -262,6 +270,7 @@ class ProvisionTests(unittest.TestCase):
                 "reccy.subprocess.run",
                 side_effect=[
                     subprocess.CompletedProcess(["git"], 0, "true\n", ""),
+                    subprocess.CompletedProcess(["git"], 0, "", ""),
                     subprocess.CompletedProcess(["git"], 0, "origin/main\n", ""),
                     subprocess.CompletedProcess(["git"], 0, "2\n", ""),
                     subprocess.CalledProcessError(
@@ -277,7 +286,7 @@ class ProvisionTests(unittest.TestCase):
 
         self.assertEqual(errors, [])
         self.assertEqual(
-            run.call_args_list[6].args[0],
+            run.call_args_list[7].args[0],
             [
                 "git",
                 "-C",
@@ -299,12 +308,51 @@ class ProvisionTests(unittest.TestCase):
                 "reccy.subprocess.run",
                 side_effect=[
                     subprocess.CompletedProcess(["git"], 0, "true\n", ""),
+                    subprocess.CompletedProcess(["git"], 0, "", ""),
                     subprocess.CalledProcessError(128, ["git"]),
                 ],
             ):
                 errors = provision.repository_errors(repository)
 
         self.assertEqual(errors, ["- showco: current branch has no upstream"])
+
+    def test_repository_worktree_errors_reports_tracked_changes(self) -> None:
+        with TemporaryDirectory() as directory:
+            repository = provision.LocalRepository(
+                name="recs",
+                path=Path(directory),
+            )
+            with mock.patch(
+                "reccy.subprocess.run",
+                side_effect=[
+                    subprocess.CompletedProcess(["git"], 0, "true\n", ""),
+                    subprocess.CompletedProcess(["git"], 0, " M recs/main.py\n", ""),
+                ],
+            ) as run:
+                errors = provision.repository_worktree_errors(repository)
+
+        self.assertEqual(errors, ["- recs:\n M recs/main.py"])
+        self.assertEqual(
+            run.call_args_list[1].args[0][-3:],
+            ["status", "--short", "--untracked-files=no"],
+        )
+
+    def test_validate_local_worktrees_reports_all_changed_repositories(self) -> None:
+        with (
+            mock.patch(
+                "showco.provision.provision.repository_worktree_errors",
+                side_effect=lambda r: [f"- {r.name}:\nM {r.name}.py"],
+            ),
+            self.assertRaises(SystemExit) as error,
+        ):
+            provision.validate_local_worktrees(Path("/code"))
+
+        message = str(error.exception)
+        self.assertIn("showco:\nM showco.py", message)
+        self.assertIn("reccy:\nM reccy.py", message)
+        self.assertIn("recs:\nM recs.py", message)
+        self.assertIn("twitcho:\nM twitcho.py", message)
+        self.assertIn("lyte:\nM lyte.py", message)
 
     def test_validate_local_repositories_reports_all_deployed_repositories(
         self,
@@ -423,6 +471,7 @@ class ProvisionTests(unittest.TestCase):
                 "showco.provision.provision.preflight_network_config",
                 return_value=network_config.NetworkTopology.PRIVATE,
             ),
+            mock.patch("showco.provision.provision.validate_remote_worktrees"),
             mock.patch("showco.provision.provision.run_scp"),
             self.assertRaises(subprocess.CalledProcessError) as error,
         ):
@@ -447,12 +496,15 @@ class ProvisionTests(unittest.TestCase):
             text=True,
         )
 
-    def test_provision_uploads_script_after_network_preflight(self) -> None:
+    def test_provision_checks_worktrees_before_network_preflight(self) -> None:
         calls: list[str] = []
         config = make_config(values(networks=networks(x18=False)))
 
         def preflight_network_config(config: config.Config, ssh_target: str) -> None:
             calls.append("preflight")
+
+        def validate_remote_worktrees(config: config.Config, ssh_target: str) -> None:
+            calls.append("worktrees")
 
         def run_scp(config: config.Config, source: Path, target: str) -> None:
             calls.append("scp")
@@ -462,6 +514,10 @@ class ProvisionTests(unittest.TestCase):
             mock.patch(
                 "showco.provision.provision.preflight_network_config",
                 side_effect=preflight_network_config,
+            ),
+            mock.patch(
+                "showco.provision.provision.validate_remote_worktrees",
+                side_effect=validate_remote_worktrees,
             ),
             mock.patch("showco.provision.provision.run_scp", side_effect=run_scp),
             mock.patch("showco.provision.provision.wait_for_ssh"),
@@ -483,7 +539,7 @@ class ProvisionTests(unittest.TestCase):
                 "/tmp/remote.sh",
             )
 
-        self.assertEqual(calls, ["preflight", "scp"])
+        self.assertEqual(calls, ["worktrees", "preflight", "scp"])
 
     def test_provision_waits_for_reboot_and_reports_verification(self) -> None:
         config = make_config(values(networks=networks(x18=False)))
@@ -494,6 +550,7 @@ class ProvisionTests(unittest.TestCase):
                 "showco.provision.provision.preflight_network_config",
                 return_value=network_config.NetworkTopology.PRIVATE,
             ),
+            mock.patch("showco.provision.provision.validate_remote_worktrees"),
             mock.patch("showco.provision.provision.run_scp"),
             mock.patch("showco.provision.provision.wait_for_ssh") as initial_wait,
             mock.patch(
@@ -539,6 +596,7 @@ class ProvisionTests(unittest.TestCase):
                 "showco.provision.provision.preflight_network_config",
                 return_value=network_config.NetworkTopology.PRIVATE,
             ),
+            mock.patch("showco.provision.provision.validate_remote_worktrees"),
             mock.patch("showco.provision.provision.run_scp"),
             mock.patch("showco.provision.provision.wait_for_ssh"),
             mock.patch(
@@ -915,6 +973,17 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn("PRIVATE_WIFI_PASSWORD='private password'", command)
         self.assertIn("X18=false", command)
         self.assertIn("RECS_REFNAME=''", command)
+
+    def test_remote_worktree_command_reports_all_tracked_changes(self) -> None:
+        command = shlex.split(
+            provision.remote_worktree_command(Path("/srv/show-projects"))
+        )[2]
+
+        self.assertIn("for name in showco reccy recs twitcho lyte", command)
+        self.assertIn('git -C "$path" status --short --untracked-files=no', command)
+        self.assertIn('printf \'%s:\\n%s\\n\' "$name" "$status"', command)
+        self.assertIn("printf '%s: not a Git checkout: %s\\n'", command)
+        self.assertIn("exit 1", command)
 
     def test_remote_command_quotes_root_with_spaces(self) -> None:
         parsed = make_config(values(paths={"root": "/srv/show projects"}))
