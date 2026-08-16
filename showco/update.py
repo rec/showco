@@ -698,8 +698,10 @@ def remote_update_command(selected: list[str], root: Path) -> str:
     showco_directory = shlex.quote(str(root / "showco"))
     return (
         f"cd {showco_directory} && "
-        'if [ -n "$(git status --porcelain --untracked-files=no)" ]; then '
-        'echo "showco target worktree has tracked changes" >&2; exit 1; fi && '
+        "status=$(git status --porcelain --untracked-files=no) && "
+        'if [ -n "$status" ]; then '
+        'printf "%s\\n" "showco target worktree has tracked changes" >&2; '
+        'printf "%s\\n" "$status" >&2; exit 1; fi && '
         'upstream=$(git rev-parse --abbrev-ref --symbolic-full-name "@{upstream}") && '
         "remote=${upstream%%/*} && branch=${upstream#*/} && "
         'git fetch "$remote" "+refs/heads/$branch:refs/remotes/$remote/$branch" && '

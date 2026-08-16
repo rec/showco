@@ -110,6 +110,7 @@ class UpdateTests(unittest.TestCase):
             "git status --porcelain --untracked-files=no",
             command,
         )
+        self.assertIn('printf "%s\\n" "$status" >&2', command)
         self.assertIn(
             'git fetch "$remote" "+refs/heads/$branch:refs/remotes/$remote/$branch"',
             command,
