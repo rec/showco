@@ -117,6 +117,8 @@ class UpdateTests(unittest.TestCase):
             command,
         )
         self.assertIn('git reset --hard "$remote/$branch"', command)
+        self.assertIn("cd '/srv/show projects/reccy' && ", command)
+        self.assertEqual(command.count('git reset --hard "$remote/$branch"'), 2)
         self.assertIn(
             "uv sync --frozen --directory '/srv/show projects/showco'",
             command,
