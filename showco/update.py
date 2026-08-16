@@ -702,7 +702,9 @@ def provisioning_config() -> config.Config:
 def remote_update_command(selected: list[str], root: Path) -> str:
     arguments = shlex.join(["--target-machine", "--root", str(root), *selected])
     showco_directory = shlex.quote(str(root / "showco"))
-    reccy_directory = shlex.quote(str(root / "reccy"))
+    dependency_directories = shlex.join(
+        [str(root / name) for name in ["reccy", "recs", "twitcho", "lyte"]]
+    )
     return (
         f"cd {showco_directory} && "
         "status=$(git status --porcelain --untracked-files=no) && "
@@ -714,11 +716,12 @@ def remote_update_command(selected: list[str], root: Path) -> str:
         "remote=${upstream%%/*} && branch=${upstream#*/} && "
         'git fetch "$remote" "+refs/heads/$branch:refs/remotes/$remote/$branch" && '
         'git reset --hard "$remote/$branch" && '
-        f"cd {reccy_directory} && "
+        f"for directory in {dependency_directories}; do "
+        'cd "$directory" && '
         'upstream=$(git rev-parse --abbrev-ref --symbolic-full-name "@{upstream}") && '
         "remote=${upstream%%/*} && branch=${upstream#*/} && "
         'git fetch "$remote" "+refs/heads/$branch:refs/remotes/$remote/$branch" && '
-        'git reset --hard "$remote/$branch" && '
+        'git reset --hard "$remote/$branch" || exit 1; done && '
         'PATH="$HOME/.local/bin:$PATH" uv sync --frozen --directory '
         f"{showco_directory} && "
         f"cd {showco_directory} && "
