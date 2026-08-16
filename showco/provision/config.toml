@@ -58,16 +58,16 @@ enabled = false
 daemon_config = "patches/wearable-daemon.toml"
 
 [git.reccy]
-url = "git@github.com:rec/reccy.git"
+url = "https://github.com/rec/reccy.git"
 
 [git.recs]
-url = "git@github.com:rec/recs.git"
+url = "https://github.com/rec/recs.git"
 
 [git.twitcho]
-url = "git@github.com:rec/twitcho.git"
+url = "https://github.com/rec/twitcho.git"
 
 [git.lyte]
-url = "git@github.com:rec/lyte.git"
+url = "https://github.com/rec/lyte.git"
 
 [git.showco]
-url = "git@github.com:rec/showco.git"
+url = "https://github.com/rec/showco.git"

@@ -386,11 +386,11 @@ class NetworkConfigTests(unittest.TestCase):
                 },
                 "twitch": {"enabled": True},
                 "git": {
-                    "reccy": {"url": "git@github.com:rec/reccy.git"},
-                    "recs": {"url": "git@github.com:rec/recs.git"},
-                    "twitcho": {"url": "git@github.com:rec/twitcho.git"},
-                    "lyte": {"url": "git@github.com:rec/lyte.git"},
-                    "showco": {"url": "git@github.com:rec/showco.git"},
+                    "reccy": {"url": "https://github.com/rec/reccy.git"},
+                    "recs": {"url": "https://github.com/rec/recs.git"},
+                    "twitcho": {"url": "https://github.com/rec/twitcho.git"},
+                    "lyte": {"url": "https://github.com/rec/lyte.git"},
+                    "showco": {"url": "https://github.com/rec/showco.git"},
                 },
             }
         )
@@ -444,11 +444,11 @@ def make_network_config(
             },
             "twitch": {"enabled": twitch_enabled},
             "git": {
-                "reccy": {"url": "git@github.com:rec/reccy.git"},
-                "recs": {"url": "git@github.com:rec/recs.git"},
-                "twitcho": {"url": "git@github.com:rec/twitcho.git"},
-                "lyte": {"url": "git@github.com:rec/lyte.git"},
-                "showco": {"url": "git@github.com:rec/showco.git"},
+                "reccy": {"url": "https://github.com/rec/reccy.git"},
+                "recs": {"url": "https://github.com/rec/recs.git"},
+                "twitcho": {"url": "https://github.com/rec/twitcho.git"},
+                "lyte": {"url": "https://github.com/rec/lyte.git"},
+                "showco": {"url": "https://github.com/rec/showco.git"},
             },
         }
     )

@@ -101,10 +101,10 @@ Clone or copy the repositories:
 
 ```bash
 cd "$root"
-git clone git@github.com:rec/reccy.git
-git clone git@github.com:rec/recs.git
-git clone git@github.com:rec/twitcho.git
-git clone git@github.com:rec/showco.git
+git clone https://github.com/rec/reccy.git
+git clone https://github.com/rec/recs.git
+git clone https://github.com/rec/twitcho.git
+git clone https://github.com/rec/showco.git
 ```
 
 Install each project:

@@ -22,7 +22,7 @@ class ProvisionTests(unittest.TestCase):
                 "--root",
                 "/srv/show-projects",
                 "--recs-repo",
-                "git@github.com:rec/recs.git",
+                "https://github.com/rec/recs.git",
                 "--lyte-enabled",
                 "True",
                 "--lyte-daemon-config",
@@ -32,7 +32,7 @@ class ProvisionTests(unittest.TestCase):
 
         self.assertEqual(options.host, "bertrand.local")
         self.assertEqual(options.root, Path("/srv/show-projects"))
-        self.assertEqual(options.recs_repo, "git@github.com:rec/recs.git")
+        self.assertEqual(options.recs_repo, "https://github.com/rec/recs.git")
         self.assertTrue(options.lyte_enabled)
         self.assertEqual(options.lyte_daemon_config, Path("patches/test-daemon.toml"))
 
@@ -423,7 +423,6 @@ class ProvisionTests(unittest.TestCase):
                 "showco.provision.provision.preflight_network_config",
                 return_value=network_config.NetworkTopology.PRIVATE,
             ),
-            mock.patch("showco.provision.provision.ensure_github_account_key"),
             mock.patch("showco.provision.provision.run_scp"),
             self.assertRaises(subprocess.CalledProcessError) as error,
         ):
@@ -448,15 +447,12 @@ class ProvisionTests(unittest.TestCase):
             text=True,
         )
 
-    def test_provision_adds_github_key_before_uploading_script(self) -> None:
+    def test_provision_uploads_script_after_network_preflight(self) -> None:
         calls: list[str] = []
         config = make_config(values(networks=networks(x18=False)))
 
         def preflight_network_config(config: config.Config, ssh_target: str) -> None:
             calls.append("preflight")
-
-        def ensure_github_account_key(config: config.Config, ssh_target: str) -> None:
-            calls.append("github")
 
         def run_scp(config: config.Config, source: Path, target: str) -> None:
             calls.append("scp")
@@ -466,10 +462,6 @@ class ProvisionTests(unittest.TestCase):
             mock.patch(
                 "showco.provision.provision.preflight_network_config",
                 side_effect=preflight_network_config,
-            ),
-            mock.patch(
-                "showco.provision.provision.ensure_github_account_key",
-                side_effect=ensure_github_account_key,
             ),
             mock.patch("showco.provision.provision.run_scp", side_effect=run_scp),
             mock.patch("showco.provision.provision.wait_for_ssh"),
@@ -491,7 +483,7 @@ class ProvisionTests(unittest.TestCase):
                 "/tmp/remote.sh",
             )
 
-        self.assertEqual(calls, ["preflight", "github", "scp"])
+        self.assertEqual(calls, ["preflight", "scp"])
 
     def test_provision_waits_for_reboot_and_reports_verification(self) -> None:
         config = make_config(values(networks=networks(x18=False)))
@@ -502,7 +494,6 @@ class ProvisionTests(unittest.TestCase):
                 "showco.provision.provision.preflight_network_config",
                 return_value=network_config.NetworkTopology.PRIVATE,
             ),
-            mock.patch("showco.provision.provision.ensure_github_account_key"),
             mock.patch("showco.provision.provision.run_scp"),
             mock.patch("showco.provision.provision.wait_for_ssh") as initial_wait,
             mock.patch(
@@ -548,7 +539,6 @@ class ProvisionTests(unittest.TestCase):
                 "showco.provision.provision.preflight_network_config",
                 return_value=network_config.NetworkTopology.PRIVATE,
             ),
-            mock.patch("showco.provision.provision.ensure_github_account_key"),
             mock.patch("showco.provision.provision.run_scp"),
             mock.patch("showco.provision.provision.wait_for_ssh"),
             mock.patch(
@@ -715,39 +705,6 @@ class ProvisionTests(unittest.TestCase):
         self.assertEqual(
             provision.known_host_names(config, "tom@recs-stage.local"),
             ["recs-stage.local", "[recs-stage.local]:2200"],
-        )
-
-    def test_github_key_title_uses_host(self) -> None:
-        config = make_config(values(networks=networks(x18=False)))
-
-        self.assertEqual(provision.github_key_title(config), "showco recs-stage.local")
-
-    def test_remote_github_key_command_writes_only_public_key_to_stdout(self) -> None:
-        config = make_config(values(networks=networks(x18=False)))
-        command = provision.remote_github_key_command(config)
-
-        self.assertIn('} >&2\ncat "$HOME/.ssh/id_ed25519.pub"', command)
-
-    def test_remote_github_key_command_regenerates_missing_public_key(self) -> None:
-        config = make_config(values(networks=networks(x18=False)))
-        command = provision.remote_github_key_command(config)
-
-        self.assertIn('ssh-keygen -y -f "$HOME/.ssh/id_ed25519"', command)
-
-    def test_remote_github_key_command_does_not_run_gh_on_pi(self) -> None:
-        config = make_config(values(networks=networks(x18=False)))
-        command = provision.remote_github_key_command(config)
-
-        self.assertNotIn("gh ", command)
-        self.assertNotIn("gh\n", command)
-
-    def test_remote_github_key_command_is_loaded_from_template_file(self) -> None:
-        config = make_config(values(networks=networks(x18=False)))
-        template = provision.script_dir() / provision.REMOTE_GITHUB_KEY_TEMPLATE
-
-        self.assertEqual(
-            provision.remote_github_key_command(config),
-            template.read_text().replace("{comment}", "'showco recs-stage.local'"),
         )
 
     def test_remote_script_is_loaded_from_template_file(self) -> None:
@@ -1097,117 +1054,6 @@ class ProvisionTests(unittest.TestCase):
             ]
         )
 
-    def test_ensure_github_account_key_adds_new_key(self) -> None:
-        config = make_config(values(networks=networks(x18=False)))
-        public_key = "ssh-ed25519 AAAATEST showco recs-stage.local"
-        with (
-            mock.patch("showco.provision.provision.shutil.which", return_value="/gh"),
-            mock.patch(
-                "showco.provision.provision.capture_ssh", return_value=public_key
-            ),
-            mock.patch(
-                "showco.provision.provision.github_key_exists", return_value=False
-            ),
-            mock.patch("reccy.subprocess.run") as run,
-        ):
-            provision.ensure_github_account_key(config, "tom@recs-stage.local")
-
-        self.assertEqual(run.call_args.args[0][:3], ["gh", "ssh-key", "add"])
-        self.assertEqual(
-            run.call_args.args[0][-2:], ["--title", "showco recs-stage.local"]
-        )
-
-    def test_ensure_github_account_key_reports_add_failure(self) -> None:
-        config = make_config(values(networks=networks(x18=False)))
-        public_key = "ssh-ed25519 AAAATEST showco recs-stage.local"
-        add_error = subprocess.CalledProcessError(
-            1,
-            ["gh", "ssh-key", "add"],
-            stderr="not logged in",
-        )
-        with (
-            mock.patch("showco.provision.provision.shutil.which", return_value="/gh"),
-            mock.patch(
-                "showco.provision.provision.capture_ssh", return_value=public_key
-            ),
-            mock.patch(
-                "showco.provision.provision.github_key_exists", return_value=False
-            ),
-            mock.patch("reccy.subprocess.run", side_effect=add_error),
-            self.assertRaises(SystemExit) as error,
-        ):
-            provision.ensure_github_account_key(config, "tom@recs-stage.local")
-
-        self.assertIn(
-            "Could not add the Pi SSH key to GitHub from the provisioning machine.",
-            str(error.exception),
-        )
-        self.assertIn("gh said: not logged in", str(error.exception))
-
-    def test_ensure_github_account_key_requires_local_gh(self) -> None:
-        config = make_config(values(networks=networks(x18=False)))
-        with (
-            mock.patch("showco.provision.provision.shutil.which", return_value=None),
-            self.assertRaises(SystemExit) as error,
-        ):
-            provision.ensure_github_account_key(config, "tom@recs-stage.local")
-
-        self.assertEqual(
-            str(error.exception),
-            "ERROR: gh is required on the provisioning machine "
-            "to add the Pi SSH key to GitHub.",
-        )
-
-    def test_ensure_github_account_key_skips_existing_key(self) -> None:
-        config = make_config(values(networks=networks(x18=False)))
-        public_key = "ssh-ed25519 AAAATEST showco recs-stage.local"
-        with (
-            mock.patch("showco.provision.provision.shutil.which", return_value="/gh"),
-            mock.patch(
-                "showco.provision.provision.capture_ssh", return_value=public_key
-            ),
-            mock.patch(
-                "showco.provision.provision.github_key_exists", return_value=True
-            ),
-            mock.patch("reccy.subprocess.run") as run,
-        ):
-            provision.ensure_github_account_key(config, "tom@recs-stage.local")
-
-        run.assert_not_called()
-
-    def test_github_key_exists_ignores_public_key_comment(self) -> None:
-        with mock.patch(
-            "reccy.subprocess.run",
-            return_value=subprocess.CompletedProcess(
-                ["gh"],
-                0,
-                "ssh-ed25519 AAAATEST\n",
-                "",
-            ),
-        ):
-            exists = provision.github_key_exists("ssh-ed25519 AAAATEST showco bertrand")
-
-        self.assertTrue(exists)
-
-    def test_github_key_exists_reports_local_gh_failure(self) -> None:
-        gh_error = subprocess.CalledProcessError(
-            1,
-            ["gh", "api", "user/keys"],
-            stderr="authentication required",
-        )
-        with (
-            mock.patch("reccy.subprocess.run", side_effect=gh_error),
-            self.assertRaises(SystemExit) as error,
-        ):
-            provision.github_key_exists("ssh-ed25519 AAAATEST showco bertrand")
-
-        self.assertIn(
-            "Could not list GitHub SSH keys from the provisioning machine.",
-            str(error.exception),
-        )
-        self.assertIn("Run `gh auth status` on this machine.", str(error.exception))
-        self.assertIn("gh said: authentication required", str(error.exception))
-
 
 def make_config(values: dict[str, object], *, port: int | None = None) -> config.Config:
     return config.config_from_values(values, port=port)
@@ -1224,11 +1070,11 @@ def values(**overrides: object) -> dict[str, object]:
         "networks": networks(),
         "usb": {"x18_device_name": "X18/XR18"},
         "git": {
-            "reccy": {"url": "git@github.com:rec/reccy.git"},
-            "recs": {"url": "git@github.com:rec/recs.git"},
-            "twitcho": {"url": "git@github.com:rec/twitcho.git"},
-            "lyte": {"url": "git@github.com:rec/lyte.git"},
-            "showco": {"url": "git@github.com:rec/showco.git"},
+            "reccy": {"url": "https://github.com/rec/reccy.git"},
+            "recs": {"url": "https://github.com/rec/recs.git"},
+            "twitcho": {"url": "https://github.com/rec/twitcho.git"},
+            "lyte": {"url": "https://github.com/rec/lyte.git"},
+            "showco": {"url": "https://github.com/rec/showco.git"},
         },
     }
     for k, v in overrides.items():
