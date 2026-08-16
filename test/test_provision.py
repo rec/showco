@@ -337,6 +337,23 @@ class ProvisionTests(unittest.TestCase):
             ["status", "--short", "--untracked-files=no"],
         )
 
+    def test_repository_worktree_errors_ignores_dirty_uv_lock(self) -> None:
+        with TemporaryDirectory() as directory:
+            repository = provision.LocalRepository(
+                name="recs",
+                path=Path(directory),
+            )
+            with mock.patch(
+                "reccy.subprocess.run",
+                side_effect=[
+                    subprocess.CompletedProcess(["git"], 0, "true\n", ""),
+                    subprocess.CompletedProcess(["git"], 0, " M uv.lock\n", ""),
+                ],
+            ):
+                errors = provision.repository_worktree_errors(repository)
+
+        self.assertEqual(errors, [])
+
     def test_validate_local_worktrees_reports_all_changed_repositories(self) -> None:
         with (
             mock.patch(
@@ -981,9 +998,19 @@ class ProvisionTests(unittest.TestCase):
 
         self.assertIn("for name in showco reccy recs twitcho lyte", command)
         self.assertIn('git -C "$path" status --short --untracked-files=no', command)
+        self.assertIn("sed -E '/^.. (.*\\/)?uv\\.lock$/d'", command)
         self.assertIn('printf \'%s:\\n%s\\n\' "$name" "$status"', command)
         self.assertIn("printf '%s: not a Git checkout: %s\\n'", command)
         self.assertIn("exit 1", command)
+
+    def test_project_status_command_ignores_dirty_uv_lock(self) -> None:
+        command = provision.project_status_command("recs", Path("/srv/show-projects"))
+
+        self.assertEqual(
+            command,
+            "git -C /srv/show-projects/recs status --short "
+            "| sed -E '/^.. (.*\\/)?uv\\.lock$/d'",
+        )
 
     def test_remote_command_quotes_root_with_spaces(self) -> None:
         parsed = make_config(values(paths={"root": "/srv/show projects"}))
@@ -1043,10 +1070,11 @@ class ProvisionTests(unittest.TestCase):
 
         commands = [c.args[0][-1] for c in run.call_args_list]
         self.assertFalse([r for r in results if r.error])
-        self.assertIn("git -C /srv/show-projects/reccy status --short", commands)
-        self.assertIn("git -C /srv/show-projects/recs status --short", commands)
-        self.assertIn("git -C /srv/show-projects/twitcho status --short", commands)
-        self.assertIn("git -C /srv/show-projects/showco status --short", commands)
+        for project in ["reccy", "recs", "twitcho", "showco"]:
+            self.assertIn(
+                provision.project_status_command(project, Path("/srv/show-projects")),
+                commands,
+            )
         self.assertIn(
             "uid=$(id -u); XDG_RUNTIME_DIR=/run/user/$uid "
             'cd /srv/show-projects/showco && PATH="$HOME/.local/bin:$PATH" '
