@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 from io import BytesIO
+from threading import Event, Lock, Thread
 from unittest import mock
 
 from showco import models, rehearsal
@@ -390,6 +391,52 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(len(messages), 10)
         self.assertEqual(messages[0], "unknown action unknown-11")
         self.assertEqual(messages[-1], "unknown action unknown-2")
+
+    def test_actions_do_not_overlap(self) -> None:
+        calls = 0
+        calls_lock = Lock()
+        entered = Event()
+        release = Event()
+        second_complete = Event()
+
+        def calibrate() -> models.ActionResult:
+            nonlocal calls
+            with calls_lock:
+                calls += 1
+            entered.set()
+            release.wait(1)
+            return models.ActionResult(ok=True, message="calibrated")
+
+        recs = mock.Mock()
+        recs.calibrate.side_effect = calibrate
+        app = ShowcoApp(
+            recs,
+            rehearsal.RehearsalTwitchoClient(),
+            rehearsal.RehearsalSystemMonitor(),
+            rehearsal.RehearsalMixerMonitor(),
+        )
+
+        def run_second_action() -> None:
+            app.run_action({"action": "recs-calibrate"})
+            second_complete.set()
+
+        first = Thread(target=app.run_action, args=({"action": "recs-calibrate"},))
+        second = Thread(target=run_second_action)
+
+        first.start()
+        self.assertTrue(entered.wait(1))
+        second.start()
+        try:
+            self.assertFalse(second_complete.wait(0.05))
+            self.assertEqual(calls, 1)
+        finally:
+            release.set()
+        first.join(1)
+        second.join(1)
+
+        self.assertFalse(first.is_alive())
+        self.assertFalse(second.is_alive())
+        self.assertEqual(calls, 2)
 
 
 if __name__ == "__main__":

@@ -1,12 +1,33 @@
 from __future__ import annotations
 
+import sys
+import time
 from pathlib import Path
 
+import tyro
+from pydantic import BaseModel
 from reccy import rpc
 
+from .. import machine_role
 from ..models import ActionResult, ServiceStatus, TwitchoStatus
 
 CONTROL_ENDPOINT = Path.home() / ".local/state/twitcho/gui.sock"
+AUDIO_STALE_SECONDS = 5.0
+ACTIVE_STREAM_STATES = {"streaming", "muted"}
+
+
+class TwitchoHealthOptions(BaseModel, frozen=True):
+    pass
+
+
+def health_main(argv: list[str] | None = None) -> int:
+    machine_role.require_target_machine("showco run twitcho-health")
+    tyro.cli(TwitchoHealthOptions, args=argv, description="Check Twitcho health")
+    status = TwitchoClient().status()
+    if status.service.state == "connected":
+        return 0
+    print(status.service.last_error or "twitcho is not healthy", file=sys.stderr)
+    return 1
 
 
 class TwitchoClient:
@@ -37,10 +58,8 @@ class TwitchoClient:
                 )
             )
         stream_state = _string(status.get("state")) or "unknown"
-        last_error = _string(status.get("last_error"))
-        service_state = (
-            "error" if last_error or stream_state == "failed" else "connected"
-        )
+        last_error = _health_error(status, stream_state)
+        service_state = "error" if last_error else "connected"
         return TwitchoStatus(
             service=ServiceStatus(
                 name="twitcho",
@@ -79,4 +98,20 @@ def _string(value: object) -> str | None:
 def _float(value: object) -> float | None:
     if isinstance(value, int | float):
         return float(value)
+    return None
+
+
+def _health_error(status: dict[str, object], stream_state: str) -> str | None:
+    if error := _string(status.get("last_error")):
+        return error
+    if stream_state == "failed":
+        return "Twitcho stream failed"
+    if stream_state not in ACTIVE_STREAM_STATES:
+        return None
+    if not bool(status.get("ffmpeg_alive")):
+        return "Twitcho encoder is not running"
+    if (last_audio_at := _float(status.get("last_audio_at"))) is None:
+        return "Twitcho has not received audio"
+    if (stalled_seconds := time.time() - last_audio_at) > AUDIO_STALE_SECONDS:
+        return f"Twitcho audio has not advanced for {stalled_seconds:.1f} seconds"
     return None

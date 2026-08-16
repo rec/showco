@@ -32,6 +32,7 @@ REMOTE_PROVISION_TIMEOUT_SECONDS = 1_800
 LOCAL_REPOSITORIES = ["showco", "reccy", "recs", "twitcho", "lyte"]
 WIFI_STATUS_COMMAND = "nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device status"
 STARTUP_CHECK_NAMES = [
+    "Lyte service",
     "recs service is active",
     "recs status is advancing",
     "showco service is active",
@@ -735,6 +736,14 @@ def showco_revision_command(root: Path) -> str:
     )
 
 
+def showco_twitcho_health_command(root: Path) -> str:
+    showco_directory = shlex.quote(str(root / "showco"))
+    return user_session_command(
+        f'cd {showco_directory} && PATH="$HOME/.local/bin:$PATH" '
+        "uv run --frozen showco run twitcho-health"
+    )
+
+
 def persistent_journal_command() -> str:
     return (
         "sudo systemd-cat --identifier=showco-provisioning "
@@ -781,7 +790,7 @@ def verify_twitcho_service(
         provision_config,
         ssh_target,
         "Twitcho service",
-        showco_service_status_command("twitcho", provision_config.paths.root),
+        showco_twitcho_health_command(provision_config.paths.root),
     )
 
 

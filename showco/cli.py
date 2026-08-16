@@ -11,7 +11,7 @@ from . import machine_role, network_config, rehearsal, services, update
 from .mixer import MixerMonitor
 from .provision import provision
 from .server import make_server
-from .twitcho import auth
+from .twitcho import auth, client
 from .x18 import osc, recorder_supervisor
 
 
@@ -110,6 +110,8 @@ def run_command(arguments: list[str]) -> int:
         return services.install_main(arguments[1:])
     if arguments[:1] == ["service-status"]:
         return services.status_main(arguments[1:])
+    if arguments[:1] == ["twitcho-health"]:
+        return client.health_main(arguments[1:])
     options = tyro.cli(
         WebUiOptions,
         args=arguments,
