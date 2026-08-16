@@ -4,9 +4,9 @@ import os
 import sys
 import tomllib
 from pathlib import Path
-from typing import cast
 
 from pydantic import BaseModel, Field
+from typing_extensions import TypeIs
 
 
 class GitRepo(BaseModel, frozen=True):
@@ -172,16 +172,15 @@ def network_kind_dict(
 def network_dict(values: dict[str, object], name: str) -> dict[str, Network]:
     networks = {}
     for k, v in values.items():
-        if not isinstance(v, dict):
+        if not is_toml_table(v):
             sys.exit(f"ERROR: {name}.{k} must be a table")
-        table = cast(dict[str, object], v)
         networks[k] = Network(
-            name=string_value(table, "name"),
-            dhcp_start=string_value(table, "dhcp_start"),
-            dhcp_end=string_value(table, "dhcp_end"),
-            ip_address=string_value(table, "ip_address"),
-            subnet=string_value(table, "subnet"),
-            password=string_value(table, "password"),
+            name=string_value(v, "name"),
+            dhcp_start=string_value(v, "dhcp_start"),
+            dhcp_end=string_value(v, "dhcp_end"),
+            ip_address=string_value(v, "ip_address"),
+            subnet=string_value(v, "subnet"),
+            password=string_value(v, "password"),
         )
     return networks
 
@@ -295,11 +294,8 @@ def merge_values(
     result = dict(config)
     for k, v in secrets.items():
         current = result.get(k)
-        if isinstance(v, dict) and isinstance(current, dict):
-            result[k] = merge_values(
-                cast(dict[str, object], current),
-                cast(dict[str, object], v),
-            )
+        if is_toml_table(v) and is_toml_table(current):
+            result[k] = merge_values(current, v)
         else:
             result[k] = v
     return result
@@ -315,8 +311,8 @@ def git_repo(name: str, values: dict[str, object], *, override: str | None) -> G
 
 def table_value(values: dict[str, object], name: str) -> dict[str, object]:
     value = values.get(name, {})
-    if isinstance(value, dict):
-        return cast(dict[str, object], value)
+    if is_toml_table(value):
+        return value
     sys.exit(f"ERROR: {name} must be a table")
 
 
@@ -388,9 +384,17 @@ def string_value(
 
 def string_list_value(values: dict[str, object], name: str) -> list[str]:
     value = values.get(name, [])
-    if isinstance(value, list) and all(isinstance(i, str) for i in value):
-        return cast(list[str], value)
+    if is_string_list(value):
+        return value
     sys.exit(f"ERROR: {name} must be a list of strings")
+
+
+def is_toml_table(value: object) -> TypeIs[dict[str, object]]:
+    return isinstance(value, dict) and all(isinstance(k, str) for k in value)
+
+
+def is_string_list(value: object) -> TypeIs[list[str]]:
+    return isinstance(value, list) and all(isinstance(i, str) for i in value)
 
 
 def toml_value(value: object) -> object:
