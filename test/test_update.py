@@ -111,6 +111,7 @@ class UpdateTests(unittest.TestCase):
             command,
         )
         self.assertIn('printf "%s\\n" "$status" >&2', command)
+        self.assertIn("sed -E '/^.. (.*\\/)?uv\\.lock$/d'", command)
         self.assertIn(
             'git fetch "$remote" "+refs/heads/$branch:refs/remotes/$remote/$branch"',
             command,
@@ -1043,6 +1044,42 @@ class UpdateTests(unittest.TestCase):
             ["git", "-C", "/code/recs", "push", "origin", "HEAD:main"], commands
         )
 
+    def test_provisioning_update_ignores_dirty_uv_lock(self) -> None:
+        def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+            if command[-2:] == ["branch", "--show-current"]:
+                return subprocess.CompletedProcess(command, 0, "main\n", "")
+            if command[-2:] == ["status", "--porcelain"]:
+                return subprocess.CompletedProcess(command, 0, " M uv.lock\n", "")
+            if command[-1:] == ["@{upstream}"]:
+                return subprocess.CompletedProcess(command, 0, "origin/main\n", "")
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        with (
+            mock.patch(
+                "showco.update.provisioning_config",
+                return_value=make_config(),
+            ),
+            mock.patch(
+                "showco.update.run_remote_step",
+                return_value=update.StepResult(
+                    program="target",
+                    step="update",
+                    command=["ssh"],
+                    returncode=0,
+                    output="",
+                ),
+            ),
+        ):
+            result = update.update_from_provisioning_machine(
+                ["recs"],
+                root=Path("/code"),
+                local_root=Path("/code"),
+                run_command=run_command,
+                output=StringIO(),
+            )
+
+        self.assertEqual(result, 0)
+
     def test_target_update_rejects_dirty_repository_and_restarts_service(self) -> None:
         commands: list[list[str]] = []
 
@@ -1076,7 +1113,7 @@ class UpdateTests(unittest.TestCase):
             ],
         )
 
-    def test_target_update_ignores_untracked_repository_files(self) -> None:
+    def test_target_update_ignores_untracked_files_and_dirty_uv_lock(self) -> None:
         commands: list[list[str]] = []
 
         def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
@@ -1084,7 +1121,12 @@ class UpdateTests(unittest.TestCase):
             if command[-2:] == ["branch", "--show-current"]:
                 return subprocess.CompletedProcess(command, 0, "main\n", "")
             if command[-2:] == ["status", "--porcelain"]:
-                return subprocess.CompletedProcess(command, 0, "?? open-loop.mp4\n", "")
+                return subprocess.CompletedProcess(
+                    command,
+                    0,
+                    "?? open-loop.mp4\n M uv.lock\n",
+                    "",
+                )
             if command[-2:] == ["rev-parse", "HEAD"]:
                 return subprocess.CompletedProcess(command, 0, "same\n", "")
             return subprocess.CompletedProcess(command, 0, "", "")
