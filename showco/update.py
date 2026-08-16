@@ -681,8 +681,14 @@ def clean_worktree_step(program: Program, run_command: RunCommand) -> StepResult
 
 def tracked_worktree_changes(status_output: str) -> str:
     return "\n".join(
-        line for line in status_output.splitlines() if not line.startswith("??")
+        line
+        for line in status_output.splitlines()
+        if not line.startswith("??") and not is_uv_lock_change(line)
     )
+
+
+def is_uv_lock_change(status_line: str) -> bool:
+    return status_line[3:].rsplit("/", maxsplit=1)[-1] == "uv.lock"
 
 
 def provisioning_config() -> config.Config:
@@ -699,6 +705,7 @@ def remote_update_command(selected: list[str], root: Path) -> str:
     return (
         f"cd {showco_directory} && "
         "status=$(git status --porcelain --untracked-files=no) && "
+        "status=$(printf '%s\\n' \"$status\" | sed -E '/^.. (.*\\/)?uv\\.lock$/d') && "
         'if [ -n "$status" ]; then '
         'printf "%s\\n" "showco target worktree has tracked changes" >&2; '
         'printf "%s\\n" "$status" >&2; exit 1; fi && '

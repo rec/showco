@@ -425,6 +425,7 @@ for name in {names}; do
     failed=true
     continue
   fi
+  status=$(printf '%s\\n' "$status" | sed -E '/^.. (.*\\/)?uv\\.lock$/d')
   if [[ -n "$status" ]]; then
     printf '%s:\\n%s\\n' "$name" "$status"
     failed=true
@@ -457,7 +458,11 @@ def git_status_output(repository: Path) -> str:
         check=True,
         text=True,
     )
-    return completed.stdout.rstrip()
+    return "\n".join(
+        line
+        for line in completed.stdout.splitlines()
+        if line[3:].rsplit("/", maxsplit=1)[-1] != "uv.lock"
+    )
 
 
 def git_push(repository: Path, upstream: str) -> None:
@@ -784,7 +789,10 @@ def wait_for_provisioning_ready(
 
 
 def project_status_command(project: str, root: Path) -> str:
-    return f"git -C {shlex.quote(str(root / project))} status --short"
+    return (
+        f"git -C {shlex.quote(str(root / project))} status --short "
+        "| sed -E '/^.. (.*\\/)?uv\\.lock$/d'"
+    )
 
 
 def user_systemctl_command(arguments: str) -> str:
