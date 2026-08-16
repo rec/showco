@@ -9,7 +9,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 from reccy import ipc, rpc
-from recs.cfg.track_names import DeviceTrackNames
+from recs.cfg.track_names import SourceTrackNames
 from recs.daemon import gui_protocol, paths
 from recs.daemon.models import DaemonMetadata
 
@@ -170,7 +170,7 @@ class RecsClient:
             ok=False, message="recs did not send track_names response"
         )
 
-    def track_names(self) -> DeviceTrackNames | models.ActionResult:
+    def track_names(self) -> SourceTrackNames | models.ActionResult:
         response = self._send_request(
             gui_protocol.GetTrackNames(type="get_track_names"),
             send_error="could not send recs track name request",
@@ -447,7 +447,7 @@ def _response(message: object) -> gui_protocol.Response | models.ActionResult:
 
 
 def track_channel(
-    device: str, channel: str, track_names: DeviceTrackNames
+    device: str, channel: str, track_names: SourceTrackNames
 ) -> int | None:
     first, _, _ = channel.partition("-")
     if first.isdigit():
@@ -459,11 +459,11 @@ def track_channel(
 
 
 def replace_track_name(
-    track_names: DeviceTrackNames,
+    track_names: SourceTrackNames,
     device: str,
     channel: int,
     track_name: str,
-) -> DeviceTrackNames:
+) -> SourceTrackNames:
     updated = {k: dict(v) for k, v in track_names.items()}
     names = updated.setdefault(device, {})
     for name, value in list(names.items()):
