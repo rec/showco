@@ -9,6 +9,7 @@ from tempfile import TemporaryDirectory
 from unittest import mock
 
 from reccy.models import Platform
+from recs.daemon import gui_protocol
 from recs.daemon.models import DaemonMetadata
 
 from showco import models, recs
@@ -65,7 +66,7 @@ class RecsTests(unittest.TestCase):
                         "updated_at": time.time(),
                         "rows": [
                             {"time": 4.0, "recorded": 3.0, "file_count": 1},
-                            {"channel": "1", "signal": 0.5},
+                            {"channel": "1", "signal": 0.5, "on": True},
                         ],
                     }
                 )
@@ -79,6 +80,7 @@ class RecsTests(unittest.TestCase):
         self.assertEqual(status.file_count, 1)
         self.assertEqual(status.client_count, 2)
         self.assertEqual(status.channels[0].state, "healthy")
+        self.assertTrue(status.channels[0].on)
         self.assertEqual(status.errors[0].message, "disk almost full")
 
     def test_reports_missing_recs_status_as_offline(self) -> None:
@@ -150,7 +152,7 @@ class RecsTests(unittest.TestCase):
         self.assertEqual(
             [json.loads(message) for message in connection.sent],
             [
-                {"type": "hello", "role": "gui", "version": 3},
+                {"type": "hello", "role": "gui", "version": gui_protocol.VERSION},
                 {"type": "calibrate", "channels": {}},
             ],
         )
@@ -217,9 +219,9 @@ class RecsTests(unittest.TestCase):
         self.assertEqual(
             [json.loads(message) for message in connection.sent],
             [
-                {"type": "hello", "role": "gui", "version": 3},
+                {"type": "hello", "role": "gui", "version": gui_protocol.VERSION},
                 {"type": "get_track_names"},
-                {"type": "hello", "role": "gui", "version": 3},
+                {"type": "hello", "role": "gui", "version": gui_protocol.VERSION},
                 {
                     "type": "set_track_names",
                     "track_names": {"Mic": {"Lead Vocal": 1}},
@@ -258,7 +260,7 @@ class RecsTests(unittest.TestCase):
         self.assertEqual(
             [json.loads(message) for message in connection.sent],
             [
-                {"type": "hello", "role": "gui", "version": 3},
+                {"type": "hello", "role": "gui", "version": gui_protocol.VERSION},
                 {
                     "type": "set_noise_floor",
                     "channel": 1,
@@ -348,7 +350,7 @@ class RecsTests(unittest.TestCase):
         self.assertEqual(
             [json.loads(message) for message in connection.sent],
             [
-                {"type": "hello", "role": "gui", "version": 3},
+                {"type": "hello", "role": "gui", "version": gui_protocol.VERSION},
                 {"type": "shutdown"},
             ],
         )

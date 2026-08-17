@@ -24,7 +24,10 @@ class RecsProtocolTests(unittest.TestCase):
 
         connection = FakeConnection(
             [
-                '{"type":"hello","role":"gui","version":3}\n',
+                json.dumps(
+                    {"type": "hello", "role": "gui", "version": gui_protocol.VERSION}
+                )
+                + "\n",
                 '{"type":"key_pressed","key":"g"}\n',
                 '{"type":"key_released","key":"g"}\n',
                 '{"type":"calibrate"}\n',
@@ -41,7 +44,7 @@ class RecsProtocolTests(unittest.TestCase):
         self.assertEqual(
             [json.loads(message) for message in connection.sent],
             [
-                {"type": "hello", "role": "daemon", "version": 3},
+                {"type": "hello", "role": "daemon", "version": gui_protocol.VERSION},
                 {
                     "type": "calibrated",
                     "measurements": {},
@@ -86,7 +89,8 @@ class RecsProtocolTests(unittest.TestCase):
                 {
                     "type": "error",
                     "message": (
-                        "GUI protocol version 1 is not supported; daemon requires 3"
+                        "GUI protocol version 1 is not supported; daemon requires "
+                        f"{gui_protocol.VERSION}"
                     ),
                 }
             ],
