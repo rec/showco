@@ -149,6 +149,7 @@ def rehearsal_channels(elapsed: float) -> list[models.ChannelLevel]:
                 state=channel_state(signal),
                 device="X18/XR18",
                 signal=signal,
+                on=True,
             )
         )
     return channels

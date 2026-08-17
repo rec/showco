@@ -298,7 +298,7 @@ def home_page(
     recs = status.recs.service
     twitcho = status.twitcho.service
     channel_html = "".join(
-        level(c.device, c.name, c.state) for c in status.recs.channels
+        level(c.device, c.name, c.state, c.on) for c in status.recs.channels
     )
     if not channel_html:
         channel_html = "<p>No channel data from recs.</p>"
@@ -438,17 +438,18 @@ def service_card(identifier: str, title: str, state: str, detail: str) -> str:
     """
 
 
-def level(device: str, name: str, state: str) -> str:
+def level(device: str, name: str, state: str, on: bool) -> str:
     safe_device = html.escape(device)
     safe_name = html.escape(name)
     safe_state = html.escape(state)
+    recording_state = "recording" if on else "not recording"
     return f"""
     <div class="level {safe_state}" data-device="{safe_device}"
          data-channel="{safe_name}" data-saved-track-name="{safe_name}">
       <label>
         <span class="channel-caption">
-          <span class="channel-state {channel_indicator(state)}"
-                aria-label="{safe_state}" title="{safe_state}">•</span>
+          <span class="channel-state {channel_indicator(on)}"
+                aria-label="{recording_state}" title="{recording_state}">•</span>
           <b>Channel {safe_name}</b>
         </span>
         <input name="track_name" value="{safe_name}">
@@ -457,10 +458,8 @@ def level(device: str, name: str, state: str) -> str:
     """
 
 
-def channel_indicator(state: str) -> str:
-    if state in {"present", "healthy"}:
-        return "indicator-green"
-    return "indicator-red"
+def channel_indicator(on: bool) -> str:
+    return "indicator-red" if on else "indicator-green"
 
 
 def mutable_attributes_section(
@@ -840,12 +839,11 @@ HOME_STATUS_SCRIPT = """
     label.append(title, input);
     const state = document.createElement("span");
     state.className = `channel-state ${
-      channel.state === "present" || channel.state === "healthy"
-        ? "indicator-green"
-        : "indicator-red"
+      channel.on ? "indicator-red" : "indicator-green"
     }`;
-    state.setAttribute("aria-label", channel.state);
-    state.title = channel.state;
+    const recordingState = channel.on ? "recording" : "not recording";
+    state.setAttribute("aria-label", recordingState);
+    state.title = recordingState;
     state.textContent = "•";
     caption.append(state, title);
     label.append(caption, input);

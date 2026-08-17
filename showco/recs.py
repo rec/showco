@@ -499,7 +499,11 @@ def channel_levels(rows: list[dict[str, object]]) -> list[models.ChannelLevel]:
         signal = _float(row.get("signal"))
         channels.append(
             models.ChannelLevel(
-                name=name, state=level_state(signal), device=device, signal=signal
+                name=name,
+                state=level_state(signal),
+                device=device,
+                signal=signal,
+                on=row.get("on") is True,
             )
         )
     return channels
