@@ -70,7 +70,7 @@ class ServerTests(unittest.TestCase):
 
         self.assertIn('id="recording-card"', html)
         self.assertIn('id="channels"', html)
-        self.assertIn('id="generated-at"', html)
+        self.assertNotIn('id="generated-at"', html)
         self.assertIn('fetch("/status"', html)
 
     def test_home_page_shows_pi_temperature(self) -> None:
