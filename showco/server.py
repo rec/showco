@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import ClassVar, cast
 from urllib import parse
 
+from reccy import logging
+
 from . import models, services
 from .mixer import MixerMonitor
 from .recs import RecsClient
@@ -20,6 +22,7 @@ from .twitcho.client import TwitchoClient
 
 MAX_ACTION_BYTES = 65_536
 MAX_CONCURRENT_REQUESTS = 8
+LOGGER = logging.get_logger(__name__)
 
 
 class ShowcoApp:
@@ -198,10 +201,13 @@ class ShowcoHandler(BaseHTTPRequestHandler):
 
     def _log_action(self, action: str, result: models.ActionResult) -> None:
         detail = result.message.replace("\n", " ")[:240]
-        print(
-            f"showco action source={self.client_address[0]} action={action!r} "
-            f"ok={result.ok} detail={detail!r}",
-            flush=True,
+        log = LOGGER.info if result.ok else LOGGER.error
+        log(
+            "showco action source=%s action=%r ok=%s detail=%r",
+            self.client_address[0],
+            action,
+            result.ok,
+            detail,
         )
 
     def _html(self, body: str) -> None:
