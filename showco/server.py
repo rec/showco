@@ -603,7 +603,7 @@ def _x18_recorder(status: models.ShowStatus) -> str:
 def _recs_errors(errors: list[models.ErrorRecord], run_started_at: float) -> str:
     current_errors = [e for e in errors if _error_timestamp(e) >= run_started_at]
     if not current_errors:
-        return ""
+        return "<p>Recs errors:</p><p>No errors</p>"
     items = "".join(
         f'<li><time class="error-time">{html.escape(e.timestamp)}</time>'
         f"<span>{html.escape(e.message)}</span></li>"
@@ -880,9 +880,14 @@ HOME_STATUS_SCRIPT = """
     const errorsToShow = document.getElementById("show-all-errors").checked
       ? errors
       : errors.filter(error => Date.parse(error.timestamp) / 1000 >= runStartedAt);
-    if (!errorsToShow.length) return;
     const heading = document.createElement("p");
     heading.textContent = "Recs errors:";
+    if (!errorsToShow.length) {
+      const noErrors = document.createElement("p");
+      noErrors.textContent = "No errors";
+      container.append(heading, noErrors);
+      return;
+    }
     const list = document.createElement("ul");
     for (const error of errorsToShow) {
       const item = document.createElement("li");

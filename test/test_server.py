@@ -137,6 +137,21 @@ class ServerTests(unittest.TestCase):
         )
         self.assertIn("Show all errors", html)
 
+    def test_home_page_shows_empty_recs_errors(self) -> None:
+        html = home_page(
+            models.ShowStatus(
+                recs=models.RecsStatus(
+                    service=models.ServiceStatus(name="recs", state="connected")
+                ),
+                twitcho=models.TwitchoStatus(
+                    service=models.ServiceStatus(name="twitcho", state="connected")
+                ),
+            )
+        )
+
+        self.assertIn("Recs errors", html)
+        self.assertIn("No errors", html)
+
     def test_home_page_hides_errors_from_before_this_run(self) -> None:
         html = home_page(
             models.ShowStatus(
@@ -157,6 +172,8 @@ class ServerTests(unittest.TestCase):
         )
 
         self.assertNotIn("old disk error", html)
+        self.assertIn("Recs errors", html)
+        self.assertIn("No errors", html)
 
     def test_home_page_has_track_name_editor_for_recs_channels(self) -> None:
         html = home_page(
