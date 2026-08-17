@@ -202,7 +202,7 @@ class X18OscRecorder:
             sock.sendto(data, target)
         except OSError as e:
             return self.write_error(output, "out", target, str(e))
-        return self.write_datagram(output, "out", data, target=target)
+        return output
 
     def write_error(
         self,
