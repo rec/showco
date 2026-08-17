@@ -7,7 +7,7 @@ import tyro
 from pydantic import BaseModel
 from reccy import cli
 
-from . import logs, machine_role, network_config, rehearsal, services, update
+from . import logs, machine_role, network_config, python, rehearsal, services, update
 from .mixer import MixerMonitor
 from .provision import provision
 from .server import make_server
@@ -94,6 +94,7 @@ def main(argv: list[str] | None = None) -> int:
             "run": run_command,
             "provision": provision.main,
             "logs": logs.main,
+            "python": python.main,
             "twitcho": twitcho_command,
             "update": update.main,
         },
