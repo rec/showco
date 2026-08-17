@@ -74,6 +74,15 @@ class X18OscTests(unittest.TestCase):
         self.assertEqual(record["target"], ["10.43.0.18", 10_024])
         self.assertEqual(record["error"], "network unreachable")
 
+    def test_send_xremote_does_not_record_success(self) -> None:
+        output = io.BytesIO()
+        recorder = osc.X18OscRecorder("10.43.0.18", log_dir=Path("/logs"))
+
+        returned = recorder.send_xremote(FakeSocket(), output)
+
+        self.assertIs(returned, output)
+        self.assertEqual(output.getvalue(), b"")
+
     def test_write_error_does_not_escape_when_log_is_unavailable(self) -> None:
         recorder = osc.X18OscRecorder("10.43.0.18", log_dir=Path("/logs"))
 
@@ -124,6 +133,14 @@ class X18OscTests(unittest.TestCase):
 class BrokenSocket:
     def sendto(self, data: bytes, target: tuple[str, int]) -> None:
         raise OSError("network unreachable")
+
+
+class FakeSocket:
+    def __init__(self) -> None:
+        self.sent: list[tuple[bytes, tuple[str, int]]] = []
+
+    def sendto(self, data: bytes, target: tuple[str, int]) -> None:
+        self.sent.append((data, target))
 
 
 class FailingOutput:
