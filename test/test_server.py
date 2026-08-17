@@ -455,6 +455,20 @@ class ServerTests(unittest.TestCase):
         self.assertFalse(second.is_alive())
         self.assertEqual(calls, 2)
 
+    def test_failed_action_result_logs_error(self) -> None:
+        handler = ShowcoHandler.__new__(ShowcoHandler)
+        handler.client_address = ("127.0.0.1", 12345)
+
+        with self.assertLogs("showco.server", level="ERROR") as logs:
+            handler._log_action(
+                "recs-calibrate",
+                models.ActionResult(ok=False, message="I/O operation on closed file."),
+            )
+
+        self.assertIn("action='recs-calibrate'", logs.output[0])
+        self.assertIn("ok=False", logs.output[0])
+        self.assertIn("I/O operation on closed file.", logs.output[0])
+
 
 if __name__ == "__main__":
     unittest.main()

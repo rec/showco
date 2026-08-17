@@ -5,7 +5,7 @@ from typing import Annotated, Literal
 
 import tyro
 from pydantic import BaseModel
-from reccy import cli
+from reccy import cli, logging
 
 from . import logs, machine_role, network_config, python, rehearsal, services, update
 from .mixer import MixerMonitor
@@ -89,6 +89,7 @@ def run_web_ui(options: WebUiOptions) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    logging.configure()
     return cli.route_command(
         {
             "run": run_command,
