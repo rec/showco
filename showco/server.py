@@ -335,7 +335,6 @@ def home_page(
           <p>Mixer latency: <span id="mixer-latency">{_mixer_latency(status)}</span></p>
           <p>X18 OSC recorder:
             <span id="x18-recorder">{_x18_recorder(status)}</span></p>
-          <p>Generated: <span id="generated-at">{_time(status.generated_at)}</span></p>
         </section>
         {mutable_attributes_section(mutable_attributes)}
         """,
@@ -628,10 +627,6 @@ def _duration(seconds: float | None) -> str:
     if hours:
         return f"{hours}:{minutes:02}:{secs:02}"
     return f"{minutes}:{secs:02}"
-
-
-def _time(timestamp: float) -> str:
-    return time.strftime("%H:%M:%S", time.localtime(timestamp))
 
 
 def _twitcho_fields(form: dict[str, str]) -> dict[str, object]:
@@ -934,14 +929,8 @@ HOME_STATUS_SCRIPT = """
         status.x18.last_error || status.x18.log_path === null
         ? status.x18.last_error || status.x18.state
         : `${status.x18.state}: ${status.x18.log_path} (${status.x18.log_size} bytes)`;
-      document.getElementById("generated-at").textContent = new Date(
-        status.generated_at * 1000,
-      ).toLocaleTimeString();
       })
-      .catch(error => {
-      document.getElementById("generated-at").textContent =
-        "stale (status update failed)";
-      });
+      .catch(() => {});
   }
 
   function pollStatus() {

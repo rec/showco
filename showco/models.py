@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import time
-
 from pydantic import BaseModel, Field
 
 
@@ -86,4 +84,3 @@ class ShowStatus(BaseModel, frozen=True):
     x18: RecorderStatus = Field(default_factory=RecorderStatus)
     revision: str | None = None
     run_started_at: float = 0.0
-    generated_at: float = Field(default_factory=time.time)
