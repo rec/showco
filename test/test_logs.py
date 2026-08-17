@@ -42,6 +42,7 @@ class LogsTests(unittest.TestCase):
                     "-p",
                     "22",
                     "tom@bertrand.local",
+                    "uid=$(id -u); XDG_RUNTIME_DIR=/run/user/$uid "
                     "journalctl --user --no-pager --lines=25 "
                     "--unit recs.service --unit twitcho.service",
                 ]
@@ -58,6 +59,7 @@ class LogsTests(unittest.TestCase):
     def test_remote_logs_command_quotes_units(self) -> None:
         self.assertEqual(
             logs.remote_logs_command(["recs", "lyte"], 50),
+            "uid=$(id -u); XDG_RUNTIME_DIR=/run/user/$uid "
             "journalctl --user --no-pager --lines=50 "
             "--unit recs.service --unit lyte.service",
         )

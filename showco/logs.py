@@ -76,7 +76,9 @@ def remote_logs_command(services: list[str], lines: int) -> str:
     units = " ".join(
         f"--unit {shlex.quote(f'{service}.service')}" for service in services
     )
-    return f"journalctl --user --no-pager --lines={lines} {units}"
+    return provision.user_session_command(
+        f"journalctl --user --no-pager --lines={lines} {units}"
+    )
 
 
 def run_command_with_timeout(command: Sequence[str]) -> CompletedProcess[str]:
