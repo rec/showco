@@ -24,6 +24,7 @@ class ChannelLevel(BaseModel, frozen=True):
     state: str
     device: str = ""
     signal: float | None = None
+    on: bool = False
 
 
 class MutableAttribute(BaseModel, frozen=True):

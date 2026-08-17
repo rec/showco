@@ -181,7 +181,9 @@ class ServerTests(unittest.TestCase):
                 recs=models.RecsStatus(
                     service=models.ServiceStatus(name="recs", state="connected"),
                     channels=[
-                        models.ChannelLevel(name="1", state="healthy", device="Mic"),
+                        models.ChannelLevel(
+                            name="1", state="healthy", device="Mic", on=True
+                        ),
                     ],
                 ),
                 twitcho=models.TwitchoStatus(
@@ -192,7 +194,8 @@ class ServerTests(unittest.TestCase):
 
         self.assertIn('name="track_name" value="1"', html)
         self.assertIn('data-saved-track-name="1"', html)
-        self.assertIn('class="channel-state indicator-green"', html)
+        self.assertIn('class="channel-state indicator-red"', html)
+        self.assertIn('aria-label="recording"', html)
         self.assertIn("Channel 1", html)
         self.assertIn(">•</span>", html)
         self.assertEqual(html.count('id="save-track-names"'), 1)
@@ -200,6 +203,24 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(html.count(">Save</button>"), 1)
         self.assertEqual(html.count(">Revert</button>"), 1)
         self.assertNotIn(">healthy</span>", html)
+
+    def test_home_page_shows_not_recording_channel_light(self) -> None:
+        html = home_page(
+            models.ShowStatus(
+                recs=models.RecsStatus(
+                    service=models.ServiceStatus(name="recs", state="connected"),
+                    channels=[
+                        models.ChannelLevel(name="1", state="healthy", device="Mic"),
+                    ],
+                ),
+                twitcho=models.TwitchoStatus(
+                    service=models.ServiceStatus(name="twitcho", state="connected")
+                ),
+            )
+        )
+
+        self.assertIn('class="channel-state indicator-green"', html)
+        self.assertIn('aria-label="not recording"', html)
 
     def test_home_page_has_mutable_recs_attributes(self) -> None:
         html = home_page(
