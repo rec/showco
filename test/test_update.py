@@ -7,7 +7,7 @@ from io import StringIO
 from pathlib import Path
 from unittest import mock
 
-from reccy.models import Platform
+from reccy.models import Platform, StatusResult
 
 from showco import update
 
@@ -420,8 +420,14 @@ class UpdateTests(unittest.TestCase):
                 return subprocess.CompletedProcess(command, 0, "same\n", "")
             return subprocess.CompletedProcess(command, 0, "", "")
 
-        with mock.patch(
-            "showco.services.service.current_platform", return_value=Platform.linux
+        with (
+            mock.patch(
+                "showco.services.service.current_platform", return_value=Platform.linux
+            ),
+            mock.patch(
+                "showco.services.refresh_service_definition",
+                return_value=StatusResult(installed=True, running=True),
+            ) as refresh,
         ):
             result = update.update_target(
                 ["reccy", "recs", "showco", "twitcho"],
@@ -439,9 +445,6 @@ class UpdateTests(unittest.TestCase):
                 ["git", "-C", "/code/showco", "branch", "--show-current"],
                 ["git", "-C", "/code/twitcho", "branch", "--show-current"],
             ],
-        )
-        self.assertEqual(
-            commands[-3], ["systemctl", "--user", "start", "showco.service"]
         )
         self.assertEqual(commands[-2][:2], ["sh", "-c"])
         self.assertIn("http://127.0.0.1:17352/status", commands[-2][2])
@@ -461,7 +464,7 @@ class UpdateTests(unittest.TestCase):
             commands.index(["git", "-C", "/code/twitcho", "pull", "--ff-only"]),
         )
         self.assertIn(["systemctl", "--user", "stop", "recs.service"], commands)
-        self.assertIn(["systemctl", "--user", "start", "recs.service"], commands)
+        self.assertEqual(refresh.call_count, 3)
 
     def test_target_update_knows_reccy_affects_recs_and_showco(self) -> None:
         commands: list[list[str]] = []
@@ -476,8 +479,14 @@ class UpdateTests(unittest.TestCase):
                 return subprocess.CompletedProcess(command, 0, "same\n", "")
             return subprocess.CompletedProcess(command, 0, "", "")
 
-        with mock.patch(
-            "showco.services.service.current_platform", return_value=Platform.linux
+        with (
+            mock.patch(
+                "showco.services.service.current_platform", return_value=Platform.linux
+            ),
+            mock.patch(
+                "showco.services.refresh_service_definition",
+                return_value=StatusResult(installed=True, running=True),
+            ) as refresh,
         ):
             result = update.update_target(
                 ["reccy"],
@@ -490,8 +499,7 @@ class UpdateTests(unittest.TestCase):
         self.assertIn(["systemctl", "--user", "stop", "recs.service"], commands)
         self.assertIn(["systemctl", "--user", "stop", "showco.service"], commands)
         self.assertIn(["git", "-C", "/code/reccy", "pull", "--ff-only"], commands)
-        self.assertIn(["systemctl", "--user", "start", "recs.service"], commands)
-        self.assertIn(["systemctl", "--user", "start", "showco.service"], commands)
+        self.assertEqual(refresh.call_count, 2)
 
     def test_target_update_restarts_lyte_service(self) -> None:
         commands: list[list[str]] = []

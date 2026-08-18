@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -80,22 +81,37 @@ class ServicesTests(unittest.TestCase):
         self.assertEqual(result, 0)
         metadata = controller.install.call_args.args[0]
         self.assertEqual(
-            metadata.executable, Path("/srv/show-projects/showco/.venv/bin/showco")
-        )
-        self.assertEqual(
             metadata.argv[:5], ["run", "--host", "0.0.0.0", "--port", "17352"]
         )
 
     def test_showco_daemon_uses_reccy_service_lifecycle(self) -> None:
-        daemon = services.ShowcoDaemon(
-            platform=Platform.linux,
-            root=Path("/srv/show-projects"),
-        )
+        daemon = services.ShowcoDaemon(platform=Platform.linux)
 
         self.assertEqual(daemon.name, "showco")
+
+    def test_refreshes_legacy_recs_service_metadata(self) -> None:
+        controller = mock.Mock()
+        controller.paths.metadata.read_text.return_value = json.dumps(
+            {
+                "argv": ["--silent", "--include", "Mic"],
+                "platform": "linux",
+                "gui_endpoint": "/tmp/recs-gui.sock",
+            }
+        )
+        controller.install.return_value = StatusResult(installed=True, running=True)
+        with mock.patch("showco.services.service_controller", return_value=controller):
+            result = services.refresh_service_definition("recs")
+
+        self.assertTrue(result.running)
         self.assertEqual(
-            daemon.daemon_executable(),
-            Path("/srv/show-projects/showco/.venv/bin/showco"),
+            controller.install.call_args.args[0].model_dump(),
+            {
+                "version": 1,
+                "argv": ["-m", "recs", "--silent", "--include", "Mic"],
+                "platform": "linux",
+                "control_endpoint": "/tmp/recs-gui.sock",
+                "event_endpoint": None,
+            },
         )
 
     def test_showco_args_omit_twitcho_when_disabled(self) -> None:

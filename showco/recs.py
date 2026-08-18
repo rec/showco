@@ -9,8 +9,8 @@ from pathlib import Path
 
 from pydantic import BaseModel
 from reccy import ipc, rpc
+from reccy.models import DaemonMetadata
 from recs.daemon import gui_protocol, paths
-from recs.daemon.models import DaemonMetadata
 from typing_extensions import TypeIs
 
 from . import models
@@ -271,7 +271,7 @@ class RecsClient:
             )
 
         try:
-            connection = ipc.client_connection(_endpoint(metadata.gui_endpoint))
+            connection = ipc.client_connection(_endpoint(metadata.control_endpoint))
         except OSError as e:
             return models.ActionResult(
                 ok=False, message=f"could not connect to recs: {e}"
@@ -312,7 +312,7 @@ class RecsClient:
             )
 
         try:
-            connection = ipc.client_connection(_endpoint(metadata.gui_endpoint))
+            connection = ipc.client_connection(_endpoint(metadata.control_endpoint))
         except OSError as e:
             return models.ActionResult(
                 ok=False, message=f"could not connect to recs: {e}"

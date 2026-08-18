@@ -202,9 +202,12 @@ def update_target(
     )
     if not check_main_branches(programs, run_command, output):
         return 1
+    refresh_definitions = any(p.name == "reccy" for p in programs)
     with progress_bar(len(programs), output) as progress:
         if "showco" in selected:
-            return update_target_with_showco(programs, run_command, output, progress)
+            return update_target_with_showco(
+                programs, run_command, output, progress, refresh_definitions
+            )
         service_names = selected_service_names(programs)
         results = [run_service_step(n, "stop", run_command) for n in service_names]
         for program in programs:
@@ -212,7 +215,12 @@ def update_target(
             results.extend(update_program_on_target(program, run_command))
             progress.update()
 
-        results.extend(run_service_step(n, "start", run_command) for n in service_names)
+        results.extend(
+            run_service_step(
+                n, "refresh" if refresh_definitions else "start", run_command
+            )
+            for n in service_names
+        )
         if "showco" in service_names:
             results.append(showco_revision_step(root, run_command))
         if "recs" in service_names:
@@ -226,6 +234,7 @@ def update_target_with_showco(
     run_command: RunCommand,
     output: TextIO,
     progress: tqdm,
+    refresh_definitions: bool,
 ) -> int:
     showco = program_named(programs, "showco")
     other_programs = [p for p in programs if p.name != "showco"]
@@ -238,9 +247,18 @@ def update_target_with_showco(
         results.extend(run_service_step(n, "stop", run_command) for n in service_names)
         progress.set_description_str(f"Updating {program.name}")
         results.extend(update_program_on_target(program, run_command))
-        results.extend(run_service_step(n, "start", run_command) for n in service_names)
+        results.extend(
+            run_service_step(
+                n, "refresh" if refresh_definitions else "start", run_command
+            )
+            for n in service_names
+        )
         progress.update()
-    results.append(run_service_step("showco", "start", run_command))
+    results.append(
+        run_service_step(
+            "showco", "refresh" if refresh_definitions else "start", run_command
+        )
+    )
     results.append(showco_revision_step(showco.directory.parent, run_command))
     if "recs" in selected_service_names(programs):
         results.append(recs_status_changes_step(run_command))
@@ -806,6 +824,10 @@ def run_service_step(
             result = controller.stop()
         elif step == "start":
             result = controller.start()
+        elif step == "refresh":
+            result = services.refresh_service_definition(
+                service_name, runner=service_runner(run_command)
+            )
         else:
             return StepResult(
                 program=service_name,
