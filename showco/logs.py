@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import shlex
 import subprocess
 import sys
 from collections.abc import Callable, Sequence
@@ -13,7 +12,7 @@ from pydantic import BaseModel, Field
 from . import machine_role, update
 from .provision import config, provision
 
-SERVICE_NAMES = ("recs", "twitcho", "lyte")
+SERVICE_NAMES = ("showco", "recs", "twitcho", "lyte")
 
 RunCommand = Callable[[Sequence[str]], CompletedProcess[str]]
 
@@ -73,12 +72,10 @@ def selected_services(arguments: list[str]) -> list[str]:
 
 
 def remote_logs_command(services: list[str], lines: int) -> str:
-    units = " ".join(
-        f"--unit {shlex.quote(f'{service}.service')}" for service in services
+    paths = " ".join(
+        f'"$HOME/.local/state/{service}/{service}.log"' for service in services
     )
-    return provision.user_session_command(
-        f"journalctl --user --no-pager --lines={lines} {units}"
-    )
+    return f"tail --lines={lines} {paths}"
 
 
 def run_command_with_timeout(command: Sequence[str]) -> CompletedProcess[str]:

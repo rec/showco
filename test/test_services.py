@@ -52,8 +52,7 @@ class ServicesTests(unittest.TestCase):
                 metadata=Path(directory) / "daemon.json",
                 service=Path(directory) / "showco.service",
                 status=Path(directory) / "status.json",
-                stdout_log=Path(directory) / "showco.out.log",
-                stderr_log=Path(directory) / "showco.err.log",
+                log=Path(directory) / "showco.log",
                 control_endpoint=Path(directory) / "gui.sock",
             )
             controller = mock.Mock()
