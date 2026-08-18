@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -9,7 +10,7 @@ from typing import ClassVar
 
 from pydantic import BaseModel
 from reccy import paths, reccy, service, service_spec
-from reccy.models import ServiceSpec, StatusResult
+from reccy.models import DaemonMetadata, ServiceSpec, StatusResult
 
 from . import machine_role, models
 
@@ -30,11 +31,6 @@ SERVICES = {
 
 class ShowcoDaemon(reccy.Reccy, frozen=True):
     service_spec: ClassVar[ServiceSpec] = SHOWCO_SERVICE
-
-    root: Path
-
-    def daemon_executable(self) -> Path:
-        return self.root / "showco/.venv/bin/showco"
 
 
 class RecsDaemonStatus(BaseModel, frozen=True):
@@ -57,10 +53,7 @@ def install_showco_service(
     x18_log_dir: Path | None = None,
     twitcho_enabled: bool = False,
 ) -> int:
-    daemon = ShowcoDaemon(
-        platform=paths.current_platform(),
-        root=root,
-    )
+    daemon = ShowcoDaemon(platform=paths.current_platform())
     result = daemon.install_service(
         [
             "run",
@@ -114,6 +107,19 @@ def restart_twitcho_service() -> models.ActionResult:
     if result.running:
         return models.ActionResult(ok=True, message="twitcho restart requested")
     return models.ActionResult(ok=False, message="twitcho service did not start")
+
+
+def refresh_service_definition(
+    name: str,
+    runner: Callable[..., CompletedProcess[str]] | None = None,
+) -> StatusResult:
+    controller = service_controller(SERVICES[name], runner=runner)
+    data = json.loads(controller.paths.metadata.read_text())
+    if name == "recs" and "gui_endpoint" in data:
+        data["control_endpoint"] = data.pop("gui_endpoint")
+        data["argv"] = ["-m", "recs", *data["argv"]]
+    metadata = DaemonMetadata.model_validate(data)
+    return controller.install(metadata)
 
 
 def report_service_status(service_names: list[str]) -> int:
