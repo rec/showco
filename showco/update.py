@@ -35,6 +35,7 @@ class UpdateOptions(BaseModel, frozen=True):
     host: str | None = None
     root: Path | None = None
     target_machine: bool = False
+    remote: bool = False
     autosquash: int = Field(default=50, ge=0)
 
 
@@ -65,6 +66,13 @@ def main(argv: list[str] | None = None) -> int:
             result = update_target(selected)
         else:
             result = update_target(selected, root=options.root)
+    elif options.remote:
+        if options.root is None:
+            result = update_remote_target(selected, host=options.host)
+        else:
+            result = update_remote_target(
+                selected, host=options.host, root=options.root
+            )
     else:
         if options.root is None:
             result = update_from_provisioning_machine(
@@ -143,6 +151,31 @@ def update_from_provisioning_machine(
         progress.update()
     if not target_result.ok:
         report_failure(target_result, output)
+        return 1
+    return 0
+
+
+def update_remote_target(
+    selected: list[str],
+    *,
+    host: str | None = None,
+    root: Path | None = None,
+    target_config: config.Config | None = None,
+    output: TextIO = sys.stdout,
+) -> int:
+    provision_config = target_config or provisioning_config()
+    target_host = host or provision_config.network.host
+    ssh_target = f"{provision_config.network.user}@{target_host}"
+    command = remote_update_command(
+        selected, root or provision_config.paths.root, skip_worktree_check=True
+    )
+    result = run_remote_step(
+        "target",
+        "update",
+        provision.ssh_command(provision_config, ssh_target, command),
+    )
+    if not result.ok:
+        report_failure(result, output)
         return 1
     return 0
 
@@ -699,19 +732,34 @@ def provisioning_config() -> config.Config:
     return config.config_from_values(values)
 
 
-def remote_update_command(selected: list[str], root: Path) -> str:
-    arguments = shlex.join(["--target-machine", "--root", str(root), *selected])
+def remote_update_command(
+    selected: list[str], root: Path, *, skip_worktree_check: bool = False
+) -> str:
+    arguments = shlex.join(
+        [
+            "--target-machine",
+            "--root",
+            str(root),
+            *selected,
+        ]
+    )
     showco_directory = shlex.quote(str(root / "showco"))
     dependency_directories = shlex.join(
         [str(root / name) for name in ["reccy", "recs", "twitcho", "lyte"]]
     )
+    worktree_check = ""
+    if not skip_worktree_check:
+        worktree_check = (
+            "status=$(git status --porcelain --untracked-files=no) && "
+            "status=$(printf '%s\\n' \"$status\" | "
+            "sed -E '/^.. (.*\\/)?uv\\.lock$/d') && "
+            'if [ -n "$status" ]; then '
+            'printf "%s\\n" "showco target worktree has tracked changes" >&2; '
+            'printf "%s\\n" "$status" >&2; exit 1; fi && '
+        )
     return (
         f"cd {showco_directory} && "
-        "status=$(git status --porcelain --untracked-files=no) && "
-        "status=$(printf '%s\\n' \"$status\" | sed -E '/^.. (.*\\/)?uv\\.lock$/d') && "
-        'if [ -n "$status" ]; then '
-        'printf "%s\\n" "showco target worktree has tracked changes" >&2; '
-        'printf "%s\\n" "$status" >&2; exit 1; fi && '
+        f"{worktree_check}"
         'upstream=$(git rev-parse --abbrev-ref --symbolic-full-name "@{upstream}") && '
         "remote=${upstream%%/*} && branch=${upstream#*/} && "
         'git fetch "$remote" "+refs/heads/$branch:refs/remotes/$remote/$branch" && '

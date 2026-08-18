@@ -79,6 +79,23 @@ class UpdateTests(unittest.TestCase):
             {"host": None, "autosquash": 0},
         )
 
+    def test_remote_update_skips_local_repositories(self) -> None:
+        with (
+            mock.patch(
+                "showco.update.machine_role.machine_role",
+                return_value="provisioning",
+            ),
+            mock.patch("showco.update.update_remote_target", return_value=0) as remote,
+            mock.patch("showco.update.update_from_provisioning_machine") as local,
+            mock.patch("showco.update.tqdm.write"),
+        ):
+            result = update.main(["--remote", "--host", "other.local", "recs"])
+
+        self.assertEqual(result, 0)
+        self.assertEqual(remote.call_args.args, (["recs"],))
+        self.assertEqual(remote.call_args.kwargs, {"host": "other.local"})
+        local.assert_not_called()
+
     def test_target_machine_override_runs_target_update(self) -> None:
         with (
             mock.patch("showco.update.machine_role.machine_role", return_value=""),
@@ -136,6 +153,17 @@ class UpdateTests(unittest.TestCase):
             command.endswith(
                 "uv run showco update --target-machine --root '/srv/show projects' recs"
             )
+        )
+
+    def test_remote_update_command_omits_worktree_check(self) -> None:
+        command = update.remote_update_command(
+            ["recs"], Path("/code"), skip_worktree_check=True
+        )
+
+        self.assertNotIn("git status --porcelain", command)
+        self.assertIn('git reset --hard "$remote/$branch"', command)
+        self.assertTrue(
+            command.endswith("uv run showco update --target-machine --root /code recs")
         )
 
     def test_legacy_remote_update_command_has_no_update_arguments(self) -> None:
