@@ -96,6 +96,25 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(remote.call_args.kwargs, {"host": "other.local"})
         local.assert_not_called()
 
+    def test_remote_update_reports_target_before_ssh(self) -> None:
+        output = StringIO()
+        with mock.patch(
+            "showco.update.run_remote_step",
+            return_value=update.StepResult(
+                program="target",
+                step="update",
+                command=["ssh"],
+                returncode=0,
+                output="",
+            ),
+        ):
+            result = update.update_remote_target(
+                ["recs"], target_config=make_config(), output=output
+            )
+
+        self.assertEqual(result, 0)
+        self.assertEqual(output.getvalue(), "Updating tom@bertrand.local from GitHub\n")
+
     def test_target_machine_override_runs_target_update(self) -> None:
         with (
             mock.patch("showco.update.machine_role.machine_role", return_value=""),
