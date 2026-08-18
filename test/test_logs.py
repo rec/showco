@@ -42,26 +42,26 @@ class LogsTests(unittest.TestCase):
                     "-p",
                     "22",
                     "tom@bertrand.local",
-                    "uid=$(id -u); XDG_RUNTIME_DIR=/run/user/$uid "
-                    "journalctl --user --no-pager --lines=25 "
-                    "--unit recs.service --unit twitcho.service",
+                    'tail --lines=25 "$HOME/.local/state/recs/recs.log" '
+                    '"$HOME/.local/state/twitcho/twitcho.log"',
                 ]
             ],
         )
 
     def test_defaults_to_all_service_logs(self) -> None:
-        self.assertEqual(logs.selected_services([]), ["recs", "twitcho", "lyte"])
+        self.assertEqual(
+            logs.selected_services([]), ["showco", "recs", "twitcho", "lyte"]
+        )
 
     def test_rejects_unknown_services(self) -> None:
         with self.assertRaisesRegex(SystemExit, "unknown log target"):
-            logs.selected_services(["recs", "showco"])
+            logs.selected_services(["recs", "unknown"])
 
     def test_remote_logs_command_quotes_units(self) -> None:
         self.assertEqual(
             logs.remote_logs_command(["recs", "lyte"], 50),
-            "uid=$(id -u); XDG_RUNTIME_DIR=/run/user/$uid "
-            "journalctl --user --no-pager --lines=50 "
-            "--unit recs.service --unit lyte.service",
+            'tail --lines=50 "$HOME/.local/state/recs/recs.log" '
+            '"$HOME/.local/state/lyte/lyte.log"',
         )
 
 
