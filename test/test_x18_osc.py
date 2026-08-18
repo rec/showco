@@ -49,9 +49,10 @@ class X18OscTests(unittest.TestCase):
     def test_write_datagram_records_raw_payload_and_decoded_message(self) -> None:
         output = io.BytesIO()
         recorder = osc.X18OscRecorder("10.43.0.18", log_dir=Path("/logs"))
+        recorder.output = output
         data = osc.xremote_message()
 
-        recorder.write_datagram(output, "out", data, target=("10.43.0.18", 10_024))
+        recorder.write_datagram("out", data, target=("10.43.0.18", 10_024))
 
         record = json.loads(output.getvalue().decode())
         self.assertEqual(record["direction"], "out")
@@ -65,8 +66,9 @@ class X18OscTests(unittest.TestCase):
     def test_send_xremote_records_send_error(self) -> None:
         output = io.BytesIO()
         recorder = osc.X18OscRecorder("10.43.0.18", log_dir=Path("/logs"))
+        recorder.output = output
 
-        recorder.send_xremote(BrokenSocket(), output)
+        recorder.send_xremote(BrokenSocket())
 
         record = json.loads(output.getvalue().decode())
         self.assertEqual(record["direction"], "out")
@@ -77,16 +79,19 @@ class X18OscTests(unittest.TestCase):
     def test_send_xremote_does_not_record_success(self) -> None:
         output = io.BytesIO()
         recorder = osc.X18OscRecorder("10.43.0.18", log_dir=Path("/logs"))
+        recorder.output = output
 
-        returned = recorder.send_xremote(FakeSocket(), output)
+        recorder.send_xremote(FakeSocket())
 
-        self.assertIs(returned, output)
+        self.assertIs(recorder.output, output)
         self.assertEqual(output.getvalue(), b"")
 
     def test_write_error_does_not_escape_when_log_is_unavailable(self) -> None:
         recorder = osc.X18OscRecorder("10.43.0.18", log_dir=Path("/logs"))
+        recorder.output = FailingOutput()
 
-        self.assertIsNone(recorder.write_datagram(FailingOutput(), "out", b"data"))
+        recorder.write_datagram("out", b"data")
+
         self.assertIsNotNone(recorder.last_write_error)
 
     def test_supervisor_command_runs_recorder_subcommand(self) -> None:
