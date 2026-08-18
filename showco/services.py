@@ -31,6 +31,7 @@ SERVICES = {
 
 class ShowcoDaemon(reccy.Reccy, frozen=True):
     service_spec: ClassVar[ServiceSpec] = SHOWCO_SERVICE
+    daemon_module: ClassVar[str] = "showco"
 
 
 class RecsDaemonStatus(BaseModel, frozen=True):
@@ -117,7 +118,11 @@ def refresh_service_definition(
     data = json.loads(controller.paths.metadata.read_text())
     if name == "recs" and "gui_endpoint" in data:
         data["control_endpoint"] = data.pop("gui_endpoint")
-        data["argv"] = ["-m", "recs", *data["argv"]]
+    if "module" not in data:
+        module = name
+        data["module"] = module
+        if data["argv"][:2] == ["-m", module]:
+            data["argv"] = data["argv"][2:]
     metadata = DaemonMetadata.model_validate(data)
     return controller.install(metadata)
 
