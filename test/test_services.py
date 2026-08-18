@@ -107,7 +107,8 @@ class ServicesTests(unittest.TestCase):
             controller.install.call_args.args[0].model_dump(),
             {
                 "version": 1,
-                "argv": ["-m", "recs", "--silent", "--include", "Mic"],
+                "argv": ["--silent", "--include", "Mic"],
+                "module": "recs",
                 "platform": "linux",
                 "control_endpoint": "/tmp/recs-gui.sock",
                 "event_endpoint": None,

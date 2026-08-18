@@ -129,6 +129,7 @@ class RecsTests(unittest.TestCase):
             metadata = Path(directory) / "daemon.json"
             metadata.write_text(
                 DaemonMetadata(
+                    module="recs",
                     platform=Platform.linux,
                     control_endpoint="/tmp/recs.sock",
                 ).model_dump_json()
@@ -171,6 +172,7 @@ class RecsTests(unittest.TestCase):
             metadata = Path(directory) / "daemon.json"
             metadata.write_text(
                 DaemonMetadata(
+                    module="recs",
                     platform=Platform.linux,
                     control_endpoint="/tmp/recs.sock",
                 ).model_dump_json()
@@ -193,6 +195,7 @@ class RecsTests(unittest.TestCase):
             metadata = Path(directory) / "daemon.json"
             metadata.write_text(
                 DaemonMetadata(
+                    module="recs",
                     platform=Platform.linux,
                     control_endpoint="/tmp/recs.sock",
                 ).model_dump_json()
@@ -230,6 +233,7 @@ class RecsTests(unittest.TestCase):
             metadata = Path(directory) / "daemon.json"
             metadata.write_text(
                 DaemonMetadata(
+                    module="recs",
                     platform=Platform.linux,
                     control_endpoint="/tmp/recs.sock",
                 ).model_dump_json()
@@ -328,6 +332,7 @@ class RecsTests(unittest.TestCase):
             metadata = Path(directory) / "daemon.json"
             metadata.write_text(
                 DaemonMetadata(
+                    module="recs",
                     platform=Platform.linux,
                     control_endpoint="/tmp/recs.sock",
                 ).model_dump_json()
