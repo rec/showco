@@ -8,9 +8,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import mock
 
-from reccy.models import Platform
+from reccy.models import DaemonMetadata, Platform
 from recs.daemon import gui_protocol
-from recs.daemon.models import DaemonMetadata
 
 from showco import models, recs
 from showco.recs import RecsClient, channel_levels, level_state, replace_track_name
@@ -130,9 +129,8 @@ class RecsTests(unittest.TestCase):
             metadata = Path(directory) / "daemon.json"
             metadata.write_text(
                 DaemonMetadata(
-                    executable=Path("/bin/recs"),
                     platform=Platform.linux,
-                    gui_endpoint="/tmp/recs.sock",
+                    control_endpoint="/tmp/recs.sock",
                 ).model_dump_json()
             )
             connection = FakeRecsConnection(
@@ -173,9 +171,8 @@ class RecsTests(unittest.TestCase):
             metadata = Path(directory) / "daemon.json"
             metadata.write_text(
                 DaemonMetadata(
-                    executable=Path("/bin/recs"),
                     platform=Platform.linux,
-                    gui_endpoint="/tmp/recs.sock",
+                    control_endpoint="/tmp/recs.sock",
                 ).model_dump_json()
             )
             client = RecsClient(metadata_path=metadata)
@@ -196,9 +193,8 @@ class RecsTests(unittest.TestCase):
             metadata = Path(directory) / "daemon.json"
             metadata.write_text(
                 DaemonMetadata(
-                    executable=Path("/bin/recs"),
                     platform=Platform.linux,
-                    gui_endpoint="/tmp/recs.sock",
+                    control_endpoint="/tmp/recs.sock",
                 ).model_dump_json()
             )
             connection = FakeRecsConnection(
@@ -234,9 +230,8 @@ class RecsTests(unittest.TestCase):
             metadata = Path(directory) / "daemon.json"
             metadata.write_text(
                 DaemonMetadata(
-                    executable=Path("/bin/recs"),
                     platform=Platform.linux,
-                    gui_endpoint="/tmp/recs.sock",
+                    control_endpoint="/tmp/recs.sock",
                 ).model_dump_json()
             )
             connection = FakeRecsConnection(
@@ -333,9 +328,8 @@ class RecsTests(unittest.TestCase):
             metadata = Path(directory) / "daemon.json"
             metadata.write_text(
                 DaemonMetadata(
-                    executable=Path("/bin/recs"),
                     platform=Platform.linux,
-                    gui_endpoint="/tmp/recs.sock",
+                    control_endpoint="/tmp/recs.sock",
                 ).model_dump_json()
             )
             connection = FakeRecsConnection(
