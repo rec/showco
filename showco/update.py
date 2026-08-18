@@ -169,11 +169,15 @@ def update_remote_target(
     command = remote_update_command(
         selected, root or provision_config.paths.root, skip_worktree_check=True
     )
-    result = run_remote_step(
-        "target",
-        "update",
-        provision.ssh_command(provision_config, ssh_target, command),
-    )
+    tqdm.write(f"Updating {ssh_target} from GitHub", file=output)
+    with progress_bar(1, output) as progress:
+        progress.set_description_str(f"Updating {ssh_target} from GitHub")
+        result = run_remote_step(
+            "target",
+            "update",
+            provision.ssh_command(provision_config, ssh_target, command),
+        )
+        progress.update()
     if not result.ok:
         report_failure(result, output)
         return 1
