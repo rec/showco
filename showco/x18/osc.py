@@ -174,43 +174,40 @@ class X18OscRecorder:
         self.max_log_files = max_log_files
         self.path = log_path(log_dir)
         self.bytes_written = 0
+        self.output: BinaryIO | None = None
         self.last_write_error: str | None = None
         self.next_open_at = 0.0
 
     def run_forever(self) -> None:
-        output = self.open_output()
+        self.open_output()
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             sock.settimeout(self.socket_timeout)
             next_subscribe = 0.0
             while True:
                 now = time.monotonic()
                 if now >= next_subscribe:
-                    output = self.send_xremote(sock, output)
+                    self.send_xremote(sock)
                     next_subscribe = now + self.subscribe_interval
                 try:
                     data, source = sock.recvfrom(65_535)
                 except TimeoutError:
                     continue
-                output = self.write_datagram(output, "in", data, source=source)
+                self.write_datagram("in", data, source=source)
 
-    def send_xremote(
-        self, sock: socket.socket, output: BinaryIO | None
-    ) -> BinaryIO | None:
+    def send_xremote(self, sock: socket.socket) -> None:
         data = xremote_message()
         target = (self.host, self.port)
         try:
             sock.sendto(data, target)
         except OSError as e:
-            return self.write_error(output, "out", target, str(e))
-        return output
+            self.write_error("out", target, str(e))
 
     def write_error(
         self,
-        output: BinaryIO | None,
         direction: str,
         target: tuple[str, int],
         error: str,
-    ) -> BinaryIO | None:
+    ) -> None:
         record: dict[str, object] = {
             "time": time.time(),
             "monotonic": time.monotonic(),
@@ -219,17 +216,16 @@ class X18OscRecorder:
             "target": [target[0], target[1]],
             "error": error,
         }
-        return self.write_record(output, record)
+        self.write_record(record)
 
     def write_datagram(
         self,
-        output: BinaryIO | None,
         direction: str,
         data: bytes,
         *,
         source: tuple[str, int] | None = None,
         target: tuple[str, int] | None = None,
-    ) -> BinaryIO | None:
+    ) -> None:
         record: dict[str, object] = {
             "time": time.time(),
             "monotonic": time.monotonic(),
@@ -242,7 +238,7 @@ class X18OscRecorder:
             record["source"] = [source[0], source[1]]
         if target:
             record["target"] = [target[0], target[1]]
-        return self.write_record(output, record)
+        self.write_record(record)
 
     def open_output(self) -> BinaryIO | None:
         if time.monotonic() < self.next_open_at:
@@ -250,47 +246,44 @@ class X18OscRecorder:
         try:
             self.log_dir.mkdir(parents=True, exist_ok=True)
             self.path = next_log_path(self.log_dir)
-            output = self.path.open("ab")
+            self.output = self.path.open("ab")
             self.bytes_written = self.path.stat().st_size
             self.last_write_error = None
             self.remove_old_logs()
             self.write_status()
-            return output
+            return self.output
         except OSError as error:
             self.report_write_error(error)
             return None
 
-    def write_record(
-        self, output: BinaryIO | None, record: dict[str, object]
-    ) -> BinaryIO | None:
-        if output is None:
-            output = self.open_output()
-            if output is None:
-                return None
-        assert output is not None
+    def write_record(self, record: dict[str, object]) -> None:
+        if self.output is None:
+            if self.open_output() is None:
+                return
+        assert self.output is not None
         data = json.dumps(record, separators=(",", ":")).encode() + b"\n"
         try:
             if (
                 self.bytes_written
                 and self.bytes_written + len(data) > self.max_log_bytes
             ):
-                output.close()
-                output = self.open_output()
-                if output is None:
-                    return None
-            output.write(data)
-            output.flush()
+                self.output.close()
+                self.output = None
+                if self.open_output() is None:
+                    return
+            assert self.output is not None
+            self.output.write(data)
+            self.output.flush()
             self.bytes_written += len(data)
             self.write_status()
-            return output
         except OSError as error:
-            if output is not None:
+            if self.output is not None:
                 try:
-                    output.close()
+                    self.output.close()
                 except OSError:
                     pass
+                self.output = None
             self.report_write_error(error)
-            return None
 
     def remove_old_logs(self) -> None:
         try:
