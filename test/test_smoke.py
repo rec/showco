@@ -14,13 +14,14 @@ from showco.server import make_server
 
 
 class SmokeTests(unittest.TestCase):
-    def test_rehearsal_server_serves_home_and_accepts_actions(self) -> None:
+    def test_rehearsal_server_serves_status_pages_and_accepts_actions(self) -> None:
         recs = RehearsalRecsClient()
         twitcho = RehearsalTwitchoClient()
         with running_rehearsal_server(recs, twitcho) as url:
-            home = read_url(f"{url}/home")
-            self.assertIn("Recording channels", home)
-            self.assertIn("Streaming", home)
+            channels = read_url(f"{url}/channels")
+            self.assertIn("Recording channels", channels)
+            health = read_url(f"{url}/health")
+            self.assertIn("Streaming", health)
 
             status = read_json(f"{url}/status")
             self.assertEqual(status["recs"]["service"]["state"], "connected")

@@ -6,7 +6,6 @@ import subprocess
 import threading
 import time
 from collections.abc import Callable
-from datetime import datetime
 from functools import cache
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -23,6 +22,7 @@ from .twitcho.client import TwitchoClient
 
 MAX_ACTION_BYTES = 65_536
 MAX_CONCURRENT_REQUESTS = 8
+ERROR_PAGE_LIMIT = 25
 LOGGER = logging.get_logger(__name__)
 SITE_DIRECTORY = Path(__file__).parent.parent / "site"
 
@@ -148,8 +148,17 @@ class ShowcoHandler(BaseHTTPRequestHandler):
         if self.path == "/status":
             self._json(self.app.status())
             return
-        if self.path in {"/", "/home"}:
-            self._html(home_page(self.app.status(), self.app.recs.mutable_attributes()))
+        if self.path in {"/", "/channels"}:
+            self._html(channels_page(self.app.status()))
+            return
+        if self.path == "/health":
+            self._html(health_page(self.app.status()))
+            return
+        if self.path == "/attributes":
+            self._html(attributes_page(self.app.recs.mutable_attributes()))
+            return
+        if self.path == "/errors":
+            self._html(errors_page(self.app.status().recs.errors))
             return
         if self.path == "/actions":
             self._html(
@@ -297,30 +306,15 @@ def make_server(
     return server
 
 
-def home_page(
-    status: models.ShowStatus,
-    mutable_attributes: list[models.MutableAttribute]
-    | models.ActionResult
-    | None = None,
-) -> str:
-    recs = status.recs.service
-    twitcho = status.twitcho.service
+def channels_page(status: models.ShowStatus) -> str:
     channel_html = "".join(
         level(c.device, c.name, c.state, c.on) for c in status.recs.channels
     )
     if not channel_html:
         channel_html = "<p>No channel data from recs.</p>"
     return page(
-        "Home",
+        "Channels",
         f"""
-        <section class="cards">
-          {service_card("recording", "Recording", recs.state, _recording_text(status))}
-          {
-            service_card(
-                "streaming", "Streaming", twitcho.state, _streaming_text(status)
-            )
-        }
-        </section>
         <section>
           <h2>Recording channels</h2>
           <div class="levels" id="channels">
@@ -331,16 +325,28 @@ def home_page(
             <button type="button" id="revert-track-names">Revert</button>
           </div>
         </section>
+        """,
+        script=site_file("status-script.js"),
+    )
+
+
+def health_page(status: models.ShowStatus) -> str:
+    recs = status.recs.service
+    twitcho = status.twitcho.service
+    return page(
+        "Health",
+        f"""
+        <section class="cards">
+          {service_card("recording", "Recording", recs.state, _recording_text(status))}
+          {
+            service_card(
+                "streaming", "Streaming", twitcho.state, _streaming_text(status)
+            )
+        }
+        </section>
         <section>
           <h2>Health</h2>
           <p id="recs-health">recs: {_service_detail(recs.state, recs.last_error)}</p>
-          <label class="toggle">
-            <input id="show-all-errors" type="checkbox" role="switch">
-            Show all errors
-          </label>
-          <div id="recs-errors">{
-            _recs_errors(status.recs.errors, status.run_started_at)
-        }</div>
           <p id="twitcho-health">
             twitcho: {_service_detail(twitcho.state, twitcho.last_error)}
           </p>
@@ -350,8 +356,30 @@ def home_page(
           <p>X18 OSC recorder:
             <span id="x18-recorder">{_x18_recorder(status)}</span></p>
         </section>
-        {mutable_attributes_section(mutable_attributes)}
         """,
+        script=site_file("status-script.js"),
+    )
+
+
+def attributes_page(
+    mutable_attributes: list[models.MutableAttribute] | models.ActionResult | None,
+) -> str:
+    return page(
+        "Attributes",
+        mutable_attributes_section(mutable_attributes),
+        script=site_file("status-script.js"),
+    )
+
+
+def errors_page(errors: list[models.ErrorRecord]) -> str:
+    body = (
+        f'<section id="recs-errors" data-limit="{ERROR_PAGE_LIMIT}">'
+        f"{_recs_errors(errors[-ERROR_PAGE_LIMIT:])}"
+        "</section>"
+    )
+    return page(
+        "Errors",
+        body,
         script=site_file("status-script.js"),
     )
 
@@ -419,7 +447,13 @@ def page(title: str, body: str, *, script: str = "") -> str:
 <body>
   <header>
     <h1>Showco</h1>
-    <nav><a href="/home">Home</a><a href="/actions">Actions</a></nav>
+    <nav>
+      <a href="/channels">Channels</a>
+      <a href="/health">Health</a>
+      <a href="/attributes">Attributes</a>
+      <a href="/actions">Actions</a>
+      <a href="/errors">Errors</a>
+    </nav>
   </header>
   <main>{body}</main>
   <script>{site_file("shutdown-action.js")}</script>
@@ -605,23 +639,15 @@ def _x18_recorder(status: models.ShowStatus) -> str:
     return status.x18.state
 
 
-def _recs_errors(errors: list[models.ErrorRecord], run_started_at: float) -> str:
-    current_errors = [e for e in errors if _error_timestamp(e) >= run_started_at]
-    if not current_errors:
-        return "<p>Recs errors:</p><p>No errors</p>"
+def _recs_errors(errors: list[models.ErrorRecord]) -> str:
+    if not errors:
+        return "<p>No errors</p>"
     items = "".join(
         f'<li><time class="error-time">{html.escape(e.timestamp)}</time>'
         f"<span>{html.escape(e.message)}</span></li>"
-        for e in current_errors
+        for e in errors
     )
-    return f"<p>Recs errors:</p><ul>{items}</ul>"
-
-
-def _error_timestamp(error: models.ErrorRecord) -> float:
-    try:
-        return datetime.fromisoformat(error.timestamp).timestamp()
-    except ValueError:
-        return 0.0
+    return f"<ul>{items}</ul>"
 
 
 def _duration(seconds: float | None) -> str:

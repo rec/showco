@@ -6,7 +6,16 @@ from threading import Event, Lock, Thread
 from unittest import mock
 
 from showco import models, rehearsal
-from showco.server import ShowcoApp, ShowcoHandler, actions_page, home_page
+from showco.server import (
+    ERROR_PAGE_LIMIT,
+    ShowcoApp,
+    ShowcoHandler,
+    actions_page,
+    attributes_page,
+    channels_page,
+    errors_page,
+    health_page,
+)
 
 
 class ServerTests(unittest.TestCase):
@@ -40,8 +49,8 @@ class ServerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "exceeds"):
             handler._form()
 
-    def test_home_page_has_two_screen_navigation(self) -> None:
-        html = home_page(
+    def test_status_pages_have_five_page_navigation(self) -> None:
+        html = channels_page(
             models.ShowStatus(
                 recs=models.RecsStatus(
                     service=models.ServiceStatus(name="recs", state="connected")
@@ -52,12 +61,15 @@ class ServerTests(unittest.TestCase):
             )
         )
 
-        self.assertIn('href="/home"', html)
+        self.assertIn('href="/channels"', html)
+        self.assertIn('href="/health"', html)
+        self.assertIn('href="/attributes"', html)
         self.assertIn('href="/actions"', html)
-        self.assertNotIn('href="/levels"', html)
+        self.assertIn('href="/errors"', html)
+        self.assertNotIn('href="/home"', html)
 
-    def test_home_page_has_live_status_elements(self) -> None:
-        html = home_page(
+    def test_channels_page_has_live_status_elements(self) -> None:
+        html = channels_page(
             models.ShowStatus(
                 recs=models.RecsStatus(
                     service=models.ServiceStatus(name="recs", state="connected")
@@ -68,13 +80,11 @@ class ServerTests(unittest.TestCase):
             )
         )
 
-        self.assertIn('id="recording-card"', html)
         self.assertIn('id="channels"', html)
-        self.assertNotIn('id="generated-at"', html)
         self.assertIn('fetch("/status"', html)
 
-    def test_home_page_shows_pi_temperature(self) -> None:
-        html = home_page(
+    def test_health_page_shows_pi_temperature(self) -> None:
+        html = health_page(
             models.ShowStatus(
                 recs=models.RecsStatus(
                     service=models.ServiceStatus(name="recs", state="connected")
@@ -89,8 +99,8 @@ class ServerTests(unittest.TestCase):
         self.assertIn("Pi temperature", html)
         self.assertIn("52.8 °C", html)
 
-    def test_home_page_shows_bitrate_and_mixer_latency(self) -> None:
-        html = home_page(
+    def test_health_page_shows_bitrate_and_mixer_latency(self) -> None:
+        html = health_page(
             models.ShowStatus(
                 recs=models.RecsStatus(
                     service=models.ServiceStatus(name="recs", state="connected")
@@ -108,75 +118,41 @@ class ServerTests(unittest.TestCase):
         self.assertIn("Mixer latency", html)
         self.assertIn("4.2 ms", html)
 
-    def test_home_page_shows_recs_errors(self) -> None:
-        html = home_page(
-            models.ShowStatus(
-                recs=models.RecsStatus(
-                    service=models.ServiceStatus(
-                        name="recs",
-                        state="connected",
-                        updated_at=1_785_000_000,
-                    ),
-                    errors=[
-                        models.ErrorRecord(
-                            timestamp="2026-08-13T12:34:56.789Z",
-                            message="disk almost full",
-                        )
-                    ],
-                ),
-                twitcho=models.TwitchoStatus(
-                    service=models.ServiceStatus(name="twitcho", state="connected")
-                ),
-            )
+    def test_errors_page_shows_recs_errors_without_controls(self) -> None:
+        html = errors_page(
+            [
+                models.ErrorRecord(
+                    timestamp="2026-08-13T12:34:56.789Z",
+                    message="disk almost full",
+                )
+            ]
         )
 
-        self.assertIn("Recs errors", html)
         self.assertIn("disk almost full", html)
-        self.assertIn(
-            '<input id="show-all-errors" type="checkbox" role="switch">', html
-        )
-        self.assertIn("Show all errors", html)
+        self.assertIn(f'data-limit="{ERROR_PAGE_LIMIT}"', html)
+        self.assertNotIn("Show all errors", html)
+        self.assertNotIn('type="checkbox" role="switch"', html)
 
-    def test_home_page_shows_empty_recs_errors(self) -> None:
-        html = home_page(
-            models.ShowStatus(
-                recs=models.RecsStatus(
-                    service=models.ServiceStatus(name="recs", state="connected")
-                ),
-                twitcho=models.TwitchoStatus(
-                    service=models.ServiceStatus(name="twitcho", state="connected")
-                ),
-            )
-        )
+    def test_errors_page_shows_empty_recs_errors(self) -> None:
+        html = errors_page([])
 
-        self.assertIn("Recs errors", html)
         self.assertIn("No errors", html)
 
-    def test_home_page_hides_errors_from_before_this_run(self) -> None:
-        html = home_page(
-            models.ShowStatus(
-                recs=models.RecsStatus(
-                    service=models.ServiceStatus(name="recs", state="connected"),
-                    errors=[
-                        models.ErrorRecord(
-                            timestamp="2026-08-13T12:34:56.789Z",
-                            message="old disk error",
-                        )
-                    ],
-                ),
-                twitcho=models.TwitchoStatus(
-                    service=models.ServiceStatus(name="twitcho", state="connected")
-                ),
-                run_started_at=1_800_000_000,
-            )
+    def test_errors_page_limits_previous_errors(self) -> None:
+        html = errors_page(
+            [
+                models.ErrorRecord(
+                    timestamp=f"2026-08-13T12:34:{i:02}Z", message=str(i)
+                )
+                for i in range(ERROR_PAGE_LIMIT + 1)
+            ]
         )
 
-        self.assertNotIn("old disk error", html)
-        self.assertIn("Recs errors", html)
-        self.assertIn("No errors", html)
+        self.assertNotIn(">0</span>", html)
+        self.assertIn(f">{ERROR_PAGE_LIMIT}</span>", html)
 
-    def test_home_page_has_track_name_editor_for_recs_channels(self) -> None:
-        html = home_page(
+    def test_channels_page_has_track_name_editor_for_recs_channels(self) -> None:
+        html = channels_page(
             models.ShowStatus(
                 recs=models.RecsStatus(
                     service=models.ServiceStatus(name="recs", state="connected"),
@@ -204,8 +180,8 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(html.count(">Revert</button>"), 1)
         self.assertNotIn(">healthy</span>", html)
 
-    def test_home_page_shows_not_recording_channel_light(self) -> None:
-        html = home_page(
+    def test_channels_page_shows_not_recording_channel_light(self) -> None:
+        html = channels_page(
             models.ShowStatus(
                 recs=models.RecsStatus(
                     service=models.ServiceStatus(name="recs", state="connected"),
@@ -222,16 +198,8 @@ class ServerTests(unittest.TestCase):
         self.assertIn('class="channel-state indicator-green"', html)
         self.assertIn('aria-label="not recording"', html)
 
-    def test_home_page_has_mutable_recs_attributes(self) -> None:
-        html = home_page(
-            models.ShowStatus(
-                recs=models.RecsStatus(
-                    service=models.ServiceStatus(name="recs", state="connected")
-                ),
-                twitcho=models.TwitchoStatus(
-                    service=models.ServiceStatus(name="twitcho", state="connected")
-                ),
-            ),
+    def test_attributes_page_has_mutable_recs_attributes(self) -> None:
+        html = attributes_page(
             [
                 models.MutableAttribute(
                     address="recording.noise_floor",

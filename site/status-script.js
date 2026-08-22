@@ -23,12 +23,18 @@
   }
 
   function updateService(identifier, service, detail, healthIdentifier) {
-    document.getElementById(`${identifier}-card`).className = `card ${service.state}`;
-    document.getElementById(`${identifier}-state`).textContent = service.state;
-    document.getElementById(`${identifier}-detail`).textContent = detail;
-    document.getElementById(healthIdentifier).textContent = `${
-      healthIdentifier.replace("-health", "")
-    }: ${serviceDetail(service)}`;
+    const card = document.getElementById(`${identifier}-card`);
+    const state = document.getElementById(`${identifier}-state`);
+    const detailElement = document.getElementById(`${identifier}-detail`);
+    const health = document.getElementById(healthIdentifier);
+    if (card) card.className = `card ${service.state}`;
+    if (state) state.textContent = service.state;
+    if (detailElement) detailElement.textContent = detail;
+    if (health) {
+      health.textContent = `${healthIdentifier.replace("-health", "")}: ${
+        serviceDetail(service)
+      }`;
+    }
   }
 
   function trackKey(channel) {
@@ -170,6 +176,7 @@
 
   function updateChannels(channels) {
     const container = document.getElementById("channels");
+    if (!container) return;
     if (document.activeElement.closest("#channels .level")) return;
     const names = new Map(
       [...container.querySelectorAll(".level")].map(form => [
@@ -190,23 +197,24 @@
     }));
   }
 
-  let latestErrors = [];
-  let showcoStartedAt = 0;
+  function atBottom() {
+    return window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2;
+  }
 
-  function updateRecsErrors(errors, runStartedAt) {
-    latestErrors = errors;
-    showcoStartedAt = runStartedAt;
+  function scrollToBottom() {
+    window.scrollTo(0, document.documentElement.scrollHeight);
+  }
+
+  function updateRecsErrors(errors) {
     const container = document.getElementById("recs-errors");
+    if (!container) return;
+    const follow = atBottom();
     container.replaceChildren();
-    const errorsToShow = document.getElementById("show-all-errors").checked
-      ? errors
-      : errors.filter(error => Date.parse(error.timestamp) / 1000 >= runStartedAt);
-    const heading = document.createElement("p");
-    heading.textContent = "Recs errors:";
+    const errorsToShow = errors.slice(-Number(container.dataset.limit));
     if (!errorsToShow.length) {
       const noErrors = document.createElement("p");
       noErrors.textContent = "No errors";
-      container.append(heading, noErrors);
+      container.append(noErrors);
       return;
     }
     const list = document.createElement("ul");
@@ -220,7 +228,8 @@
       item.append(timestamp, message);
       list.append(item);
     }
-    container.append(heading, list);
+    container.append(list);
+    if (follow) requestAnimationFrame(scrollToBottom);
   }
 
   function updateStatus() {
@@ -238,23 +247,31 @@
         "twitcho-health",
       );
       updateChannels(status.recs.channels);
-      updateRecsErrors(status.recs.errors, status.run_started_at);
-      document.getElementById("temperature").textContent =
-        status.system.temperature_c === null
-        ? status.system.temperature_error || "unknown"
-        : `${status.system.temperature_c.toFixed(1)} °C`;
-      document.getElementById("bitrate").textContent =
-        status.twitcho.output_bitrate_kbps === null
-        ? "unknown"
-        : `${status.twitcho.output_bitrate_kbps.toFixed(0)} kbps`;
-      document.getElementById("mixer-latency").textContent =
-        status.mixer.latency_ms === null
-        ? status.mixer.error || "unknown"
-        : `${status.mixer.latency_ms.toFixed(1)} ms`;
-      document.getElementById("x18-recorder").textContent =
-        status.x18.last_error || status.x18.log_path === null
-        ? status.x18.last_error || status.x18.state
-        : `${status.x18.state}: ${status.x18.log_path} (${status.x18.log_size} bytes)`;
+      updateRecsErrors(status.recs.errors);
+      const temperature = document.getElementById("temperature");
+      if (temperature) {
+        temperature.textContent = status.system.temperature_c === null
+          ? status.system.temperature_error || "unknown"
+          : `${status.system.temperature_c.toFixed(1)} °C`;
+      }
+      const bitrate = document.getElementById("bitrate");
+      if (bitrate) {
+        bitrate.textContent = status.twitcho.output_bitrate_kbps === null
+          ? "unknown"
+          : `${status.twitcho.output_bitrate_kbps.toFixed(0)} kbps`;
+      }
+      const mixerLatency = document.getElementById("mixer-latency");
+      if (mixerLatency) {
+        mixerLatency.textContent = status.mixer.latency_ms === null
+          ? status.mixer.error || "unknown"
+          : `${status.mixer.latency_ms.toFixed(1)} ms`;
+      }
+      const x18Recorder = document.getElementById("x18-recorder");
+      if (x18Recorder) {
+        x18Recorder.textContent = status.x18.last_error || status.x18.log_path === null
+          ? status.x18.last_error || status.x18.state
+          : `${status.x18.state}: ${status.x18.log_path} (${status.x18.log_size} bytes)`;
+      }
       })
       .catch(() => {});
   }
@@ -263,18 +280,19 @@
     updateStatus().then(() => setTimeout(pollStatus, 1000));
   }
 
-  document.getElementById("show-all-errors").addEventListener("change", () => {
-    updateRecsErrors(latestErrors, showcoStartedAt);
-  });
-
-  document.getElementById("save-track-names").addEventListener(
-    "click", saveTrackNames,
-  );
-  document.getElementById("revert-track-names").addEventListener(
-    "click", revertTrackNames,
-  );
+  const saveTrackNamesButton = document.getElementById("save-track-names");
+  if (saveTrackNamesButton) {
+    saveTrackNamesButton.addEventListener("click", saveTrackNames);
+  }
+  const revertTrackNamesButton = document.getElementById("revert-track-names");
+  if (revertTrackNamesButton) {
+    revertTrackNamesButton.addEventListener("click", revertTrackNames);
+  }
   for (const input of document.querySelectorAll("#mutable-attributes input")) {
     input.addEventListener("blur", saveMutableAttribute);
   }
 
+  if (document.getElementById("recs-errors")) {
+    requestAnimationFrame(scrollToBottom);
+  }
   pollStatus();
