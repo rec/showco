@@ -28,6 +28,9 @@ main {
   gap: 0.75rem;
   grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
 }
+.levels {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
 .card, .actions > form, section {
   background: #fffaf0;
   border: 2px solid #2b2b2b;
