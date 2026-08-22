@@ -381,8 +381,6 @@ showco_args() {
       --mixer-host "$SHOWCO_X18_HOST"
       --mixer-port 10024
       --mixer-protocol udp
-      --x18-host "$SHOWCO_X18_HOST"
-      --x18-log-dir "/home/$SHOW_USER/recordings"
     )
   fi
   if [[ "$TWITCHO_ENABLED" == true ]]; then
@@ -401,6 +399,7 @@ user_systemctl() {
 
 install_recs_service() {
   local quoted_args=
+  local osc_nodes=
   local uid
   local args=()
   local device_name
@@ -411,6 +410,14 @@ install_recs_service() {
     for device_name in "${device_names[@]}"; do
       args+=(--include "$device_name")
     done
+  fi
+  if [[ -n "$SHOWCO_X18_HOST" && "$SHOWCO_X18_HOST" != TODO ]]; then
+    osc_nodes="/home/$SHOW_USER/.config/recs/x18.toml"
+    sudo -H -u "$SHOW_USER" mkdir -p "${osc_nodes%/*}"
+    sudo -H -u "$SHOW_USER" sh -c '
+      printf "[[nodes]]\\nname = \\\"x18\\\"\\nhost = \\\"%s\\\"\\nport = 10024\\n\\n[[nodes.subscriptions]]\\npath = \\\"/xremote\\\"\\nresubscribe_period = 10\\n" "$1" > "$2"
+    ' sh "$SHOWCO_X18_HOST" "$osc_nodes"
+    args+=(--osc-nodes "$osc_nodes")
   fi
   if [[ ${#args[@]} -gt 0 ]]; then
     quoted_args=$(printf '%q ' "${args[@]}")
