@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Annotated, Literal
 
 import tyro
@@ -12,7 +11,6 @@ from .mixer import MixerMonitor
 from .provision import provision
 from .server import make_server
 from .twitcho import auth, client
-from .x18 import osc, recorder_supervisor
 
 
 class WebUiOptions(BaseModel, frozen=True):
@@ -21,14 +19,6 @@ class WebUiOptions(BaseModel, frozen=True):
     mixer_host: str | None = None
     mixer_port: int | None = None
     mixer_protocol: Literal["tcp", "udp"] = "tcp"
-    x18_host: Annotated[
-        str | None,
-        tyro.conf.arg(
-            help="start a read-only X18 OSC recorder subprocess for this mixer host"
-        ),
-    ] = None
-    x18_port: int = osc.X18_OSC_PORT
-    x18_log_dir: Path = Path(".")
     twitcho_enabled: bool = False
     rehearsal_mode: Annotated[
         bool,
@@ -42,16 +32,6 @@ class WebUiOptions(BaseModel, frozen=True):
 def run_web_ui(options: WebUiOptions) -> int:
     if not options.rehearsal_mode:
         machine_role.require_target_machine("showco run")
-    x18_recorder = None
-
-    if options.x18_host:
-        x18_recorder = recorder_supervisor.X18RecorderSupervisor(
-            options.x18_host,
-            port=options.x18_port,
-            log_dir=options.x18_log_dir,
-        )
-        x18_recorder.start()
-
     if options.rehearsal_mode:
         server = make_server(
             options.host,
@@ -74,7 +54,6 @@ def run_web_ui(options: WebUiOptions) -> int:
                 protocol=options.mixer_protocol,
             ),
             twitcho_enabled=options.twitcho_enabled,
-            x18_status=x18_recorder.status if x18_recorder else None,
         )
         print(f"showco listening on http://{options.host}:{options.port}")
     try:
@@ -83,8 +62,6 @@ def run_web_ui(options: WebUiOptions) -> int:
         print("Interrupted")
     finally:
         server.server_close()
-        if x18_recorder:
-            x18_recorder.close()
     return 0
 
 
@@ -105,8 +82,6 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def run_command(arguments: list[str]) -> int:
-    if arguments[:1] == ["x18-record"]:
-        return osc.main(arguments[1:])
     if arguments[:1] == ["network-config"]:
         return network_config.main(arguments[1:])
     if arguments[:1] == ["install-service"]:
