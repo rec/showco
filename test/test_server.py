@@ -161,7 +161,14 @@ class ServerTests(unittest.TestCase):
                     service=models.ServiceStatus(name="recs", state="connected"),
                     channels=[
                         models.ChannelLevel(
-                            name="1", state="healthy", device="Mic", on=True
+                            name="1",
+                            state="healthy",
+                            device="Mic",
+                            channels=[1],
+                            on=True,
+                        ),
+                        models.ChannelLevel(
+                            name="2", state="healthy", device="Mic", channels=[2]
                         ),
                     ],
                 ),
@@ -183,6 +190,58 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(html.count(">Save</button>"), 1)
         self.assertEqual(html.count(">Revert</button>"), 1)
         self.assertNotIn(">healthy</span>", html)
+        self.assertIn(
+            '<label class="stereo"><input type="checkbox">Stereo</label>', html
+        )
+
+    def test_channels_page_disables_mono_stereo_control_without_right_channel(
+        self,
+    ) -> None:
+        html = channels_page(
+            models.ShowStatus(
+                recs=models.RecsStatus(
+                    service=models.ServiceStatus(name="recs", state="connected"),
+                    channels=[
+                        models.ChannelLevel(
+                            name="2", state="healthy", device="Mic", channels=[2]
+                        )
+                    ],
+                ),
+                twitcho=models.TwitchoStatus(
+                    service=models.ServiceStatus(name="twitcho", state="connected")
+                ),
+            )
+        )
+
+        self.assertIn(
+            '<label class="stereo"><input type="checkbox" disabled>Stereo</label>',
+            html,
+        )
+
+    def test_channels_page_checks_stereo_control(self) -> None:
+        html = channels_page(
+            models.ShowStatus(
+                recs=models.RecsStatus(
+                    service=models.ServiceStatus(name="recs", state="connected"),
+                    channels=[
+                        models.ChannelLevel(
+                            name="1-2",
+                            state="healthy",
+                            device="Mic",
+                            channels=[1, 2],
+                        )
+                    ],
+                ),
+                twitcho=models.TwitchoStatus(
+                    service=models.ServiceStatus(name="twitcho", state="connected")
+                ),
+            )
+        )
+
+        self.assertIn(
+            '<label class="stereo"><input type="checkbox" checked>Stereo</label>',
+            html,
+        )
 
     def test_channels_page_shows_not_recording_channel_light(self) -> None:
         html = channels_page(
@@ -331,6 +390,22 @@ class ServerTests(unittest.TestCase):
 
         self.assertTrue(result.ok)
         self.assertTrue(recs.rehearsal_attributes["recording.record_everything"])
+
+    def test_set_stereo_action_uses_recs_client(self) -> None:
+        recs = rehearsal.RehearsalRecsClient()
+        app = ShowcoApp(
+            recs,
+            rehearsal.RehearsalTwitchoClient(),
+            rehearsal.RehearsalSystemMonitor(),
+            rehearsal.RehearsalMixerMonitor(),
+        )
+
+        result = app.run_action(
+            {"action": "recs-set-stereo", "device": "X18/XR18", "channels": "1"}
+        )
+
+        self.assertTrue(result.ok)
+        self.assertIn([1, 2], recs.rehearsal_tracks)
 
     def test_recs_action_uses_recs_client(self) -> None:
         recs = rehearsal.RehearsalRecsClient()

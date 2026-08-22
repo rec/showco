@@ -172,6 +172,35 @@ class RecsClient:
             ok=False, message="recs did not send track_names response"
         )
 
+    def set_stereo(self, device: str, channels: list[int]) -> models.ActionResult:
+        with self.track_name_lock:
+            tracks = stereo_tracks(self.status().channels, device, channels)
+            if isinstance(tracks, models.ActionResult):
+                return tracks
+            track_names = self.track_names()
+            if isinstance(track_names, models.ActionResult):
+                return track_names
+            response = self._send_request(
+                gui_protocol.SetTracks(
+                    type="set_tracks",
+                    source=device,
+                    tracks=[
+                        gui_protocol.ChannelTrack(
+                            channels=track,
+                            name=track_name(track_names, device, track[0]),
+                        )
+                        for track in tracks
+                    ],
+                ),
+                send_error="could not send recs stereo request",
+                failure_prefix="recs stereo update failed",
+            )
+        if isinstance(response, models.ActionResult):
+            return response
+        if isinstance(response, gui_protocol.TracksSet):
+            return models.ActionResult(ok=True, message="recs stereo updated")
+        return models.ActionResult(ok=False, message="recs did not update stereo")
+
     def track_names(self) -> dict[str, dict[str, int]] | models.ActionResult:
         response = self._send_request(
             gui_protocol.GetTrackNames(type="get_track_names"),
@@ -504,6 +533,7 @@ def channel_levels(rows: list[dict[str, object]]) -> list[models.ChannelLevel]:
                 name=name,
                 state=level_state(signal),
                 device=device,
+                channels=_channels(row.get("channels")),
                 signal=signal,
                 on=row.get("on") is True,
             )
@@ -519,6 +549,49 @@ def level_state(signal: float | None) -> str:
     if signal < 0.9:
         return "healthy"
     return "clipping"
+
+
+def stereo_tracks(
+    channels: list[models.ChannelLevel], device: str, selected: list[int]
+) -> list[list[int]] | models.ActionResult:
+    source_tracks = [
+        channel.channels for channel in channels if channel.device == device
+    ]
+    if selected not in source_tracks:
+        return models.ActionResult(
+            ok=False, message="recs channel is no longer available"
+        )
+    if len(selected) == 2:
+        tracks: list[list[int]] = []
+        for track in source_tracks:
+            if track == selected:
+                tracks.extend([[selected[0]], [selected[1]]])
+            else:
+                tracks.append(track)
+        return tracks
+    if len(selected) != 1:
+        return models.ActionResult(ok=False, message="recs channel layout is invalid")
+    right = [selected[0] + 1]
+    if right not in source_tracks:
+        return models.ActionResult(
+            ok=False, message="recs channel cannot be paired with its right neighbor"
+        )
+    tracks = []
+    for track in source_tracks:
+        if track == selected:
+            tracks.append(selected + right)
+        elif track != right:
+            tracks.append(track)
+    return tracks
+
+
+def track_name(
+    track_names: dict[str, dict[str, int]], device: str, channel: int
+) -> str:
+    for name, first_channel in track_names.get(device, {}).items():
+        if first_channel == channel:
+            return name
+    return ""
 
 
 def _connection_state(updated_at: float | None, stale_after_seconds: float) -> str:
@@ -583,6 +656,17 @@ def _float(value: object) -> float | None:
     if isinstance(value, int | float):
         return float(value)
     return None
+
+
+def _channels(value: object) -> list[int]:
+    if not isinstance(value, list):
+        return []
+    channels: list[int] = []
+    for channel in value:
+        if not isinstance(channel, int):
+            return []
+        channels.append(channel)
+    return channels
 
 
 def error_message(value: object) -> str:

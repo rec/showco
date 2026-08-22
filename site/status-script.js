@@ -38,7 +38,7 @@
   }
 
   function trackKey(channel) {
-    return `${channel.device}\\u0000${channel.name}`;
+    return `${channel.device}\\u0000${channel.channels.join(",")}`;
   }
 
   function revertTrackName(form) {
@@ -90,6 +90,41 @@
       saved = saved.then(() => saveTrackName(form));
     }
     return saved;
+  }
+
+  function saveStereo(event) {
+    const input = event.currentTarget;
+    const form = input.closest(".level");
+    input.setCustomValidity("");
+    input.disabled = true;
+    fetch("/actions", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        action: "recs-set-stereo",
+        device: form.dataset.device,
+        channels: form.dataset.channels,
+      }),
+    })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`stereo request failed: ${response.status}`);
+        }
+        return response.json();
+      })
+      .then(result => {
+        if (!result.ok) throw new Error(result.message);
+        return updateStatus();
+      })
+      .catch(error => {
+        input.checked = !input.checked;
+        input.disabled = false;
+        input.setCustomValidity(error.message);
+        input.reportValidity();
+      });
   }
 
   function revertTrackNames() {
@@ -145,11 +180,12 @@
       });
   }
 
-  function channelForm(channel, trackName, savedTrackName) {
+  function channelForm(channel, trackName, savedTrackName, channels) {
     const form = document.createElement("div");
     form.className = `level ${channel.state}`;
     form.dataset.device = channel.device;
     form.dataset.channel = channel.name;
+    form.dataset.channels = channel.channels.join(",");
     form.dataset.savedTrackName = savedTrackName;
     const label = document.createElement("label");
     const caption = document.createElement("span");
@@ -170,8 +206,25 @@
     state.textContent = "•";
     caption.append(state, title);
     label.append(caption, input);
-    form.append(label);
+    const stereo = document.createElement("label");
+    stereo.className = "stereo";
+    const stereoInput = document.createElement("input");
+    stereoInput.type = "checkbox";
+    stereoInput.checked = channel.channels.length === 2;
+    stereoInput.disabled = !stereoEnabled(channel, channels);
+    stereoInput.addEventListener("change", saveStereo);
+    stereo.append(stereoInput, "Stereo");
+    form.append(label, stereo);
     return form;
+  }
+
+  function stereoEnabled(channel, channels) {
+    return channel.channels.length === 2 || channels.some(other =>
+      other.device === channel.device
+      && other.channels.length === 1
+      && channel.channels.length === 1
+      && other.channels[0] === channel.channels[0] + 1,
+    );
   }
 
   function updateChannels(channels) {
@@ -193,6 +246,7 @@
         channel,
         name?.trackName ?? channel.name,
         name?.savedTrackName ?? channel.name,
+        channels,
       );
     }));
   }

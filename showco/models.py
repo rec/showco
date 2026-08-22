@@ -23,6 +23,7 @@ class ChannelLevel(BaseModel, frozen=True):
     name: str
     state: str
     device: str = ""
+    channels: list[int] = Field(default_factory=list)
     signal: float | None = None
     on: bool = False
 
