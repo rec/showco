@@ -7,6 +7,7 @@ import threading
 import time
 from collections.abc import Callable
 from datetime import datetime
+from functools import cache
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import ClassVar, cast
@@ -23,6 +24,12 @@ from .twitcho.client import TwitchoClient
 MAX_ACTION_BYTES = 65_536
 MAX_CONCURRENT_REQUESTS = 8
 LOGGER = logging.get_logger(__name__)
+SITE_DIRECTORY = Path(__file__).parent.parent / "site"
+
+
+@cache
+def site_file(name: str) -> str:
+    return (SITE_DIRECTORY / name).read_text()
 
 
 class ShowcoApp:
@@ -345,7 +352,7 @@ def home_page(
         </section>
         {mutable_attributes_section(mutable_attributes)}
         """,
-        script=HOME_STATUS_SCRIPT,
+        script=site_file("status-script.js"),
     )
 
 
@@ -407,7 +414,7 @@ def page(title: str, body: str, *, script: str = "") -> str:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Showco {title}</title>
-  <style>{CSS}</style>
+  <style>{site_file("server.css")}</style>
 </head>
 <body>
   <header>
@@ -415,15 +422,7 @@ def page(title: str, body: str, *, script: str = "") -> str:
     <nav><a href="/home">Home</a><a href="/actions">Actions</a></nav>
   </header>
   <main>{body}</main>
-  <script>
-    for (const form of document.querySelectorAll("form[data-confirm=true]")) {{
-      form.addEventListener("submit", event => {{
-        if (!confirm("Are you sure?")) {{
-          event.preventDefault();
-        }}
-      }});
-    }}
-  </script>
+  <script>{site_file("shutdown-action.js")}</script>
   {script}
 </body>
 </html>"""
@@ -679,413 +678,3 @@ TWITCHO_ACTIONS = {
     "twitcho-clip": "clip",
     "twitcho-marker": "marker",
 }
-
-HOME_STATUS_SCRIPT = """
-<script>
-  function serviceDetail(service) {
-    return service.last_error
-      ? `${service.state}: ${service.last_error}`
-      : service.state;
-  }
-
-  function recordingText(recs) {
-    if (!recs.recording) return "stopped";
-    const seconds = recs.elapsed_seconds;
-    if (seconds === null) return "recording for unknown time, ? files";
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    const duration = hours
-      ? `${hours}:${String(minutes % 60).padStart(2, "0")}:${String(
-          Math.floor(seconds % 60),
-        ).padStart(2, "0")}`
-      : `${minutes}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
-    return `recording for ${duration}, ${recs.file_count ?? "?"} files`;
-  }
-
-  function streamingText(twitcho) {
-    return `${twitcho.stream_state}${twitcho.muted ? ", muted" : ""}`;
-  }
-
-  function updateService(identifier, service, detail, healthIdentifier) {
-    document.getElementById(`${identifier}-card`).className = `card ${service.state}`;
-    document.getElementById(`${identifier}-state`).textContent = service.state;
-    document.getElementById(`${identifier}-detail`).textContent = detail;
-    document.getElementById(healthIdentifier).textContent = `${
-      healthIdentifier.replace("-health", "")
-    }: ${serviceDetail(service)}`;
-  }
-
-  function trackKey(channel) {
-    return `${channel.device}\\u0000${channel.name}`;
-  }
-
-  function revertTrackName(form) {
-    const input = form.querySelector("[name=track_name]");
-    input.value = form.dataset.savedTrackName;
-    input.setCustomValidity("");
-  }
-
-  function saveTrackName(form) {
-    const input = form.querySelector("[name=track_name]");
-    if (input.value === form.dataset.savedTrackName) return Promise.resolve();
-    input.setCustomValidity("");
-    return fetch("/actions", {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({
-        action: "recs-track-name",
-        device: form.dataset.device,
-        channel: form.dataset.channel,
-        track_name: input.value,
-      }),
-    })
-      .then(response => {
-        if (!response.ok) {
-          throw new Error(`track name request failed: ${response.status}`);
-        }
-        return response.json();
-      })
-      .then(result => {
-        if (!result.ok) throw new Error(result.message);
-        form.dataset.savedTrackName = input.value;
-      })
-      .catch(error => {
-        input.setCustomValidity(error.message);
-        input.reportValidity();
-      });
-  }
-
-  function channelForms() {
-    return [...document.querySelectorAll("#channels .level")];
-  }
-
-  function saveTrackNames() {
-    let saved = Promise.resolve();
-    for (const form of channelForms()) {
-      saved = saved.then(() => saveTrackName(form));
-    }
-    return saved;
-  }
-
-  function revertTrackNames() {
-    for (const form of channelForms()) revertTrackName(form);
-  }
-
-  function mutableAttributeValue(input) {
-    if (input.dataset.valueType === "boolean") return input.checked;
-    if (input.dataset.valueType === "number") return Number(input.value);
-    if (input.dataset.valueType === "json") return JSON.parse(input.value);
-    return input.value;
-  }
-
-  function saveMutableAttribute(event) {
-    const input = event.currentTarget;
-    const attribute = input.closest(".mutable-attribute");
-    input.setCustomValidity("");
-    let value;
-    try {
-      value = mutableAttributeValue(input);
-    } catch (error) {
-      input.setCustomValidity(error.message);
-      input.reportValidity();
-      return;
-    }
-    const savedValue = JSON.stringify(value);
-    if (savedValue === attribute.dataset.savedValue) return;
-    fetch("/actions", {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({
-        action: "recs-set-attr",
-        address: attribute.dataset.address,
-        value: savedValue,
-      }),
-    })
-      .then(response => {
-        if (!response.ok) {
-          throw new Error(`attribute request failed: ${response.status}`);
-        }
-        return response.json();
-      })
-      .then(result => {
-        if (!result.ok) throw new Error(result.message);
-        attribute.dataset.savedValue = savedValue;
-      })
-      .catch(error => {
-        input.setCustomValidity(error.message);
-        input.reportValidity();
-      });
-  }
-
-  function channelForm(channel, trackName, savedTrackName) {
-    const form = document.createElement("div");
-    form.className = `level ${channel.state}`;
-    form.dataset.device = channel.device;
-    form.dataset.channel = channel.name;
-    form.dataset.savedTrackName = savedTrackName;
-    const label = document.createElement("label");
-    const caption = document.createElement("span");
-    caption.className = "channel-caption";
-    const title = document.createElement("b");
-    title.textContent = `Channel ${channel.name}`;
-    const input = document.createElement("input");
-    input.name = "track_name";
-    input.value = trackName;
-    label.append(title, input);
-    const state = document.createElement("span");
-    state.className = `channel-state ${
-      channel.on ? "indicator-red" : "indicator-green"
-    }`;
-    const recordingState = channel.on ? "recording" : "not recording";
-    state.setAttribute("aria-label", recordingState);
-    state.title = recordingState;
-    state.textContent = "•";
-    caption.append(state, title);
-    label.append(caption, input);
-    form.append(label);
-    return form;
-  }
-
-  function updateChannels(channels) {
-    const container = document.getElementById("channels");
-    if (document.activeElement.closest("#channels .level")) return;
-    const names = new Map(
-      [...container.querySelectorAll(".level")].map(form => [
-        `${form.dataset.device}\\u0000${form.dataset.channel}`,
-        {
-          trackName: form.querySelector("[name=track_name]").value,
-          savedTrackName: form.dataset.savedTrackName,
-        },
-      ]),
-    );
-    container.replaceChildren(...channels.map(channel => {
-      const name = names.get(trackKey(channel));
-      return channelForm(
-        channel,
-        name?.trackName ?? channel.name,
-        name?.savedTrackName ?? channel.name,
-      );
-    }));
-  }
-
-  let latestErrors = [];
-  let showcoStartedAt = 0;
-
-  function updateRecsErrors(errors, runStartedAt) {
-    latestErrors = errors;
-    showcoStartedAt = runStartedAt;
-    const container = document.getElementById("recs-errors");
-    container.replaceChildren();
-    const errorsToShow = document.getElementById("show-all-errors").checked
-      ? errors
-      : errors.filter(error => Date.parse(error.timestamp) / 1000 >= runStartedAt);
-    const heading = document.createElement("p");
-    heading.textContent = "Recs errors:";
-    if (!errorsToShow.length) {
-      const noErrors = document.createElement("p");
-      noErrors.textContent = "No errors";
-      container.append(heading, noErrors);
-      return;
-    }
-    const list = document.createElement("ul");
-    for (const error of errorsToShow) {
-      const item = document.createElement("li");
-      const timestamp = document.createElement("time");
-      timestamp.className = "error-time";
-      timestamp.textContent = new Date(error.timestamp).toLocaleTimeString();
-      const message = document.createElement("span");
-      message.textContent = error.message;
-      item.append(timestamp, message);
-      list.append(item);
-    }
-    container.append(heading, list);
-  }
-
-  function updateStatus() {
-    return fetch("/status", { cache: "no-store" })
-      .then(response => {
-      if (!response.ok) throw new Error(`status request failed: ${response.status}`);
-        return response.json();
-      })
-      .then(status => {
-      updateService(
-        "recording", status.recs.service, recordingText(status.recs), "recs-health",
-      );
-      updateService(
-        "streaming", status.twitcho.service, streamingText(status.twitcho),
-        "twitcho-health",
-      );
-      updateChannels(status.recs.channels);
-      updateRecsErrors(status.recs.errors, status.run_started_at);
-      document.getElementById("temperature").textContent =
-        status.system.temperature_c === null
-        ? status.system.temperature_error || "unknown"
-        : `${status.system.temperature_c.toFixed(1)} °C`;
-      document.getElementById("bitrate").textContent =
-        status.twitcho.output_bitrate_kbps === null
-        ? "unknown"
-        : `${status.twitcho.output_bitrate_kbps.toFixed(0)} kbps`;
-      document.getElementById("mixer-latency").textContent =
-        status.mixer.latency_ms === null
-        ? status.mixer.error || "unknown"
-        : `${status.mixer.latency_ms.toFixed(1)} ms`;
-      document.getElementById("x18-recorder").textContent =
-        status.x18.last_error || status.x18.log_path === null
-        ? status.x18.last_error || status.x18.state
-        : `${status.x18.state}: ${status.x18.log_path} (${status.x18.log_size} bytes)`;
-      })
-      .catch(() => {});
-  }
-
-  function pollStatus() {
-    updateStatus().then(() => setTimeout(pollStatus, 1000));
-  }
-
-  document.getElementById("show-all-errors").addEventListener("change", () => {
-    updateRecsErrors(latestErrors, showcoStartedAt);
-  });
-
-  document.getElementById("save-track-names").addEventListener(
-    "click", saveTrackNames,
-  );
-  document.getElementById("revert-track-names").addEventListener(
-    "click", revertTrackNames,
-  );
-  for (const input of document.querySelectorAll("#mutable-attributes input")) {
-    input.addEventListener("blur", saveMutableAttribute);
-  }
-
-  pollStatus();
-</script>
-"""
-
-CSS = """
-body {
-  background: #f7f4ed;
-  color: #171717;
-  font-family: system-ui, sans-serif;
-  margin: 0;
-}
-header {
-  align-items: center;
-  background: #eee4d4;
-  display: flex;
-  justify-content: space-between;
-  padding: 0.75rem 1rem;
-}
-h1, h2 { margin: 0.25rem 0; }
-nav a {
-  color: #171717;
-  font-size: 1.2rem;
-  font-weight: 700;
-  margin-left: 1rem;
-}
-main {
-  display: grid;
-  gap: 1rem;
-  padding: 1rem;
-}
-.cards, .actions, .levels {
-  display: grid;
-  gap: 0.75rem;
-  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
-}
-.card, .actions > form, section {
-  background: #fffaf0;
-  border: 2px solid #2b2b2b;
-  border-radius: 0.75rem;
-  padding: 1rem;
-}
-.state {
-  font-size: 1.6rem;
-  font-weight: 800;
-}
-.connected { border-color: #14853d; }
-.stale { border-color: #b57900; }
-.offline, .error, .failed { border-color: #b3261e; }
-#recs-errors li {
-  display: grid;
-  gap: 0.75rem;
-  grid-template-columns: 5.5rem 1fr;
-}
-.error-time {
-  font-family: ui-monospace, monospace;
-}
-.toggle {
-  align-items: center;
-  display: flex;
-  gap: 0.5rem;
-}
-.toggle input {
-  margin: 0;
-  min-height: 1rem;
-  width: auto;
-}
-.level {
-  border-radius: 0.5rem;
-  color: white;
-  display: grid;
-  gap: 0.5rem;
-  padding: 0.75rem;
-}
-.level label {
-  margin: 0;
-}
-.channel-caption {
-  align-items: center;
-  display: flex;
-  gap: 0.5rem;
-}
-.level input {
-  margin: 0.25rem 0 0;
-  min-height: 2rem;
-}
-.channel-actions {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
-}
-.channel-actions button {
-  width: auto;
-}
-.attributes {
-  display: grid;
-  gap: 0.75rem;
-  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
-}
-.mutable-attribute {
-  margin: 0;
-}
-.channel-state {
-  font-size: 3rem;
-  line-height: 1;
-}
-.indicator-green { color: #14853d; }
-.indicator-red { color: #b3261e; }
-.silent { background: #777; }
-.present { background: #3366cc; }
-.healthy { background: #14853d; }
-.clipping { background: #b3261e; }
-button, input {
-  box-sizing: border-box;
-  display: block;
-  font-size: 1.1rem;
-  margin-top: 0.5rem;
-  min-height: 2.5rem;
-  width: 100%;
-}
-button {
-  background: #f0c24b;
-  border: 2px solid #171717;
-  border-radius: 0.5rem;
-  font-weight: 800;
-}
-.ok { color: #14853d; }
-.failed { color: #b3261e; }
-"""
