@@ -54,12 +54,13 @@ class ShowcoApp:
             )
         else:
             twitcho = self.twitcho.status()
+        recs = self.recs.status()
         return models.ShowStatus(
-            recs=self.recs.status(),
+            recs=recs,
             twitcho=twitcho,
             system=self.system.status(),
             mixer=self.mixer.status(),
-            x18=self.x18_status() if self.x18_status else models.RecorderStatus(),
+            x18=recs.x18,
             revision=self.revision,
             run_started_at=self.run_started_at,
         )

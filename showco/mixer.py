@@ -5,7 +5,6 @@ import threading
 import time
 
 from .models import MixerStatus
-from .x18.osc import xremote_message
 
 MIXER_TIMEOUT_SECONDS = 0.5
 MIXER_PROBE_INTERVAL_SECONDS = 5.0
@@ -71,7 +70,7 @@ class MixerMonitor:
             sock.settimeout(self.timeout_seconds)
             try:
                 sock.connect((self.host, self.port))
-                sock.send(xremote_message())
+                sock.send(b'/xremote\0\0\0\0,\0\0\0')
                 sock.recv(1)
                 return MixerStatus(latency_ms=elapsed_ms(start))
             except OSError as e:

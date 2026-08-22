@@ -27,6 +27,13 @@ class ChannelLevel(BaseModel, frozen=True):
     on: bool = False
 
 
+class RecorderStatus(BaseModel, frozen=True):
+    state: str = "disabled"
+    log_path: str | None = None
+    log_size: int | None = None
+    last_error: str | None = None
+
+
 class MutableAttribute(BaseModel, frozen=True):
     address: str
     value: object
@@ -47,6 +54,7 @@ class RecsStatus(BaseModel, frozen=True):
     client_count: int = 0
     channels: list[ChannelLevel] = Field(default_factory=list)
     errors: list[ErrorRecord] = Field(default_factory=list)
+    x18: RecorderStatus = Field(default_factory=RecorderStatus)
 
 
 class TwitchoStatus(BaseModel, frozen=True):
@@ -68,13 +76,6 @@ class SystemStatus(BaseModel, frozen=True):
 class MixerStatus(BaseModel, frozen=True):
     latency_ms: float | None = None
     error: str | None = None
-
-
-class RecorderStatus(BaseModel, frozen=True):
-    state: str = "disabled"
-    log_path: str | None = None
-    log_size: int | None = None
-    last_error: str | None = None
 
 
 class ShowStatus(BaseModel, frozen=True):

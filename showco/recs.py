@@ -88,6 +88,7 @@ class RecsClient:
         rows = _rows(data.get("rows"))
         totals = rows[0] if rows else {}
 
+        x18 = _x18_status(self._external_command("status_snapshot"))
         return models.RecsStatus(
             service=models.ServiceStatus(
                 name="recs",
@@ -103,6 +104,7 @@ class RecsClient:
             client_count=_int(data.get("client_count")) or 0,
             channels=channel_levels(rows),
             errors=_error_records(data.get("errors")),
+            x18=x18,
         )
 
     def calibrate(self) -> models.ActionResult:
@@ -557,6 +559,24 @@ def _error_records(value: object) -> list[models.ErrorRecord]:
         if timestamp is not None and message is not None:
             errors.append(models.ErrorRecord(timestamp=timestamp, message=message))
     return errors
+
+
+def _x18_status(value: object) -> models.RecorderStatus:
+    if not _object_dict(value):
+        return models.RecorderStatus()
+    nodes = value.get("osc")
+    if not isinstance(nodes, list):
+        return models.RecorderStatus()
+    for node in nodes:
+        if not _object_dict(node) or node.get("name") != "x18":
+            continue
+        return models.RecorderStatus(
+            state=_string(node.get("state")) or "running",
+            log_path=_string(node.get("path")),
+            log_size=_int(node.get("size")),
+            last_error=_string(node.get("last_error")),
+        )
+    return models.RecorderStatus()
 
 
 def _float(value: object) -> float | None:
