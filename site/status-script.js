@@ -155,7 +155,7 @@
     const caption = document.createElement("span");
     caption.className = "channel-caption";
     const title = document.createElement("b");
-    title.textContent = `Channel ${channel.name}`;
+    title.textContent = channel.name;
     const input = document.createElement("input");
     input.name = "track_name";
     input.value = trackName;
