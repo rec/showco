@@ -5,7 +5,7 @@ import time
 
 from . import models
 from .mixer import MixerMonitor
-from .recs import RecsClient
+from .recs import RecsClient, stereo_tracks
 from .system import SystemMonitor
 from .twitcho.client import TwitchoClient
 
@@ -14,6 +14,7 @@ class RehearsalRecsClient(RecsClient):
     def __init__(self) -> None:
         self.started_at = time.time()
         self.calibration_count = 0
+        self.rehearsal_tracks = [[channel] for channel in range(1, 19)]
         self.rehearsal_track_names: dict[str, dict[str, int]] = {}
         self.rehearsal_attributes: dict[str, object] = {
             "recording.longest_file_time": 0.0,
@@ -34,7 +35,7 @@ class RehearsalRecsClient(RecsClient):
             file_size=elapsed * 9_000_000,
             file_count=18,
             client_count=1,
-            channels=rehearsal_channels(elapsed),
+            channels=rehearsal_channels(elapsed, self.rehearsal_tracks),
             errors=[],
         )
 
@@ -65,6 +66,13 @@ class RehearsalRecsClient(RecsClient):
         return models.ActionResult(
             ok=True, message=f"rehearsal recs track name {track_name}"
         )
+
+    def set_stereo(self, device: str, channels: list[int]) -> models.ActionResult:
+        tracks = stereo_tracks(self.status().channels, device, channels)
+        if isinstance(tracks, models.ActionResult):
+            return tracks
+        self.rehearsal_tracks = tracks
+        return models.ActionResult(ok=True, message="rehearsal recs stereo updated")
 
     def mutable_attributes(self) -> list[models.MutableAttribute]:
         return [
@@ -139,15 +147,19 @@ class RehearsalMixerMonitor(MixerMonitor):
         return models.MixerStatus(latency_ms=4.2)
 
 
-def rehearsal_channels(elapsed: float) -> list[models.ChannelLevel]:
+def rehearsal_channels(
+    elapsed: float, tracks: list[list[int]]
+) -> list[models.ChannelLevel]:
     channels = []
-    for index in range(18):
+    for track in tracks:
+        index = track[0] - 1
         signal = channel_signal(index, elapsed)
         channels.append(
             models.ChannelLevel(
-                name=str(index + 1),
+                name="-".join(str(channel) for channel in track),
                 state=channel_state(signal),
                 device="X18/XR18",
+                channels=track,
                 signal=signal,
                 on=True,
             )

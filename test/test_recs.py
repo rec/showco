@@ -12,7 +12,13 @@ from reccy.models import DaemonMetadata, Platform
 from recs.daemon import gui_protocol
 
 from showco import models, recs
-from showco.recs import RecsClient, channel_levels, level_state, replace_track_name
+from showco.recs import (
+    RecsClient,
+    channel_levels,
+    level_state,
+    replace_track_name,
+    stereo_tracks,
+)
 
 CLIENT_CONNECTION = "showco.recs.ipc.client_connection"
 
@@ -65,7 +71,12 @@ class RecsTests(unittest.TestCase):
                         "updated_at": time.time(),
                         "rows": [
                             {"time": 4.0, "recorded": 3.0, "file_count": 1},
-                            {"channel": "1", "signal": 0.5, "on": True},
+                            {
+                                "channel": "1",
+                                "channels": [1],
+                                "signal": 0.5,
+                                "on": True,
+                            },
                         ],
                     }
                 )
@@ -79,6 +90,7 @@ class RecsTests(unittest.TestCase):
         self.assertEqual(status.file_count, 1)
         self.assertEqual(status.client_count, 2)
         self.assertEqual(status.channels[0].state, "healthy")
+        self.assertEqual(status.channels[0].channels, [1])
         self.assertTrue(status.channels[0].on)
         self.assertEqual(status.errors[0].message, "disk almost full")
 
@@ -365,6 +377,72 @@ class RecsTests(unittest.TestCase):
         )
 
         self.assertEqual([c.device for c in channels], ["Mic", "X18"])
+
+    def test_stereo_tracks_pairs_right_hand_mono_channel(self) -> None:
+        tracks = stereo_tracks(
+            [
+                models.ChannelLevel(
+                    name="1", state="healthy", device="Mic", channels=[1]
+                ),
+                models.ChannelLevel(
+                    name="2", state="healthy", device="Mic", channels=[2]
+                ),
+                models.ChannelLevel(
+                    name="3", state="healthy", device="Mic", channels=[3]
+                ),
+            ],
+            "Mic",
+            [1],
+        )
+
+        self.assertEqual(tracks, [[1, 2], [3]])
+
+    def test_stereo_tracks_splits_stereo_channel(self) -> None:
+        tracks = stereo_tracks(
+            [
+                models.ChannelLevel(
+                    name="1-2", state="healthy", device="Mic", channels=[1, 2]
+                )
+            ],
+            "Mic",
+            [1, 2],
+        )
+
+        self.assertEqual(tracks, [[1], [2]])
+
+    def test_set_stereo_sends_complete_track_layout(self) -> None:
+        client = RecsClient()
+        client.status = mock.Mock(
+            return_value=models.RecsStatus(
+                service=models.ServiceStatus(name="recs", state="connected"),
+                channels=[
+                    models.ChannelLevel(
+                        name="Lead", state="healthy", device="Mic", channels=[1]
+                    ),
+                    models.ChannelLevel(
+                        name="Right", state="healthy", device="Mic", channels=[2]
+                    ),
+                ],
+            )
+        )
+        client.track_names = mock.Mock(return_value={"Mic": {"Lead": 1}})
+        client._send_request = mock.Mock(
+            return_value=gui_protocol.TracksSet(
+                type="tracks_set",
+                source="Mic",
+                tracks=[gui_protocol.ChannelTrack(channels=[1, 2], name="Lead")],
+            )
+        )
+
+        result = client.set_stereo("Mic", [1])
+
+        self.assertTrue(result.ok)
+        request = client._send_request.call_args.args[0]
+        self.assertEqual(request.type, "set_tracks")
+        self.assertEqual(request.source, "Mic")
+        self.assertEqual(
+            request.tracks, [gui_protocol.ChannelTrack(channels=[1, 2], name="Lead")]
+        )
 
     def test_replace_track_name_removes_old_name_for_channel(self) -> None:
         self.assertEqual(

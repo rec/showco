@@ -83,6 +83,10 @@ class ShowcoApp:
                     form.get("channel", ""),
                     form.get("track_name", ""),
                 )
+            elif action == "recs-set-stereo":
+                result = self.recs.set_stereo(
+                    form.get("device", ""), _channel_numbers(form.get("channels", ""))
+                )
             elif action == "recs-set-attr":
                 try:
                     value = json.loads(form.get("value", ""))
@@ -308,7 +312,7 @@ def make_server(
 
 def channels_page(status: models.ShowStatus) -> str:
     channel_html = "".join(
-        level(c.device, c.name, c.state, c.on) for c in status.recs.channels
+        level(channel, status.recs.channels) for channel in status.recs.channels
     )
     if not channel_html:
         channel_html = "<p>No channel data from recs.</p>"
@@ -472,24 +476,49 @@ def service_card(identifier: str, title: str, state: str, detail: str) -> str:
     """
 
 
-def level(device: str, name: str, state: str, on: bool) -> str:
-    safe_device = html.escape(device)
-    safe_name = html.escape(name)
-    safe_state = html.escape(state)
-    recording_state = "recording" if on else "not recording"
+def level(channel: models.ChannelLevel, channels: list[models.ChannelLevel]) -> str:
+    safe_device = html.escape(channel.device)
+    safe_name = html.escape(channel.name)
+    safe_state = html.escape(channel.state)
+    recording_state = "recording" if channel.on else "not recording"
+    stereo = len(channel.channels) == 2
+    enabled = stereo or _stereo_enabled(channel, channels)
+    checked = " checked" if stereo else ""
+    disabled = "" if enabled else " disabled"
+    numbers = ",".join(str(number) for number in channel.channels)
     return f"""
     <div class="level {safe_state}" data-device="{safe_device}"
-         data-channel="{safe_name}" data-saved-track-name="{safe_name}">
+         data-channel="{safe_name}" data-channels="{numbers}"
+         data-saved-track-name="{safe_name}">
       <label>
         <span class="channel-caption">
-          <span class="channel-state {channel_indicator(on)}"
+          <span class="channel-state {channel_indicator(channel.on)}"
                 aria-label="{recording_state}" title="{recording_state}">•</span>
           <b>{safe_name}</b>
         </span>
         <input name="track_name" value="{safe_name}">
       </label>
+      <label class="stereo"><input type="checkbox"{checked}{disabled}>Stereo</label>
     </div>
     """
+
+
+def _stereo_enabled(
+    channel: models.ChannelLevel, channels: list[models.ChannelLevel]
+) -> bool:
+    if len(channel.channels) != 1:
+        return False
+    return any(
+        other.device == channel.device and other.channels == [channel.channels[0] + 1]
+        for other in channels
+    )
+
+
+def _channel_numbers(value: str) -> list[int]:
+    try:
+        return [int(number) for number in value.split(",") if number]
+    except ValueError:
+        return []
 
 
 def channel_indicator(on: bool) -> str:

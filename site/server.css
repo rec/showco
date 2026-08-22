@@ -81,6 +81,16 @@ main {
   margin: 0.25rem 0 0;
   min-height: 2rem;
 }
+.stereo {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+}
+.stereo input {
+  margin: 0;
+  min-height: 1rem;
+  width: auto;
+}
 .channel-actions {
   display: flex;
   gap: 0.5rem;
