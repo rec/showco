@@ -484,7 +484,7 @@ def level(device: str, name: str, state: str, on: bool) -> str:
         <span class="channel-caption">
           <span class="channel-state {channel_indicator(on)}"
                 aria-label="{recording_state}" title="{recording_state}">•</span>
-          <b>Channel {safe_name}</b>
+          <b>{safe_name}</b>
         </span>
         <input name="track_name" value="{safe_name}">
       </label>
