@@ -8,6 +8,8 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 from typing_extensions import TypeIs
 
+from ..mixer import MixerSpec, MixerSpecs
+
 
 class GitRepo(BaseModel, frozen=True):
     url: str
@@ -34,10 +36,6 @@ class NetworkConfig(BaseModel, frozen=True):
 
 class Paths(BaseModel, frozen=True):
     root: Path
-
-
-class Usb(BaseModel, frozen=True):
-    x18_device_name: str = ""
 
 
 class Twitch(BaseModel, frozen=True):
@@ -78,7 +76,7 @@ class Config(BaseModel, frozen=True):
     network: NetworkConfig
     paths: Paths
     networks: dict[str, dict[str, dict[str, Network]]]
-    usb: Usb
+    mixers: list[MixerSpec] = Field(default_factory=list)
     twitch: Twitch
     lyte: Lyte
     git: Git
@@ -118,7 +116,7 @@ def config_from_values(
     )
     paths = table_value(values, "paths")
     git = table_value(values, "git")
-    return Config(
+    result = Config(
         network=network_config,
         paths=Paths(
             root=path_value(
@@ -128,9 +126,7 @@ def config_from_values(
             )
         ),
         networks=networks_value(table_value(values, "networks")),
-        usb=Usb(
-            x18_device_name=string_value(table_value(values, "usb"), "x18_device_name")
-        ),
+        mixers=mixer_specs(values.get("mixers", [])),
         twitch=twitch_value(table_value(values, "twitch")),
         lyte=lyte_value(
             table_value(values, "lyte"),
@@ -153,6 +149,30 @@ def config_from_values(
             lyte=git_repo("lyte", table_value(git, "lyte"), override=lyte_repo),
         ),
     )
+    validate_x18_mixer_hosts(result)
+    return result
+
+
+def mixer_specs(value: object) -> list[MixerSpec]:
+    if not isinstance(value, list):
+        sys.exit("ERROR: mixers must be an array of tables")
+    try:
+        return MixerSpecs.model_validate({"mixers": value}).mixers
+    except ValueError as error:
+        sys.exit(f"ERROR: invalid mixers: {error}")
+
+
+def validate_x18_mixer_hosts(config: Config) -> None:
+    network = x18(config)
+    mixer = next((mixer for mixer in config.mixers if mixer.name == "X18"), None)
+    if network is None or mixer is None:
+        return
+    for endpoint in (mixer.probe, mixer.osc):
+        if endpoint is not None and endpoint.host != network.ip_address:
+            sys.exit(
+                "ERROR: X18 mixer endpoint host must match "
+                "networks.internal.wired.x18.ip_address"
+            )
 
 
 def networks_value(

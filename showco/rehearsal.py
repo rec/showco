@@ -4,7 +4,7 @@ import math
 import time
 
 from . import models
-from .mixer import MixerMonitor
+from .mixer import MixersMonitor
 from .recs import RecsClient, stereo_tracks
 from .system import SystemMonitor
 from .twitcho.client import TwitchoClient
@@ -142,9 +142,17 @@ class RehearsalSystemMonitor(SystemMonitor):
         return models.SystemStatus(temperature_c=48.5)
 
 
-class RehearsalMixerMonitor(MixerMonitor):
-    def status(self) -> models.MixerStatus:
-        return models.MixerStatus(latency_ms=4.2)
+class RehearsalMixersMonitor(MixersMonitor):
+    def __init__(self) -> None:
+        super().__init__([])
+
+    def status(
+        self, audio_devices: set[str], midi: dict[str, str]
+    ) -> list[models.MixerStatus]:
+        return [
+            models.MixerStatus(name="X18", state="connected", latency_ms=4.2),
+            models.MixerStatus(name="Flow 8", state="waiting"),
+        ]
 
 
 def rehearsal_channels(

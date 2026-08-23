@@ -21,11 +21,7 @@ class ServicesTests(unittest.TestCase):
             services.showco_args(
                 "0.0.0.0",
                 17352,
-                "10.43.0.18",
-                10024,
-                "udp",
-                "10.43.0.18",
-                Path("/recordings"),
+                Path("/home/tom/.config/showco/mixers.toml"),
                 True,
             ),
             [
@@ -33,16 +29,8 @@ class ServicesTests(unittest.TestCase):
                 "0.0.0.0",
                 "--port",
                 "17352",
-                "--mixer-host",
-                "10.43.0.18",
-                "--mixer-port",
-                "10024",
-                "--mixer-protocol",
-                "udp",
-                "--x18-host",
-                "10.43.0.18",
-                "--x18-log-dir",
-                "/recordings",
+                "--mixers-config",
+                "/home/tom/.config/showco/mixers.toml",
                 "--twitcho-enabled",
             ],
         )
@@ -120,10 +108,6 @@ class ServicesTests(unittest.TestCase):
             "0.0.0.0",
             17_352,
             None,
-            None,
-            "tcp",
-            None,
-            Path("/recordings"),
             False,
         )
 

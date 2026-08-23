@@ -22,6 +22,19 @@
     return `${twitcho.stream_state}${twitcho.muted ? ", muted" : ""}`;
   }
 
+  function mixerDetail(mixer) {
+    if (mixer.error) return `${mixer.state}: ${mixer.error}`;
+    const missing = [];
+    if (mixer.audio_ready === false) missing.push("USB audio");
+    if (mixer.midi_ready === false) missing.push("MIDI");
+    const detail = missing.length
+      ? `${mixer.state} for ${missing.join(" and ")}`
+      : mixer.state;
+    return mixer.latency_ms === null
+      ? detail
+      : `${detail}: ${mixer.latency_ms.toFixed(1)} ms`;
+  }
+
   function updateService(identifier, service, detail, healthIdentifier) {
     const card = document.getElementById(`${identifier}-card`);
     const state = document.getElementById(`${identifier}-state`);
@@ -314,11 +327,13 @@
           ? "unknown"
           : `${status.twitcho.output_bitrate_kbps.toFixed(0)} kbps`;
       }
-      const mixerLatency = document.getElementById("mixer-latency");
-      if (mixerLatency) {
-        mixerLatency.textContent = status.mixer.latency_ms === null
-          ? status.mixer.error || "unknown"
-          : `${status.mixer.latency_ms.toFixed(1)} ms`;
+      const mixers = document.getElementById("mixers");
+      if (mixers) {
+        mixers.replaceChildren(...status.mixers.map(mixer => {
+          const row = document.createElement("p");
+          row.textContent = `${mixer.name}: ${mixerDetail(mixer)}`;
+          return row;
+        }));
       }
       const x18Recorder = document.getElementById("x18-recorder");
       if (x18Recorder) {

@@ -37,10 +37,12 @@ class RehearsalTests(unittest.TestCase):
         self.assertIsNone(status.temperature_error)
 
     def test_rehearsal_mixer_reports_latency(self) -> None:
-        status = rehearsal.RehearsalMixerMonitor().status()
+        status = rehearsal.RehearsalMixersMonitor().status(set(), {})
 
-        self.assertEqual(status.latency_ms, 4.2)
-        self.assertIsNone(status.error)
+        self.assertEqual(status[0].name, "X18")
+        self.assertEqual(status[0].latency_ms, 4.2)
+        self.assertEqual(status[1].name, "Flow 8")
+        self.assertEqual(status[1].state, "waiting")
 
 
 if __name__ == "__main__":

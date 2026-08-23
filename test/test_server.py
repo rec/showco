@@ -25,7 +25,7 @@ class ServerTests(unittest.TestCase):
             rehearsal.RehearsalRecsClient(),
             rehearsal.RehearsalTwitchoClient(),
             rehearsal.RehearsalSystemMonitor(),
-            rehearsal.RehearsalMixerMonitor(),
+            rehearsal.RehearsalMixersMonitor(),
         )
 
         self.assertEqual(app.status().revision, "revision")
@@ -112,14 +112,39 @@ class ServerTests(unittest.TestCase):
                     service=models.ServiceStatus(name="twitcho", state="connected"),
                     output_bitrate_kbps=312.5,
                 ),
-                mixer=models.MixerStatus(latency_ms=4.25),
+                mixers=[
+                    models.MixerStatus(name="X18", state="connected", latency_ms=4.25)
+                ],
             )
         )
 
         self.assertIn("Twitch bitrate", html)
         self.assertIn("312 kbps", html)
-        self.assertIn("Mixer latency", html)
+        self.assertIn("X18: connected: 4.2 ms", html)
         self.assertIn("4.2 ms", html)
+
+    def test_health_page_shows_named_mixer_input_progress(self) -> None:
+        html = health_page(
+            models.ShowStatus(
+                recs=models.RecsStatus(
+                    service=models.ServiceStatus(name="recs", state="connected")
+                ),
+                twitcho=models.TwitchoStatus(
+                    service=models.ServiceStatus(name="twitcho", state="connected")
+                ),
+                mixers=[
+                    models.MixerStatus(
+                        name="Flow 8",
+                        state="waiting",
+                        audio_ready=False,
+                        midi_ready=False,
+                    )
+                ],
+            )
+        )
+
+        self.assertIn("Flow 8: waiting for USB audio and MIDI", html)
+        self.assertIn("function mixerDetail", html)
 
     def test_errors_page_shows_recs_errors_without_controls(self) -> None:
         html = errors_page(
@@ -299,7 +324,7 @@ class ServerTests(unittest.TestCase):
             rehearsal.RehearsalRecsClient(),
             None,
             rehearsal.RehearsalSystemMonitor(),
-            rehearsal.RehearsalMixerMonitor(),
+            rehearsal.RehearsalMixersMonitor(),
         )
 
         status = app.status()
@@ -311,7 +336,7 @@ class ServerTests(unittest.TestCase):
             rehearsal.RehearsalRecsClient(),
             None,
             rehearsal.RehearsalSystemMonitor(),
-            rehearsal.RehearsalMixerMonitor(),
+            rehearsal.RehearsalMixersMonitor(),
         )
 
         result = app.run_action({"action": "twitcho-mute"})
@@ -341,7 +366,7 @@ class ServerTests(unittest.TestCase):
             rehearsal.RehearsalRecsClient(),
             rehearsal.RehearsalTwitchoClient(),
             rehearsal.RehearsalSystemMonitor(),
-            rehearsal.RehearsalMixerMonitor(),
+            rehearsal.RehearsalMixersMonitor(),
             restart,
         )
 
@@ -356,7 +381,7 @@ class ServerTests(unittest.TestCase):
             recs,
             rehearsal.RehearsalTwitchoClient(),
             rehearsal.RehearsalSystemMonitor(),
-            rehearsal.RehearsalMixerMonitor(),
+            rehearsal.RehearsalMixersMonitor(),
         )
 
         result = app.run_action(
@@ -377,7 +402,7 @@ class ServerTests(unittest.TestCase):
             recs,
             rehearsal.RehearsalTwitchoClient(),
             rehearsal.RehearsalSystemMonitor(),
-            rehearsal.RehearsalMixerMonitor(),
+            rehearsal.RehearsalMixersMonitor(),
         )
 
         result = app.run_action(
@@ -397,7 +422,7 @@ class ServerTests(unittest.TestCase):
             recs,
             rehearsal.RehearsalTwitchoClient(),
             rehearsal.RehearsalSystemMonitor(),
-            rehearsal.RehearsalMixerMonitor(),
+            rehearsal.RehearsalMixersMonitor(),
         )
 
         result = app.run_action(
@@ -413,7 +438,7 @@ class ServerTests(unittest.TestCase):
             recs,
             rehearsal.RehearsalTwitchoClient(),
             rehearsal.RehearsalSystemMonitor(),
-            rehearsal.RehearsalMixerMonitor(),
+            rehearsal.RehearsalMixersMonitor(),
         )
 
         result = app.run_action(
@@ -433,7 +458,7 @@ class ServerTests(unittest.TestCase):
             rehearsal.RehearsalRecsClient(),
             rehearsal.RehearsalTwitchoClient(),
             rehearsal.RehearsalSystemMonitor(),
-            rehearsal.RehearsalMixerMonitor(),
+            rehearsal.RehearsalMixersMonitor(),
         )
 
         result = app.run_action(
@@ -453,7 +478,7 @@ class ServerTests(unittest.TestCase):
             rehearsal.RehearsalRecsClient(),
             rehearsal.RehearsalTwitchoClient(),
             rehearsal.RehearsalSystemMonitor(),
-            rehearsal.RehearsalMixerMonitor(),
+            rehearsal.RehearsalMixersMonitor(),
         )
 
         result = app.run_action({"action": "recs-shutdown"})
@@ -466,7 +491,7 @@ class ServerTests(unittest.TestCase):
             rehearsal.RehearsalRecsClient(),
             rehearsal.RehearsalTwitchoClient(),
             rehearsal.RehearsalSystemMonitor(),
-            rehearsal.RehearsalMixerMonitor(),
+            rehearsal.RehearsalMixersMonitor(),
         )
 
         for i in range(12):
@@ -498,7 +523,7 @@ class ServerTests(unittest.TestCase):
             recs,
             rehearsal.RehearsalTwitchoClient(),
             rehearsal.RehearsalSystemMonitor(),
-            rehearsal.RehearsalMixerMonitor(),
+            rehearsal.RehearsalMixersMonitor(),
         )
 
         def run_second_action() -> None:

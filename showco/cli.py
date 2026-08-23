@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from pathlib import Path
+from typing import Annotated
 
 import tyro
 from pydantic import BaseModel
 from reccy import cli, logging
 
 from . import logs, machine_role, network_config, python, rehearsal, services, update
-from .mixer import MixerMonitor
+from .mixer import MixersMonitor, load_mixer_specs
 from .provision import provision
 from .server import make_server
 from .twitcho import auth, client
@@ -16,9 +17,7 @@ from .twitcho import auth, client
 class WebUiOptions(BaseModel, frozen=True):
     host: str = "127.0.0.1"
     port: int = 17_352
-    mixer_host: str | None = None
-    mixer_port: int | None = None
-    mixer_protocol: Literal["tcp", "udp"] = "tcp"
+    mixers_config: Path = Path()
     twitcho_enabled: bool = False
     rehearsal_mode: Annotated[
         bool,
@@ -39,7 +38,7 @@ def run_web_ui(options: WebUiOptions) -> int:
             recs=rehearsal.RehearsalRecsClient(),
             twitcho=rehearsal.RehearsalTwitchoClient(),
             system=rehearsal.RehearsalSystemMonitor(),
-            mixer=rehearsal.RehearsalMixerMonitor(),
+            mixers=rehearsal.RehearsalMixersMonitor(),
             twitcho_restart=rehearsal.restart_twitcho,
             twitcho_enabled=True,
         )
@@ -48,11 +47,7 @@ def run_web_ui(options: WebUiOptions) -> int:
         server = make_server(
             options.host,
             options.port,
-            mixer=MixerMonitor(
-                host=options.mixer_host,
-                port=options.mixer_port,
-                protocol=options.mixer_protocol,
-            ),
+            mixers=MixersMonitor(load_mixer_specs(options.mixers_config)),
             twitcho_enabled=options.twitcho_enabled,
         )
         print(f"showco listening on http://{options.host}:{options.port}")
