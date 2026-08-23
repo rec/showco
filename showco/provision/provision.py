@@ -5,7 +5,7 @@ import shlex
 import sys
 import tempfile
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from subprocess import CalledProcessError, CompletedProcess, TimeoutExpired
 from typing import Annotated
@@ -768,7 +768,7 @@ def verify_provisioning(
         *private_wifi_verification,
         verify_lyte_service(provision_config, ssh_target),
         verify_twitcho_service(provision_config, ssh_target),
-        verify_x18_usb_device(provision_config, ssh_target),
+        *verify_mixer_devices(provision_config, ssh_target),
     ]
 
 
@@ -874,19 +874,27 @@ def verify_twitcho_service(
     )
 
 
-def verify_x18_usb_device(
+def verify_mixer_devices(
     provision_config: config.Config, ssh_target: str
+) -> list[VerificationResult]:
+    return [
+        *(
+            verify_mixer_audio_input(provision_config, ssh_target, mixer.name, name)
+            for mixer in provision_config.mixers
+            for name in mixer.audio_device_names
+        ),
+        *(
+            verify_mixer_midi_input(provision_config, ssh_target, mixer.name, name)
+            for mixer in provision_config.mixers
+            for name in mixer.midi_input_names
+        ),
+    ]
+
+
+def verify_mixer_audio_input(
+    provision_config: config.Config, ssh_target: str, mixer_name: str, selector: str
 ) -> VerificationResult:
-    if (
-        not provision_config.usb.x18_device_name
-        or provision_config.usb.x18_device_name == "TODO"
-    ):
-        return VerificationResult(
-            name="X18 USB device", error="", note="not configured"
-        )
-    device_names = x18_device_names(provision_config.usb.x18_device_name)
-    selectors = " ".join(f"-e {shlex.quote(name)}" for name in device_names)
-    command = f"arecord -l | grep -Fi {selectors} >/dev/null"
+    command = f"arecord -l | grep -Fi -e {shlex.quote(selector)} >/dev/null"
     try:
         completed = subprocess.run(
             ssh_command(provision_config, ssh_target, command, connect_timeout=1),
@@ -897,21 +905,55 @@ def verify_x18_usb_device(
         )
     except TimeoutExpired:
         return VerificationResult(
-            name="X18 USB device",
+            name=f"{mixer_name} USB audio {selector}",
             error="",
             note=f"detection timed out after {SSH_VERIFICATION_TIMEOUT_SECONDS}s",
         )
     if completed.returncode == 0:
-        return VerificationResult(name="X18 USB device", error="")
+        return VerificationResult(name=f"{mixer_name} USB audio {selector}", error="")
     return VerificationResult(
-        name="X18 USB device",
+        name=f"{mixer_name} USB audio {selector}",
         error="",
-        note=f"{provision_config.usb.x18_device_name} not detected",
+        note=f"{selector} not detected",
     )
 
 
-def x18_device_names(value: str) -> list[str]:
-    return [name for part in value.split("/") if (name := part.strip())]
+def verify_mixer_midi_input(
+    provision_config: config.Config, ssh_target: str, mixer_name: str, selector: str
+) -> VerificationResult:
+    matcher = (
+        "from recs.midi.device import input_names; import sys; "
+        "sys.exit(not any(name.startswith(sys.argv[1]) for name in input_names()))"
+    )
+    command = " ".join(
+        [
+            f"cd {shlex.quote(str(provision_config.paths.root / 'recs'))}",
+            "&& uv run --frozen python -c",
+            shlex.quote(matcher),
+            shlex.quote(selector),
+        ]
+    )
+    try:
+        completed = subprocess.run(
+            ssh_command(provision_config, ssh_target, command, connect_timeout=1),
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=SSH_VERIFICATION_TIMEOUT_SECONDS,
+        )
+    except TimeoutExpired:
+        return VerificationResult(
+            name=f"{mixer_name} USB MIDI {selector}",
+            error="",
+            note=f"detection timed out after {SSH_VERIFICATION_TIMEOUT_SECONDS}s",
+        )
+    if completed.returncode == 0:
+        return VerificationResult(name=f"{mixer_name} USB MIDI {selector}", error="")
+    return VerificationResult(
+        name=f"{mixer_name} USB MIDI {selector}",
+        error="",
+        note=f"{selector} not detected",
+    )
 
 
 def verify_remote_command(
@@ -974,7 +1016,10 @@ def remote_command(provision_config: config.Config, remote_script: str) -> str:
     private = config.internal_wifi(provision_config)
     external = config.external_wifi(provision_config)
     x18_network = config.x18(provision_config)
-    x18_host = ""
+    x18_mixer = next(
+        (mixer for mixer in provision_config.mixers if mixer.name == "X18"), None
+    )
+    x18_host = x18_mixer.osc.host if x18_mixer and x18_mixer.osc else ""
     x18_subnet = "10.43.0.0/24"
     if x18_network is not None:
         x18_host = config.require_value(
@@ -1009,10 +1054,84 @@ def remote_command(provision_config: config.Config, remote_script: str) -> str:
         "EXTERNAL_WIFI_PASSWORD": external.password,
         "SHOWCO_PI_X18_SUBNET": x18_subnet,
         "SHOWCO_X18_HOST": x18_host,
-        "X18_USB_DEVICE_NAME": provision_config.usb.x18_device_name,
+        "SHOWCO_MIXERS_TOML": mixers_toml(provision_config.mixers),
+        "RECS_AUDIO_DEVICE_NAMES": "\n".join(
+            unique_selectors(
+                name
+                for mixer in provision_config.mixers
+                for name in mixer.audio_device_names
+            )
+        ),
+        "RECS_MIDI_INPUT_NAMES": "\n".join(
+            unique_selectors(
+                name
+                for mixer in provision_config.mixers
+                for name in mixer.midi_input_names
+            )
+        ),
+        "RECS_OSC_NODES_TOML": osc_nodes_toml(provision_config.mixers),
     }
     assignments = [f"{k}={shlex.quote(v)}" for k, v in values.items()]
     return " ".join([*assignments, "bash", shlex.quote(remote_script)])
+
+
+def mixers_toml(mixers: list[config.MixerSpec]) -> str:
+    lines = []
+    for mixer in mixers:
+        lines.extend(["[[mixers]]", f"name = {mixer.name!r}"])
+        if mixer.audio_device_names:
+            lines.append(f"audio_device_names = {mixer.audio_device_names!r}")
+        if mixer.midi_input_names:
+            lines.append(f"midi_input_names = {mixer.midi_input_names!r}")
+        if mixer.probe:
+            lines.extend(
+                [
+                    "[mixers.probe]",
+                    f"host = {mixer.probe.host!r}",
+                    f"port = {mixer.probe.port}",
+                    f"protocol = {mixer.probe.protocol!r}",
+                ]
+            )
+        if mixer.osc:
+            lines.extend(
+                [
+                    "[mixers.osc]",
+                    f"host = {mixer.osc.host!r}",
+                    f"port = {mixer.osc.port}",
+                    f"subscription_path = {mixer.osc.subscription_path!r}",
+                    f"resubscribe_period = {mixer.osc.resubscribe_period}",
+                ]
+            )
+    return "\n".join(lines) + "\n"
+
+
+def unique_selectors(values: Iterable[str]) -> list[str]:
+    result: list[str] = []
+    for value in values:
+        if value not in result:
+            result.append(value)
+    return result
+
+
+def osc_nodes_toml(mixers: list[config.MixerSpec]) -> str:
+    lines = []
+    for mixer in mixers:
+        if mixer.osc is None:
+            continue
+        lines.extend(
+            [
+                "[[nodes]]",
+                f"name = {mixer.name!r}",
+                f"host = {mixer.osc.host!r}",
+                f"port = {mixer.osc.port}",
+                "",
+                "[[nodes.subscriptions]]",
+                f"path = {mixer.osc.subscription_path!r}",
+                f"resubscribe_period = {mixer.osc.resubscribe_period}",
+                "",
+            ]
+        )
+    return "\n".join(lines)
 
 
 def run_ssh(

@@ -14,6 +14,7 @@ from recs.daemon import gui_protocol
 from showco import models, recs
 from showco.recs import (
     RecsClient,
+    _x18_status,
     channel_levels,
     level_state,
     replace_track_name,
@@ -24,6 +25,24 @@ CLIENT_CONNECTION = "showco.recs.ipc.client_connection"
 
 
 class RecsTests(unittest.TestCase):
+    def test_reads_uppercase_x18_osc_status(self) -> None:
+        status = _x18_status(
+            {
+                "osc": [
+                    {
+                        "name": "X18",
+                        "state": "running",
+                        "path": "X18.jsonl",
+                        "size": 12,
+                    }
+                ]
+            }
+        )
+
+        self.assertEqual(status.state, "running")
+        self.assertEqual(status.log_path, "X18.jsonl")
+        self.assertEqual(status.log_size, 12)
+
     def test_status_changes_command_checks_successive_updated_at_values(self) -> None:
         command = recs.status_changes_command()
 

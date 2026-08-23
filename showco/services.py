@@ -47,11 +47,7 @@ def install_showco_service(
     root: Path,
     host: str = "0.0.0.0",
     port: int = 17_352,
-    mixer_host: str | None = None,
-    mixer_port: int | None = None,
-    mixer_protocol: str = "tcp",
-    x18_host: str | None = None,
-    x18_log_dir: Path | None = None,
+    mixers_config: Path | None = None,
     twitcho_enabled: bool = False,
 ) -> int:
     daemon = ShowcoDaemon(platform=paths.current_platform())
@@ -61,11 +57,7 @@ def install_showco_service(
             *showco_args(
                 host,
                 port,
-                mixer_host,
-                mixer_port,
-                mixer_protocol,
-                x18_host,
-                x18_log_dir or Path.home() / "recordings",
+                mixers_config,
                 twitcho_enabled,
             ),
         ]
@@ -77,27 +69,12 @@ def install_showco_service(
 def showco_args(
     host: str,
     port: int,
-    mixer_host: str | None,
-    mixer_port: int | None,
-    mixer_protocol: str,
-    x18_host: str | None,
-    x18_log_dir: Path,
+    mixers_config: Path | None,
     twitcho_enabled: bool,
 ) -> list[str]:
     result = ["--host", host, "--port", str(port)]
-    if mixer_host and mixer_port is not None:
-        result.extend(
-            [
-                "--mixer-host",
-                mixer_host,
-                "--mixer-port",
-                str(mixer_port),
-                "--mixer-protocol",
-                mixer_protocol,
-            ]
-        )
-    if x18_host:
-        result.extend(["--x18-host", x18_host, "--x18-log-dir", str(x18_log_dir)])
+    if mixers_config is not None:
+        result.extend(["--mixers-config", str(mixers_config)])
     if twitcho_enabled:
         result.append("--twitcho-enabled")
     return result
@@ -162,22 +139,14 @@ def install_main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", default=17_352, type=int)
-    parser.add_argument("--mixer-host")
-    parser.add_argument("--mixer-port", type=int)
-    parser.add_argument("--mixer-protocol", default="tcp")
-    parser.add_argument("--x18-host")
-    parser.add_argument("--x18-log-dir", type=Path)
+    parser.add_argument("--mixers-config", type=Path)
     parser.add_argument("--twitcho-enabled", action="store_true")
     parser.add_argument("--root", required=True, type=Path)
     args = parser.parse_args(argv)
     return install_showco_service(
         host=args.host,
         port=args.port,
-        mixer_host=args.mixer_host,
-        mixer_port=args.mixer_port,
-        mixer_protocol=args.mixer_protocol,
-        x18_host=args.x18_host,
-        x18_log_dir=args.x18_log_dir,
+        mixers_config=args.mixers_config,
         twitcho_enabled=args.twitcho_enabled,
         root=args.root,
     )

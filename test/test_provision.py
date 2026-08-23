@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shlex
 import subprocess
+import tomllib
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -121,6 +122,46 @@ class ProvisionTests(unittest.TestCase):
             config.networks["internal"]["wired"]["x18"].ip_address,
             "10.43.0.18",
         )
+
+    def test_duplicate_mixer_names_are_rejected(self) -> None:
+        with self.assertRaisesRegex(SystemExit, "mixer names must be unique"):
+            make_config(
+                values(
+                    mixers=[
+                        {"name": "X18"},
+                        {"name": "X18"},
+                    ]
+                )
+            )
+
+    def test_x18_mixer_host_must_match_wired_network(self) -> None:
+        with self.assertRaisesRegex(SystemExit, "must match"):
+            make_config(
+                values(
+                    mixers=[
+                        {
+                            "name": "X18",
+                            "probe": {
+                                "host": "10.43.0.19",
+                                "port": 10024,
+                            },
+                        }
+                    ]
+                )
+            )
+
+    def test_mixer_endpoint_requires_a_host(self) -> None:
+        with self.assertRaisesRegex(SystemExit, "must not be empty"):
+            make_config(
+                values(
+                    mixers=[
+                        {
+                            "name": "Flow 8",
+                            "probe": {"host": "", "port": 10024},
+                        }
+                    ]
+                )
+            )
 
     def test_unwired_x18_omits_x18_host(self) -> None:
         config = make_config(
@@ -1103,36 +1144,51 @@ class ProvisionTests(unittest.TestCase):
             any("systemd-cat --identifier=showco-provisioning" in c for c in commands)
         )
 
-    def test_missing_x18_usb_device_is_note_not_error(self) -> None:
+    def test_missing_mixer_devices_are_notes_not_errors(self) -> None:
         config = make_config(values())
         with mock.patch(
             "reccy.subprocess.run",
             return_value=subprocess.CompletedProcess(["ssh"], 1, "", ""),
         ):
-            result = provision.verify_x18_usb_device(config, "tom@recs-stage.local")
+            result = provision.verify_mixer_devices(config, "tom@recs-stage.local")
 
-        self.assertEqual(result.error, "")
-        self.assertEqual(result.note, "X18/XR18 not detected")
+        self.assertTrue(all(value.error == "" for value in result))
+        self.assertEqual(result[0].note, "X18 not detected")
 
-    def test_x18_usb_device_check_accepts_model_components(self) -> None:
+    def test_mixer_audio_device_check_uses_selector(self) -> None:
         config = make_config(values())
         with mock.patch(
             "reccy.subprocess.run",
             return_value=subprocess.CompletedProcess(["ssh"], 0, "", ""),
         ) as run:
-            provision.verify_x18_usb_device(config, "tom@recs-stage.local")
+            provision.verify_mixer_audio_input(
+                config, "tom@recs-stage.local", "X18", "X18"
+            )
 
         self.assertIn(
-            "arecord -l | grep -Fi -e X18 -e XR18 >/dev/null",
+            "arecord -l | grep -Fi -e X18 >/dev/null",
             run.call_args.args[0],
         )
 
-    def test_remote_script_includes_x18_model_components(self) -> None:
+    def test_remote_script_includes_mixer_selectors(self) -> None:
         self.assertIn(
-            'IFS=/ read -r -a device_names <<<"$X18_USB_DEVICE_NAME"',
+            'done <<<"$RECS_AUDIO_DEVICE_NAMES"',
             provision.REMOTE_SCRIPT,
         )
         self.assertIn('args+=(--include "$device_name")', provision.REMOTE_SCRIPT)
+
+    def test_mixer_configuration_renders_osc_and_deduplicates_selectors(self) -> None:
+        mixers = make_config(values()).mixers
+
+        rendered = provision.mixers_toml(mixers)
+        osc = provision.osc_nodes_toml(mixers)
+
+        self.assertEqual(
+            provision.unique_selectors(["X18", "XR18", "X18"]), ["X18", "XR18"]
+        )
+        self.assertEqual(len(tomllib.loads(rendered)["mixers"]), 2)
+        self.assertIn("subscription_path = '/xremote'", rendered)
+        self.assertEqual(osc.count("[[nodes]]"), 1)
 
     def test_report_verification_results_exits_with_errors(self) -> None:
         with self.assertRaises(SystemExit):
@@ -1165,7 +1221,24 @@ def values(**overrides: object) -> dict[str, object]:
         },
         "paths": {"root": "/srv/show-projects"},
         "networks": networks(),
-        "usb": {"x18_device_name": "X18/XR18"},
+        "mixers": [
+            {
+                "name": "X18",
+                "audio_device_names": ["X18", "XR18"],
+                "probe": {"host": "10.43.0.18", "port": 10024, "protocol": "udp"},
+                "osc": {
+                    "host": "10.43.0.18",
+                    "port": 10024,
+                    "subscription_path": "/xremote",
+                    "resubscribe_period": 10,
+                },
+            },
+            {
+                "name": "Flow 8",
+                "audio_device_names": ["FLOW 8"],
+                "midi_input_names": ["FLOW 8"],
+            },
+        ],
         "git": {
             "reccy": {"url": "https://github.com/rec/reccy.git"},
             "recs": {"url": "https://github.com/rec/recs.git"},

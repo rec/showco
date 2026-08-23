@@ -376,13 +376,7 @@ showco_args() {
     --host 0.0.0.0
     --port "$SHOWCO_PORT"
   )
-  if [[ -n "$SHOWCO_X18_HOST" && "$SHOWCO_X18_HOST" != TODO ]]; then
-    args+=(
-      --mixer-host "$SHOWCO_X18_HOST"
-      --mixer-port 10024
-      --mixer-protocol udp
-    )
-  fi
+  args+=(--mixers-config "/home/$SHOW_USER/.config/showco/mixers.toml")
   if [[ "$TWITCHO_ENABLED" == true ]]; then
     args+=(--twitcho-enabled)
   fi
@@ -402,21 +396,17 @@ install_recs_service() {
   local osc_nodes=
   local uid
   local args=()
-  local device_name
-  local device_names
   uid=$(id -u "$SHOW_USER")
-  if [[ -n "$X18_USB_DEVICE_NAME" && "$X18_USB_DEVICE_NAME" != TODO ]]; then
-    IFS=/ read -r -a device_names <<<"$X18_USB_DEVICE_NAME"
-    for device_name in "${device_names[@]}"; do
-      args+=(--include "$device_name")
-    done
-  fi
-  if [[ -n "$SHOWCO_X18_HOST" && "$SHOWCO_X18_HOST" != TODO ]]; then
-    osc_nodes="/home/$SHOW_USER/.config/recs/x18.toml"
+  while IFS= read -r device_name; do
+    [[ -n "$device_name" ]] && args+=(--include "$device_name")
+  done <<<"$RECS_AUDIO_DEVICE_NAMES"
+  while IFS= read -r device_name; do
+    [[ -n "$device_name" ]] && args+=(--midi-include "$device_name")
+  done <<<"$RECS_MIDI_INPUT_NAMES"
+  if [[ -n "$RECS_OSC_NODES_TOML" ]]; then
+    osc_nodes="/home/$SHOW_USER/.config/recs/mixers.toml"
     sudo -H -u "$SHOW_USER" mkdir -p "${osc_nodes%/*}"
-    sudo -H -u "$SHOW_USER" sh -c '
-      printf "[[nodes]]\\nname = \\\"x18\\\"\\nhost = \\\"%s\\\"\\nport = 10024\\n\\n[[nodes.subscriptions]]\\npath = \\\"/xremote\\\"\\nresubscribe_period = 10\\n" "$1" > "$2"
-    ' sh "$SHOWCO_X18_HOST" "$osc_nodes"
+    sudo -H -u "$SHOW_USER" sh -c 'printf "%s" "$1" > "$2"' sh "$RECS_OSC_NODES_TOML" "$osc_nodes"
     args+=(--osc-nodes "$osc_nodes")
   fi
   if [[ ${#args[@]} -gt 0 ]]; then
@@ -434,7 +424,7 @@ install_showco_service() {
   sudo -H -u "$SHOW_USER" \
     env XDG_RUNTIME_DIR="/run/user/$uid" \
     PATH="$ROOT/showco/.venv/bin:/home/$SHOW_USER/.local/bin:$PATH" \
-    bash -lc "cd '$ROOT/showco' && uv run --frozen showco run install-service --root '$ROOT' $(showco_args)"
+    bash -lc "mkdir -p /home/$SHOW_USER/.config/showco && printf '%s' \"$SHOWCO_MIXERS_TOML\" > /home/$SHOW_USER/.config/showco/mixers.toml && cd '$ROOT/showco' && uv run --frozen showco run install-service --root '$ROOT' $(showco_args)"
 }
 
 install_twitcho_service() {

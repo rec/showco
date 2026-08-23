@@ -35,6 +35,11 @@ class RecorderStatus(BaseModel, frozen=True):
     last_error: str | None = None
 
 
+class MidiStatus(BaseModel, frozen=True):
+    name: str
+    state: str
+
+
 class MutableAttribute(BaseModel, frozen=True):
     address: str
     value: object
@@ -56,6 +61,7 @@ class RecsStatus(BaseModel, frozen=True):
     channels: list[ChannelLevel] = Field(default_factory=list)
     errors: list[ErrorRecord] = Field(default_factory=list)
     x18: RecorderStatus = Field(default_factory=RecorderStatus)
+    midi: list[MidiStatus] = Field(default_factory=list)
 
 
 class TwitchoStatus(BaseModel, frozen=True):
@@ -75,6 +81,10 @@ class SystemStatus(BaseModel, frozen=True):
 
 
 class MixerStatus(BaseModel, frozen=True):
+    name: str = ""
+    state: str = "waiting"
+    audio_ready: bool | None = None
+    midi_ready: bool | None = None
     latency_ms: float | None = None
     error: str | None = None
 
@@ -83,7 +93,7 @@ class ShowStatus(BaseModel, frozen=True):
     recs: RecsStatus
     twitcho: TwitchoStatus
     system: SystemStatus = Field(default_factory=SystemStatus)
-    mixer: MixerStatus = Field(default_factory=MixerStatus)
+    mixers: list[MixerStatus] = Field(default_factory=list)
     x18: RecorderStatus = Field(default_factory=RecorderStatus)
     revision: str | None = None
     run_started_at: float = 0.0

@@ -15,7 +15,7 @@ from urllib import parse
 from reccy import logging
 
 from . import models, services
-from .mixer import MixerMonitor
+from .mixer import MixersMonitor
 from .recs import RecsClient
 from .system import SystemMonitor
 from .twitcho.client import TwitchoClient
@@ -38,14 +38,14 @@ class ShowcoApp:
         recs: RecsClient,
         twitcho: TwitchoClient | None,
         system: SystemMonitor,
-        mixer: MixerMonitor,
+        mixers: MixersMonitor,
         twitcho_restart: Callable[[], models.ActionResult] | None = None,
         x18_status: Callable[[], models.RecorderStatus] | None = None,
     ) -> None:
         self.recs = recs
         self.twitcho = twitcho
         self.system = system
-        self.mixer = mixer
+        self.mixers = mixers
         self.twitcho_restart = twitcho_restart or services.restart_twitcho_service
         self.x18_status = x18_status
         self.revision = source_revision()
@@ -66,7 +66,10 @@ class ShowcoApp:
             recs=recs,
             twitcho=twitcho,
             system=self.system.status(),
-            mixer=self.mixer.status(),
+            mixers=self.mixers.status(
+                {channel.device for channel in recs.channels},
+                {midi.name: midi.state for midi in recs.midi},
+            ),
             x18=recs.x18,
             revision=self.revision,
             run_started_at=self.run_started_at,
@@ -290,7 +293,7 @@ def make_server(
     recs: RecsClient | None = None,
     twitcho: TwitchoClient | None = None,
     system: SystemMonitor | None = None,
-    mixer: MixerMonitor | None = None,
+    mixers: MixersMonitor | None = None,
     twitcho_restart: Callable[[], models.ActionResult] | None = None,
     twitcho_enabled: bool = False,
     x18_status: Callable[[], models.RecorderStatus] | None = None,
@@ -300,7 +303,7 @@ def make_server(
         recs or RecsClient(),
         (twitcho or TwitchoClient()) if twitcho_enabled else None,
         system or SystemMonitor(),
-        mixer or MixerMonitor(),
+        mixers or MixersMonitor([]),
         twitcho_restart if twitcho_enabled else None,
         x18_status,
     )
@@ -356,7 +359,7 @@ def health_page(status: models.ShowStatus) -> str:
           </p>
           <p>Pi temperature: <span id="temperature">{_temperature(status)}</span></p>
           <p>Twitch bitrate: <span id="bitrate">{_bitrate(status)}</span></p>
-          <p>Mixer latency: <span id="mixer-latency">{_mixer_latency(status)}</span></p>
+          <div id="mixers">{_mixers(status)}</div>
           <p>X18 OSC recorder:
             <span id="x18-recorder">{_x18_recorder(status)}</span></p>
         </section>
@@ -650,10 +653,27 @@ def _bitrate(status: models.ShowStatus) -> str:
     return f"{status.twitcho.output_bitrate_kbps:.0f} kbps"
 
 
-def _mixer_latency(status: models.ShowStatus) -> str:
-    if status.mixer.latency_ms is not None:
-        return f"{status.mixer.latency_ms:.1f} ms"
-    return status.mixer.error or "unknown"
+def _mixers(status: models.ShowStatus) -> str:
+    if not status.mixers:
+        return "<p>No mixers configured.</p>"
+    return "".join(
+        f"<p>{html.escape(mixer.name)}: {html.escape(_mixer_detail(mixer))}</p>"
+        for mixer in status.mixers
+    )
+
+
+def _mixer_detail(mixer: models.MixerStatus) -> str:
+    if mixer.error:
+        return f"{mixer.state}: {mixer.error}"
+    missing = []
+    if mixer.audio_ready is False:
+        missing.append("USB audio")
+    if mixer.midi_ready is False:
+        missing.append("MIDI")
+    detail = f"{mixer.state} for {' and '.join(missing)}" if missing else mixer.state
+    if mixer.latency_ms is not None:
+        return f"{detail}: {mixer.latency_ms:.1f} ms"
+    return detail
 
 
 def _x18_recorder(status: models.ShowStatus) -> str:

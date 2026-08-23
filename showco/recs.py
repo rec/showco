@@ -88,7 +88,8 @@ class RecsClient:
         rows = _rows(data.get("rows"))
         totals = rows[0] if rows else {}
 
-        x18 = _x18_status(self._external_command("status_snapshot"))
+        snapshot = self._external_command("status_snapshot")
+        x18 = _x18_status(snapshot)
         return models.RecsStatus(
             service=models.ServiceStatus(
                 name="recs",
@@ -105,6 +106,7 @@ class RecsClient:
             channels=channel_levels(rows),
             errors=_error_records(data.get("errors")),
             x18=x18,
+            midi=_midi_status(snapshot),
         )
 
     def calibrate(self) -> models.ActionResult:
@@ -641,7 +643,9 @@ def _x18_status(value: object) -> models.RecorderStatus:
     if not isinstance(nodes, list):
         return models.RecorderStatus()
     for node in nodes:
-        if not _object_dict(node) or node.get("name") != "x18":
+        if not _object_dict(node):
+            continue
+        if (_string(node.get("name")) or "").casefold() != "x18":
             continue
         return models.RecorderStatus(
             state=_string(node.get("state")) or "running",
@@ -650,6 +654,21 @@ def _x18_status(value: object) -> models.RecorderStatus:
             last_error=_string(node.get("last_error")),
         )
     return models.RecorderStatus()
+
+
+def _midi_status(value: object) -> list[models.MidiStatus]:
+    if not _object_dict(value):
+        return []
+    midi = value.get("midi")
+    if not isinstance(midi, list):
+        return []
+    return [
+        models.MidiStatus(name=name, state=state)
+        for item in midi
+        if _object_dict(item)
+        and (name := _string(item.get("name"))) is not None
+        and (state := _string(item.get("state"))) is not None
+    ]
 
 
 def _float(value: object) -> float | None:
