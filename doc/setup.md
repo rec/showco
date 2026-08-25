@@ -4,6 +4,16 @@ This checklist assumes the Raspberry Pi has a fresh Raspberry Pi OS Lite image,
 the correct hostname or IP address, the expected user account, and working SSH
 access, but Showco has not yet provisioned it.
 
+Before its first boot, prepare the card while its boot volume is mounted on the
+developer machine:
+
+```bash
+showco prepare-card --boot /Volumes/bootfs
+```
+
+This enables noninteractive `sudo` for the configured Showco user. Current
+Raspberry Pi OS Lite images do not expose that setting in Raspberry Pi Imager.
+
 1. Put the Raspberry Pi, X18, tablet, and developer machine where they can all be
    powered and reached during the test.
 

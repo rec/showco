@@ -7,7 +7,16 @@ import tyro
 from pydantic import BaseModel
 from reccy import cli, logging
 
-from . import logs, machine_role, network_config, python, rehearsal, services, update
+from . import (
+    card,
+    logs,
+    machine_role,
+    network_config,
+    python,
+    rehearsal,
+    services,
+    update,
+)
 from .mixer import MixersMonitor, load_mixer_specs
 from .provision import provision
 from .server import make_server
@@ -65,6 +74,7 @@ def main(argv: list[str] | None = None) -> int:
     return cli.route_command(
         {
             "run": run_command,
+            "prepare-card": card.main,
             "provision": provision.main,
             "logs": logs.main,
             "python": python.main,

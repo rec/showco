@@ -25,6 +25,12 @@ class CliTests(unittest.TestCase):
 
         provision.assert_called_once_with(["--help"])
 
+    def test_dispatches_prepare_card_subcommand(self) -> None:
+        with patch.object(cli.card, "main", return_value=7) as prepare_card:
+            self.assertEqual(cli.main(["prepare-card", "--boot", "/Volumes/bootfs"]), 7)
+
+        prepare_card.assert_called_once_with(["--boot", "/Volumes/bootfs"])
+
     def test_dispatches_twitcho_subcommand(self) -> None:
         with (
             patch.object(cli.machine_role, "require_target_machine"),
