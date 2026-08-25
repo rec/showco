@@ -11,7 +11,7 @@ from unittest import mock
 import tyro
 
 from showco import network_config
-from showco.provision import config, provision, ssh
+from showco.provision import config, provision, script, ssh
 
 
 class ProvisionTests(unittest.TestCase):
@@ -1009,7 +1009,7 @@ class ProvisionTests(unittest.TestCase):
             ),
         )
 
-        command = provision.remote_command(config, "/tmp/provision.sh")
+        command = script.remote_command(config, "/tmp/provision.sh")
 
         self.assertIn("SHOWCO_HOST=recs-stage.local", command)
         self.assertIn("ROOT=/srv/show-projects", command)
@@ -1044,7 +1044,7 @@ class ProvisionTests(unittest.TestCase):
     def test_remote_command_quotes_root_with_spaces(self) -> None:
         parsed = make_config(values(paths={"root": "/srv/show projects"}))
 
-        command = provision.remote_command(parsed, "/tmp/provision.sh")
+        command = script.remote_command(parsed, "/tmp/provision.sh")
 
         self.assertIn("ROOT='/srv/show projects'", command)
 
@@ -1056,7 +1056,7 @@ class ProvisionTests(unittest.TestCase):
             ),
         )
 
-        command = provision.remote_command(config, "/tmp/provision.sh")
+        command = script.remote_command(config, "/tmp/provision.sh")
 
         self.assertIn("RECS_REFNAME=my-branch", command)
 
@@ -1068,7 +1068,7 @@ class ProvisionTests(unittest.TestCase):
             ),
         )
 
-        command = provision.remote_command(config, "/tmp/provision.sh")
+        command = script.remote_command(config, "/tmp/provision.sh")
 
         self.assertIn("TWITCHO_ENABLED=true", command)
 
@@ -1165,11 +1165,11 @@ class ProvisionTests(unittest.TestCase):
     def test_mixer_configuration_renders_osc_and_deduplicates_selectors(self) -> None:
         mixers = make_config(values()).mixers
 
-        rendered = provision.mixers_toml(mixers)
-        osc = provision.osc_nodes_toml(mixers)
+        rendered = script.mixers_toml(mixers)
+        osc = script.osc_nodes_toml(mixers)
 
         self.assertEqual(
-            provision.unique_selectors(["X18", "XR18", "X18"]), ["X18", "XR18"]
+            script.unique_selectors(["X18", "XR18", "X18"]), ["X18", "XR18"]
         )
         self.assertEqual(len(tomllib.loads(rendered)["mixers"]), 2)
         self.assertIn("subscription_path = '/xremote'", rendered)
