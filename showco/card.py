@@ -17,7 +17,7 @@ USER_NAME_PATTERN = re.compile(r"[a-z_][a-z0-9_-]*")
 
 
 class PrepareCardOptions(BaseModel, frozen=True):
-    boot: Path
+    boot: Path = Path("/Volumes/bootfs")
     config_path: Annotated[Path, tyro.conf.arg(name="config")] = (
         PROVISION_DIR / "config.toml"
     )

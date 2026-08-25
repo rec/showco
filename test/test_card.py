@@ -4,10 +4,17 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+import tyro
+
 from showco import card
 
 
 class PrepareCardTests(unittest.TestCase):
+    def test_prepare_card_options_default_to_imager_boot_volume(self) -> None:
+        options = tyro.cli(card.PrepareCardOptions, args=[])
+
+        self.assertEqual(options.boot, Path("/Volumes/bootfs"))
+
     def test_prepare_card_adds_sudo_commands_to_runcmd(self) -> None:
         with TemporaryDirectory() as directory:
             boot = Path(directory)
