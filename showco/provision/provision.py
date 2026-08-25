@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from reccy import subprocess
 
 from .. import machine_role, network_config, recs
-from . import config, ssh
+from . import config, script, ssh
 
 PROVISION_DIR = Path(__file__).resolve().parent
 REMOTE_SCRIPT_TEMPLATE = "provision_locally.tmpl.sh"
@@ -112,7 +112,7 @@ def run(options: ProvisionOptions) -> int:
         suffix=".sh",
     ) as fp:
         local_script = Path(fp.name)
-        fp.write(REMOTE_SCRIPT)
+        fp.write(script.REMOTE_SCRIPT)
     try:
         provision_remote(
             parsed_config,
@@ -213,7 +213,7 @@ def provision_remote(
         print(f"Running provisioning on {provision_config.ssh_target}...")
         ssh.run_ssh(
             provision_config,
-            remote_command(provision_config, remote_script),
+            script.remote_command(provision_config, remote_script),
             timeout_seconds=REMOTE_PROVISION_TIMEOUT_SECONDS,
         )
 
