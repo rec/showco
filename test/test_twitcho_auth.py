@@ -6,6 +6,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import mock
 
+from showco.provision import config
 from showco.twitcho import auth
 
 
@@ -47,10 +48,10 @@ class TwitchoAuthTests(unittest.TestCase):
             path = Path(directory) / "config.toml"
             path.write_text('[twitch]\ntags = ["Live Music", "Music"]\n')
 
-            values = auth.read_toml(path)
+            values = config.read_toml(path)
 
         self.assertEqual(
-            auth.table_value(values, "twitch")["tags"],
+            config.table_value(values, "twitch")["tags"],
             ["Live Music", "Music"],
         )
 
@@ -61,9 +62,9 @@ class TwitchoAuthTests(unittest.TestCase):
 
             auth.write_toml_value(path, "twitch", "state", "new")
 
-            values = auth.read_toml(path)
+            values = config.read_toml(path)
 
-        self.assertEqual(auth.table_value(values, "twitch")["state"], "new")
+        self.assertEqual(config.table_value(values, "twitch")["state"], "new")
 
 
 def env(config_dir: Path) -> dict[str, object]:

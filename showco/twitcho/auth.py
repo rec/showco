@@ -2,17 +2,17 @@
 from __future__ import annotations
 
 import json
-import os
 import secrets
 import sys
-import tomllib
 import webbrowser
 from pathlib import Path
-from typing import cast
+from typing import Annotated
 from urllib import error, parse, request
 
 import tyro
 from pydantic import BaseModel
+
+from ..provision import config
 
 PROVISION_DIR = Path(__file__).resolve().parent.parent / "provision"
 DEFAULT_CONFIG_PATH = PROVISION_DIR / "config.toml"
@@ -53,33 +53,36 @@ def auth_options(
 
 
 def authorize_url_command(
-    config: Path = DEFAULT_CONFIG_PATH,
+    config_path: Annotated[Path, tyro.conf.arg(name="config")] = DEFAULT_CONFIG_PATH,
     secrets: Path = DEFAULT_SECRETS_PATH,
 ) -> int:
-    options = auth_options(config, secrets)
-    return authorize_url(options.config, read_toml(options.config))
+    options = auth_options(config_path, secrets)
+    return authorize_url(options.config, config.read_toml(options.config))
 
 
 def exchange_code_command(
-    config: Path = DEFAULT_CONFIG_PATH,
+    config_path: Annotated[Path, tyro.conf.arg(name="config")] = DEFAULT_CONFIG_PATH,
     secrets: Path = DEFAULT_SECRETS_PATH,
 ) -> int:
-    options = auth_options(config, secrets)
+    options = auth_options(config_path, secrets)
     return exchange_code(
-        merge_values(read_toml(options.config), read_toml(options.secrets))
+        config.merge_values(
+            config.read_toml(options.config),
+            config.read_toml(options.secrets),
+        )
     )
 
 
 def validate_token_command(
-    config: Path = DEFAULT_CONFIG_PATH,
+    config_path: Annotated[Path, tyro.conf.arg(name="config")] = DEFAULT_CONFIG_PATH,
     secrets: Path = DEFAULT_SECRETS_PATH,
 ) -> int:
-    options = auth_options(config, secrets)
-    return validate_token(read_toml(options.config))
+    options = auth_options(config_path, secrets)
+    return validate_token(config.read_toml(options.config))
 
 
-def authorize_url(config_path: Path, config: dict[str, object]) -> int:
-    twitch = table_value(config, "twitch")
+def authorize_url(config_path: Path, values: dict[str, object]) -> int:
+    twitch = config.table_value(values, "twitch")
     client_id = require_value(twitch, "client_id", config_path)
     redirect_uri = require_value(twitch, "redirect_uri", config_path)
     scopes = require_value(twitch, "scopes", config_path)
@@ -103,7 +106,7 @@ def authorize_url(config_path: Path, config: dict[str, object]) -> int:
 
 
 def exchange_code(env: dict[str, object]) -> int:
-    twitch = table_value(env, "twitch")
+    twitch = config.table_value(env, "twitch")
     client_id = require_value(twitch, "client_id")
     client_secret = require_value(twitch, "client_secret")
     redirect_uri = require_value(twitch, "redirect_uri")
@@ -160,8 +163,8 @@ def exchange_code(env: dict[str, object]) -> int:
     return 0
 
 
-def validate_token(config: dict[str, object]) -> int:
-    twitch = table_value(config, "twitch")
+def validate_token(values: dict[str, object]) -> int:
+    twitch = config.table_value(values, "twitch")
     config_dir = Path(require_value(twitch, "config_dir")).expanduser()
     token_file = config_dir / "oauth-token"
     if not token_file.exists():
@@ -201,28 +204,6 @@ def request_http(http_request: request.Request) -> HttpResponse:
         return HttpResponse(status=e.code, text=e.read().decode())
 
 
-def read_toml(path: Path) -> dict[str, object]:
-    if not path.exists():
-        return {}
-    try:
-        parsed = tomllib.loads(path.read_text())
-    except tomllib.TOMLDecodeError as e:
-        sys.exit(f"Cannot parse {path}: {e}")
-    return {k: toml_value(v) for k, v in parsed.items()}
-
-
-def toml_value(value: object) -> object:
-    if isinstance(value, str):
-        return os.path.expandvars(value)
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, list) and all(isinstance(i, str) for i in value):
-        return value
-    if isinstance(value, dict):
-        return {k: toml_value(v) for k, v in value.items()}
-    return None
-
-
 def write_toml_value(path: Path, section: str, name: str, value: str) -> None:
     lines = path.read_text().splitlines() if path.exists() else []
     replacement = f"{name} = {json.dumps(value)}"
@@ -247,29 +228,6 @@ def write_toml_value(path: Path, section: str, name: str, value: str) -> None:
             lines.append(section_header)
         lines.append(replacement)
     path.write_text("\n".join(lines) + "\n")
-
-
-def merge_values(
-    config: dict[str, object], secrets: dict[str, object]
-) -> dict[str, object]:
-    result = dict(config)
-    for k, v in secrets.items():
-        current = result.get(k)
-        if isinstance(v, dict) and isinstance(current, dict):
-            result[k] = merge_values(
-                cast(dict[str, object], current),
-                cast(dict[str, object], v),
-            )
-        else:
-            result[k] = v
-    return result
-
-
-def table_value(values: dict[str, object], name: str) -> dict[str, object]:
-    value = values.get(name, {})
-    if isinstance(value, dict):
-        return cast(dict[str, object], value)
-    sys.exit(f"ERROR: {name} must be a table")
 
 
 def require_value(env: dict[str, object], name: str, path: Path | None = None) -> str:
