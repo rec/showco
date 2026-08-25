@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import re
 import sys
@@ -78,6 +79,52 @@ def prepare_card(boot: Path, user: str) -> bool:
         lines[insert_index:insert_index] = commands
     path.write_text("".join(lines))
     return True
+
+
+def write_cloud_init(
+    boot: Path,
+    host: str,
+    user: str,
+    ssh_public_key: str,
+    external_network: config.Network,
+) -> None:
+    if USER_NAME_PATTERN.fullmatch(user) is None:
+        sys.exit(f"ERROR: invalid Linux user name: {user!r}")
+    key = ssh_public_key.strip()
+    if not key.startswith("ssh-"):
+        sys.exit("ERROR: SSH public key must start with ssh-")
+    (boot / "user-data").write_text(
+        "#cloud-config\n"
+        f"hostname: {yaml_string(host)}\n"
+        "manage_etc_hosts: true\n"
+        "users:\n"
+        f"  - name: {yaml_string(user)}\n"
+        "    groups: [adm, dialout, cdrom, sudo, audio, video, plugdev, users,\n"
+        "      gpio, i2c, spi, render]\n"
+        "    shell: /bin/bash\n"
+        "    lock_passwd: true\n"
+        "    sudo: ALL=(ALL) NOPASSWD:ALL\n"
+        "    ssh_authorized_keys:\n"
+        f"      - {yaml_string(key)}\n"
+        "ssh_pwauth: false\n"
+        "rpi:\n"
+        "  enable_ssh: true\n"
+    )
+    if external_network.name:
+        (boot / "network-config").write_text(
+            "version: 2\n"
+            "wifis:\n"
+            "  wlan0:\n"
+            "    optional: true\n"
+            "    dhcp4: true\n"
+            "    access-points:\n"
+            f"      {yaml_string(external_network.name)}:\n"
+            f"        password: {yaml_string(external_network.password)}\n"
+        )
+
+
+def yaml_string(value: str) -> str:
+    return json.dumps(value)
 
 
 def configured_user(config_path: Path) -> str:

@@ -1,0 +1,77 @@
+from __future__ import annotations
+
+import subprocess
+import sys
+from pathlib import Path
+from typing import Annotated
+
+import tyro
+from pydantic import BaseModel
+
+from . import card, machine_role
+from .provision import config
+
+DEFAULT_IMAGE_URL = "https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2026-06-19/2026-06-18-raspios-trixie-arm64-lite.img.xz"
+DEFAULT_IMAGE_SHA256 = (
+    "e235fd24fc5f039c08daba7d3abc04aecc7313f979d16d2a3fdad29dd44c33a9"
+)
+DEFAULT_IMAGER = Path("/Applications/Raspberry Pi Imager.app/Contents/MacOS/rpi-imager")
+PROVISION_DIR = Path(__file__).resolve().parent / "provision"
+
+
+class ImageCardOptions(BaseModel, frozen=True):
+    device: Path
+    confirm: bool = False
+    boot: Path = Path("/Volumes/bootfs")
+    image_url: str = DEFAULT_IMAGE_URL
+    image_sha256: str = DEFAULT_IMAGE_SHA256
+    imager: Path = DEFAULT_IMAGER
+    ssh_key: Path = Path.home() / ".ssh/id_ed25519.pub"
+    config_path: Annotated[Path, tyro.conf.arg(name="config")] = (
+        PROVISION_DIR / "config.toml"
+    )
+    secrets: Path = PROVISION_DIR / "secrets.toml"
+
+
+def main(argv: list[str] | None = None) -> int:
+    machine_role.require_provisioning_machine("showco image-card")
+    options = tyro.cli(
+        ImageCardOptions,
+        args=argv,
+        description="Image a Showco Raspberry Pi SD card",
+    )
+    return run(options)
+
+
+def run(options: ImageCardOptions) -> int:
+    if not options.confirm:
+        sys.exit("ERROR: pass --confirm to erase and image the selected disk")
+    if not options.device.name.startswith("disk"):
+        sys.exit("ERROR: device must be a macOS disk such as /dev/disk4")
+    if not options.imager.is_file():
+        sys.exit(f"ERROR: Raspberry Pi Imager not found: {options.imager}")
+    values = config.merge_values(
+        config.read_toml(options.config_path), config.read_toml(options.secrets)
+    )
+    provision_config = config.config_from_values(values)
+    subprocess.run(
+        [
+            str(options.imager),
+            "--cli",
+            "--sha256",
+            options.image_sha256,
+            options.image_url,
+            str(options.device),
+        ],
+        check=True,
+    )
+    subprocess.run(["diskutil", "mountDisk", str(options.device)], check=True)
+    card.write_cloud_init(
+        options.boot,
+        provision_config.network.host,
+        provision_config.network.user,
+        options.ssh_key.expanduser().read_text(),
+        config.external_wifi(provision_config),
+    )
+    print(f"Imaged {options.device} and wrote cloud-init to {options.boot}.")
+    return 0
