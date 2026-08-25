@@ -96,9 +96,17 @@ def run(options: ProvisionOptions) -> int:
         lyte_daemon_config=options.lyte_daemon_config,
     )
     validate_config(parsed_config)
-    autosquash_local_repositories()
-    validate_local_worktrees()
-    validate_local_repositories()
+    from .. import update
+
+    if not update.prepare_local_repositories(
+        update.REPOSITORY_NAMES,
+        local_checkout_directory(),
+        update.run_command_with_timeout,
+        sys.stdout,
+    ):
+        sys.exit(
+            "ERROR: local repositories are not ready for Raspberry Pi provisioning"
+        )
     if options.host is not None:
         persist_network_host(options.config_path, options.host)
     if options.root is not None:
@@ -124,22 +132,6 @@ def run(options: ProvisionOptions) -> int:
 
     print(f"Provisioned {parsed_config.ssh_target}.")
     return 0
-
-
-def autosquash_local_repositories() -> None:
-    from .. import update
-
-    programs = update.programs_for_repositories(
-        update.REPOSITORY_NAMES,
-        local_checkout_directory(),
-    )
-    if not update.autosquash_programs(
-        programs,
-        50,
-        update.run_command_with_timeout,
-        sys.stdout,
-    ):
-        sys.exit("ERROR: could not autosquash local repositories before provisioning")
 
 
 def persist_network_host(config_path: Path, host: str) -> None:

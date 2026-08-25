@@ -104,25 +104,16 @@ def update_from_provisioning_machine(
 ) -> int:
     run_command = run_command or run_command_with_timeout
     provision_config = target_config or provisioning_config()
-    programs = programs_for_repositories(
+    if not prepare_local_repositories(
         selected,
         local_root or provision.local_checkout_directory(),
-    )
-    if not check_main_branches(programs, run_command, output):
-        return 1
-    if autosquash and not autosquash_programs(
-        programs, autosquash, run_command, output
+        run_command,
+        output,
+        autosquash=autosquash,
     ):
         return 1
-    with progress_bar(len(programs) + 1, output) as progress:
-        for program in programs:
-            progress.set_description_str(f"Pushing {program.name}")
-            result = push_program(program, run_command, output)
-            progress.update()
-            if not result.ok:
-                report_failure(result, output)
-                return 1
 
+    with progress_bar(1, output) as progress:
         target_host = host or provision_config.network.host
         ssh_target = f"{provision_config.network.user}@{target_host}"
         command = remote_update_command(selected, root or provision_config.paths.root)
@@ -153,6 +144,32 @@ def update_from_provisioning_machine(
         report_failure(target_result, output)
         return 1
     return 0
+
+
+def prepare_local_repositories(
+    selected: list[str],
+    root: Path,
+    run_command: RunCommand,
+    output: TextIO,
+    *,
+    autosquash: int = 50,
+) -> bool:
+    programs = programs_for_repositories(selected, root)
+    if not check_main_branches(programs, run_command, output):
+        return False
+    if autosquash and not autosquash_programs(
+        programs, autosquash, run_command, output
+    ):
+        return False
+    with progress_bar(len(programs), output) as progress:
+        for program in programs:
+            progress.set_description_str(f"Pushing {program.name}")
+            result = push_program(program, run_command, output)
+            progress.update()
+            if not result.ok:
+                report_failure(result, output)
+                return False
+    return True
 
 
 def update_remote_target(
