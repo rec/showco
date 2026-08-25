@@ -10,7 +10,7 @@ import tyro
 from pydantic import BaseModel, Field
 
 from . import machine_role, update
-from .provision import config, provision
+from .provision import config, ssh
 
 SERVICE_NAMES = ("showco", "recs", "twitcho", "lyte")
 
@@ -48,7 +48,7 @@ def fetch_logs(
     ssh_target = f"{provision_config.network.user}@{target_host}"
     command = remote_logs_command(services, options.lines)
     runner = run_command or run_command_with_timeout
-    completed = runner(provision.ssh_command(provision_config, ssh_target, command))
+    completed = runner(ssh.ssh_command(provision_config, ssh_target, command))
     output.write(completed.stdout)
     output.write(completed.stderr)
     return completed.returncode
