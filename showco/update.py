@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from reccy import subprocess
 from tqdm import tqdm
 
-from . import machine_role, recs, revision, services
+from . import machine_role, recs, repositories, revision, services
 from .provision import config, provision, ssh
 
 RunCommand = Callable[
@@ -1019,7 +1019,7 @@ def report_failure(result: StepResult, output: TextIO) -> None:
         tqdm.write(result.output.rstrip(), file=output)
 
 
-REPOSITORY_NAMES = ["reccy", "recs", "showco", "twitcho", "lyte"]
+REPOSITORY_NAMES = repositories.REPOSITORY_NAMES
 SERVICES_BY_REPOSITORY = {
     "reccy": ["recs", "showco", "twitcho", "lyte"],
     "recs": ["recs"],
