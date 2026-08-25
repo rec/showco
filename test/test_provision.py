@@ -482,7 +482,7 @@ class ProvisionTests(unittest.TestCase):
             ),
             self.assertRaisesRegex(SystemExit, "no unconnected Wi-Fi interface"),
         ):
-            provision.preflight_network_config(config, "tom@recs-stage.local")
+            provision.preflight_network_config(config)
 
     def test_network_preflight_preserves_connected_external_wifi(self) -> None:
         config = make_config(values(networks=networks(x18=False)))
@@ -490,13 +490,10 @@ class ProvisionTests(unittest.TestCase):
             "showco.provision.provision.capture_ssh",
             return_value="wlan0:wifi:disconnected\nwlan1:wifi:connected\n",
         ) as capture_ssh:
-            topology = provision.preflight_network_config(
-                config, "tom@recs-stage.local"
-            )
+            topology = provision.preflight_network_config(config)
 
         capture_ssh.assert_called_once_with(
             config,
-            "tom@recs-stage.local",
             "nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device status",
         )
         self.assertEqual(topology, network_config.NetworkTopology.PRIVATE)
@@ -509,9 +506,7 @@ class ProvisionTests(unittest.TestCase):
                 "wlan0:wifi:connected:Livebox\nwlan1:wifi:connected:showco-private\n"
             ),
         ):
-            topology = provision.preflight_network_config(
-                config, "tom@recs-stage.local"
-            )
+            topology = provision.preflight_network_config(config)
 
         self.assertEqual(topology, network_config.NetworkTopology.PRIVATE)
 
@@ -535,13 +530,12 @@ class ProvisionTests(unittest.TestCase):
         ):
             provision.provision_remote(
                 config,
-                "tom@recs-stage.local",
                 Path("/tmp/local.sh"),
                 "/tmp/remote.sh",
             )
 
         self.assertIs(error.exception, original_error)
-        self.assertEqual(run_ssh.call_args_list[-1].args[2], "rm -f /tmp/remote.sh")
+        self.assertEqual(run_ssh.call_args_list[-1].args[1], "rm -f /tmp/remote.sh")
 
     def test_run_uses_key_based_ssh_command(self) -> None:
         with mock.patch("reccy.subprocess.run") as run:
@@ -558,13 +552,13 @@ class ProvisionTests(unittest.TestCase):
         calls: list[str] = []
         config = make_config(values(networks=networks(x18=False)))
 
-        def preflight_network_config(config: config.Config, ssh_target: str) -> None:
+        def preflight_network_config(config: config.Config) -> None:
             calls.append("preflight")
 
-        def validate_remote_worktrees(config: config.Config, ssh_target: str) -> None:
+        def validate_remote_worktrees(config: config.Config) -> None:
             calls.append("worktrees")
 
-        def run_scp(config: config.Config, source: Path, target: str) -> None:
+        def run_scp(config: config.Config, source: Path, remote_path: str) -> None:
             calls.append("scp")
 
         with (
@@ -592,7 +586,6 @@ class ProvisionTests(unittest.TestCase):
         ):
             provision.provision_remote(
                 config,
-                "tom@recs-stage.local",
                 Path("/tmp/local.sh"),
                 "/tmp/remote.sh",
             )
@@ -611,6 +604,7 @@ class ProvisionTests(unittest.TestCase):
             mock.patch("showco.provision.provision.validate_remote_worktrees"),
             mock.patch("showco.provision.provision.run_scp"),
             mock.patch("showco.provision.provision.wait_for_ssh") as initial_wait,
+            mock.patch("showco.provision.provision.remove_known_host") as remove_host,
             mock.patch(
                 "showco.provision.provision.provisioning_reboot_required",
                 return_value=True,
@@ -627,23 +621,15 @@ class ProvisionTests(unittest.TestCase):
         ):
             provision.provision_remote(
                 config,
-                "tom@recs-stage.local",
                 Path("/tmp/local.sh"),
                 "/tmp/remote.sh",
             )
 
-        initial_wait.assert_called_once_with(
-            config, "tom@recs-stage.local", accept_changed_host_key=False
-        )
-        wait.assert_called_once_with(
-            config, "tom@recs-stage.local", accept_changed_host_key=False
-        )
-        schedule.assert_called_once_with(config, "tom@recs-stage.local")
-        verify.assert_called_once_with(
-            config,
-            "tom@recs-stage.local",
-            network_config.NetworkTopology.PRIVATE,
-        )
+        initial_wait.assert_called_once_with(config)
+        remove_host.assert_called_once_with(config)
+        wait.assert_called_once_with(config)
+        schedule.assert_called_once_with(config)
+        verify.assert_called_once_with(config, network_config.NetworkTopology.PRIVATE)
         report.assert_called_once_with(result)
 
     def test_provision_does_not_wait_for_reboot_when_not_required(self) -> None:
@@ -670,7 +656,6 @@ class ProvisionTests(unittest.TestCase):
         ):
             provision.provision_remote(
                 config,
-                "tom@recs-stage.local",
                 Path("/tmp/local.sh"),
                 "/tmp/remote.sh",
             )
@@ -695,7 +680,6 @@ class ProvisionTests(unittest.TestCase):
         ):
             result = provision.wait_for_provisioning_ready(
                 config,
-                "tom@recs-stage.local",
                 network_config.NetworkTopology.MIXED,
             )
 
@@ -721,7 +705,7 @@ class ProvisionTests(unittest.TestCase):
             ) as reachable,
             mock.patch("showco.provision.provision.time.sleep") as sleep,
         ):
-            provision.wait_for_ssh(config, "tom@recs-stage.local")
+            provision.wait_for_ssh(config)
 
         self.assertEqual(reachable.call_count, 3)
         sleep.assert_has_calls([mock.call(1), mock.call(1)])
@@ -739,33 +723,37 @@ class ProvisionTests(unittest.TestCase):
         with mock.patch(
             "reccy.subprocess.run", side_effect=[changed_key, removed, connected]
         ) as run:
-            self.assertFalse(
-                provision.ssh_is_reachable(
-                    config, "tom@recs-stage.local", accept_changed_host_key=True
-                )
-            )
-            self.assertTrue(provision.ssh_is_reachable(config, "tom@recs-stage.local"))
+            self.assertFalse(provision.ssh_is_reachable(config))
+            self.assertTrue(provision.ssh_is_reachable(config))
 
         self.assertEqual(
             run.call_args_list[1].args[0],
             ["ssh-keygen", "-R", "recs-stage.local"],
         )
 
-    def test_changed_host_key_requires_explicit_acceptance(self) -> None:
+    def test_config_uses_ssh_target_and_accepts_changed_host_keys(self) -> None:
         config = make_config(values(networks=networks(x18=False)))
+
+        self.assertEqual(config.ssh_target, "tom@recs-stage.local")
+        self.assertTrue(config.accept_changed_host_key)
+
+    def test_changed_host_key_requires_explicit_acceptance(self) -> None:
+        config = make_config(
+            values(networks=networks(x18=False), accept_changed_host_key=False)
+        )
         changed_key = subprocess.CompletedProcess(
             ["ssh"], 255, "", "WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!"
         )
         with mock.patch("reccy.subprocess.run", return_value=changed_key):
-            with self.assertRaisesRegex(SystemExit, "accept-changed-host-key"):
-                provision.ssh_is_reachable(config, "tom@recs-stage.local")
+            with self.assertRaisesRegex(SystemExit, "accept_changed_host_key"):
+                provision.ssh_is_reachable(config)
 
     def test_ssh_retry_uses_non_interactive_host_key_options(self) -> None:
         config = make_config(values(networks=networks(x18=False)))
 
         command = provision.ssh_command(
             config,
-            "tom@recs-stage.local",
+            config.ssh_target,
             "true",
             connect_timeout=1,
         )
@@ -777,7 +765,7 @@ class ProvisionTests(unittest.TestCase):
     def test_ssh_command_uses_short_default_connect_timeout(self) -> None:
         config = make_config(values(networks=networks(x18=False)))
 
-        command = provision.ssh_command(config, "tom@recs-stage.local", "true")
+        command = provision.ssh_command(config, config.ssh_target, "true")
 
         self.assertIn("ConnectTimeout=2", command)
 
@@ -785,7 +773,7 @@ class ProvisionTests(unittest.TestCase):
         config = make_config(values(networks=networks(x18=False)))
 
         with mock.patch("reccy.subprocess.run") as run:
-            provision.run_scp(config, Path("/tmp/local.sh"), "tom@host:/tmp/remote.sh")
+            provision.run_scp(config, Path("/tmp/local.sh"), "/tmp/remote.sh")
 
         self.assertIn("ConnectTimeout=2", run.call_args.args[0])
 
@@ -801,10 +789,10 @@ class ProvisionTests(unittest.TestCase):
             mock.patch("reccy.subprocess.run", side_effect=error),
             self.assertRaises(SystemExit) as exit_error,
         ):
-            provision.run_ssh(config, "tom@host", "true")
+            provision.run_ssh(config, "true")
 
         self.assertIn(
-            "ERROR: SSH connection or command failed for tom@host.",
+            "ERROR: SSH connection or command failed for tom@recs-stage.local.",
             str(exit_error.exception),
         )
         self.assertIn("SSH connect timeout is 2 seconds.", str(exit_error.exception))
@@ -819,7 +807,7 @@ class ProvisionTests(unittest.TestCase):
         )
 
         self.assertEqual(
-            provision.known_host_names(config, "tom@recs-stage.local"),
+            provision.known_host_names(config),
             ["recs-stage.local", "[recs-stage.local]:2200"],
         )
 
@@ -1093,7 +1081,7 @@ class ProvisionTests(unittest.TestCase):
             ) as reachable,
             mock.patch("showco.provision.provision.time.sleep"),
         ):
-            provision.wait_for_rebooted_ssh(config, "tom@recs-stage.local")
+            provision.wait_for_rebooted_ssh(config)
 
         self.assertEqual(reachable.call_count, 4)
 
@@ -1105,7 +1093,6 @@ class ProvisionTests(unittest.TestCase):
         ) as run:
             results = provision.verify_provisioning(
                 config,
-                "tom@recs-stage.local",
                 network_config.NetworkTopology.MIXED,
             )
 
@@ -1150,7 +1137,7 @@ class ProvisionTests(unittest.TestCase):
             "reccy.subprocess.run",
             return_value=subprocess.CompletedProcess(["ssh"], 1, "", ""),
         ):
-            result = provision.verify_mixer_devices(config, "tom@recs-stage.local")
+            result = provision.verify_mixer_devices(config)
 
         self.assertTrue(all(value.error == "" for value in result))
         self.assertEqual(result[0].note, "X18 not detected")
@@ -1161,9 +1148,7 @@ class ProvisionTests(unittest.TestCase):
             "reccy.subprocess.run",
             return_value=subprocess.CompletedProcess(["ssh"], 0, "", ""),
         ) as run:
-            provision.verify_mixer_audio_input(
-                config, "tom@recs-stage.local", "X18", "X18"
-            )
+            provision.verify_mixer_audio_input(config, "X18", "X18")
 
         self.assertIn(
             "arecord -l | grep -Fi -e X18 >/dev/null",
