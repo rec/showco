@@ -16,8 +16,9 @@ orchestrator, and report completion.
 
 Move the remaining responsibilities into these modules:
 
-- `showco/provision/local.py`: local repository discovery, worktree checks,
-  Git status and push/recovery commands, and local autosquash preparation.
+- `showco.update`: remains the sole owner of local repository branch checks,
+  autosquash, and push/recovery commands. Provisioning calls its local-only
+  preparation function and does not create a second local-Git module.
 - `showco/provision/ssh.py`: SSH and SCP command construction, command
   execution, reachability waits, known-host removal, remote command capture,
   reboot waiting, and SSH error rendering. Keep the explicit target argument
@@ -66,10 +67,10 @@ extraction; they are configuration-file operations, not remote provisioning.
    timeout behavior unchanged. The X18 physical-link and recording-persistence
    checks remain manual acceptance work, not provisioning assertions.
 
-5. Extract `local.py`. Move the local repository list and all local Git,
-   worktree, validation, and autosquash helpers. Preserve the current special
-   handling for dirty `uv.lock`, and do not add destructive reset behavior to
-   the provisioning-machine checkout.
+5. Extract the local-only part of `showco update` as a reusable preparation
+   function. Provisioning calls it before contacting the target. Preserve the
+   current special handling for dirty `uv.lock`, and do not add destructive
+   reset behavior to the provisioning-machine checkout.
 
 6. Extract `remote.py`. Move remote worktree validation, network preflight,
    and the `provision_remote` sequence. Its public entry should take

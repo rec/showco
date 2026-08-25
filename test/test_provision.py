@@ -11,7 +11,7 @@ from unittest import mock
 import tyro
 
 from showco import network_config, update
-from showco.provision import config, provision, script, ssh
+from showco.provision import config, provision, remote, script, ssh, verify
 
 
 class ProvisionTests(unittest.TestCase):
@@ -54,7 +54,7 @@ class ProvisionTests(unittest.TestCase):
             ),
             mock.patch("showco.update.prepare_local_repositories", return_value=True),
             mock.patch(
-                "showco.provision.provision.provision_remote",
+                "showco.provision.remote.provision_remote",
             ),
         ):
             result = provision.run(options)
@@ -74,7 +74,7 @@ class ProvisionTests(unittest.TestCase):
             mock.patch(
                 "showco.update.prepare_local_repositories", return_value=True
             ) as prepare,
-            mock.patch("showco.provision.provision.provision_remote"),
+            mock.patch("showco.provision.remote.provision_remote"),
         ):
             provision.run(options)
 
@@ -220,195 +220,6 @@ class ProvisionTests(unittest.TestCase):
 
         provision.validate_config(config)
 
-    def test_local_repository_errors_pushes_ahead_repository(self) -> None:
-        with TemporaryDirectory() as directory:
-            repository = provision.LocalRepository(
-                name="recs",
-                path=Path(directory),
-            )
-            with mock.patch(
-                "reccy.subprocess.run",
-                side_effect=[
-                    subprocess.CompletedProcess(["git"], 0, "true\n", ""),
-                    subprocess.CompletedProcess(["git"], 0, "", ""),
-                    subprocess.CompletedProcess(["git"], 0, "origin/main\n", ""),
-                    subprocess.CompletedProcess(["git"], 0, "2\n", ""),
-                    subprocess.CompletedProcess(["git"], 0, "", ""),
-                    subprocess.CompletedProcess(["git"], 0, "0\n", ""),
-                ],
-            ) as run:
-                errors = provision.repository_errors(repository)
-
-        self.assertEqual(errors, [])
-        push_command = run.call_args_list[4].args[0]
-        self.assertEqual(
-            push_command,
-            ["git", "-C", str(Path(directory)), "push", "origin", "HEAD:main"],
-        )
-        self.assertNotIn("--force", push_command)
-
-    def test_local_repository_errors_reports_push_failure(self) -> None:
-        with TemporaryDirectory() as directory:
-            repository = provision.LocalRepository(
-                name="recs",
-                path=Path(directory),
-            )
-            with mock.patch(
-                "reccy.subprocess.run",
-                side_effect=[
-                    subprocess.CompletedProcess(["git"], 0, "true\n", ""),
-                    subprocess.CompletedProcess(["git"], 0, "", ""),
-                    subprocess.CompletedProcess(["git"], 0, "origin/main\n", ""),
-                    subprocess.CompletedProcess(["git"], 0, "2\n", ""),
-                    subprocess.CalledProcessError(
-                        1,
-                        ["git", "push"],
-                        stderr="rejected\n",
-                    ),
-                    subprocess.CalledProcessError(
-                        1,
-                        ["git", "fetch"],
-                        stderr="fetch failed\n",
-                    ),
-                ],
-            ):
-                errors = provision.repository_errors(repository)
-
-        self.assertEqual(
-            errors,
-            [
-                "- recs: could not push 2 local commit(s) to origin/main: "
-                "regular push failed:\nrejected\n"
-                "force-with-lease recovery failed:\nfetch failed"
-            ],
-        )
-
-    def test_local_repository_errors_force_pushes_rejected_branch(self) -> None:
-        with TemporaryDirectory() as directory:
-            repository = provision.LocalRepository(name="recs", path=Path(directory))
-            with mock.patch(
-                "reccy.subprocess.run",
-                side_effect=[
-                    subprocess.CompletedProcess(["git"], 0, "true\n", ""),
-                    subprocess.CompletedProcess(["git"], 0, "", ""),
-                    subprocess.CompletedProcess(["git"], 0, "origin/main\n", ""),
-                    subprocess.CompletedProcess(["git"], 0, "2\n", ""),
-                    subprocess.CalledProcessError(
-                        1, ["git", "push"], stderr="rejected"
-                    ),
-                    subprocess.CompletedProcess(["git"], 0, "", ""),
-                    subprocess.CompletedProcess(["git"], 0, "abc123\n", ""),
-                    subprocess.CompletedProcess(["git"], 0, "", ""),
-                    subprocess.CompletedProcess(["git"], 0, "0\n", ""),
-                ],
-            ) as run:
-                errors = provision.repository_errors(repository)
-
-        self.assertEqual(errors, [])
-        self.assertEqual(
-            run.call_args_list[7].args[0],
-            [
-                "git",
-                "-C",
-                str(Path(directory)),
-                "push",
-                "--force-with-lease=refs/heads/main:abc123",
-                "origin",
-                "HEAD:main",
-            ],
-        )
-
-    def test_local_repository_errors_reports_missing_upstream(self) -> None:
-        with TemporaryDirectory() as directory:
-            repository = provision.LocalRepository(
-                name="showco",
-                path=Path(directory),
-            )
-            with mock.patch(
-                "reccy.subprocess.run",
-                side_effect=[
-                    subprocess.CompletedProcess(["git"], 0, "true\n", ""),
-                    subprocess.CompletedProcess(["git"], 0, "", ""),
-                    subprocess.CalledProcessError(128, ["git"]),
-                ],
-            ):
-                errors = provision.repository_errors(repository)
-
-        self.assertEqual(errors, ["- showco: current branch has no upstream"])
-
-    def test_repository_worktree_errors_reports_tracked_changes(self) -> None:
-        with TemporaryDirectory() as directory:
-            repository = provision.LocalRepository(
-                name="recs",
-                path=Path(directory),
-            )
-            with mock.patch(
-                "reccy.subprocess.run",
-                side_effect=[
-                    subprocess.CompletedProcess(["git"], 0, "true\n", ""),
-                    subprocess.CompletedProcess(["git"], 0, " M recs/main.py\n", ""),
-                ],
-            ) as run:
-                errors = provision.repository_worktree_errors(repository)
-
-        self.assertEqual(errors, ["- recs:\n M recs/main.py"])
-        self.assertEqual(
-            run.call_args_list[1].args[0][-3:],
-            ["status", "--short", "--untracked-files=no"],
-        )
-
-    def test_repository_worktree_errors_ignores_dirty_uv_lock(self) -> None:
-        with TemporaryDirectory() as directory:
-            repository = provision.LocalRepository(
-                name="recs",
-                path=Path(directory),
-            )
-            with mock.patch(
-                "reccy.subprocess.run",
-                side_effect=[
-                    subprocess.CompletedProcess(["git"], 0, "true\n", ""),
-                    subprocess.CompletedProcess(["git"], 0, " M uv.lock\n", ""),
-                ],
-            ):
-                errors = provision.repository_worktree_errors(repository)
-
-        self.assertEqual(errors, [])
-
-    def test_validate_local_worktrees_reports_all_changed_repositories(self) -> None:
-        with (
-            mock.patch(
-                "showco.provision.provision.repository_worktree_errors",
-                side_effect=lambda r: [f"- {r.name}:\nM {r.name}.py"],
-            ),
-            self.assertRaises(SystemExit) as error,
-        ):
-            provision.validate_local_worktrees(Path("/code"))
-
-        message = str(error.exception)
-        self.assertIn("showco:\nM showco.py", message)
-        self.assertIn("reccy:\nM reccy.py", message)
-        self.assertIn("recs:\nM recs.py", message)
-        self.assertIn("twitcho:\nM twitcho.py", message)
-        self.assertIn("lyte:\nM lyte.py", message)
-
-    def test_validate_local_repositories_reports_all_deployed_repositories(
-        self,
-    ) -> None:
-        with (
-            mock.patch(
-                "showco.provision.provision.repository_errors",
-                side_effect=lambda r: [r.name],
-            ),
-            self.assertRaises(SystemExit) as error,
-        ):
-            provision.validate_local_repositories(Path("/code"))
-
-        message = str(error.exception)
-        self.assertIn("showco", message)
-        self.assertIn("reccy", message)
-        self.assertIn("recs", message)
-        self.assertIn("twitcho", message)
-
     def test_local_checkout_directory_is_parent_of_showco_checkout(self) -> None:
         self.assertEqual(
             provision.local_checkout_directory(),
@@ -461,7 +272,7 @@ class ProvisionTests(unittest.TestCase):
             ),
             self.assertRaisesRegex(SystemExit, "no unconnected Wi-Fi interface"),
         ):
-            provision.preflight_network_config(config)
+            remote.preflight_network_config(config)
 
     def test_network_preflight_preserves_connected_external_wifi(self) -> None:
         config = make_config(values(networks=networks(x18=False)))
@@ -469,7 +280,7 @@ class ProvisionTests(unittest.TestCase):
             "showco.provision.ssh.capture_ssh",
             return_value="wlan0:wifi:disconnected\nwlan1:wifi:connected\n",
         ) as capture_ssh:
-            topology = provision.preflight_network_config(config)
+            topology = remote.preflight_network_config(config)
 
         capture_ssh.assert_called_once_with(
             config,
@@ -485,7 +296,7 @@ class ProvisionTests(unittest.TestCase):
                 "wlan0:wifi:connected:Livebox\nwlan1:wifi:connected:showco-private\n"
             ),
         ):
-            topology = provision.preflight_network_config(config)
+            topology = remote.preflight_network_config(config)
 
         self.assertEqual(topology, network_config.NetworkTopology.PRIVATE)
 
@@ -500,14 +311,14 @@ class ProvisionTests(unittest.TestCase):
             ) as run_ssh,
             mock.patch("showco.provision.ssh.wait_for_ssh"),
             mock.patch(
-                "showco.provision.provision.preflight_network_config",
+                "showco.provision.remote.preflight_network_config",
                 return_value=network_config.NetworkTopology.PRIVATE,
             ),
-            mock.patch("showco.provision.provision.validate_remote_worktrees"),
+            mock.patch("showco.provision.remote.validate_remote_worktrees"),
             mock.patch("showco.provision.ssh.run_scp"),
             self.assertRaises(subprocess.CalledProcessError) as error,
         ):
-            provision.provision_remote(
+            remote.provision_remote(
                 config,
                 Path("/tmp/local.sh"),
                 "/tmp/remote.sh",
@@ -543,11 +354,11 @@ class ProvisionTests(unittest.TestCase):
         with (
             mock.patch("showco.provision.ssh.run_ssh"),
             mock.patch(
-                "showco.provision.provision.preflight_network_config",
+                "showco.provision.remote.preflight_network_config",
                 side_effect=preflight_network_config,
             ),
             mock.patch(
-                "showco.provision.provision.validate_remote_worktrees",
+                "showco.provision.remote.validate_remote_worktrees",
                 side_effect=validate_remote_worktrees,
             ),
             mock.patch("showco.provision.ssh.run_scp", side_effect=run_scp),
@@ -558,12 +369,12 @@ class ProvisionTests(unittest.TestCase):
                 return_value=False,
             ),
             mock.patch(
-                "showco.provision.provision.verify_provisioning",
+                "showco.provision.verify.verify_provisioning",
                 return_value=[],
             ),
-            mock.patch("showco.provision.provision.report_verification_results"),
+            mock.patch("showco.provision.verify.report_verification_results"),
         ):
-            provision.provision_remote(
+            remote.provision_remote(
                 config,
                 Path("/tmp/local.sh"),
                 "/tmp/remote.sh",
@@ -573,14 +384,14 @@ class ProvisionTests(unittest.TestCase):
 
     def test_provision_waits_for_reboot_and_reports_verification(self) -> None:
         config = make_config(values(networks=networks(x18=False)))
-        result = [provision.VerificationResult(name="showco", error="")]
+        result = [verify.VerificationResult(name="showco", error="")]
         with (
             mock.patch("showco.provision.ssh.run_ssh"),
             mock.patch(
-                "showco.provision.provision.preflight_network_config",
+                "showco.provision.remote.preflight_network_config",
                 return_value=network_config.NetworkTopology.PRIVATE,
             ),
-            mock.patch("showco.provision.provision.validate_remote_worktrees"),
+            mock.patch("showco.provision.remote.validate_remote_worktrees"),
             mock.patch("showco.provision.ssh.run_scp"),
             mock.patch("showco.provision.ssh.wait_for_ssh") as initial_wait,
             mock.patch("showco.provision.ssh.remove_known_host") as remove_host,
@@ -591,14 +402,12 @@ class ProvisionTests(unittest.TestCase):
             mock.patch("showco.provision.ssh.schedule_remote_reboot") as schedule,
             mock.patch("showco.provision.ssh.wait_for_rebooted_ssh") as wait,
             mock.patch(
-                "showco.provision.provision.verify_provisioning",
+                "showco.provision.verify.verify_provisioning",
                 return_value=result,
-            ) as verify,
-            mock.patch(
-                "showco.provision.provision.report_verification_results"
-            ) as report,
+            ) as verification,
+            mock.patch("showco.provision.verify.report_verification_results") as report,
         ):
-            provision.provision_remote(
+            remote.provision_remote(
                 config,
                 Path("/tmp/local.sh"),
                 "/tmp/remote.sh",
@@ -608,7 +417,9 @@ class ProvisionTests(unittest.TestCase):
         remove_host.assert_called_once_with(config)
         wait.assert_called_once_with(config)
         schedule.assert_called_once_with(config)
-        verify.assert_called_once_with(config, network_config.NetworkTopology.PRIVATE)
+        verification.assert_called_once_with(
+            config, network_config.NetworkTopology.PRIVATE
+        )
         report.assert_called_once_with(result)
 
     def test_provision_does_not_wait_for_reboot_when_not_required(self) -> None:
@@ -616,10 +427,10 @@ class ProvisionTests(unittest.TestCase):
         with (
             mock.patch("showco.provision.ssh.run_ssh"),
             mock.patch(
-                "showco.provision.provision.preflight_network_config",
+                "showco.provision.remote.preflight_network_config",
                 return_value=network_config.NetworkTopology.PRIVATE,
             ),
-            mock.patch("showco.provision.provision.validate_remote_worktrees"),
+            mock.patch("showco.provision.remote.validate_remote_worktrees"),
             mock.patch("showco.provision.ssh.run_scp"),
             mock.patch("showco.provision.ssh.wait_for_ssh"),
             mock.patch(
@@ -628,12 +439,10 @@ class ProvisionTests(unittest.TestCase):
             ),
             mock.patch("showco.provision.ssh.schedule_remote_reboot") as schedule,
             mock.patch("showco.provision.ssh.wait_for_rebooted_ssh") as wait,
-            mock.patch(
-                "showco.provision.provision.verify_provisioning", return_value=[]
-            ),
-            mock.patch("showco.provision.provision.report_verification_results"),
+            mock.patch("showco.provision.verify.verify_provisioning", return_value=[]),
+            mock.patch("showco.provision.verify.report_verification_results"),
         ):
-            provision.provision_remote(
+            remote.provision_remote(
                 config,
                 Path("/tmp/local.sh"),
                 "/tmp/remote.sh",
@@ -644,33 +453,31 @@ class ProvisionTests(unittest.TestCase):
 
     def test_wait_for_provisioning_ready_retries_startup_checks(self) -> None:
         starting = [
-            provision.VerificationResult(
-                name="recs service is active", error="activating"
-            )
+            verify.VerificationResult(name="recs service is active", error="activating")
         ]
-        ready = [provision.VerificationResult(name="recs service is active", error="")]
+        ready = [verify.VerificationResult(name="recs service is active", error="")]
         config = make_config(values())
         with (
             mock.patch(
-                "showco.provision.provision.verify_provisioning",
+                "showco.provision.verify.verify_provisioning",
                 side_effect=[starting, ready],
-            ) as verify,
-            mock.patch("showco.provision.provision.time.sleep") as sleep,
+            ) as verification,
+            mock.patch("showco.provision.ssh.time.sleep") as sleep,
         ):
-            result = provision.wait_for_provisioning_ready(
+            result = verify.wait_for_provisioning_ready(
                 config,
                 network_config.NetworkTopology.MIXED,
             )
 
         self.assertEqual(result, ready)
-        self.assertEqual(verify.call_count, 2)
+        self.assertEqual(verification.call_count, 2)
         sleep.assert_called_once_with(1)
 
     def test_lyte_service_is_a_startup_check(self) -> None:
-        self.assertIn("Lyte service", provision.STARTUP_CHECK_NAMES)
+        self.assertIn("Lyte service", verify.STARTUP_CHECK_NAMES)
 
     def test_twitcho_health_command_uses_target_showco(self) -> None:
-        command = provision.showco_twitcho_health_command(Path("/code"))
+        command = verify.showco_twitcho_health_command(Path("/code"))
 
         self.assertIn("cd /code/showco", command)
         self.assertIn("uv run --frozen showco run twitcho-health", command)
@@ -682,7 +489,7 @@ class ProvisionTests(unittest.TestCase):
                 "showco.provision.ssh.ssh_is_reachable",
                 side_effect=[False, False, True],
             ) as reachable,
-            mock.patch("showco.provision.provision.time.sleep") as sleep,
+            mock.patch("showco.provision.ssh.time.sleep") as sleep,
         ):
             ssh.wait_for_ssh(config)
 
@@ -791,28 +598,28 @@ class ProvisionTests(unittest.TestCase):
         )
 
     def test_remote_script_is_loaded_from_template_file(self) -> None:
-        template = provision.script_dir() / provision.REMOTE_SCRIPT_TEMPLATE
+        template = script.SCRIPT_DIR / script.REMOTE_SCRIPT_TEMPLATE
 
-        self.assertEqual(provision.REMOTE_SCRIPT, template.read_text())
+        self.assertEqual(script.REMOTE_SCRIPT, template.read_text())
 
     def test_remote_script_configures_external_storage_mounts(self) -> None:
-        self.assertIn("exfatprogs", provision.REMOTE_SCRIPT)
-        self.assertIn('phase "configuring storage mounts"', provision.REMOTE_SCRIPT)
-        self.assertIn("lsblk -f", provision.REMOTE_SCRIPT)
-        self.assertIn("UUID=%s %s %s %s 0 2", provision.REMOTE_SCRIPT)
-        self.assertIn("fstab_mountpoint_for_uuid()", provision.REMOTE_SCRIPT)
-        self.assertIn("mount_target_for_disk()", provision.REMOTE_SCRIPT)
-        self.assertIn('target="/mnt/$name-$suffix"', provision.REMOTE_SCRIPT)
+        self.assertIn("exfatprogs", script.REMOTE_SCRIPT)
+        self.assertIn('phase "configuring storage mounts"', script.REMOTE_SCRIPT)
+        self.assertIn("lsblk -f", script.REMOTE_SCRIPT)
+        self.assertIn("UUID=%s %s %s %s 0 2", script.REMOTE_SCRIPT)
+        self.assertIn("fstab_mountpoint_for_uuid()", script.REMOTE_SCRIPT)
+        self.assertIn("mount_target_for_disk()", script.REMOTE_SCRIPT)
+        self.assertIn('target="/mnt/$name-$suffix"', script.REMOTE_SCRIPT)
 
     def test_remote_script_preserves_broken_checkouts_for_reruns(self) -> None:
-        self.assertIn("prepare_checkout_path()", provision.REMOTE_SCRIPT)
-        self.assertIn("Moving non-git checkout aside", provision.REMOTE_SCRIPT)
-        self.assertIn('sudo mv "$path" "$backup"', provision.REMOTE_SCRIPT)
+        self.assertIn("prepare_checkout_path()", script.REMOTE_SCRIPT)
+        self.assertIn("Moving non-git checkout aside", script.REMOTE_SCRIPT)
+        self.assertIn('sudo mv "$path" "$backup"', script.REMOTE_SCRIPT)
 
     def test_remote_script_resets_target_checkout_to_its_upstream(self) -> None:
-        upstream = provision.REMOTE_SCRIPT.index("--symbolic-full-name '@{upstream}'")
-        fetch = provision.REMOTE_SCRIPT.index('git -C "$path" fetch "$remote"')
-        reset = provision.REMOTE_SCRIPT.index(
+        upstream = script.REMOTE_SCRIPT.index("--symbolic-full-name '@{upstream}'")
+        fetch = script.REMOTE_SCRIPT.index('git -C "$path" fetch "$remote"')
+        reset = script.REMOTE_SCRIPT.index(
             'git -C "$path" reset --hard "$remote/$branch"'
         )
 
@@ -820,99 +627,93 @@ class ProvisionTests(unittest.TestCase):
         self.assertLess(fetch, reset)
         self.assertIn(
             '"+refs/heads/$branch:refs/remotes/$remote/$branch"',
-            provision.REMOTE_SCRIPT,
+            script.REMOTE_SCRIPT,
         )
-        self.assertNotIn('git -C "$path" pull --ff-only', provision.REMOTE_SCRIPT)
+        self.assertNotIn('git -C "$path" pull --ff-only', script.REMOTE_SCRIPT)
 
     def test_remote_script_checks_out_configured_refname(self) -> None:
-        self.assertIn('git -C "$path" checkout "$refname"', provision.REMOTE_SCRIPT)
+        self.assertIn('git -C "$path" checkout "$refname"', script.REMOTE_SCRIPT)
         self.assertIn(
-            'sync_repo reccy "$RECCY_REPO" "$RECCY_REFNAME"', provision.REMOTE_SCRIPT
+            'sync_repo reccy "$RECCY_REPO" "$RECCY_REFNAME"', script.REMOTE_SCRIPT
         )
         self.assertIn(
-            'sync_repo recs "$RECS_REPO" "$RECS_REFNAME"', provision.REMOTE_SCRIPT
+            'sync_repo recs "$RECS_REPO" "$RECS_REFNAME"', script.REMOTE_SCRIPT
         )
         self.assertIn(
-            'sync_repo lyte "$LYTE_REPO" "$LYTE_REFNAME"', provision.REMOTE_SCRIPT
+            'sync_repo lyte "$LYTE_REPO" "$LYTE_REFNAME"', script.REMOTE_SCRIPT
         )
 
     def test_remote_script_reinstalls_broken_uv(self) -> None:
-        self.assertIn("uv --version", provision.REMOTE_SCRIPT)
+        self.assertIn("uv --version", script.REMOTE_SCRIPT)
 
     def test_remote_script_checks_before_syncing_unchanged_environments(self) -> None:
-        self.assertIn("uv sync --frozen", provision.REMOTE_SCRIPT)
-        self.assertIn("uv sync --frozen --check", provision.REMOTE_SCRIPT)
+        self.assertIn("uv sync --frozen", script.REMOTE_SCRIPT)
+        self.assertIn("uv sync --frozen --check", script.REMOTE_SCRIPT)
 
     def test_remote_script_uses_frozen_uv_run(self) -> None:
+        self.assertIn("uv run --frozen showco run network-config", script.REMOTE_SCRIPT)
+        self.assertIn("uv run --frozen recs daemon install", script.REMOTE_SCRIPT)
+        self.assertIn("uv run --frozen twitcho daemon install", script.REMOTE_SCRIPT)
+        self.assertIn("uv run --frozen lyte daemon install", script.REMOTE_SCRIPT)
         self.assertIn(
-            "uv run --frozen showco run network-config", provision.REMOTE_SCRIPT
-        )
-        self.assertIn("uv run --frozen recs daemon install", provision.REMOTE_SCRIPT)
-        self.assertIn("uv run --frozen twitcho daemon install", provision.REMOTE_SCRIPT)
-        self.assertIn("uv run --frozen lyte daemon install", provision.REMOTE_SCRIPT)
-        self.assertIn(
-            "uv run --frozen showco run install-service", provision.REMOTE_SCRIPT
+            "uv run --frozen showco run install-service", script.REMOTE_SCRIPT
         )
 
     def test_remote_script_writes_provisioning_report(self) -> None:
-        self.assertIn('phase "writing provisioning report"', provision.REMOTE_SCRIPT)
-        self.assertIn("Disks discovered:", provision.REMOTE_SCRIPT)
-        self.assertIn("Wi-Fi interfaces discovered:", provision.REMOTE_SCRIPT)
-        self.assertIn("nmcli device status", provision.REMOTE_SCRIPT)
-        self.assertIn("iw dev", provision.REMOTE_SCRIPT)
-        self.assertIn("Lyte:", provision.REMOTE_SCRIPT)
-        self.assertIn("lyte service:", provision.REMOTE_SCRIPT)
-        self.assertIn("Twitcho:", provision.REMOTE_SCRIPT)
-        self.assertIn("twitcho service:", provision.REMOTE_SCRIPT)
-        self.assertIn("PROVISIONING-REPORT.txt", provision.REMOTE_SCRIPT)
+        self.assertIn('phase "writing provisioning report"', script.REMOTE_SCRIPT)
+        self.assertIn("Disks discovered:", script.REMOTE_SCRIPT)
+        self.assertIn("Wi-Fi interfaces discovered:", script.REMOTE_SCRIPT)
+        self.assertIn("nmcli device status", script.REMOTE_SCRIPT)
+        self.assertIn("iw dev", script.REMOTE_SCRIPT)
+        self.assertIn("Lyte:", script.REMOTE_SCRIPT)
+        self.assertIn("lyte service:", script.REMOTE_SCRIPT)
+        self.assertIn("Twitcho:", script.REMOTE_SCRIPT)
+        self.assertIn("twitcho service:", script.REMOTE_SCRIPT)
+        self.assertIn("PROVISIONING-REPORT.txt", script.REMOTE_SCRIPT)
 
     def test_remote_script_marks_target_machine(self) -> None:
         self.assertIn(
             '"/home/$SHOW_USER/.config/showco/machine-role"',
-            provision.REMOTE_SCRIPT,
+            script.REMOTE_SCRIPT,
         )
-        self.assertIn("printf 'target\\n'", provision.REMOTE_SCRIPT)
+        self.assertIn("printf 'target\\n'", script.REMOTE_SCRIPT)
 
     def test_remote_script_configures_network(self) -> None:
-        self.assertIn('phase "configuring network"', provision.REMOTE_SCRIPT)
-        self.assertIn("configure_network()", provision.REMOTE_SCRIPT)
-        self.assertIn(
-            "uv run --frozen showco run network-config", provision.REMOTE_SCRIPT
-        )
-        self.assertIn('write_toml_string host "$SHOWCO_HOST"', provision.REMOTE_SCRIPT)
-        self.assertIn("printf '\\n[git.reccy]\\n'", provision.REMOTE_SCRIPT)
-        self.assertIn("printf '\\n[git.lyte]\\n'", provision.REMOTE_SCRIPT)
-        self.assertIn("Skipping network configuration", provision.REMOTE_SCRIPT)
+        self.assertIn('phase "configuring network"', script.REMOTE_SCRIPT)
+        self.assertIn("configure_network()", script.REMOTE_SCRIPT)
+        self.assertIn("uv run --frozen showco run network-config", script.REMOTE_SCRIPT)
+        self.assertIn('write_toml_string host "$SHOWCO_HOST"', script.REMOTE_SCRIPT)
+        self.assertIn("printf '\\n[git.reccy]\\n'", script.REMOTE_SCRIPT)
+        self.assertIn("printf '\\n[git.lyte]\\n'", script.REMOTE_SCRIPT)
+        self.assertIn("Skipping network configuration", script.REMOTE_SCRIPT)
 
     def test_remote_script_installs_showco_service_through_showco(self) -> None:
         self.assertIn(
-            "uv run --frozen showco run install-service", provision.REMOTE_SCRIPT
+            "uv run --frozen showco run install-service", script.REMOTE_SCRIPT
         )
-        self.assertNotIn('tee "$service_file"', provision.REMOTE_SCRIPT)
-        self.assertNotIn("ExecStart=$command", provision.REMOTE_SCRIPT)
+        self.assertNotIn('tee "$service_file"', script.REMOTE_SCRIPT)
+        self.assertNotIn("ExecStart=$command", script.REMOTE_SCRIPT)
 
     def test_remote_script_marks_required_reboots(self) -> None:
-        network = provision.REMOTE_SCRIPT.index('phase "configuring network"')
-        reboot = provision.REMOTE_SCRIPT.index('phase "rebooting"')
+        network = script.REMOTE_SCRIPT.index('phase "configuring network"')
+        reboot = script.REMOTE_SCRIPT.index('phase "rebooting"')
 
         self.assertIn(
             "sudo touch /run/showco-provision-reboot-required",
-            provision.REMOTE_SCRIPT,
+            script.REMOTE_SCRIPT,
         )
         self.assertNotIn(
             "sudo systemd-run --on-active=2s /usr/bin/systemctl reboot",
-            provision.REMOTE_SCRIPT,
+            script.REMOTE_SCRIPT,
         )
         self.assertLess(network, reboot)
 
     def test_remote_script_configures_locale_before_package_updates(self) -> None:
-        locale = provision.REMOTE_SCRIPT.index('phase "configuring locale"')
-        journal = provision.REMOTE_SCRIPT.index(
-            'phase "configuring persistent journal"'
-        )
-        update = provision.REMOTE_SCRIPT.index("sudo apt-get update")
-        upgrade = provision.REMOTE_SCRIPT.index("sudo apt-get upgrade -y")
-        install = provision.REMOTE_SCRIPT.index("sudo apt-get install -y")
+        locale = script.REMOTE_SCRIPT.index('phase "configuring locale"')
+        journal = script.REMOTE_SCRIPT.index('phase "configuring persistent journal"')
+        update = script.REMOTE_SCRIPT.index("sudo apt-get update")
+        upgrade = script.REMOTE_SCRIPT.index("sudo apt-get upgrade -y")
+        install = script.REMOTE_SCRIPT.index("sudo apt-get install -y")
 
         self.assertLess(locale, update)
         self.assertLess(locale, journal)
@@ -921,15 +722,15 @@ class ProvisionTests(unittest.TestCase):
         self.assertLess(upgrade, install)
 
     def test_remote_script_configures_persistent_journal(self) -> None:
-        self.assertIn("Storage=persistent", provision.REMOTE_SCRIPT)
-        self.assertIn("/var/log/journal", provision.REMOTE_SCRIPT)
-        self.assertIn("systemctl restart systemd-journald", provision.REMOTE_SCRIPT)
+        self.assertIn("Storage=persistent", script.REMOTE_SCRIPT)
+        self.assertIn("/var/log/journal", script.REMOTE_SCRIPT)
+        self.assertIn("systemctl restart systemd-journald", script.REMOTE_SCRIPT)
 
     def test_remote_script_exports_locale_before_package_updates(self) -> None:
-        export = provision.REMOTE_SCRIPT.index("export LC_CTYPE=en_US.UTF-8")
-        update = provision.REMOTE_SCRIPT.index("sudo apt-get update")
+        export = script.REMOTE_SCRIPT.index("export LC_CTYPE=en_US.UTF-8")
+        update = script.REMOTE_SCRIPT.index("sudo apt-get update")
 
-        self.assertIn("unset LC_ALL", provision.REMOTE_SCRIPT)
+        self.assertIn("unset LC_ALL", script.REMOTE_SCRIPT)
         self.assertLess(export, update)
 
     def test_read_toml_preserves_string_lists(self) -> None:
@@ -1001,7 +802,7 @@ class ProvisionTests(unittest.TestCase):
 
     def test_remote_worktree_command_reports_all_tracked_changes(self) -> None:
         command = shlex.split(
-            provision.remote_worktree_command(Path("/srv/show-projects"))
+            remote.remote_worktree_command(Path("/srv/show-projects"))
         )[2]
 
         self.assertIn("for name in showco reccy recs twitcho lyte", command)
@@ -1012,7 +813,7 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn("exit 1", command)
 
     def test_project_status_command_ignores_dirty_uv_lock(self) -> None:
-        command = provision.project_status_command("recs", Path("/srv/show-projects"))
+        command = verify.project_status_command("recs", Path("/srv/show-projects"))
 
         self.assertEqual(
             command,
@@ -1058,7 +859,7 @@ class ProvisionTests(unittest.TestCase):
                 "showco.provision.ssh.ssh_is_reachable",
                 side_effect=[True, False, False, True],
             ) as reachable,
-            mock.patch("showco.provision.provision.time.sleep"),
+            mock.patch("showco.provision.ssh.time.sleep"),
         ):
             ssh.wait_for_rebooted_ssh(config)
 
@@ -1070,7 +871,7 @@ class ProvisionTests(unittest.TestCase):
             "reccy.subprocess.run",
             return_value=subprocess.CompletedProcess(["ssh"], 0, "", ""),
         ) as run:
-            results = provision.verify_provisioning(
+            results = verify.verify_provisioning(
                 config,
                 network_config.NetworkTopology.MIXED,
             )
@@ -1079,7 +880,7 @@ class ProvisionTests(unittest.TestCase):
         self.assertFalse([r for r in results if r.error])
         for project in ["reccy", "recs", "twitcho", "showco"]:
             self.assertIn(
-                provision.project_status_command(project, Path("/srv/show-projects")),
+                verify.project_status_command(project, Path("/srv/show-projects")),
                 commands,
             )
         self.assertIn(
@@ -1116,7 +917,7 @@ class ProvisionTests(unittest.TestCase):
             "reccy.subprocess.run",
             return_value=subprocess.CompletedProcess(["ssh"], 1, "", ""),
         ):
-            result = provision.verify_mixer_devices(config)
+            result = verify.verify_mixer_devices(config)
 
         self.assertTrue(all(value.error == "" for value in result))
         self.assertEqual(result[0].note, "X18 not detected")
@@ -1127,7 +928,7 @@ class ProvisionTests(unittest.TestCase):
             "reccy.subprocess.run",
             return_value=subprocess.CompletedProcess(["ssh"], 0, "", ""),
         ) as run:
-            provision.verify_mixer_audio_input(config, "X18", "X18")
+            verify.verify_mixer_audio_input(config, "X18", "X18")
 
         self.assertIn(
             "arecord -l | grep -Fi -e X18 >/dev/null",
@@ -1137,9 +938,9 @@ class ProvisionTests(unittest.TestCase):
     def test_remote_script_includes_mixer_selectors(self) -> None:
         self.assertIn(
             'done <<<"$RECS_AUDIO_DEVICE_NAMES"',
-            provision.REMOTE_SCRIPT,
+            script.REMOTE_SCRIPT,
         )
-        self.assertIn('args+=(--include "$device_name")', provision.REMOTE_SCRIPT)
+        self.assertIn('args+=(--include "$device_name")', script.REMOTE_SCRIPT)
 
     def test_mixer_configuration_renders_osc_and_deduplicates_selectors(self) -> None:
         mixers = make_config(values()).mixers
@@ -1156,14 +957,14 @@ class ProvisionTests(unittest.TestCase):
 
     def test_report_verification_results_exits_with_errors(self) -> None:
         with self.assertRaises(SystemExit):
-            provision.report_verification_results(
-                [provision.VerificationResult(name="showco", error="inactive")]
+            verify.report_verification_results(
+                [verify.VerificationResult(name="showco", error="inactive")]
             )
 
     def test_report_verification_results_allows_notes(self) -> None:
-        provision.report_verification_results(
+        verify.report_verification_results(
             [
-                provision.VerificationResult(
+                verify.VerificationResult(
                     name="X18 USB device",
                     error="",
                     note="X18/XR18 not detected",
