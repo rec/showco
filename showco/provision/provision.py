@@ -69,7 +69,6 @@ class ProvisionOptions(BaseModel, frozen=True):
     lyte_repo: str | None = None
     lyte_enabled: bool | None = None
     lyte_daemon_config: Path | None = None
-    accept_changed_host_key: bool = False
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -108,7 +107,6 @@ def run(options: ProvisionOptions) -> int:
         persist_network_host(options.config_path, options.host)
     if options.root is not None:
         persist_paths_root(options.config_path, options.root)
-    ssh_target = f"{parsed_config.network.user}@{parsed_config.network.host}"
     remote_script = "/tmp/showco-provision-pi.sh"
 
     with tempfile.NamedTemporaryFile(
@@ -122,15 +120,13 @@ def run(options: ProvisionOptions) -> int:
     try:
         provision_remote(
             parsed_config,
-            ssh_target,
             local_script,
             remote_script,
-            accept_changed_host_key=options.accept_changed_host_key,
         )
     finally:
         local_script.unlink(missing_ok=True)
 
-    print(f"Provisioned {ssh_target}.")
+    print(f"Provisioned {parsed_config.ssh_target}.")
     return 0
 
 
@@ -197,60 +193,50 @@ def toml_string(value: str) -> str:
 
 def provision_remote(
     provision_config: config.Config,
-    ssh_target: str,
     local_script: Path,
     remote_script: str,
-    *,
-    accept_changed_host_key: bool = False,
 ) -> None:
     uploaded = False
-    print(f"Waiting for SSH connection to {ssh_target}...")
-    wait_for_ssh(
-        provision_config, ssh_target, accept_changed_host_key=accept_changed_host_key
-    )
-    validate_remote_worktrees(provision_config, ssh_target)
-    topology = preflight_network_config(provision_config, ssh_target)
-    print(f"Checking {ssh_target}...")
+    if provision_config.accept_changed_host_key:
+        remove_known_host(provision_config)
+    print(f"Waiting for SSH connection to {provision_config.ssh_target}...")
+    wait_for_ssh(provision_config)
+    validate_remote_worktrees(provision_config)
+    topology = preflight_network_config(provision_config)
+    print(f"Checking {provision_config.ssh_target}...")
     run_ssh(
         provision_config,
-        ssh_target,
         "set -e; uname -a; id; command -v sudo; command -v apt-get",
         timeout_seconds=SSH_VERIFICATION_TIMEOUT_SECONDS,
     )
     try:
         print("Copying provisioning script...")
-        run_scp(provision_config, local_script, f"{ssh_target}:{remote_script}")
+        run_scp(provision_config, local_script, remote_script)
         uploaded = True
 
-        print(f"Running provisioning on {ssh_target}...")
+        print(f"Running provisioning on {provision_config.ssh_target}...")
         run_ssh(
             provision_config,
-            ssh_target,
             remote_command(provision_config, remote_script),
             timeout_seconds=REMOTE_PROVISION_TIMEOUT_SECONDS,
         )
 
-        if provisioning_reboot_required(provision_config, ssh_target):
-            print(f"Waiting for {ssh_target} to reboot...")
-            schedule_remote_reboot(provision_config, ssh_target)
-            wait_for_rebooted_ssh(
-                provision_config,
-                ssh_target,
-                accept_changed_host_key=accept_changed_host_key,
-            )
+        if provisioning_reboot_required(provision_config):
+            print(f"Waiting for {provision_config.ssh_target} to reboot...")
+            schedule_remote_reboot(provision_config)
+            wait_for_rebooted_ssh(provision_config)
         else:
-            print(f"No reboot is required for {ssh_target}.")
+            print(f"No reboot is required for {provision_config.ssh_target}.")
 
-        print(f"Checking provisioned services on {ssh_target}...")
+        print(f"Checking provisioned services on {provision_config.ssh_target}...")
         report_verification_results(
-            wait_for_provisioning_ready(provision_config, ssh_target, topology)
+            wait_for_provisioning_ready(provision_config, topology)
         )
     finally:
         if uploaded:
             try:
                 run_ssh(
                     provision_config,
-                    ssh_target,
                     f"rm -f {shlex.quote(remote_script)}",
                     exit_on_error=False,
                     timeout_seconds=SSH_CLEANUP_TIMEOUT_SECONDS,
@@ -265,10 +251,10 @@ def provision_remote(
 
 
 def preflight_network_config(
-    provision_config: config.Config, ssh_target: str
+    provision_config: config.Config,
 ) -> network_config.NetworkTopology:
-    print(f"Checking Wi-Fi interfaces on {ssh_target}...")
-    status = capture_ssh(provision_config, ssh_target, WIFI_STATUS_COMMAND)
+    print(f"Checking Wi-Fi interfaces on {provision_config.ssh_target}...")
+    status = capture_ssh(provision_config, WIFI_STATUS_COMMAND)
     interfaces = network_config.wifi_interfaces_from_status(status)
     assignment = network_config.assign_wifi(
         interfaces, provision_config.network.swap_wifi
@@ -397,11 +383,10 @@ def repository_worktree_errors(repository: LocalRepository) -> list[str]:
     return [f"- {repository.name}:\n{status}"]
 
 
-def validate_remote_worktrees(provision_config: config.Config, ssh_target: str) -> None:
-    print(f"Checking target repository worktrees on {ssh_target}...")
+def validate_remote_worktrees(provision_config: config.Config) -> None:
+    print(f"Checking target repository worktrees on {provision_config.ssh_target}...")
     run_ssh(
         provision_config,
-        ssh_target,
         remote_worktree_command(provision_config.paths.root),
     )
 
@@ -531,98 +516,78 @@ def git_error_output(error: CalledProcessError) -> str:
     return str(error)
 
 
-def wait_for_rebooted_ssh(
-    provision_config: config.Config,
-    ssh_target: str,
-    *,
-    accept_changed_host_key: bool = False,
-) -> None:
-    wait_for_ssh_disconnect(provision_config, ssh_target, accept_changed_host_key)
+def wait_for_rebooted_ssh(provision_config: config.Config) -> None:
+    wait_for_ssh_disconnect(provision_config)
     wait_for_ssh(
         provision_config,
-        ssh_target,
         timeout_seconds=REBOOT_WAIT_SECONDS,
-        accept_changed_host_key=accept_changed_host_key,
     )
 
 
-def provisioning_reboot_required(
-    provision_config: config.Config, ssh_target: str
-) -> bool:
+def provisioning_reboot_required(provision_config: config.Config) -> bool:
     return (
         capture_ssh(
             provision_config,
-            ssh_target,
             "test -f /run/showco-provision-reboot-required && echo true || echo false",
         )
         == "true"
     )
 
 
-def schedule_remote_reboot(provision_config: config.Config, ssh_target: str) -> None:
+def schedule_remote_reboot(provision_config: config.Config) -> None:
     run_ssh(
         provision_config,
-        ssh_target,
         "sudo systemd-run --on-active=2s /usr/bin/systemctl reboot",
     )
 
 
-def wait_for_ssh_disconnect(
-    provision_config: config.Config, ssh_target: str, accept_changed_host_key: bool
-) -> None:
+def wait_for_ssh_disconnect(provision_config: config.Config) -> None:
     deadline = time.monotonic() + 60
     while time.monotonic() < deadline:
-        if not ssh_is_reachable(
-            provision_config,
-            ssh_target,
-            accept_changed_host_key=accept_changed_host_key,
-        ):
+        if not ssh_is_reachable(provision_config):
             return
         time.sleep(1)
-    sys.exit(f"ERROR: {ssh_target} did not drop SSH before reboot")
+    sys.exit(f"ERROR: {provision_config.ssh_target} did not drop SSH before reboot")
 
 
 def wait_for_ssh(
     provision_config: config.Config,
-    ssh_target: str,
     *,
     timeout_seconds: int | None = None,
-    accept_changed_host_key: bool = False,
 ) -> None:
     deadline = None
     if timeout_seconds is not None:
         deadline = time.monotonic() + timeout_seconds
     while deadline is None or time.monotonic() < deadline:
-        if ssh_is_reachable(
-            provision_config,
-            ssh_target,
-            accept_changed_host_key=accept_changed_host_key,
-        ):
+        if ssh_is_reachable(provision_config):
             return
         time.sleep(1)
-    sys.exit(f"ERROR: {ssh_target} did not accept SSH within {timeout_seconds}s")
+    sys.exit(
+        f"ERROR: {provision_config.ssh_target} did not accept SSH "
+        f"within {timeout_seconds}s"
+    )
 
 
-def ssh_is_reachable(
-    provision_config: config.Config,
-    ssh_target: str,
-    *,
-    accept_changed_host_key: bool = False,
-) -> bool:
+def ssh_is_reachable(provision_config: config.Config) -> bool:
     completed = subprocess.run(
-        ssh_command(provision_config, ssh_target, "true", connect_timeout=1),
+        ssh_command(
+            provision_config,
+            provision_config.ssh_target,
+            "true",
+            connect_timeout=1,
+        ),
         capture_output=True,
         check=False,
         text=True,
     )
     if has_changed_host_key(completed):
-        if not accept_changed_host_key:
+        if not provision_config.accept_changed_host_key:
             sys.exit(
                 "ERROR: SSH host key changed for "
-                f"{ssh_target}. Verify the new key and rerun with "
-                "--accept-changed-host-key after reflashing."
+                f"{provision_config.ssh_target}. Verify the new key and set "
+                "accept_changed_host_key = true after reflashing."
             )
-        remove_known_host(provision_config, ssh_target)
+        remove_known_host(provision_config)
         return False
     return completed.returncode == 0
 
@@ -632,8 +597,8 @@ def has_changed_host_key(completed: CompletedProcess[str]) -> bool:
     return "REMOTE HOST IDENTIFICATION HAS CHANGED" in output
 
 
-def remove_known_host(provision_config: config.Config, ssh_target: str) -> None:
-    for host in known_host_names(provision_config, ssh_target):
+def remove_known_host(provision_config: config.Config) -> None:
+    for host in known_host_names(provision_config):
         print(f"Removing stale SSH host key for {host}...")
         subprocess.run(
             ["ssh-keygen", "-R", host],
@@ -643,8 +608,8 @@ def remove_known_host(provision_config: config.Config, ssh_target: str) -> None:
         )
 
 
-def known_host_names(provision_config: config.Config, ssh_target: str) -> list[str]:
-    host = ssh_target.rsplit("@", maxsplit=1)[-1]
+def known_host_names(provision_config: config.Config) -> list[str]:
+    host = provision_config.network.host
     if provision_config.network.ssh_port == 22:
         return [host]
     return [host, f"[{host}]:{provision_config.network.ssh_port}"]
@@ -652,7 +617,6 @@ def known_host_names(provision_config: config.Config, ssh_target: str) -> list[s
 
 def verify_provisioning(
     provision_config: config.Config,
-    ssh_target: str,
     topology: network_config.NetworkTopology | None = None,
 ) -> list[VerificationResult]:
     private_wifi_verification = []
@@ -662,7 +626,6 @@ def verify_provisioning(
             private_wifi_verification.append(
                 verify_remote_command(
                     provision_config,
-                    ssh_target,
                     "X18 bridge has the configured address",
                     "ip -4 -o address show dev "
                     f"{network_config.X18_BRIDGE_INTERFACE} "
@@ -672,7 +635,6 @@ def verify_provisioning(
         private_wifi_verification.append(
             verify_remote_command(
                 provision_config,
-                ssh_target,
                 "private Wi-Fi hotspot is active",
                 "nmcli -t -f TYPE,STATE,CONNECTION device status "
                 f"| grep -F -x "
@@ -682,104 +644,90 @@ def verify_provisioning(
     return [
         verify_remote_command(
             provision_config,
-            ssh_target,
             "no failed systemd units",
             "systemctl --failed --no-legend --plain",
             expect_empty_stdout=True,
         ),
         verify_remote_command(
             provision_config,
-            ssh_target,
             "reccy project status is clean",
             project_status_command("reccy", provision_config.paths.root),
             expect_empty_stdout=True,
         ),
         verify_remote_command(
             provision_config,
-            ssh_target,
             "recs project status is clean",
             project_status_command("recs", provision_config.paths.root),
             expect_empty_stdout=True,
         ),
         verify_remote_command(
             provision_config,
-            ssh_target,
             "twitcho project status is clean",
             project_status_command("twitcho", provision_config.paths.root),
             expect_empty_stdout=True,
         ),
         verify_remote_command(
             provision_config,
-            ssh_target,
             "lyte project status is clean",
             project_status_command("lyte", provision_config.paths.root),
             expect_empty_stdout=True,
         ),
         verify_remote_command(
             provision_config,
-            ssh_target,
             "showco project status is clean",
             project_status_command("showco", provision_config.paths.root),
             expect_empty_stdout=True,
         ),
         verify_remote_command(
             provision_config,
-            ssh_target,
             "recs service is active",
             showco_service_status_command("recs", provision_config.paths.root),
         ),
         verify_remote_command(
             provision_config,
-            ssh_target,
             "recs status is advancing",
             recs.status_changes_command(),
             summarize_error=recs.status_failure_summary,
         ),
         verify_remote_command(
             provision_config,
-            ssh_target,
             "showco service is active",
             showco_service_status_command("showco", provision_config.paths.root),
         ),
         verify_remote_command(
             provision_config,
-            ssh_target,
             "showco web UI revision",
             showco_revision_command(provision_config.paths.root),
         ),
         verify_remote_command(
             provision_config,
-            ssh_target,
             "persistent journal is readable",
             persistent_journal_command(),
         ),
         verify_remote_command(
             provision_config,
-            ssh_target,
             "NetworkManager device status is readable",
             "nmcli device status >/dev/null",
         ),
         verify_remote_command(
             provision_config,
-            ssh_target,
             "NetworkManager connection list is readable",
             "nmcli connection show >/dev/null",
         ),
         *private_wifi_verification,
-        verify_lyte_service(provision_config, ssh_target),
-        verify_twitcho_service(provision_config, ssh_target),
-        *verify_mixer_devices(provision_config, ssh_target),
+        verify_lyte_service(provision_config),
+        verify_twitcho_service(provision_config),
+        *verify_mixer_devices(provision_config),
     ]
 
 
 def wait_for_provisioning_ready(
     provision_config: config.Config,
-    ssh_target: str,
     topology: network_config.NetworkTopology,
 ) -> list[VerificationResult]:
     deadline = time.monotonic() + POST_REBOOT_READY_WAIT_SECONDS
     while True:
-        results = verify_provisioning(provision_config, ssh_target, topology)
+        results = verify_provisioning(provision_config, topology)
         startup_errors = [
             r for r in results if r.name in STARTUP_CHECK_NAMES and r.error
         ]
@@ -837,14 +785,11 @@ def user_session_command(command: str) -> str:
     return f"uid=$(id -u); XDG_RUNTIME_DIR=/run/user/$uid {command}"
 
 
-def verify_lyte_service(
-    provision_config: config.Config, ssh_target: str
-) -> VerificationResult:
+def verify_lyte_service(provision_config: config.Config) -> VerificationResult:
     if not provision_config.lyte.enabled:
         return VerificationResult(name="Lyte MIDI service", error="", note="disabled")
     installed = verify_remote_command(
         provision_config,
-        ssh_target,
         "Lyte service is installed",
         user_systemctl_command("is-enabled --quiet lyte.service"),
     )
@@ -852,7 +797,6 @@ def verify_lyte_service(
         return installed
     active = verify_remote_command(
         provision_config,
-        ssh_target,
         "Lyte service",
         user_systemctl_command("is-active --quiet lyte.service"),
     )
@@ -861,30 +805,25 @@ def verify_lyte_service(
     return active
 
 
-def verify_twitcho_service(
-    provision_config: config.Config, ssh_target: str
-) -> VerificationResult:
+def verify_twitcho_service(provision_config: config.Config) -> VerificationResult:
     if not provision_config.twitch.enabled:
         return VerificationResult(name="Twitcho service", error="", note="disabled")
     return verify_remote_command(
         provision_config,
-        ssh_target,
         "Twitcho service",
         showco_twitcho_health_command(provision_config.paths.root),
     )
 
 
-def verify_mixer_devices(
-    provision_config: config.Config, ssh_target: str
-) -> list[VerificationResult]:
+def verify_mixer_devices(provision_config: config.Config) -> list[VerificationResult]:
     return [
         *(
-            verify_mixer_audio_input(provision_config, ssh_target, mixer.name, name)
+            verify_mixer_audio_input(provision_config, mixer.name, name)
             for mixer in provision_config.mixers
             for name in mixer.audio_device_names
         ),
         *(
-            verify_mixer_midi_input(provision_config, ssh_target, mixer.name, name)
+            verify_mixer_midi_input(provision_config, mixer.name, name)
             for mixer in provision_config.mixers
             for name in mixer.midi_input_names
         ),
@@ -892,12 +831,17 @@ def verify_mixer_devices(
 
 
 def verify_mixer_audio_input(
-    provision_config: config.Config, ssh_target: str, mixer_name: str, selector: str
+    provision_config: config.Config, mixer_name: str, selector: str
 ) -> VerificationResult:
     command = f"arecord -l | grep -Fi -e {shlex.quote(selector)} >/dev/null"
     try:
         completed = subprocess.run(
-            ssh_command(provision_config, ssh_target, command, connect_timeout=1),
+            ssh_command(
+                provision_config,
+                provision_config.ssh_target,
+                command,
+                connect_timeout=1,
+            ),
             capture_output=True,
             check=False,
             text=True,
@@ -919,7 +863,7 @@ def verify_mixer_audio_input(
 
 
 def verify_mixer_midi_input(
-    provision_config: config.Config, ssh_target: str, mixer_name: str, selector: str
+    provision_config: config.Config, mixer_name: str, selector: str
 ) -> VerificationResult:
     matcher = (
         "from recs.midi.device import input_names; import sys; "
@@ -935,7 +879,12 @@ def verify_mixer_midi_input(
     )
     try:
         completed = subprocess.run(
-            ssh_command(provision_config, ssh_target, command, connect_timeout=1),
+            ssh_command(
+                provision_config,
+                provision_config.ssh_target,
+                command,
+                connect_timeout=1,
+            ),
             capture_output=True,
             check=False,
             text=True,
@@ -958,7 +907,6 @@ def verify_mixer_midi_input(
 
 def verify_remote_command(
     provision_config: config.Config,
-    ssh_target: str,
     name: str,
     command: str,
     *,
@@ -967,7 +915,12 @@ def verify_remote_command(
 ) -> VerificationResult:
     try:
         completed = subprocess.run(
-            ssh_command(provision_config, ssh_target, command, connect_timeout=1),
+            ssh_command(
+                provision_config,
+                provision_config.ssh_target,
+                command,
+                connect_timeout=1,
+            ),
             capture_output=True,
             check=False,
             text=True,
@@ -1136,7 +1089,6 @@ def osc_nodes_toml(mixers: list[config.MixerSpec]) -> str:
 
 def run_ssh(
     provision_config: config.Config,
-    target: str,
     command: str,
     *,
     exit_on_error: bool = True,
@@ -1144,16 +1096,21 @@ def run_ssh(
 ) -> None:
     try:
         run_command(
-            ssh_command(provision_config, target, command, allocate_tty=True),
+            ssh_command(
+                provision_config,
+                provision_config.ssh_target,
+                command,
+                allocate_tty=True,
+            ),
             timeout_seconds=timeout_seconds,
         )
     except (CalledProcessError, TimeoutExpired) as e:
         if not exit_on_error:
             raise
-        sys.exit(ssh_error_message(target, e))
+        sys.exit(ssh_error_message(provision_config, e))
 
 
-def run_scp(provision_config: config.Config, source: Path, target: str) -> None:
+def run_scp(provision_config: config.Config, source: Path, remote_path: str) -> None:
     try:
         run_command(
             [
@@ -1163,30 +1120,32 @@ def run_scp(provision_config: config.Config, source: Path, target: str) -> None:
                 "-P",
                 str(provision_config.network.ssh_port),
                 str(source),
-                target,
+                f"{provision_config.ssh_target}:{remote_path}",
             ],
             timeout_seconds=SCP_TIMEOUT_SECONDS,
         )
     except (CalledProcessError, TimeoutExpired) as e:
-        sys.exit(ssh_error_message(target, e))
+        sys.exit(ssh_error_message(provision_config, e))
 
 
-def capture_ssh(provision_config: config.Config, target: str, command: str) -> str:
+def capture_ssh(provision_config: config.Config, command: str) -> str:
     try:
         completed = run_command(
-            ssh_command(provision_config, target, command),
+            ssh_command(provision_config, provision_config.ssh_target, command),
             capture_output=True,
             timeout_seconds=SSH_VERIFICATION_TIMEOUT_SECONDS,
         )
     except (CalledProcessError, TimeoutExpired) as e:
-        sys.exit(ssh_error_message(target, e))
+        sys.exit(ssh_error_message(provision_config, e))
     return completed.stdout.strip()
 
 
-def ssh_error_message(target: str, error: CalledProcessError | TimeoutExpired) -> str:
+def ssh_error_message(
+    provision_config: config.Config, error: CalledProcessError | TimeoutExpired
+) -> str:
     output = f"{error.stdout or ''}{error.stderr or ''}".strip()
     message = (
-        f"ERROR: SSH connection or command failed for {target}. "
+        f"ERROR: SSH connection or command failed for {provision_config.ssh_target}. "
         f"SSH connect timeout is {SSH_CONNECT_TIMEOUT_SECONDS} seconds."
     )
     if output:
@@ -1208,7 +1167,14 @@ def ssh_command(
     if connect_timeout is not None:
         result.extend(["-o", f"ConnectTimeout={connect_timeout}"])
     result.extend(["-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new"])
-    result.extend(["-p", str(provision_config.network.ssh_port), target, command])
+    result.extend(
+        [
+            "-p",
+            str(provision_config.network.ssh_port),
+            target,
+            command,
+        ]
+    )
     return result
 
 

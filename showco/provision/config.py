@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import sys
 import tomllib
+from functools import cached_property
 from pathlib import Path
 
 from pydantic import BaseModel, Field
@@ -80,6 +81,11 @@ class Config(BaseModel, frozen=True):
     twitch: Twitch
     lyte: Lyte
     git: Git
+    accept_changed_host_key: bool = True
+
+    @cached_property
+    def ssh_target(self) -> str:
+        return f"{self.network.user}@{self.network.host}"
 
 
 def config_from_values(
@@ -147,6 +153,9 @@ def config_from_values(
                 override=showco_repo,
             ),
             lyte=git_repo("lyte", table_value(git, "lyte"), override=lyte_repo),
+        ),
+        accept_changed_host_key=bool_value(
+            values, "accept_changed_host_key", default=True
         ),
     )
     validate_x18_mixer_hosts(result)
