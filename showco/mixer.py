@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-from recs.cfg.device import DeviceSpec
+from reccy.device import AudioMidiDeviceSpec
 
 from .models import MixerStatus
 
@@ -75,7 +75,7 @@ class MixerOscSpec(BaseModel):
         return value
 
 
-class MixerSpec(DeviceSpec):
+class MixerSpec(AudioMidiDeviceSpec, frozen=True):
     probe: MixerProbeSpec | None = None
     osc: MixerOscSpec | None = None
 
