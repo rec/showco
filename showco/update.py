@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from reccy import subprocess
 from tqdm import tqdm
 
-from . import machine_role, recs, services
+from . import machine_role, recs, revision, services
 from .provision import config, provision, ssh
 
 RunCommand = Callable[
@@ -391,13 +391,7 @@ def recs_status_changes_step(run_command: RunCommand) -> StepResult:
 
 
 def showco_revision_step(root: Path, run_command: RunCommand) -> StepResult:
-    showco_directory = shlex.quote(str(root / "showco"))
-    command = (
-        f"expected=$(git -C {showco_directory} rev-parse HEAD) && "
-        "curl --fail --silent --show-error --retry 5 --retry-connrefused "
-        "--retry-delay 1 http://127.0.0.1:17352/status | "
-        'grep --fixed-strings "\\"revision\\":\\"$expected\\""'
-    )
+    command = revision.showco_revision_command(root, retry=True)
     return run_step("showco", "web UI revision", ["sh", "-c", command], run_command)
 
 
