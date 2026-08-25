@@ -14,7 +14,7 @@ from reccy import subprocess
 from tqdm import tqdm
 
 from . import machine_role, recs, services
-from .provision import config, provision
+from .provision import config, provision, ssh
 
 RunCommand = Callable[
     [Sequence[str]],
@@ -130,13 +130,13 @@ def update_from_provisioning_machine(
         target_result = run_remote_step(
             "target",
             "update",
-            provision.ssh_command(provision_config, ssh_target, command),
+            ssh.ssh_command(provision_config, ssh_target, command),
         )
         if rejected_update_arguments(target_result):
             target_result = run_remote_step(
                 "target",
                 "legacy update",
-                provision.ssh_command(
+                ssh.ssh_command(
                     provision_config,
                     ssh_target,
                     legacy_remote_update_command(root or provision_config.paths.root),
@@ -146,7 +146,7 @@ def update_from_provisioning_machine(
                 target_result = run_remote_step(
                     "target",
                     "update",
-                    provision.ssh_command(provision_config, ssh_target, command),
+                    ssh.ssh_command(provision_config, ssh_target, command),
                 )
         progress.update()
     if not target_result.ok:
@@ -175,7 +175,7 @@ def update_remote_target(
         result = run_remote_step(
             "target",
             "update",
-            provision.ssh_command(provision_config, ssh_target, command),
+            ssh.ssh_command(provision_config, ssh_target, command),
         )
         progress.update()
     if not result.ok:

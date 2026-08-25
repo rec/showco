@@ -11,7 +11,7 @@ from unittest import mock
 import tyro
 
 from showco import network_config
-from showco.provision import config, provision
+from showco.provision import config, provision, ssh
 
 
 class ProvisionTests(unittest.TestCase):
@@ -477,7 +477,7 @@ class ProvisionTests(unittest.TestCase):
         config = make_config(values(networks=networks(x18=False)))
         with (
             mock.patch(
-                "showco.provision.provision.capture_ssh",
+                "showco.provision.ssh.capture_ssh",
                 return_value="wlan0:wifi:connected\n",
             ),
             self.assertRaisesRegex(SystemExit, "no unconnected Wi-Fi interface"),
@@ -487,7 +487,7 @@ class ProvisionTests(unittest.TestCase):
     def test_network_preflight_preserves_connected_external_wifi(self) -> None:
         config = make_config(values(networks=networks(x18=False)))
         with mock.patch(
-            "showco.provision.provision.capture_ssh",
+            "showco.provision.ssh.capture_ssh",
             return_value="wlan0:wifi:disconnected\nwlan1:wifi:connected\n",
         ) as capture_ssh:
             topology = provision.preflight_network_config(config)
@@ -501,7 +501,7 @@ class ProvisionTests(unittest.TestCase):
     def test_network_preflight_reuses_existing_private_hotspot(self) -> None:
         config = make_config(values(networks=networks(x18=False)))
         with mock.patch(
-            "showco.provision.provision.capture_ssh",
+            "showco.provision.ssh.capture_ssh",
             return_value=(
                 "wlan0:wifi:connected:Livebox\nwlan1:wifi:connected:showco-private\n"
             ),
@@ -516,16 +516,16 @@ class ProvisionTests(unittest.TestCase):
         cleanup_error = subprocess.CalledProcessError(1, ["ssh", "cleanup"])
         with (
             mock.patch(
-                "showco.provision.provision.run_ssh",
+                "showco.provision.ssh.run_ssh",
                 side_effect=[None, original_error, cleanup_error],
             ) as run_ssh,
-            mock.patch("showco.provision.provision.wait_for_ssh"),
+            mock.patch("showco.provision.ssh.wait_for_ssh"),
             mock.patch(
                 "showco.provision.provision.preflight_network_config",
                 return_value=network_config.NetworkTopology.PRIVATE,
             ),
             mock.patch("showco.provision.provision.validate_remote_worktrees"),
-            mock.patch("showco.provision.provision.run_scp"),
+            mock.patch("showco.provision.ssh.run_scp"),
             self.assertRaises(subprocess.CalledProcessError) as error,
         ):
             provision.provision_remote(
@@ -539,7 +539,7 @@ class ProvisionTests(unittest.TestCase):
 
     def test_run_uses_key_based_ssh_command(self) -> None:
         with mock.patch("reccy.subprocess.run") as run:
-            provision.run_command(["ssh"])
+            ssh.run_command(["ssh"])
 
         run.assert_called_once_with(
             ["ssh"],
@@ -562,7 +562,7 @@ class ProvisionTests(unittest.TestCase):
             calls.append("scp")
 
         with (
-            mock.patch("showco.provision.provision.run_ssh"),
+            mock.patch("showco.provision.ssh.run_ssh"),
             mock.patch(
                 "showco.provision.provision.preflight_network_config",
                 side_effect=preflight_network_config,
@@ -571,11 +571,11 @@ class ProvisionTests(unittest.TestCase):
                 "showco.provision.provision.validate_remote_worktrees",
                 side_effect=validate_remote_worktrees,
             ),
-            mock.patch("showco.provision.provision.run_scp", side_effect=run_scp),
-            mock.patch("showco.provision.provision.wait_for_ssh"),
-            mock.patch("showco.provision.provision.wait_for_rebooted_ssh"),
+            mock.patch("showco.provision.ssh.run_scp", side_effect=run_scp),
+            mock.patch("showco.provision.ssh.wait_for_ssh"),
+            mock.patch("showco.provision.ssh.wait_for_rebooted_ssh"),
             mock.patch(
-                "showco.provision.provision.provisioning_reboot_required",
+                "showco.provision.ssh.provisioning_reboot_required",
                 return_value=False,
             ),
             mock.patch(
@@ -596,21 +596,21 @@ class ProvisionTests(unittest.TestCase):
         config = make_config(values(networks=networks(x18=False)))
         result = [provision.VerificationResult(name="showco", error="")]
         with (
-            mock.patch("showco.provision.provision.run_ssh"),
+            mock.patch("showco.provision.ssh.run_ssh"),
             mock.patch(
                 "showco.provision.provision.preflight_network_config",
                 return_value=network_config.NetworkTopology.PRIVATE,
             ),
             mock.patch("showco.provision.provision.validate_remote_worktrees"),
-            mock.patch("showco.provision.provision.run_scp"),
-            mock.patch("showco.provision.provision.wait_for_ssh") as initial_wait,
-            mock.patch("showco.provision.provision.remove_known_host") as remove_host,
+            mock.patch("showco.provision.ssh.run_scp"),
+            mock.patch("showco.provision.ssh.wait_for_ssh") as initial_wait,
+            mock.patch("showco.provision.ssh.remove_known_host") as remove_host,
             mock.patch(
-                "showco.provision.provision.provisioning_reboot_required",
+                "showco.provision.ssh.provisioning_reboot_required",
                 return_value=True,
             ),
-            mock.patch("showco.provision.provision.schedule_remote_reboot") as schedule,
-            mock.patch("showco.provision.provision.wait_for_rebooted_ssh") as wait,
+            mock.patch("showco.provision.ssh.schedule_remote_reboot") as schedule,
+            mock.patch("showco.provision.ssh.wait_for_rebooted_ssh") as wait,
             mock.patch(
                 "showco.provision.provision.verify_provisioning",
                 return_value=result,
@@ -635,20 +635,20 @@ class ProvisionTests(unittest.TestCase):
     def test_provision_does_not_wait_for_reboot_when_not_required(self) -> None:
         config = make_config(values(networks=networks(x18=False)))
         with (
-            mock.patch("showco.provision.provision.run_ssh"),
+            mock.patch("showco.provision.ssh.run_ssh"),
             mock.patch(
                 "showco.provision.provision.preflight_network_config",
                 return_value=network_config.NetworkTopology.PRIVATE,
             ),
             mock.patch("showco.provision.provision.validate_remote_worktrees"),
-            mock.patch("showco.provision.provision.run_scp"),
-            mock.patch("showco.provision.provision.wait_for_ssh"),
+            mock.patch("showco.provision.ssh.run_scp"),
+            mock.patch("showco.provision.ssh.wait_for_ssh"),
             mock.patch(
-                "showco.provision.provision.provisioning_reboot_required",
+                "showco.provision.ssh.provisioning_reboot_required",
                 return_value=False,
             ),
-            mock.patch("showco.provision.provision.schedule_remote_reboot") as schedule,
-            mock.patch("showco.provision.provision.wait_for_rebooted_ssh") as wait,
+            mock.patch("showco.provision.ssh.schedule_remote_reboot") as schedule,
+            mock.patch("showco.provision.ssh.wait_for_rebooted_ssh") as wait,
             mock.patch(
                 "showco.provision.provision.verify_provisioning", return_value=[]
             ),
@@ -700,12 +700,12 @@ class ProvisionTests(unittest.TestCase):
         config = make_config(values(networks=networks(x18=False)))
         with (
             mock.patch(
-                "showco.provision.provision.ssh_is_reachable",
+                "showco.provision.ssh.ssh_is_reachable",
                 side_effect=[False, False, True],
             ) as reachable,
             mock.patch("showco.provision.provision.time.sleep") as sleep,
         ):
-            provision.wait_for_ssh(config)
+            ssh.wait_for_ssh(config)
 
         self.assertEqual(reachable.call_count, 3)
         sleep.assert_has_calls([mock.call(1), mock.call(1)])
@@ -723,8 +723,8 @@ class ProvisionTests(unittest.TestCase):
         with mock.patch(
             "reccy.subprocess.run", side_effect=[changed_key, removed, connected]
         ) as run:
-            self.assertFalse(provision.ssh_is_reachable(config))
-            self.assertTrue(provision.ssh_is_reachable(config))
+            self.assertFalse(ssh.ssh_is_reachable(config))
+            self.assertTrue(ssh.ssh_is_reachable(config))
 
         self.assertEqual(
             run.call_args_list[1].args[0],
@@ -746,12 +746,12 @@ class ProvisionTests(unittest.TestCase):
         )
         with mock.patch("reccy.subprocess.run", return_value=changed_key):
             with self.assertRaisesRegex(SystemExit, "accept_changed_host_key"):
-                provision.ssh_is_reachable(config)
+                ssh.ssh_is_reachable(config)
 
     def test_ssh_retry_uses_non_interactive_host_key_options(self) -> None:
         config = make_config(values(networks=networks(x18=False)))
 
-        command = provision.ssh_command(
+        command = ssh.ssh_command(
             config,
             config.ssh_target,
             "true",
@@ -765,7 +765,7 @@ class ProvisionTests(unittest.TestCase):
     def test_ssh_command_uses_short_default_connect_timeout(self) -> None:
         config = make_config(values(networks=networks(x18=False)))
 
-        command = provision.ssh_command(config, config.ssh_target, "true")
+        command = ssh.ssh_command(config, config.ssh_target, "true")
 
         self.assertIn("ConnectTimeout=2", command)
 
@@ -773,7 +773,7 @@ class ProvisionTests(unittest.TestCase):
         config = make_config(values(networks=networks(x18=False)))
 
         with mock.patch("reccy.subprocess.run") as run:
-            provision.run_scp(config, Path("/tmp/local.sh"), "/tmp/remote.sh")
+            ssh.run_scp(config, Path("/tmp/local.sh"), "/tmp/remote.sh")
 
         self.assertIn("ConnectTimeout=2", run.call_args.args[0])
 
@@ -789,7 +789,7 @@ class ProvisionTests(unittest.TestCase):
             mock.patch("reccy.subprocess.run", side_effect=error),
             self.assertRaises(SystemExit) as exit_error,
         ):
-            provision.run_ssh(config, "true")
+            ssh.run_ssh(config, "true")
 
         self.assertIn(
             "ERROR: SSH connection or command failed for tom@recs-stage.local.",
@@ -807,7 +807,7 @@ class ProvisionTests(unittest.TestCase):
         )
 
         self.assertEqual(
-            provision.known_host_names(config),
+            ssh.known_host_names(config),
             ["recs-stage.local", "[recs-stage.local]:2200"],
         )
 
@@ -1076,12 +1076,12 @@ class ProvisionTests(unittest.TestCase):
         config = make_config(values(networks=networks(x18=False)))
         with (
             mock.patch(
-                "showco.provision.provision.ssh_is_reachable",
+                "showco.provision.ssh.ssh_is_reachable",
                 side_effect=[True, False, False, True],
             ) as reachable,
             mock.patch("showco.provision.provision.time.sleep"),
         ):
-            provision.wait_for_rebooted_ssh(config)
+            ssh.wait_for_rebooted_ssh(config)
 
         self.assertEqual(reachable.call_count, 4)
 

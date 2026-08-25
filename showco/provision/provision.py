@@ -7,7 +7,7 @@ import tempfile
 import time
 from collections.abc import Callable, Iterable
 from pathlib import Path
-from subprocess import CalledProcessError, CompletedProcess, TimeoutExpired
+from subprocess import CalledProcessError, TimeoutExpired
 from typing import Annotated
 
 import tyro
@@ -15,17 +15,13 @@ from pydantic import BaseModel
 from reccy import subprocess
 
 from .. import machine_role, network_config, recs
-from . import config
+from . import config, ssh
 
 PROVISION_DIR = Path(__file__).resolve().parent
 REMOTE_SCRIPT_TEMPLATE = "provision_locally.tmpl.sh"
 REMOTE_SCRIPT = (PROVISION_DIR / REMOTE_SCRIPT_TEMPLATE).read_text()
-REBOOT_WAIT_SECONDS = 300
 POST_REBOOT_READY_WAIT_SECONDS = 60
-SSH_CONNECT_TIMEOUT_SECONDS = 2
-SSH_VERIFICATION_TIMEOUT_SECONDS = 15
 SSH_CLEANUP_TIMEOUT_SECONDS = 15
-SCP_TIMEOUT_SECONDS = 60
 REMOTE_PROVISION_TIMEOUT_SECONDS = 1_800
 LOCAL_REPOSITORIES = ["showco", "reccy", "recs", "twitcho", "lyte"]
 WIFI_STATUS_COMMAND = "nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device status"
@@ -198,33 +194,33 @@ def provision_remote(
 ) -> None:
     uploaded = False
     if provision_config.accept_changed_host_key:
-        remove_known_host(provision_config)
+        ssh.remove_known_host(provision_config)
     print(f"Waiting for SSH connection to {provision_config.ssh_target}...")
-    wait_for_ssh(provision_config)
+    ssh.wait_for_ssh(provision_config)
     validate_remote_worktrees(provision_config)
     topology = preflight_network_config(provision_config)
     print(f"Checking {provision_config.ssh_target}...")
-    run_ssh(
+    ssh.run_ssh(
         provision_config,
         "set -e; uname -a; id; command -v sudo; command -v apt-get",
-        timeout_seconds=SSH_VERIFICATION_TIMEOUT_SECONDS,
+        timeout_seconds=ssh.SSH_VERIFICATION_TIMEOUT_SECONDS,
     )
     try:
         print("Copying provisioning script...")
-        run_scp(provision_config, local_script, remote_script)
+        ssh.run_scp(provision_config, local_script, remote_script)
         uploaded = True
 
         print(f"Running provisioning on {provision_config.ssh_target}...")
-        run_ssh(
+        ssh.run_ssh(
             provision_config,
             remote_command(provision_config, remote_script),
             timeout_seconds=REMOTE_PROVISION_TIMEOUT_SECONDS,
         )
 
-        if provisioning_reboot_required(provision_config):
+        if ssh.provisioning_reboot_required(provision_config):
             print(f"Waiting for {provision_config.ssh_target} to reboot...")
-            schedule_remote_reboot(provision_config)
-            wait_for_rebooted_ssh(provision_config)
+            ssh.schedule_remote_reboot(provision_config)
+            ssh.wait_for_rebooted_ssh(provision_config)
         else:
             print(f"No reboot is required for {provision_config.ssh_target}.")
 
@@ -235,7 +231,7 @@ def provision_remote(
     finally:
         if uploaded:
             try:
-                run_ssh(
+                ssh.run_ssh(
                     provision_config,
                     f"rm -f {shlex.quote(remote_script)}",
                     exit_on_error=False,
@@ -254,7 +250,7 @@ def preflight_network_config(
     provision_config: config.Config,
 ) -> network_config.NetworkTopology:
     print(f"Checking Wi-Fi interfaces on {provision_config.ssh_target}...")
-    status = capture_ssh(provision_config, WIFI_STATUS_COMMAND)
+    status = ssh.capture_ssh(provision_config, WIFI_STATUS_COMMAND)
     interfaces = network_config.wifi_interfaces_from_status(status)
     assignment = network_config.assign_wifi(
         interfaces, provision_config.network.swap_wifi
@@ -385,7 +381,7 @@ def repository_worktree_errors(repository: LocalRepository) -> list[str]:
 
 def validate_remote_worktrees(provision_config: config.Config) -> None:
     print(f"Checking target repository worktrees on {provision_config.ssh_target}...")
-    run_ssh(
+    ssh.run_ssh(
         provision_config,
         remote_worktree_command(provision_config.paths.root),
     )
@@ -514,105 +510,6 @@ def git_error_output(error: CalledProcessError) -> str:
     if output:
         return output
     return str(error)
-
-
-def wait_for_rebooted_ssh(provision_config: config.Config) -> None:
-    wait_for_ssh_disconnect(provision_config)
-    wait_for_ssh(
-        provision_config,
-        timeout_seconds=REBOOT_WAIT_SECONDS,
-    )
-
-
-def provisioning_reboot_required(provision_config: config.Config) -> bool:
-    return (
-        capture_ssh(
-            provision_config,
-            "test -f /run/showco-provision-reboot-required && echo true || echo false",
-        )
-        == "true"
-    )
-
-
-def schedule_remote_reboot(provision_config: config.Config) -> None:
-    run_ssh(
-        provision_config,
-        "sudo systemd-run --on-active=2s /usr/bin/systemctl reboot",
-    )
-
-
-def wait_for_ssh_disconnect(provision_config: config.Config) -> None:
-    deadline = time.monotonic() + 60
-    while time.monotonic() < deadline:
-        if not ssh_is_reachable(provision_config):
-            return
-        time.sleep(1)
-    sys.exit(f"ERROR: {provision_config.ssh_target} did not drop SSH before reboot")
-
-
-def wait_for_ssh(
-    provision_config: config.Config,
-    *,
-    timeout_seconds: int | None = None,
-) -> None:
-    deadline = None
-    if timeout_seconds is not None:
-        deadline = time.monotonic() + timeout_seconds
-    while deadline is None or time.monotonic() < deadline:
-        if ssh_is_reachable(provision_config):
-            return
-        time.sleep(1)
-    sys.exit(
-        f"ERROR: {provision_config.ssh_target} did not accept SSH "
-        f"within {timeout_seconds}s"
-    )
-
-
-def ssh_is_reachable(provision_config: config.Config) -> bool:
-    completed = subprocess.run(
-        ssh_command(
-            provision_config,
-            provision_config.ssh_target,
-            "true",
-            connect_timeout=1,
-        ),
-        capture_output=True,
-        check=False,
-        text=True,
-    )
-    if has_changed_host_key(completed):
-        if not provision_config.accept_changed_host_key:
-            sys.exit(
-                "ERROR: SSH host key changed for "
-                f"{provision_config.ssh_target}. Verify the new key and set "
-                "accept_changed_host_key = true after reflashing."
-            )
-        remove_known_host(provision_config)
-        return False
-    return completed.returncode == 0
-
-
-def has_changed_host_key(completed: CompletedProcess[str]) -> bool:
-    output = f"{completed.stdout}{completed.stderr}"
-    return "REMOTE HOST IDENTIFICATION HAS CHANGED" in output
-
-
-def remove_known_host(provision_config: config.Config) -> None:
-    for host in known_host_names(provision_config):
-        print(f"Removing stale SSH host key for {host}...")
-        subprocess.run(
-            ["ssh-keygen", "-R", host],
-            capture_output=True,
-            check=False,
-            text=True,
-        )
-
-
-def known_host_names(provision_config: config.Config) -> list[str]:
-    host = provision_config.network.host
-    if provision_config.network.ssh_port == 22:
-        return [host]
-    return [host, f"[{host}]:{provision_config.network.ssh_port}"]
 
 
 def verify_provisioning(
@@ -836,7 +733,7 @@ def verify_mixer_audio_input(
     command = f"arecord -l | grep -Fi -e {shlex.quote(selector)} >/dev/null"
     try:
         completed = subprocess.run(
-            ssh_command(
+            ssh.ssh_command(
                 provision_config,
                 provision_config.ssh_target,
                 command,
@@ -845,13 +742,13 @@ def verify_mixer_audio_input(
             capture_output=True,
             check=False,
             text=True,
-            timeout=SSH_VERIFICATION_TIMEOUT_SECONDS,
+            timeout=ssh.SSH_VERIFICATION_TIMEOUT_SECONDS,
         )
     except TimeoutExpired:
         return VerificationResult(
             name=f"{mixer_name} USB audio {selector}",
             error="",
-            note=f"detection timed out after {SSH_VERIFICATION_TIMEOUT_SECONDS}s",
+            note=f"detection timed out after {ssh.SSH_VERIFICATION_TIMEOUT_SECONDS}s",
         )
     if completed.returncode == 0:
         return VerificationResult(name=f"{mixer_name} USB audio {selector}", error="")
@@ -879,7 +776,7 @@ def verify_mixer_midi_input(
     )
     try:
         completed = subprocess.run(
-            ssh_command(
+            ssh.ssh_command(
                 provision_config,
                 provision_config.ssh_target,
                 command,
@@ -888,13 +785,13 @@ def verify_mixer_midi_input(
             capture_output=True,
             check=False,
             text=True,
-            timeout=SSH_VERIFICATION_TIMEOUT_SECONDS,
+            timeout=ssh.SSH_VERIFICATION_TIMEOUT_SECONDS,
         )
     except TimeoutExpired:
         return VerificationResult(
             name=f"{mixer_name} USB MIDI {selector}",
             error="",
-            note=f"detection timed out after {SSH_VERIFICATION_TIMEOUT_SECONDS}s",
+            note=f"detection timed out after {ssh.SSH_VERIFICATION_TIMEOUT_SECONDS}s",
         )
     if completed.returncode == 0:
         return VerificationResult(name=f"{mixer_name} USB MIDI {selector}", error="")
@@ -915,7 +812,7 @@ def verify_remote_command(
 ) -> VerificationResult:
     try:
         completed = subprocess.run(
-            ssh_command(
+            ssh.ssh_command(
                 provision_config,
                 provision_config.ssh_target,
                 command,
@@ -924,12 +821,12 @@ def verify_remote_command(
             capture_output=True,
             check=False,
             text=True,
-            timeout=SSH_VERIFICATION_TIMEOUT_SECONDS,
+            timeout=ssh.SSH_VERIFICATION_TIMEOUT_SECONDS,
         )
     except TimeoutExpired:
         return VerificationResult(
             name=name,
-            error=f"command timed out after {SSH_VERIFICATION_TIMEOUT_SECONDS}s",
+            error=f"command timed out after {ssh.SSH_VERIFICATION_TIMEOUT_SECONDS}s",
         )
     output = f"{completed.stdout}{completed.stderr}".strip()
     if completed.returncode == 0 and (not expect_empty_stdout or not output):
@@ -1085,119 +982,6 @@ def osc_nodes_toml(mixers: list[config.MixerSpec]) -> str:
             ]
         )
     return "\n".join(lines)
-
-
-def run_ssh(
-    provision_config: config.Config,
-    command: str,
-    *,
-    exit_on_error: bool = True,
-    timeout_seconds: int = SSH_VERIFICATION_TIMEOUT_SECONDS,
-) -> None:
-    try:
-        run_command(
-            ssh_command(
-                provision_config,
-                provision_config.ssh_target,
-                command,
-                allocate_tty=True,
-            ),
-            timeout_seconds=timeout_seconds,
-        )
-    except (CalledProcessError, TimeoutExpired) as e:
-        if not exit_on_error:
-            raise
-        sys.exit(ssh_error_message(provision_config, e))
-
-
-def run_scp(provision_config: config.Config, source: Path, remote_path: str) -> None:
-    try:
-        run_command(
-            [
-                "scp",
-                "-o",
-                f"ConnectTimeout={SSH_CONNECT_TIMEOUT_SECONDS}",
-                "-P",
-                str(provision_config.network.ssh_port),
-                str(source),
-                f"{provision_config.ssh_target}:{remote_path}",
-            ],
-            timeout_seconds=SCP_TIMEOUT_SECONDS,
-        )
-    except (CalledProcessError, TimeoutExpired) as e:
-        sys.exit(ssh_error_message(provision_config, e))
-
-
-def capture_ssh(provision_config: config.Config, command: str) -> str:
-    try:
-        completed = run_command(
-            ssh_command(provision_config, provision_config.ssh_target, command),
-            capture_output=True,
-            timeout_seconds=SSH_VERIFICATION_TIMEOUT_SECONDS,
-        )
-    except (CalledProcessError, TimeoutExpired) as e:
-        sys.exit(ssh_error_message(provision_config, e))
-    return completed.stdout.strip()
-
-
-def ssh_error_message(
-    provision_config: config.Config, error: CalledProcessError | TimeoutExpired
-) -> str:
-    output = f"{error.stdout or ''}{error.stderr or ''}".strip()
-    message = (
-        f"ERROR: SSH connection or command failed for {provision_config.ssh_target}. "
-        f"SSH connect timeout is {SSH_CONNECT_TIMEOUT_SECONDS} seconds."
-    )
-    if output:
-        message += f"\nssh said: {output}"
-    return message
-
-
-def ssh_command(
-    provision_config: config.Config,
-    target: str,
-    command: str,
-    *,
-    allocate_tty: bool = False,
-    connect_timeout: int | None = SSH_CONNECT_TIMEOUT_SECONDS,
-) -> list[str]:
-    result = ["ssh"]
-    if allocate_tty:
-        result.append("-t")
-    if connect_timeout is not None:
-        result.extend(["-o", f"ConnectTimeout={connect_timeout}"])
-    result.extend(["-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new"])
-    result.extend(
-        [
-            "-p",
-            str(provision_config.network.ssh_port),
-            target,
-            command,
-        ]
-    )
-    return result
-
-
-def run_command(
-    command: list[str],
-    *,
-    capture_output: bool = False,
-    timeout_seconds: int | None = None,
-) -> CompletedProcess[str]:
-    if timeout_seconds is None:
-        return subprocess.run(
-            command,
-            capture_output=capture_output,
-            check=True,
-            text=True,
-        )
-    return subprocess.run(
-        command,
-        capture_output=capture_output,
-        check=True,
-        text=True,
-        timeout=timeout_seconds,
-    )
 
 
 def script_dir() -> Path:
