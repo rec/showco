@@ -7,6 +7,7 @@ from tempfile import TemporaryDirectory
 import tyro
 
 from showco import card
+from showco.provision import config
 
 
 class PrepareCardTests(unittest.TestCase):
@@ -62,6 +63,24 @@ class PrepareCardTests(unittest.TestCase):
         with TemporaryDirectory() as directory:
             with self.assertRaisesRegex(SystemExit, "user-data file not found"):
                 card.prepare_card(Path(directory), "tom")
+
+    def test_write_cloud_init_configures_key_only_access(self) -> None:
+        with TemporaryDirectory() as directory:
+            boot = Path(directory)
+
+            card.write_cloud_init(
+                boot,
+                "bertrand",
+                "tom",
+                "ssh-ed25519 public-key tom@developer",
+                config.Network(name="Livebox", password="wireless secret"),
+            )
+
+            user_data = (boot / "user-data").read_text()
+            self.assertIn("lock_passwd: true", user_data)
+            self.assertIn("NOPASSWD:ALL", user_data)
+            self.assertIn('"ssh-ed25519 public-key tom@developer"', user_data)
+            self.assertIn('"Livebox"', (boot / "network-config").read_text())
 
 
 if __name__ == "__main__":

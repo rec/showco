@@ -5,8 +5,8 @@ accepts SSH login. This can be a freshly imaged Raspberry Pi OS Lite machine or
 an existing Pi.
 
 The provisioning script runs setup commands over SSH so progress and failures
-are visible from the development machine. It does not write cloud-init files to
-an SD card.
+are visible from the development machine. `showco image-card` images a fresh SD
+card and writes its first-boot cloud-init configuration.
 
 ## Files
 
@@ -144,6 +144,19 @@ This updates Raspberry Pi Imager's `user-data` cloud-init file to enable
 passwordless `sudo` for the configured Showco user. Provisioning checks this
 with `sudo -n` before it runs remote setup, so it cannot block waiting for an
 unknown account password.
+
+## Imaging a card
+
+On macOS, use the raw disk reported by `diskutil list` and pass it explicitly:
+
+```bash
+showco image-card --device /dev/disk4 --confirm
+```
+
+This erases the selected disk. It writes the pinned Raspberry Pi OS Lite image,
+then creates `tom` from the provisioning configuration with SSH-key access,
+passwordless `sudo`, and the configured external Wi-Fi. It does not store or
+enable a login password.
 
 ## What the script does
 
