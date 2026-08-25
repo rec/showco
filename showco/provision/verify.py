@@ -10,7 +10,7 @@ from subprocess import TimeoutExpired
 from pydantic import BaseModel
 from reccy import subprocess
 
-from .. import network_config, recs
+from .. import network_config, recs, revision
 from . import config, ssh
 
 POST_REBOOT_READY_WAIT_SECONDS = 60
@@ -114,7 +114,7 @@ def verify_provisioning(
         verify_remote_command(
             provision_config,
             "showco web UI revision",
-            showco_revision_command(provision_config.paths.root),
+            revision.showco_revision_command(provision_config.paths.root, retry=False),
         ),
         verify_remote_command(
             provision_config,
@@ -168,16 +168,6 @@ def showco_service_status_command(service: str, root: Path) -> str:
     return user_session_command(
         f'cd {shlex.quote(str(root / "showco"))} && PATH="$HOME/.local/bin:$PATH" '
         f"uv run --frozen showco run service-status {service}"
-    )
-
-
-def showco_revision_command(root: Path) -> str:
-    showco_directory = shlex.quote(str(root / "showco"))
-    return (
-        f"expected=$(git -C {showco_directory} rev-parse HEAD) && "
-        "curl --fail --silent --show-error --max-time 5 "
-        "http://127.0.0.1:17352/status | "
-        'grep --fixed-strings "\\"revision\\":\\"$expected\\""'
     )
 
 
