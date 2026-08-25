@@ -133,6 +133,18 @@ Before running the provisioning script, this should work:
 ssh "$USER@recs-stage.local"
 ```
 
+Before the Pi's first boot, prepare its newly written boot volume from the
+developer machine:
+
+```bash
+showco prepare-card --boot /Volumes/bootfs
+```
+
+This updates Raspberry Pi Imager's `user-data` cloud-init file to enable
+passwordless `sudo` for the configured Showco user. Provisioning checks this
+with `sudo -n` before it runs remote setup, so it cannot block waiting for an
+unknown account password.
+
 ## What the script does
 
 The script:

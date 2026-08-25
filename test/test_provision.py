@@ -307,7 +307,7 @@ class ProvisionTests(unittest.TestCase):
         with (
             mock.patch(
                 "showco.provision.ssh.run_ssh",
-                side_effect=[None, original_error, cleanup_error],
+                side_effect=[None, None, original_error, cleanup_error],
             ) as run_ssh,
             mock.patch("showco.provision.ssh.wait_for_ssh"),
             mock.patch(
@@ -381,6 +381,37 @@ class ProvisionTests(unittest.TestCase):
             )
 
         self.assertEqual(calls, ["worktrees", "preflight", "scp"])
+
+    def test_provision_requires_passwordless_sudo_before_remote_checks(self) -> None:
+        provision_config = make_config(values(networks=networks(x18=False)))
+        with (
+            mock.patch("showco.provision.ssh.run_ssh") as run_ssh,
+            mock.patch("showco.provision.ssh.wait_for_ssh"),
+            mock.patch("showco.provision.remote.validate_remote_worktrees"),
+            mock.patch(
+                "showco.provision.remote.preflight_network_config",
+                return_value=network_config.NetworkTopology.PRIVATE,
+            ),
+            mock.patch("showco.provision.ssh.run_scp"),
+            mock.patch(
+                "showco.provision.ssh.provisioning_reboot_required",
+                return_value=False,
+            ),
+            mock.patch(
+                "showco.provision.verify.wait_for_provisioning_ready",
+                return_value=[],
+            ),
+            mock.patch("showco.provision.verify.report_verification_results"),
+        ):
+            remote.provision_remote(
+                provision_config,
+                Path("/tmp/local.sh"),
+                "/tmp/remote.sh",
+            )
+
+        self.assertEqual(
+            run_ssh.call_args_list[0].args[1], remote.PASSWORDLESS_SUDO_COMMAND
+        )
 
     def test_provision_waits_for_reboot_and_reports_verification(self) -> None:
         config = make_config(values(networks=networks(x18=False)))

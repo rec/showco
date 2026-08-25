@@ -11,6 +11,12 @@ from . import config, script, ssh, verify
 SSH_CLEANUP_TIMEOUT_SECONDS = 15
 REMOTE_PROVISION_TIMEOUT_SECONDS = 1_800
 WIFI_STATUS_COMMAND = "nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device status"
+PASSWORDLESS_SUDO_COMMAND = (
+    "sudo -n true || { "
+    "echo 'ERROR: passwordless sudo is required. Prepare the SD card with "
+    "showco prepare-card before its first boot.' >&2; exit 1; "
+    "}"
+)
 
 
 def provision_remote(
@@ -23,6 +29,7 @@ def provision_remote(
         ssh.remove_known_host(provision_config)
     print(f"Waiting for SSH connection to {provision_config.ssh_target}...")
     ssh.wait_for_ssh(provision_config)
+    require_passwordless_sudo(provision_config)
     validate_remote_worktrees(provision_config)
     topology = preflight_network_config(provision_config)
     print(f"Checking {provision_config.ssh_target}...")
@@ -86,6 +93,11 @@ def preflight_network_config(
     )
     network_config.network_commands(provision_config, assignment, topology)
     return topology
+
+
+def require_passwordless_sudo(provision_config: config.Config) -> None:
+    print(f"Checking passwordless sudo on {provision_config.ssh_target}...")
+    ssh.run_ssh(provision_config, PASSWORDLESS_SUDO_COMMAND)
 
 
 def validate_remote_worktrees(provision_config: config.Config) -> None:
