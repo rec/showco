@@ -96,8 +96,8 @@ def run(options: ProvisionOptions) -> int:
         lyte_daemon_config=options.lyte_daemon_config,
     )
     validate_config(parsed_config)
-    validate_local_worktrees()
     autosquash_local_repositories()
+    validate_local_worktrees()
     validate_local_repositories()
     if options.host is not None:
         persist_network_host(options.config_path, options.host)

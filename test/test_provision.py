@@ -65,7 +65,7 @@ class ProvisionTests(unittest.TestCase):
 
         self.assertEqual(result, 0)
 
-    def test_run_checks_worktrees_before_autosquashing(self) -> None:
+    def test_run_autosquashes_before_checking_worktrees(self) -> None:
         options = provision.ProvisionOptions(
             config_path=Path("config.toml"), secrets=Path("secrets.toml")
         )
@@ -93,7 +93,7 @@ class ProvisionTests(unittest.TestCase):
         ):
             provision.run(options)
 
-        self.assertEqual(steps, ["worktrees", "autosquash", "validate"])
+        self.assertEqual(steps, ["autosquash", "worktrees", "validate"])
 
     def test_autosquash_local_repositories_uses_update_default_window(self) -> None:
         with mock.patch("showco.update.autosquash_programs", return_value=True) as run:
