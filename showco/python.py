@@ -38,10 +38,9 @@ def run_python(
 ) -> int:
     machine_role.require_provisioning_machine("showco python")
     provision_config = target_config or update.provisioning_config()
-    ssh_target = f"{provision_config.network.user}@{provision_config.network.host}"
     command = remote_python_command(options.code, provision_config.paths.root)
     completed = (run_command or update.run_command_with_timeout)(
-        ssh.ssh_command(provision_config, ssh_target, command)
+        ssh.ssh_command(provision_config, provision_config.ssh_target, command)
     )
     output.write(completed.stdout)
     output.write(completed.stderr)
