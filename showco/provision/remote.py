@@ -5,12 +5,11 @@ import sys
 from pathlib import Path
 from subprocess import CalledProcessError
 
-from .. import network_config
+from .. import network_config, repositories
 from . import config, script, ssh, verify
 
 SSH_CLEANUP_TIMEOUT_SECONDS = 15
 REMOTE_PROVISION_TIMEOUT_SECONDS = 1_800
-LOCAL_REPOSITORIES = ["showco", "reccy", "recs", "twitcho", "lyte"]
 WIFI_STATUS_COMMAND = "nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device status"
 
 
@@ -98,7 +97,12 @@ def validate_remote_worktrees(provision_config: config.Config) -> None:
 
 
 def remote_worktree_command(root: Path) -> str:
-    names = " ".join(LOCAL_REPOSITORIES)
+    names = " ".join(
+        [
+            "showco",
+            *(name for name in repositories.REPOSITORY_NAMES if name != "showco"),
+        ]
+    )
     script = f"""root={shlex.quote(str(root))}
 failed=false
 for name in {names}; do
