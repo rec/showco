@@ -4,13 +4,10 @@ This checklist assumes the Raspberry Pi has a fresh Raspberry Pi OS Lite image,
 the correct hostname or IP address, the expected user account, and working SSH
 access, but Showco has not yet provisioned it.
 
-Before its first boot, either image it directly or prepare an Imager-written
-card while its boot volume is mounted on the developer machine:
+Before its first boot, prepare the Imager-written card while its boot volume is
+mounted on the developer machine:
 
 ```bash
-showco image-card --device /dev/disk4
-
-# Or, after using Raspberry Pi Imager:
 showco prepare-card --boot /Volumes/bootfs
 ```
 

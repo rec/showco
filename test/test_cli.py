@@ -31,12 +31,6 @@ class CliTests(unittest.TestCase):
 
         prepare_card.assert_called_once_with(["--boot", "/Volumes/bootfs"])
 
-    def test_dispatches_image_card_subcommand(self) -> None:
-        with patch.object(cli.image_card, "main", return_value=7) as image_card:
-            self.assertEqual(cli.main(["image-card", "--device", "/dev/disk4"]), 7)
-
-        image_card.assert_called_once_with(["--device", "/dev/disk4"])
-
     def test_dispatches_twitcho_subcommand(self) -> None:
         with (
             patch.object(cli.machine_role, "require_target_machine"),

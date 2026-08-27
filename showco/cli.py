@@ -9,7 +9,6 @@ from reccy import cli, logging
 
 from . import (
     card,
-    image_card,
     logs,
     machine_role,
     network_config,
@@ -76,7 +75,6 @@ def main(argv: list[str] | None = None) -> int:
         {
             "run": run_command,
             "prepare-card": card.main,
-            "image-card": image_card.main,
             "provision": provision.main,
             "logs": logs.main,
             "python": python.main,
