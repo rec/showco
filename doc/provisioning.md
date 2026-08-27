@@ -150,10 +150,12 @@ unknown account password.
 On macOS, use the raw disk reported by `diskutil list` and pass it explicitly:
 
 ```bash
-showco image-card --device /dev/disk4 --confirm
+showco image-card --device /dev/disk4
 ```
 
-This erases the selected disk. It writes the pinned Raspberry Pi OS Lite image,
+The command displays `diskutil list /dev/disk4` and requires typing `yes` before
+it erases the selected disk. Add `--yes` or `-y` only for deliberate scripted
+use. It writes the pinned Raspberry Pi OS Lite image,
 then creates `tom` from the provisioning configuration with SSH-key access,
 passwordless `sudo`, and the configured external Wi-Fi. It does not store or
 enable a login password.

@@ -8,7 +8,7 @@ Before its first boot, either image it directly or prepare an Imager-written
 card while its boot volume is mounted on the developer machine:
 
 ```bash
-showco image-card --device /dev/disk4 --confirm
+showco image-card --device /dev/disk4
 
 # Or, after using Raspberry Pi Imager:
 showco prepare-card --boot /Volumes/bootfs

@@ -21,15 +21,12 @@ PROVISION_DIR = Path(__file__).resolve().parent / "provision"
 
 class ImageCardOptions(BaseModel, frozen=True):
     device: Path
-    confirm: bool = False
+    yes: Annotated[bool, tyro.conf.arg(aliases=["-y"])] = False
     boot: Path = Path("/Volumes/bootfs")
     image_url: str = DEFAULT_IMAGE_URL
     image_sha256: str = DEFAULT_IMAGE_SHA256
     imager: Path = DEFAULT_IMAGER
     ssh_key: Path = Path.home() / ".ssh/id_ed25519.pub"
-    config_path: Annotated[Path, tyro.conf.arg(name="config")] = (
-        PROVISION_DIR / "config.toml"
-    )
     secrets: Path = PROVISION_DIR / "secrets.toml"
 
 
@@ -44,14 +41,14 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def run(options: ImageCardOptions) -> int:
-    if not options.confirm:
-        sys.exit("ERROR: pass --confirm to erase and image the selected disk")
     if not options.device.name.startswith("disk"):
         sys.exit("ERROR: device must be a macOS disk such as /dev/disk4")
     if not options.imager.is_file():
         sys.exit(f"ERROR: Raspberry Pi Imager not found: {options.imager}")
+    confirm_device(options.device, options.yes)
     values = config.merge_values(
-        config.read_toml(options.config_path), config.read_toml(options.secrets)
+        config.read_toml(PROVISION_DIR / "config.toml"),
+        config.read_toml(options.secrets),
     )
     provision_config = config.config_from_values(values)
     subprocess.run(
@@ -75,3 +72,11 @@ def run(options: ImageCardOptions) -> int:
     )
     print(f"Imaged {options.device} and wrote cloud-init to {options.boot}.")
     return 0
+
+
+def confirm_device(device: Path, yes: bool) -> None:
+    subprocess.run(["diskutil", "list", str(device)], check=True)
+    if yes:
+        return
+    if input(f"Erase {device}? Type yes to continue: ").casefold() != "yes":
+        sys.exit("Cancelled.")
