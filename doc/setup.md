@@ -8,7 +8,7 @@ Before its first boot, prepare the Imager-written card while its boot volume is
 mounted on the developer machine:
 
 ```bash
-showco prepare-card --boot /Volumes/bootfs
+showco prepare-card
 ```
 
 This enables noninteractive `sudo` for the configured Showco user. Current
