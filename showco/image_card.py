@@ -55,6 +55,7 @@ def run(options: ImageCardOptions) -> int:
         [
             str(options.imager),
             "--cli",
+            "--debug",
             "--sha256",
             options.image_sha256,
             options.image_url,
