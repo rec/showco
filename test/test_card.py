@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import plistlib
+import subprocess
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest import mock
 
 import tyro
 
@@ -61,8 +64,34 @@ class PrepareCardTests(unittest.TestCase):
 
     def test_prepare_card_rejects_missing_user_data(self) -> None:
         with TemporaryDirectory() as directory:
-            with self.assertRaisesRegex(SystemExit, "user-data file not found"):
+            with (
+                mock.patch("showco.card.mount_external_disks") as mount,
+                self.assertRaisesRegex(SystemExit, "user-data file not found"),
+            ):
                 card.prepare_card(Path(directory), "tom")
+
+        mount.assert_called_once_with()
+
+    def test_prepare_card_mounts_external_physical_disks(self) -> None:
+        disk_list = plistlib.dumps({"WholeDisks": ["disk4", "disk5"]})
+        with mock.patch(
+            "showco.card.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 0, disk_list),
+        ) as run:
+            card.mount_external_disks()
+
+        self.assertEqual(
+            run.call_args_list,
+            [
+                mock.call(
+                    ["diskutil", "list", "-plist", "external", "physical"],
+                    capture_output=True,
+                    check=True,
+                ),
+                mock.call(["diskutil", "mountDisk", "/dev/disk4"], check=False),
+                mock.call(["diskutil", "mountDisk", "/dev/disk5"], check=False),
+            ],
+        )
 
     def test_write_cloud_init_configures_key_only_access(self) -> None:
         with TemporaryDirectory() as directory:
