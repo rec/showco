@@ -46,6 +46,7 @@ def run(options: ImageCardOptions) -> int:
     if not options.imager.is_file():
         sys.exit(f"ERROR: Raspberry Pi Imager not found: {options.imager}")
     confirm_device(options.device, options.yes)
+    unmount_device(options.device)
     values = config.merge_values(
         config.read_toml(PROVISION_DIR / "config.toml"),
         config.read_toml(options.secrets),
@@ -84,3 +85,7 @@ def confirm_device(device: Path, yes: bool) -> None:
         return
     if input(f"Erase {device}? Type yes to continue: ").casefold() != "yes":
         sys.exit("Cancelled.")
+
+
+def unmount_device(device: Path) -> None:
+    subprocess.run(["diskutil", "unmountDisk", str(device)], check=True)

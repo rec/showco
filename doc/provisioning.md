@@ -155,7 +155,9 @@ showco image-card --device /dev/disk4
 
 The command displays `diskutil list /dev/disk4` and requires typing `yes` before
 it erases the selected disk. Add `--yes` or `-y` only for deliberate scripted
-use. It writes the pinned Raspberry Pi OS Lite image,
+use. It then unmounts the disk before it starts Imager, which makes an unmount
+failure visible instead of leaving Imager apparently idle. It writes the pinned
+Raspberry Pi OS Lite image,
 then creates `tom` from the provisioning configuration with SSH-key access,
 passwordless `sudo`, and the configured external Wi-Fi. It does not store or
 enable a login password.
