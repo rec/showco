@@ -11,17 +11,18 @@ from typing import Annotated
 
 import tyro
 from pydantic import BaseModel
+from typing_extensions import TypeIs
 
 from . import machine_role
 from .provision import config
 
 PROVISION_DIR = Path(__file__).resolve().parent / "provision"
-DEFAULT_BOOT = Path("/Volumes/bootfs")
+MAX_CARD_SIZE = 256 * 1024**3
 USER_NAME_PATTERN = re.compile(r"[a-z_][a-z0-9_-]*")
 
 
 class PrepareCardOptions(BaseModel, frozen=True):
-    boot: Path = DEFAULT_BOOT
+    card: Path | None = None
     config_path: Annotated[Path, tyro.conf.arg(name="config")] = (
         PROVISION_DIR / "config.toml"
     )
@@ -36,19 +37,28 @@ def main(argv: list[str] | None = None) -> int:
         description="Prepare an Imager-written Raspberry Pi OS card for Showco",
     )
     user = options.user or configured_user(options.config_path)
-    path = user_data_path(options.boot)
+    card_path = select_card(options.card)
+    path = card_user_data_path(card_path)
+    show_card(card_path)
+    prompt = f"Prepare {path.parent} on {card_path}? Type yes to continue: "
+    if input(prompt).casefold() != "yes":
+        sys.exit("Cancelled.")
     changed = prepare_card(path.parent, user)
     if changed:
         print(f"Prepared {path} for passwordless sudo as {user}.")
     else:
         print(f"{path} is already prepared for passwordless sudo as {user}.")
+    print(f"Ejecting {card_path}; remove the card after macOS confirms.")
+    eject_card(card_path)
     return 0
 
 
 def prepare_card(boot: Path, user: str) -> bool:
     if USER_NAME_PATTERN.fullmatch(user) is None:
         sys.exit(f"ERROR: invalid Linux user name: {user!r}")
-    path = user_data_path(boot)
+    path = boot / "user-data"
+    if not path.is_file():
+        sys.exit(f"ERROR: Raspberry Pi Imager user-data file not found: {path}")
 
     contents = path.read_text()
     if not contents.lstrip().startswith("#cloud-config"):
@@ -128,33 +138,76 @@ def yaml_string(value: str) -> str:
     return json.dumps(value)
 
 
-def user_data_path(boot: Path, volumes: Path = Path("/Volumes")) -> Path:
-    path = boot / "user-data"
-    if path.is_file():
-        return path
-    mount_external_disks()
-    if path.is_file():
-        return path
-    candidates = [p for p in volumes.glob("*/user-data") if p.is_file()]
-    if len(candidates) == 1:
-        return candidates[0]
-    if candidates:
-        names = ", ".join(str(p.parent) for p in candidates)
-        sys.exit(f"ERROR: multiple Raspberry Pi boot volumes found: {names}")
-    sys.exit(f"ERROR: Raspberry Pi Imager user-data file not found: {path}")
+def select_card(card: Path | None) -> Path:
+    cards = external_cards()
+    if card is not None:
+        if card in cards:
+            return card
+        sys.exit(f"ERROR: card is not an external physical disk: {card}")
+    if len(cards) == 1:
+        return cards[0]
+    if not cards:
+        sys.exit("ERROR: no external physical cards of 256 GiB or smaller found")
+    names = ", ".join(str(value) for value in cards)
+    sys.exit(f"ERROR: multiple external physical cards found: {names}; pass --card")
 
 
-def mount_external_disks() -> None:
-    print("Mounting external disks...")
+def card_user_data_path(card: Path) -> Path:
+    for value in disk_values():
+        device = value.get("DeviceIdentifier")
+        if not isinstance(device, str) or Path("/dev") / device != card:
+            continue
+        if path := mounted_user_data_path(value):
+            return path
+    sys.exit(f"ERROR: no mounted Raspberry Pi boot volume found on {card}")
+
+
+def disk_values() -> list[dict[str, object]]:
     result = subprocess.run(
         ["diskutil", "list", "-plist", "external", "physical"],
         capture_output=True,
         check=True,
     )
     values = plistlib.loads(result.stdout)
-    for disk in values.get("WholeDisks", []):
-        if isinstance(disk, str):
-            subprocess.run(["diskutil", "mountDisk", f"/dev/{disk}"], check=False)
+    disks = values.get("AllDisksAndPartitions", [])
+    return [value for value in disks if isinstance(value, dict)]
+
+
+def external_cards() -> list[Path]:
+    cards = []
+    for value in disk_values():
+        device = value.get("DeviceIdentifier")
+        size = value.get("Size")
+        if isinstance(device, str) and isinstance(size, int) and size <= MAX_CARD_SIZE:
+            cards.append(Path("/dev") / device)
+    return cards
+
+
+def show_card(card: Path) -> None:
+    subprocess.run(["diskutil", "list", str(card)], check=True)
+
+
+def eject_card(card: Path) -> None:
+    subprocess.run(["diskutil", "eject", str(card)], check=True)
+
+
+def mounted_user_data_path(value: dict[str, object]) -> Path | None:
+    partitions = value.get("Partitions", [])
+    if not isinstance(partitions, list):
+        return None
+    for partition in partitions:
+        if not is_dictionary(partition):
+            continue
+        mount_point = partition.get("MountPoint")
+        if not isinstance(mount_point, str):
+            continue
+        if (path := Path(mount_point) / "user-data").is_file():
+            return path
+    return None
+
+
+def is_dictionary(value: object) -> TypeIs[dict[str, object]]:
+    return isinstance(value, dict) and all(isinstance(key, str) for key in value)
 
 
 def configured_user(config_path: Path) -> str:

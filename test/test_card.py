@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import plistlib
-import subprocess
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -14,10 +12,10 @@ from showco.provision import config
 
 
 class PrepareCardTests(unittest.TestCase):
-    def test_prepare_card_options_default_to_imager_boot_volume(self) -> None:
+    def test_prepare_card_options_detect_card_by_default(self) -> None:
         options = tyro.cli(card.PrepareCardOptions, args=[])
 
-        self.assertEqual(options.boot, Path("/Volumes/bootfs"))
+        self.assertIsNone(options.card)
 
     def test_prepare_card_adds_sudo_commands_to_runcmd(self) -> None:
         with TemporaryDirectory() as directory:
@@ -62,50 +60,52 @@ class PrepareCardTests(unittest.TestCase):
 
             self.assertFalse(card.prepare_card(boot, "tom"))
 
-    def test_prepare_card_rejects_missing_user_data(self) -> None:
-        with TemporaryDirectory() as directory:
-            with (
-                mock.patch("showco.card.mount_external_disks") as mount,
-                self.assertRaisesRegex(SystemExit, "user-data file not found"),
-            ):
-                card.prepare_card(Path(directory), "tom")
-
-        mount.assert_called_once_with()
-
-    def test_prepare_card_mounts_external_physical_disks(self) -> None:
-        disk_list = plistlib.dumps({"WholeDisks": ["disk4", "disk5"]})
+    def test_prepare_card_selects_single_small_external_card(self) -> None:
         with mock.patch(
-            "showco.card.subprocess.run",
-            return_value=subprocess.CompletedProcess([], 0, disk_list),
-        ) as run:
-            card.mount_external_disks()
+            "showco.card.disk_values",
+            return_value=[{"DeviceIdentifier": "disk4", "Size": 128 * 1024**3}],
+        ):
+            self.assertEqual(card.select_card(None), Path("/dev/disk4"))
 
-        self.assertEqual(
-            run.call_args_list,
-            [
-                mock.call(
-                    ["diskutil", "list", "-plist", "external", "physical"],
-                    capture_output=True,
-                    check=True,
-                ),
-                mock.call(["diskutil", "mountDisk", "/dev/disk4"], check=False),
-                mock.call(["diskutil", "mountDisk", "/dev/disk5"], check=False),
-            ],
-        )
+    def test_prepare_card_rejects_multiple_small_external_cards(self) -> None:
+        with (
+            mock.patch(
+                "showco.card.disk_values",
+                return_value=[
+                    {"DeviceIdentifier": "disk4", "Size": 128 * 1024**3},
+                    {"DeviceIdentifier": "disk5", "Size": 64 * 1024**3},
+                ],
+            ),
+            self.assertRaisesRegex(SystemExit, "multiple external physical cards"),
+        ):
+            card.select_card(None)
 
-    def test_prepare_card_finds_mounted_boot_volume(self) -> None:
+    def test_prepare_card_displays_selected_card(self) -> None:
+        with mock.patch("showco.card.subprocess.run") as run:
+            card.show_card(Path("/dev/disk4"))
+
+        run.assert_called_once_with(["diskutil", "list", "/dev/disk4"], check=True)
+
+    def test_prepare_card_ejects_selected_card(self) -> None:
+        with mock.patch("showco.card.subprocess.run") as run:
+            card.eject_card(Path("/dev/disk4"))
+
+        run.assert_called_once_with(["diskutil", "eject", "/dev/disk4"], check=True)
+
+    def test_prepare_card_finds_user_data_on_selected_card(self) -> None:
         with TemporaryDirectory() as directory:
-            volumes = Path(directory)
-            boot = volumes / "bootfs 1"
-            boot.mkdir()
-            path = boot / "user-data"
+            path = Path(directory) / "user-data"
             path.write_text("#cloud-config\n")
-
-            with mock.patch("showco.card.mount_external_disks"):
-                self.assertEqual(
-                    card.user_data_path(volumes / "bootfs", volumes),
-                    path,
-                )
+            with mock.patch(
+                "showco.card.disk_values",
+                return_value=[
+                    {
+                        "DeviceIdentifier": "disk4",
+                        "Partitions": [{"MountPoint": str(path.parent)}],
+                    }
+                ],
+            ):
+                self.assertEqual(card.card_user_data_path(Path("/dev/disk4")), path)
 
     def test_write_cloud_init_configures_key_only_access(self) -> None:
         with TemporaryDirectory() as directory:
