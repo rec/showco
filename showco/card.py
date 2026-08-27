@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import os
+import plistlib
 import re
+import subprocess
 import sys
 from pathlib import Path
 from typing import Annotated
@@ -46,6 +48,8 @@ def prepare_card(boot: Path, user: str) -> bool:
     if USER_NAME_PATTERN.fullmatch(user) is None:
         sys.exit(f"ERROR: invalid Linux user name: {user!r}")
     path = boot / "user-data"
+    if not path.is_file():
+        mount_external_disks()
     if not path.is_file():
         sys.exit(f"ERROR: Raspberry Pi Imager user-data file not found: {path}")
 
@@ -125,6 +129,19 @@ def write_cloud_init(
 
 def yaml_string(value: str) -> str:
     return json.dumps(value)
+
+
+def mount_external_disks() -> None:
+    print("Mounting external disks...")
+    result = subprocess.run(
+        ["diskutil", "list", "-plist", "external", "physical"],
+        capture_output=True,
+        check=True,
+    )
+    values = plistlib.loads(result.stdout)
+    for disk in values.get("WholeDisks", []):
+        if isinstance(disk, str):
+            subprocess.run(["diskutil", "mountDisk", f"/dev/{disk}"], check=False)
 
 
 def configured_user(config_path: Path) -> str:

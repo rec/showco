@@ -142,7 +142,8 @@ showco prepare-card --boot /Volumes/bootfs
 This updates Raspberry Pi Imager's `user-data` cloud-init file to enable
 passwordless `sudo` for the configured Showco user. Provisioning checks this
 with `sudo -n` before it runs remote setup, so it cannot block waiting for an
-unknown account password.
+unknown account password. If Imager ejected the card, `prepare-card` mounts
+external physical disks before it looks for the boot volume.
 
 ## What the script does
 
