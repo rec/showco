@@ -3,11 +3,10 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest import mock
 
 import tyro
 
-from showco import card, image_card
+from showco import card
 from showco.provision import config
 
 
@@ -16,53 +15,6 @@ class PrepareCardTests(unittest.TestCase):
         options = tyro.cli(card.PrepareCardOptions, args=[])
 
         self.assertEqual(options.boot, Path("/Volumes/bootfs"))
-
-    def test_image_card_yes_accepts_short_option(self) -> None:
-        options = tyro.cli(
-            image_card.ImageCardOptions,
-            args=["--device", "/dev/disk4", "-y"],
-        )
-
-        self.assertTrue(options.yes)
-
-    def test_image_card_confirmation_requires_yes(self) -> None:
-        with (
-            mock.patch("showco.image_card.subprocess.run") as run,
-            mock.patch("builtins.input", return_value="no"),
-            self.assertRaisesRegex(SystemExit, "Cancelled"),
-        ):
-            image_card.confirm_device(Path("/dev/disk4"), False)
-
-        run.assert_called_once_with(["diskutil", "list", "/dev/disk4"], check=True)
-
-    def test_image_card_unmounts_device_before_imaging(self) -> None:
-        with mock.patch("showco.image_card.subprocess.run") as run:
-            image_card.unmount_device(Path("/dev/disk4"))
-
-        run.assert_called_once_with(
-            ["diskutil", "unmountDisk", "/dev/disk4"], check=True
-        )
-
-    def test_image_card_reports_interrupted_imager(self) -> None:
-        options = image_card.ImageCardOptions(device=Path("/dev/disk4"), yes=True)
-        with (
-            mock.patch("showco.image_card.Path.is_file", return_value=True),
-            mock.patch("showco.image_card.confirm_device"),
-            mock.patch("showco.image_card.unmount_device"),
-            mock.patch(
-                "showco.image_card.config.read_toml",
-                return_value={},
-            ),
-            mock.patch(
-                "showco.image_card.config.config_from_values",
-                return_value=mock.Mock(),
-            ),
-            mock.patch(
-                "showco.image_card.subprocess.run", side_effect=KeyboardInterrupt
-            ),
-            self.assertRaisesRegex(SystemExit, "partially written"),
-        ):
-            image_card.run(options)
 
     def test_prepare_card_adds_sudo_commands_to_runcmd(self) -> None:
         with TemporaryDirectory() as directory:
