@@ -35,6 +35,26 @@ class PrepareCardTests(unittest.TestCase):
 
         run.assert_called_once_with(["diskutil", "list", "/dev/disk4"], check=True)
 
+    def test_image_card_reports_interrupted_imager(self) -> None:
+        options = image_card.ImageCardOptions(device=Path("/dev/disk4"), yes=True)
+        with (
+            mock.patch("showco.image_card.Path.is_file", return_value=True),
+            mock.patch("showco.image_card.confirm_device"),
+            mock.patch(
+                "showco.image_card.config.read_toml",
+                return_value={},
+            ),
+            mock.patch(
+                "showco.image_card.config.config_from_values",
+                return_value=mock.Mock(),
+            ),
+            mock.patch(
+                "showco.image_card.subprocess.run", side_effect=KeyboardInterrupt
+            ),
+            self.assertRaisesRegex(SystemExit, "partially written"),
+        ):
+            image_card.run(options)
+
     def test_prepare_card_adds_sudo_commands_to_runcmd(self) -> None:
         with TemporaryDirectory() as directory:
             boot = Path(directory)

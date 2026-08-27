@@ -51,18 +51,21 @@ def run(options: ImageCardOptions) -> int:
         config.read_toml(options.secrets),
     )
     provision_config = config.config_from_values(values)
-    subprocess.run(
-        [
-            str(options.imager),
-            "--cli",
-            "--debug",
-            "--sha256",
-            options.image_sha256,
-            options.image_url,
-            str(options.device),
-        ],
-        check=True,
-    )
+    try:
+        subprocess.run(
+            [
+                str(options.imager),
+                "--cli",
+                "--debug",
+                "--sha256",
+                options.image_sha256,
+                options.image_url,
+                str(options.device),
+            ],
+            check=True,
+        )
+    except KeyboardInterrupt:
+        sys.exit("Interrupted. The card may be partially written; reimage it.")
     subprocess.run(["diskutil", "mountDisk", str(options.device)], check=True)
     card.write_cloud_init(
         options.boot,
