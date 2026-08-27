@@ -16,11 +16,12 @@ from . import machine_role
 from .provision import config
 
 PROVISION_DIR = Path(__file__).resolve().parent / "provision"
+DEFAULT_BOOT = Path("/Volumes/bootfs")
 USER_NAME_PATTERN = re.compile(r"[a-z_][a-z0-9_-]*")
 
 
 class PrepareCardOptions(BaseModel, frozen=True):
-    boot: Path = Path("/Volumes/bootfs")
+    boot: Path = DEFAULT_BOOT
     config_path: Annotated[Path, tyro.conf.arg(name="config")] = (
         PROVISION_DIR / "config.toml"
     )
@@ -35,8 +36,8 @@ def main(argv: list[str] | None = None) -> int:
         description="Prepare an Imager-written Raspberry Pi OS card for Showco",
     )
     user = options.user or configured_user(options.config_path)
-    changed = prepare_card(options.boot, user)
-    path = options.boot / "user-data"
+    path = user_data_path(options.boot)
+    changed = prepare_card(path.parent, user)
     if changed:
         print(f"Prepared {path} for passwordless sudo as {user}.")
     else:
@@ -47,11 +48,7 @@ def main(argv: list[str] | None = None) -> int:
 def prepare_card(boot: Path, user: str) -> bool:
     if USER_NAME_PATTERN.fullmatch(user) is None:
         sys.exit(f"ERROR: invalid Linux user name: {user!r}")
-    path = boot / "user-data"
-    if not path.is_file():
-        mount_external_disks()
-    if not path.is_file():
-        sys.exit(f"ERROR: Raspberry Pi Imager user-data file not found: {path}")
+    path = user_data_path(boot)
 
     contents = path.read_text()
     if not contents.lstrip().startswith("#cloud-config"):
@@ -129,6 +126,22 @@ def write_cloud_init(
 
 def yaml_string(value: str) -> str:
     return json.dumps(value)
+
+
+def user_data_path(boot: Path, volumes: Path = Path("/Volumes")) -> Path:
+    path = boot / "user-data"
+    if path.is_file():
+        return path
+    mount_external_disks()
+    if path.is_file():
+        return path
+    candidates = [p for p in volumes.glob("*/user-data") if p.is_file()]
+    if len(candidates) == 1:
+        return candidates[0]
+    if candidates:
+        names = ", ".join(str(p.parent) for p in candidates)
+        sys.exit(f"ERROR: multiple Raspberry Pi boot volumes found: {names}")
+    sys.exit(f"ERROR: Raspberry Pi Imager user-data file not found: {path}")
 
 
 def mount_external_disks() -> None:

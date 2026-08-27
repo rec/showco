@@ -93,6 +93,20 @@ class PrepareCardTests(unittest.TestCase):
             ],
         )
 
+    def test_prepare_card_finds_mounted_boot_volume(self) -> None:
+        with TemporaryDirectory() as directory:
+            volumes = Path(directory)
+            boot = volumes / "bootfs 1"
+            boot.mkdir()
+            path = boot / "user-data"
+            path.write_text("#cloud-config\n")
+
+            with mock.patch("showco.card.mount_external_disks"):
+                self.assertEqual(
+                    card.user_data_path(volumes / "bootfs", volumes),
+                    path,
+                )
+
     def test_write_cloud_init_configures_key_only_access(self) -> None:
         with TemporaryDirectory() as directory:
             boot = Path(directory)
