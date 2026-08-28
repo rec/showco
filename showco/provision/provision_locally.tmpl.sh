@@ -232,9 +232,9 @@ sync_repo() {
   fi
   if [[ "$changed" == true ]] || ! sudo -H -u "$SHOW_USER" \
     env PATH="/home/$SHOW_USER/.local/bin:$PATH" \
-    bash -lc "cd '$path' && uv sync --frozen --check"; then
+    bash -lc "cd '$path' && uv sync --locked --check"; then
     sudo -H -u "$SHOW_USER" env PATH="/home/$SHOW_USER/.local/bin:$PATH" \
-      bash -lc "cd '$path' && uv sync --frozen"
+      bash -lc "cd '$path' && uv sync --locked"
   else
     printf '%s environment is already synchronized.\n' "$name"
   fi
@@ -358,7 +358,7 @@ configure_network() {
   set +e
   sudo -H -u "$SHOW_USER" env PATH="/home/$SHOW_USER/.local/bin:$PATH" \
     bash -lc \
-      "cd '$ROOT/showco' && uv run --frozen showco run network-config --config '$config_file' --secrets '$secrets_file'"
+      "cd '$ROOT/showco' && uv run --locked showco run network-config --config '$config_file' --secrets '$secrets_file'"
   status=$?
   set -e
   rm -f "$config_file" "$secrets_file"
@@ -415,7 +415,7 @@ install_recs_service() {
   sudo -H -u "$SHOW_USER" \
     env XDG_RUNTIME_DIR="/run/user/$uid" \
     PATH="$ROOT/recs/.venv/bin:/home/$SHOW_USER/.local/bin:$PATH" \
-    bash -lc "cd '$ROOT/recs' && uv run --frozen recs daemon install $quoted_args"
+    bash -lc "cd '$ROOT/recs' && uv run --locked recs daemon install $quoted_args"
 }
 
 install_showco_service() {
@@ -424,7 +424,7 @@ install_showco_service() {
   sudo -H -u "$SHOW_USER" \
     env XDG_RUNTIME_DIR="/run/user/$uid" \
     PATH="$ROOT/showco/.venv/bin:/home/$SHOW_USER/.local/bin:$PATH" \
-    bash -lc "mkdir -p /home/$SHOW_USER/.config/showco && printf '%s' \"$SHOWCO_MIXERS_TOML\" > /home/$SHOW_USER/.config/showco/mixers.toml && cd '$ROOT/showco' && uv run --frozen showco run install-service --root '$ROOT' $(showco_args)"
+    bash -lc "mkdir -p /home/$SHOW_USER/.config/showco && printf '%s' \"$SHOWCO_MIXERS_TOML\" > /home/$SHOW_USER/.config/showco/mixers.toml && cd '$ROOT/showco' && uv run --locked showco run install-service --root '$ROOT' $(showco_args)"
 }
 
 install_twitcho_service() {
@@ -445,7 +445,7 @@ install_twitcho_service() {
   sudo -H -u "$SHOW_USER" \
     env XDG_RUNTIME_DIR="/run/user/$uid" \
     PATH="$ROOT/twitcho/.venv/bin:/home/$SHOW_USER/.local/bin:$PATH" \
-    bash -lc "cd '$ROOT/twitcho' && uv run --frozen twitcho daemon install --config $quoted_config"
+    bash -lc "cd '$ROOT/twitcho' && uv run --locked twitcho daemon install --config $quoted_config"
 }
 
 install_lyte_service() {
@@ -466,7 +466,7 @@ install_lyte_service() {
   sudo -H -u "$SHOW_USER" \
     env XDG_RUNTIME_DIR="/run/user/$uid" \
     PATH="$ROOT/lyte/.venv/bin:/home/$SHOW_USER/.local/bin:$PATH" \
-    bash -lc "cd '$ROOT/lyte' && uv run --frozen lyte daemon install --config $quoted_config"
+    bash -lc "cd '$ROOT/lyte' && uv run --locked lyte daemon install --config $quoted_config"
 }
 
 write_provisioning_report() {

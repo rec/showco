@@ -13,6 +13,11 @@ from showco import update
 
 
 class UpdateTests(unittest.TestCase):
+    def setUp(self) -> None:
+        ensure_log = mock.patch("reccy.service.ServiceController._ensure_log")
+        ensure_log.start()
+        self.addCleanup(ensure_log.stop)
+
     def test_update_host_override_is_used_for_target_ssh(self) -> None:
         with (
             mock.patch(
@@ -147,7 +152,7 @@ class UpdateTests(unittest.TestCase):
             command,
         )
         self.assertIn('printf "%s\\n" "$status" >&2', command)
-        self.assertIn("sed -E '/^.. (.*\\/)?uv\\.lock$/d'", command)
+        self.assertNotIn("sed -E '/^.. (.*\\/)?uv\\.lock$/d'", command)
         self.assertIn(
             'git fetch "$remote" "+refs/heads/$branch:refs/remotes/$remote/$branch"',
             command,
@@ -160,17 +165,18 @@ class UpdateTests(unittest.TestCase):
         )
         self.assertEqual(command.count('git reset --hard "$remote/$branch"'), 2)
         self.assertIn(
-            "uv sync --frozen --directory '/srv/show projects/showco'",
+            "uv sync --locked --directory '/srv/show projects/showco'",
             command,
         )
         self.assertIn(
-            "uv sync --frozen --directory '/srv/show projects/showco' "
+            "uv sync --locked --directory '/srv/show projects/showco' "
             "&& cd '/srv/show projects/showco' && ",
             command,
         )
         self.assertTrue(
             command.endswith(
-                "uv run showco update --target-machine --root '/srv/show projects' recs"
+                "uv run --locked showco update --target-machine "
+                "--root '/srv/show projects' recs"
             )
         )
 
@@ -182,7 +188,9 @@ class UpdateTests(unittest.TestCase):
         self.assertNotIn("git status --porcelain", command)
         self.assertIn('git reset --hard "$remote/$branch"', command)
         self.assertTrue(
-            command.endswith("uv run showco update --target-machine --root /code recs")
+            command.endswith(
+                "uv run --locked showco update --target-machine --root /code recs"
+            )
         )
 
     def test_legacy_remote_update_command_has_no_update_arguments(self) -> None:
@@ -192,7 +200,7 @@ class UpdateTests(unittest.TestCase):
             command,
             "cd '/srv/show projects/showco' && "
             'PATH="$HOME/.local/bin:$PATH" '
-            "uv run showco update",
+            "uv run --locked showco update",
         )
 
     def test_rejected_update_arguments_requires_tyro_option_error(self) -> None:
@@ -255,7 +263,7 @@ class UpdateTests(unittest.TestCase):
                 ["git", "-C", "/code/recs", "rev-parse", "HEAD"],
                 ["git", "-C", "/code/recs", "pull", "--ff-only"],
                 ["git", "-C", "/code/recs", "rev-parse", "HEAD"],
-                ["uv", "sync", "--frozen", "--directory", "/code/recs"],
+                ["uv", "sync", "--locked", "--directory", "/code/recs"],
                 ["systemctl", "--user", "start", "recs.service"],
                 ["sh", "-c", update.recs.status_changes_command()],
             ],
@@ -305,7 +313,7 @@ class UpdateTests(unittest.TestCase):
             if command[-2:] == ["rev-parse", "HEAD"]:
                 stdout = "old\n" if commands.count(list(command)) == 1 else "new\n"
                 return subprocess.CompletedProcess(command, 0, stdout, "")
-            if command[:3] == ["uv", "sync", "--frozen"]:
+            if command[:3] == ["uv", "sync", "--locked"]:
                 return subprocess.CompletedProcess(
                     command, 1, "", "package unavailable\n"
                 )
@@ -322,7 +330,7 @@ class UpdateTests(unittest.TestCase):
             )
 
         self.assertEqual(result, 1)
-        self.assertIn(["uv", "sync", "--frozen", "--directory", "/code/recs"], commands)
+        self.assertIn(["uv", "sync", "--locked", "--directory", "/code/recs"], commands)
         self.assertIn(["git", "-C", "/code/recs", "reset", "--hard", "old"], commands)
         self.assertIn(["systemctl", "--user", "start", "recs.service"], commands)
 
@@ -402,7 +410,7 @@ class UpdateTests(unittest.TestCase):
             commands,
         )
         self.assertIn(
-            ["uv", "sync", "--frozen", "--directory", "/code/showco"],
+            ["uv", "sync", "--locked", "--directory", "/code/showco"],
             commands,
         )
         self.assertIn(["systemctl", "--user", "start", "showco.service"], commands)
@@ -589,10 +597,11 @@ class UpdateTests(unittest.TestCase):
         remote_command = remote_update.call_args.args[2][-1]
         self.assertIn("cd /code/showco &&", remote_command)
         self.assertIn('git reset --hard "$remote/$branch"', remote_command)
-        self.assertIn("uv sync --frozen --directory /code/showco", remote_command)
+        self.assertIn("uv sync --locked --directory /code/showco", remote_command)
         self.assertTrue(
             remote_command.endswith(
-                "uv run showco update --target-machine --root /code showco reccy"
+                "uv run --locked showco update --target-machine "
+                "--root /code showco reccy"
             )
         )
         self.assertIn("ConnectTimeout=2", remote_update.call_args.args[2])
@@ -858,10 +867,11 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(remote_update.call_count, 3)
         self.assertEqual(
             remote_update.call_args_list[1].args[2][-1],
-            'cd /code/showco && PATH="$HOME/.local/bin:$PATH" uv run showco update',
+            'cd /code/showco && PATH="$HOME/.local/bin:$PATH" '
+            "uv run --locked showco update",
         )
         self.assertIn(
-            "uv run showco update --target-machine --root /code showco",
+            "uv run --locked showco update --target-machine --root /code showco",
             remote_update.call_args.args[2][-1],
         )
         self.assertIn(
@@ -1110,7 +1120,7 @@ class UpdateTests(unittest.TestCase):
             ["git", "-C", "/code/recs", "push", "origin", "HEAD:main"], commands
         )
 
-    def test_provisioning_update_ignores_dirty_uv_lock(self) -> None:
+    def test_provisioning_update_rejects_dirty_uv_lock(self) -> None:
         def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
             if command[-2:] == ["branch", "--show-current"]:
                 return subprocess.CompletedProcess(command, 0, "main\n", "")
@@ -1144,7 +1154,7 @@ class UpdateTests(unittest.TestCase):
                 output=StringIO(),
             )
 
-        self.assertEqual(result, 0)
+        self.assertEqual(result, 1)
 
     def test_target_update_rejects_dirty_repository_and_restarts_service(self) -> None:
         commands: list[list[str]] = []
@@ -1179,7 +1189,7 @@ class UpdateTests(unittest.TestCase):
             ],
         )
 
-    def test_target_update_ignores_untracked_files_and_dirty_uv_lock(self) -> None:
+    def test_target_update_ignores_untracked_files(self) -> None:
         commands: list[list[str]] = []
 
         def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
@@ -1190,7 +1200,7 @@ class UpdateTests(unittest.TestCase):
                 return subprocess.CompletedProcess(
                     command,
                     0,
-                    "?? open-loop.mp4\n M uv.lock\n",
+                    "?? open-loop.mp4\n",
                     "",
                 )
             if command[-2:] == ["rev-parse", "HEAD"]:
