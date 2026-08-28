@@ -227,7 +227,10 @@
     stereoInput.disabled = !stereoEnabled(channel, channels);
     stereoInput.addEventListener("change", saveStereo);
     stereo.append(stereoInput, "Stereo");
-    form.append(label, stereo);
+    const waveform = document.createElement("canvas");
+    waveform.className = "waveform";
+    waveform.setAttribute("aria-label", "Live waveform");
+    form.append(label, stereo, waveform);
     return form;
   }
 
@@ -244,24 +247,32 @@
     const container = document.getElementById("channels");
     if (!container) return;
     if (document.activeElement.closest("#channels .level")) return;
-    const names = new Map(
-      [...container.querySelectorAll(".level")].map(form => [
-        `${form.dataset.device}\\u0000${form.dataset.channel}`,
-        {
-          trackName: form.querySelector("[name=track_name]").value,
-          savedTrackName: form.dataset.savedTrackName,
-        },
-      ]),
+    const forms = new Map(
+      [...container.querySelectorAll(".level")].map(form => [trackKey({
+        device: form.dataset.device,
+        channels: form.dataset.channels.split(",").map(Number),
+      }), form]),
     );
     container.replaceChildren(...channels.map(channel => {
-      const name = names.get(trackKey(channel));
-      return channelForm(
-        channel,
-        name?.trackName ?? channel.name,
-        name?.savedTrackName ?? channel.name,
-        channels,
-      );
+      const form = forms.get(trackKey(channel));
+      if (!form) return channelForm(channel, channel.name, channel.name, channels);
+      updateChannelForm(form, channel, channels);
+      return form;
     }));
+  }
+
+  function updateChannelForm(form, channel, channels) {
+    form.className = `level ${channel.state}`;
+    form.dataset.device = channel.device;
+    form.dataset.channel = channel.name;
+    form.dataset.channels = channel.channels.join(",");
+    const state = form.querySelector(".channel-state");
+    state.className = `channel-state ${channel.on ? "indicator-red" : "indicator-green"}`;
+    state.setAttribute("aria-label", channel.on ? "recording" : "not recording");
+    state.title = state.getAttribute("aria-label");
+    const stereo = form.querySelector(".stereo input");
+    stereo.checked = channel.channels.length === 2;
+    stereo.disabled = !stereoEnabled(channel, channels);
   }
 
   function atBottom() {

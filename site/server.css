@@ -81,6 +81,13 @@ main {
   margin: 0.25rem 0 0;
   min-height: 2rem;
 }
+.waveform {
+  background: #171717;
+  border: 1px solid #fffaf0;
+  display: block;
+  height: 5rem;
+  width: 100%;
+}
 .stereo {
   align-items: center;
   display: flex;

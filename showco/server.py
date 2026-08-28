@@ -16,7 +16,7 @@ from reccy import logging
 
 from . import models, services
 from .mixer import MixersMonitor
-from .recs import RecsClient
+from .recs import RecsClient, WaveformBridge
 from .system import SystemMonitor
 from .twitcho.client import TwitchoClient
 
@@ -41,6 +41,7 @@ class ShowcoApp:
         mixers: MixersMonitor,
         twitcho_restart: Callable[[], models.ActionResult] | None = None,
         x18_status: Callable[[], models.RecorderStatus] | None = None,
+        waveforms: WaveformBridge | None = None,
     ) -> None:
         self.recs = recs
         self.twitcho = twitcho
@@ -48,6 +49,7 @@ class ShowcoApp:
         self.mixers = mixers
         self.twitcho_restart = twitcho_restart or services.restart_twitcho_service
         self.x18_status = x18_status
+        self.waveforms = waveforms
         self.revision = source_revision()
         self.run_started_at = time.time()
         self.action_log: list[models.ActionResult] = []
@@ -144,6 +146,9 @@ class ShowcoHandler(BaseHTTPRequestHandler):
     app: ClassVar[ShowcoApp]
 
     def do_GET(self) -> None:
+        if self.path == "/waveforms":
+            self._waveforms()
+            return
         if not self._acquire_request():
             return
         try:
@@ -176,6 +181,40 @@ class ShowcoHandler(BaseHTTPRequestHandler):
             )
             return
         self.send_error(404)
+
+    def _waveforms(self) -> None:
+        bridge = self.app.waveforms
+        if bridge is None:
+            self.send_response(204)
+            self.end_headers()
+            return
+        self.send_response(200)
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Connection", "keep-alive")
+        self.end_headers()
+        layouts, batches, changed = bridge.snapshot()
+        try:
+            for layout in layouts:
+                self._waveform_event("waveform_layout", layout.model_dump())
+            for batch in batches:
+                self._waveform_event("waveform", batch.model_dump())
+            while not bridge.stopped.is_set():
+                updated = bridge.wait_for_change(changed, 15)
+                if updated == changed:
+                    self.wfile.write(b": heartbeat\n\n")
+                    self.wfile.flush()
+                    continue
+                for _, name, event in bridge.events_since(changed):
+                    self._waveform_event(name, event.model_dump())
+                changed = updated
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            return
+
+    def _waveform_event(self, name: str, data: dict[str, object]) -> None:
+        message = f"event: {name}\ndata: {json.dumps(data, separators=(',', ':'))}\n\n"
+        self.wfile.write(message.encode())
+        self.wfile.flush()
 
     def do_POST(self) -> None:
         if not self._acquire_request():
@@ -270,6 +309,11 @@ class ShowcoServer(ThreadingHTTPServer):
         self.request_slots = threading.BoundedSemaphore(MAX_CONCURRENT_REQUESTS)
         self.daemon_threads = True
 
+    def server_close(self) -> None:
+        if self.app.waveforms is not None:
+            self.app.waveforms.close()
+        super().server_close()
+
 
 def source_revision() -> str | None:
     try:
@@ -299,13 +343,18 @@ def make_server(
     x18_status: Callable[[], models.RecorderStatus] | None = None,
 ) -> ThreadingHTTPServer:
     handler = type("ConfiguredShowcoHandler", (ShowcoHandler,), {})
+    recs_client = recs or RecsClient()
+    waveforms = WaveformBridge() if isinstance(recs_client, RecsClient) else None
+    if waveforms is not None:
+        waveforms.start()
     app = ShowcoApp(
-        recs or RecsClient(),
+        recs_client,
         (twitcho or TwitchoClient()) if twitcho_enabled else None,
         system or SystemMonitor(),
         mixers or MixersMonitor([]),
         twitcho_restart if twitcho_enabled else None,
         x18_status,
+        waveforms,
     )
     handler.app = app
     server = ShowcoServer((host, port), handler)
@@ -333,7 +382,7 @@ def channels_page(status: models.ShowStatus) -> str:
           </div>
         </section>
         """,
-        script=site_file("status-script.js"),
+        script=site_file("status-script.js") + site_file("waveform-script.js"),
     )
 
 
@@ -502,6 +551,7 @@ def level(channel: models.ChannelLevel, channels: list[models.ChannelLevel]) -> 
         <input name="track_name" value="{safe_name}">
       </label>
       <label class="stereo"><input type="checkbox"{checked}{disabled}>Stereo</label>
+      <canvas class="waveform" aria-label="Live waveform"></canvas>
     </div>
     """
 

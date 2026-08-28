@@ -42,6 +42,17 @@ class ServerTests(unittest.TestCase):
 
         handler.send_header.assert_any_call("Cache-Control", "no-store")
 
+    def test_waveform_event_uses_server_sent_event_format(self) -> None:
+        handler = object.__new__(ShowcoHandler)
+        handler.wfile = BytesIO()
+
+        handler._waveform_event("waveform", {"source": "Mixer"})
+
+        self.assertEqual(
+            handler.wfile.getvalue(),
+            b'event: waveform\ndata: {"source":"Mixer"}\n\n',
+        )
+
     def test_form_rejects_large_request(self) -> None:
         handler = object.__new__(ShowcoHandler)
         handler.headers = {"Content-Length": str(65_537)}
@@ -81,6 +92,7 @@ class ServerTests(unittest.TestCase):
         )
 
         self.assertIn('id="channels"', html)
+        self.assertIn('new EventSource("/waveforms")', html)
         self.assertIn(
             ".levels {\n  grid-template-columns: repeat(3, minmax(0, 1fr));", html
         )
@@ -207,6 +219,9 @@ class ServerTests(unittest.TestCase):
         self.assertIn('data-saved-track-name="1"', html)
         self.assertIn('class="channel-state indicator-red"', html)
         self.assertIn('aria-label="recording"', html)
+        self.assertIn(
+            '<canvas class="waveform" aria-label="Live waveform"></canvas>', html
+        )
         self.assertIn("<b>1</b>", html)
         self.assertNotIn("Channel 1", html)
         self.assertIn(">•</span>", html)
