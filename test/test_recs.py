@@ -6,14 +6,23 @@ import unittest
 from collections.abc import Iterator
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from threading import Event
 from unittest import mock
 
+from reccy import rpc
 from reccy.models import DaemonMetadata, Platform
+from recs.base.waveform import (
+    WaveformBatchData,
+    WaveformLayoutData,
+    WaveformTrackData,
+    WaveformTrackLayout,
+)
 from recs.daemon import gui_protocol
 
 from showco import models, recs
 from showco.recs import (
     RecsClient,
+    WaveformBridge,
     _x18_status,
     channel_levels,
     level_state,
@@ -24,7 +33,145 @@ from showco.recs import (
 CLIENT_CONNECTION = "showco.recs.ipc.client_connection"
 
 
+class FakeWaveformEvents:
+    def __init__(self) -> None:
+        self.started = False
+        self.closed = False
+
+    def start(self) -> None:
+        self.started = True
+
+    def close(self) -> None:
+        self.closed = True
+
+
 class RecsTests(unittest.TestCase):
+    def test_waveform_bridge_keeps_current_layout_and_batches(self) -> None:
+        bridge = WaveformBridge()
+        layout = WaveformLayoutData(
+            source="Mixer",
+            generation=1,
+            sample_rate=48_000,
+            bucket_frames=960,
+            tracks=[WaveformTrackLayout(channels=[1])],
+        )
+        batch = WaveformBatchData(
+            source="Mixer",
+            generation=1,
+            sequence=0,
+            sample_rate=48_000,
+            bucket_frames=960,
+            start_frame=0,
+            start_timestamp=1.0,
+            present=[True],
+            tracks=[WaveformTrackData(channels=[1], minimum=[[-0.5]], maximum=[[0.5]])],
+        )
+
+        bridge.receive(rpc.Event(name="waveform_layout", data=layout.model_dump()))
+        bridge.receive(rpc.Event(name="waveform", data=batch.model_dump()))
+        layouts, batches, changed = bridge.snapshot()
+
+        self.assertEqual(layouts, [layout])
+        self.assertEqual(batches, [batch])
+        self.assertEqual(changed, 2)
+
+    def test_waveform_bridge_discards_wrong_generation(self) -> None:
+        bridge = WaveformBridge()
+        bridge.receive(
+            rpc.Event(
+                name="waveform_layout",
+                data={
+                    "source": "Mixer",
+                    "generation": 2,
+                    "sample_rate": 48_000,
+                    "bucket_frames": 960,
+                    "tracks": [{"channels": [1]}],
+                },
+            )
+        )
+        bridge.receive(
+            rpc.Event(
+                name="waveform",
+                data={
+                    "source": "Mixer",
+                    "generation": 1,
+                    "sequence": 0,
+                    "sample_rate": 48_000,
+                    "bucket_frames": 960,
+                    "start_frame": 0,
+                    "start_timestamp": 1.0,
+                    "present": [True],
+                    "tracks": [
+                        {"channels": [1], "minimum": [[0.0]], "maximum": [[0.0]]}
+                    ],
+                },
+            )
+        )
+
+        _, batches, _ = bridge.snapshot()
+
+        self.assertEqual(batches, [])
+
+    def test_waveform_bridge_bounds_batches_per_source(self) -> None:
+        bridge = WaveformBridge()
+        layout = WaveformLayoutData(
+            source="Mixer",
+            generation=1,
+            sample_rate=48_000,
+            bucket_frames=960,
+            tracks=[WaveformTrackLayout(channels=[1])],
+        )
+        bridge.receive(rpc.Event(name="waveform_layout", data=layout.model_dump()))
+
+        with mock.patch.object(recs, "MAX_WAVEFORM_BATCHES", 2):
+            for sequence in range(3):
+                bridge.receive(
+                    rpc.Event(
+                        name="waveform",
+                        data={
+                            "source": "Mixer",
+                            "generation": 1,
+                            "sequence": sequence,
+                            "sample_rate": 48_000,
+                            "bucket_frames": 960,
+                            "start_frame": sequence * 960,
+                            "start_timestamp": float(sequence),
+                            "present": [True],
+                            "tracks": [
+                                {
+                                    "channels": [1],
+                                    "minimum": [[0.0]],
+                                    "maximum": [[0.0]],
+                                }
+                            ],
+                        },
+                    )
+                )
+
+        _, batches, _ = bridge.snapshot()
+
+        self.assertEqual([batch.sequence for batch in batches], [1, 2])
+
+    def test_waveform_bridge_subscribes_to_recs(self) -> None:
+        subscribed = Event()
+        events = FakeWaveformEvents()
+        control = mock.Mock()
+        control.call.side_effect = lambda name: subscribed.set() or {"active": True}
+        bridge = WaveformBridge(
+            event_client=lambda receive: events,
+            control_client=lambda: control,
+        )
+
+        bridge.start()
+        self.assertTrue(subscribed.wait(0.1))
+        bridge.close()
+        assert bridge.thread is not None
+        bridge.thread.join()
+
+        control.call.assert_called_once_with("subscribe_waveforms")
+        self.assertTrue(events.started)
+        self.assertTrue(events.closed)
+
     def test_reads_uppercase_x18_osc_status(self) -> None:
         status = _x18_status(
             {
