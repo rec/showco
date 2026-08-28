@@ -511,7 +511,7 @@ class ProvisionTests(unittest.TestCase):
         command = verify.showco_twitcho_health_command(Path("/code"))
 
         self.assertIn("cd /code/showco", command)
-        self.assertIn("uv run --frozen showco run twitcho-health", command)
+        self.assertIn("uv run --locked showco run twitcho-health", command)
 
     def test_initial_wait_for_ssh_retries_until_connected(self) -> None:
         config = make_config(values(networks=networks(x18=False)))
@@ -678,16 +678,16 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn("uv --version", script.REMOTE_SCRIPT)
 
     def test_remote_script_checks_before_syncing_unchanged_environments(self) -> None:
-        self.assertIn("uv sync --frozen", script.REMOTE_SCRIPT)
-        self.assertIn("uv sync --frozen --check", script.REMOTE_SCRIPT)
+        self.assertIn("uv sync --locked", script.REMOTE_SCRIPT)
+        self.assertIn("uv sync --locked --check", script.REMOTE_SCRIPT)
 
-    def test_remote_script_uses_frozen_uv_run(self) -> None:
-        self.assertIn("uv run --frozen showco run network-config", script.REMOTE_SCRIPT)
-        self.assertIn("uv run --frozen recs daemon install", script.REMOTE_SCRIPT)
-        self.assertIn("uv run --frozen twitcho daemon install", script.REMOTE_SCRIPT)
-        self.assertIn("uv run --frozen lyte daemon install", script.REMOTE_SCRIPT)
+    def test_remote_script_uses_locked_uv_run(self) -> None:
+        self.assertIn("uv run --locked showco run network-config", script.REMOTE_SCRIPT)
+        self.assertIn("uv run --locked recs daemon install", script.REMOTE_SCRIPT)
+        self.assertIn("uv run --locked twitcho daemon install", script.REMOTE_SCRIPT)
+        self.assertIn("uv run --locked lyte daemon install", script.REMOTE_SCRIPT)
         self.assertIn(
-            "uv run --frozen showco run install-service", script.REMOTE_SCRIPT
+            "uv run --locked showco run install-service", script.REMOTE_SCRIPT
         )
 
     def test_remote_script_writes_provisioning_report(self) -> None:
@@ -712,7 +712,7 @@ class ProvisionTests(unittest.TestCase):
     def test_remote_script_configures_network(self) -> None:
         self.assertIn('phase "configuring network"', script.REMOTE_SCRIPT)
         self.assertIn("configure_network()", script.REMOTE_SCRIPT)
-        self.assertIn("uv run --frozen showco run network-config", script.REMOTE_SCRIPT)
+        self.assertIn("uv run --locked showco run network-config", script.REMOTE_SCRIPT)
         self.assertIn('write_toml_string host "$SHOWCO_HOST"', script.REMOTE_SCRIPT)
         self.assertIn("printf '\\n[git.reccy]\\n'", script.REMOTE_SCRIPT)
         self.assertIn("printf '\\n[git.lyte]\\n'", script.REMOTE_SCRIPT)
@@ -720,7 +720,7 @@ class ProvisionTests(unittest.TestCase):
 
     def test_remote_script_installs_showco_service_through_showco(self) -> None:
         self.assertIn(
-            "uv run --frozen showco run install-service", script.REMOTE_SCRIPT
+            "uv run --locked showco run install-service", script.REMOTE_SCRIPT
         )
         self.assertNotIn('tee "$service_file"', script.REMOTE_SCRIPT)
         self.assertNotIn("ExecStart=$command", script.REMOTE_SCRIPT)
@@ -838,18 +838,17 @@ class ProvisionTests(unittest.TestCase):
 
         self.assertIn("for name in showco reccy recs twitcho lyte", command)
         self.assertIn('git -C "$path" status --short --untracked-files=no', command)
-        self.assertIn("sed -E '/^.. (.*\\/)?uv\\.lock$/d'", command)
+        self.assertNotIn("sed -E '/^.. (.*\\/)?uv\\.lock$/d'", command)
         self.assertIn('printf \'%s:\\n%s\\n\' "$name" "$status"', command)
         self.assertIn("printf '%s: not a Git checkout: %s\\n'", command)
         self.assertIn("exit 1", command)
 
-    def test_project_status_command_ignores_dirty_uv_lock(self) -> None:
+    def test_project_status_command_reports_dirty_uv_lock(self) -> None:
         command = verify.project_status_command("recs", Path("/srv/show-projects"))
 
         self.assertEqual(
             command,
-            "git -C /srv/show-projects/recs status --short "
-            "| sed -E '/^.. (.*\\/)?uv\\.lock$/d'",
+            "git -C /srv/show-projects/recs status --short",
         )
 
     def test_remote_command_quotes_root_with_spaces(self) -> None:
@@ -917,7 +916,7 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn(
             "uid=$(id -u); XDG_RUNTIME_DIR=/run/user/$uid "
             'cd /srv/show-projects/showco && PATH="$HOME/.local/bin:$PATH" '
-            "uv run --frozen showco run service-status recs",
+            "uv run --locked showco run service-status recs",
             commands,
         )
         self.assertIn(
@@ -932,7 +931,7 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn(
             "uid=$(id -u); XDG_RUNTIME_DIR=/run/user/$uid "
             'cd /srv/show-projects/showco && PATH="$HOME/.local/bin:$PATH" '
-            "uv run --frozen showco run service-status showco",
+            "uv run --locked showco run service-status showco",
             commands,
         )
         self.assertTrue(

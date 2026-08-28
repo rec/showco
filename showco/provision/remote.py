@@ -132,7 +132,6 @@ for name in {names}; do
     failed=true
     continue
   fi
-  status=$(printf '%s\\n' "$status" | sed -E '/^.. (.*\\/)?uv\\.lock$/d')
   if [[ -n "$status" ]]; then
     printf '%s:\\n%s\\n' "$name" "$status"
     failed=true

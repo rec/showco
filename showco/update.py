@@ -360,7 +360,7 @@ def update_program_on_target(
         dependencies = run_step(
             program.name,
             "sync dependencies",
-            ["uv", "sync", "--frozen", "--directory", str(program.directory)],
+            ["uv", "sync", "--locked", "--directory", str(program.directory)],
             run_command,
         )
         results.append(dependencies)
@@ -747,14 +747,8 @@ def clean_worktree_step(program: Program, run_command: RunCommand) -> StepResult
 
 def tracked_worktree_changes(status_output: str) -> str:
     return "\n".join(
-        line
-        for line in status_output.splitlines()
-        if not line.startswith("??") and not is_uv_lock_change(line)
+        line for line in status_output.splitlines() if not line.startswith("??")
     )
-
-
-def is_uv_lock_change(status_line: str) -> bool:
-    return status_line[3:].rsplit("/", maxsplit=1)[-1] == "uv.lock"
 
 
 def provisioning_config() -> config.Config:
@@ -784,8 +778,6 @@ def remote_update_command(
     if not skip_worktree_check:
         worktree_check = (
             "status=$(git status --porcelain --untracked-files=no) && "
-            "status=$(printf '%s\\n' \"$status\" | "
-            "sed -E '/^.. (.*\\/)?uv\\.lock$/d') && "
             'if [ -n "$status" ]; then '
             'printf "%s\\n" "showco target worktree has tracked changes" >&2; '
             'printf "%s\\n" "$status" >&2; exit 1; fi && '
@@ -803,18 +795,18 @@ def remote_update_command(
         "remote=${upstream%%/*} && branch=${upstream#*/} && "
         'git fetch "$remote" "+refs/heads/$branch:refs/remotes/$remote/$branch" && '
         'git reset --hard "$remote/$branch" || exit 1; done && '
-        'PATH="$HOME/.local/bin:$PATH" uv sync --frozen --directory '
+        'PATH="$HOME/.local/bin:$PATH" uv sync --locked --directory '
         f"{showco_directory} && "
         f"cd {showco_directory} && "
         'PATH="$HOME/.local/bin:$PATH" '
-        f"uv run showco update {arguments}"
+        f"uv run --locked showco update {arguments}"
     ).rstrip()
 
 
 def legacy_remote_update_command(root: Path) -> str:
     return (
         f'cd {shlex.quote(str(root / "showco"))} && PATH="$HOME/.local/bin:$PATH" '
-        "uv run showco update"
+        "uv run --locked showco update"
     )
 
 

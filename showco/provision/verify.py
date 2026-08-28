@@ -154,10 +154,7 @@ def wait_for_provisioning_ready(
 
 
 def project_status_command(project: str, root: Path) -> str:
-    return (
-        f"git -C {shlex.quote(str(root / project))} status --short "
-        "| sed -E '/^.. (.*\\/)?uv\\.lock$/d'"
-    )
+    return f"git -C {shlex.quote(str(root / project))} status --short"
 
 
 def user_systemctl_command(arguments: str) -> str:
@@ -167,7 +164,7 @@ def user_systemctl_command(arguments: str) -> str:
 def showco_service_status_command(service: str, root: Path) -> str:
     return user_session_command(
         f'cd {shlex.quote(str(root / "showco"))} && PATH="$HOME/.local/bin:$PATH" '
-        f"uv run --frozen showco run service-status {service}"
+        f"uv run --locked showco run service-status {service}"
     )
 
 
@@ -175,7 +172,7 @@ def showco_twitcho_health_command(root: Path) -> str:
     showco_directory = shlex.quote(str(root / "showco"))
     return user_session_command(
         f'cd {showco_directory} && PATH="$HOME/.local/bin:$PATH" '
-        "uv run --frozen showco run twitcho-health"
+        "uv run --locked showco run twitcho-health"
     )
 
 
@@ -279,7 +276,7 @@ def verify_mixer_midi_input(
     command = " ".join(
         [
             f"cd {shlex.quote(str(provision_config.paths.root / 'recs'))}",
-            "&& uv run --frozen python -c",
+            "&& uv run --locked python -c",
             shlex.quote(matcher),
             shlex.quote(selector),
         ]
