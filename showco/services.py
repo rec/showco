@@ -9,7 +9,7 @@ from subprocess import CompletedProcess
 from typing import ClassVar
 
 from pydantic import BaseModel
-from reccy import paths, reccy, service, service_spec
+from reccy import paths, reccy, rpc, service, service_spec
 from reccy.models import DaemonMetadata, ServiceSpec, StatusResult
 
 from . import machine_role, models
@@ -85,6 +85,21 @@ def restart_twitcho_service() -> models.ActionResult:
     if result.running:
         return models.ActionResult(ok=True, message="twitcho restart requested")
     return models.ActionResult(ok=False, message="twitcho service did not start")
+
+
+def test_lyte_lights() -> models.ActionResult:
+    control_endpoint = paths.service_paths(
+        LYTE_SERVICE, paths.current_platform()
+    ).control_endpoint
+    if control_endpoint is None:
+        return models.ActionResult(ok=False, message="lyte does not support control")
+    try:
+        result = rpc.Client(control_endpoint, role="showco").call("test")
+    except (ConnectionError, OSError, TimeoutError, ValueError) as error:
+        return models.ActionResult(ok=False, message=f"lyte test failed: {error}")
+    if isinstance(result, dict) and result.get("state") == "queued":
+        return models.ActionResult(ok=True, message="lyte light test queued")
+    return models.ActionResult(ok=False, message="lyte did not queue light test")
 
 
 def refresh_service_definition(

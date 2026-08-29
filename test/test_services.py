@@ -126,6 +126,28 @@ class ServicesTests(unittest.TestCase):
         self.assertEqual(result.message, "twitcho restart requested")
         registry.controller.assert_called_once_with("twitcho")
 
+    def test_lyte_light_test_uses_lyte_control_socket(self) -> None:
+        service_paths = ServicePaths(
+            metadata=Path("/tmp/lyte/daemon.json"),
+            service=Path("/tmp/lyte/lyte.service"),
+            status=Path("/tmp/lyte/status.json"),
+            log=Path("/tmp/lyte/lyte.log"),
+            control_endpoint=Path("/tmp/lyte/gui.sock"),
+        )
+        client = mock.Mock()
+        client.call.return_value = {"state": "queued"}
+        with (
+            mock.patch(
+                "showco.services.paths.service_paths", return_value=service_paths
+            ),
+            mock.patch("showco.services.rpc.Client", return_value=client),
+        ):
+            result = services.test_lyte_lights()
+
+        self.assertTrue(result.ok)
+        self.assertEqual(result.message, "lyte light test queued")
+        client.call.assert_called_once_with("test")
+
     def test_report_service_status_fails_inactive_service(self) -> None:
         registry = mock.Mock()
         registry.report_status.return_value = 1
