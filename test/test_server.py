@@ -370,6 +370,27 @@ class ServerTests(unittest.TestCase):
         self.assertIn('value="recs-shutdown"', html)
         self.assertIn('<option value="cancel" selected>Cancel</option>', html)
 
+    def test_actions_page_has_lyte_light_test(self) -> None:
+        html = actions_page([])
+
+        self.assertIn('value="lyte-test"', html)
+        self.assertIn(">Test lights</button>", html)
+
+    def test_lyte_light_test_uses_service_control(self) -> None:
+        app = ShowcoApp(
+            rehearsal.RehearsalRecsClient(),
+            rehearsal.RehearsalTwitchoClient(),
+            rehearsal.RehearsalSystemMonitor(),
+            rehearsal.RehearsalMixersMonitor(),
+        )
+        expected = models.ActionResult(ok=True, message="lyte light test queued")
+        with mock.patch(
+            "showco.server.services.test_lyte_lights", return_value=expected
+        ):
+            result = app.run_action({"action": "lyte-test"})
+
+        self.assertEqual(result, expected)
+
     def test_twitch_restart_action_uses_service_restart(self) -> None:
         restart = mock.Mock(
             return_value=models.ActionResult(

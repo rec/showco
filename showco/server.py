@@ -120,6 +120,8 @@ class ShowcoApp:
                 result = models.ActionResult(ok=False, message="twitcho is disabled")
             elif action == "twitcho-restart":
                 result = self.twitcho_restart()
+            elif action == "lyte-test":
+                result = services.test_lyte_lights()
             elif action in TWITCHO_ACTIONS:
                 if self.twitcho is None:
                     result = models.ActionResult(
@@ -467,6 +469,7 @@ def actions_page(
           {button("recs-list-devices", "List Recs devices")}
           {button("recs-capabilities", "Recs capabilities")}
           {shutdown_action()}
+          {button("lyte-test", "Test lights")}
           {_twitcho_actions(title_fields) if twitcho_enabled else ""}
         </section>
         <section>
