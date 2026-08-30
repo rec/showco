@@ -165,6 +165,11 @@ class UpdateTests(unittest.TestCase):
         )
         self.assertEqual(command.count('git reset --hard "$remote/$branch"'), 2)
         self.assertIn(
+            'git config --global url."https://github.com/".insteadOf '
+            '"ssh://git@github.com/"',
+            command,
+        )
+        self.assertIn(
             "uv sync --locked --directory '/srv/show projects/showco'",
             command,
         )

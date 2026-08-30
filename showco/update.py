@@ -795,6 +795,8 @@ def remote_update_command(
         "remote=${upstream%%/*} && branch=${upstream#*/} && "
         'git fetch "$remote" "+refs/heads/$branch:refs/remotes/$remote/$branch" && '
         'git reset --hard "$remote/$branch" || exit 1; done && '
+        'git config --global url."https://github.com/".insteadOf '
+        '"ssh://git@github.com/" && '
         'PATH="$HOME/.local/bin:$PATH" uv sync --locked --directory '
         f"{showco_directory} && "
         f"cd {showco_directory} && "
