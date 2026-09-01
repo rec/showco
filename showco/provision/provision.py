@@ -4,6 +4,7 @@ from __future__ import annotations
 import sys
 import tempfile
 from pathlib import Path
+from string import hexdigits
 from typing import Annotated
 
 import tyro
@@ -150,12 +151,23 @@ def config_errors(provision_config: config.Config) -> list[str]:
         errors.append("- networks.external.wifi.external.name is required")
     if not private.password or private.password == "TODO":
         errors.append("- networks.internal.wifi.private.password is required")
+    elif not valid_wpa_password(private.password):
+        errors.append(
+            "- networks.internal.wifi.private.password must be 8-63 printable "
+            "ASCII characters or 64 hexadecimal digits"
+        )
     daemon_config = lyte_daemon_config_path(
         provision_config, local_checkout_directory()
     )
     if provision_config.lyte.enabled and not daemon_config.is_file():
         errors.append(f"- lyte.daemon_config does not exist: {daemon_config}")
     return errors
+
+
+def valid_wpa_password(password: str) -> bool:
+    if len(password) == 64:
+        return all(c in hexdigits for c in password)
+    return 8 <= len(password) <= 63 and password.isascii() and password.isprintable()
 
 
 def lyte_daemon_config_path(provision_config: config.Config, root: Path) -> Path:

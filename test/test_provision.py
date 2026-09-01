@@ -220,6 +220,19 @@ class ProvisionTests(unittest.TestCase):
 
         provision.validate_config(config)
 
+    def test_config_validation_rejects_invalid_private_wifi_password(self) -> None:
+        config = make_config(
+            values(
+                networks=networks(
+                    internal_wifi={"name": "showbox", "password": "short"},
+                    external_wifi={"name": "Venue"},
+                )
+            )
+        )
+
+        with self.assertRaisesRegex(SystemExit, "must be 8-63"):
+            provision.validate_config(config)
+
     def test_local_checkout_directory_is_parent_of_showco_checkout(self) -> None:
         self.assertEqual(
             provision.local_checkout_directory(),
