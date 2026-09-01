@@ -100,6 +100,23 @@ def require_passwordless_sudo(provision_config: config.Config) -> None:
     ssh.run_ssh(provision_config, PASSWORDLESS_SUDO_COMMAND)
 
 
+def update_private_wifi_password(provision_config: config.Config) -> None:
+    print(f"Waiting for SSH connection to {provision_config.ssh_target}...")
+    ssh.wait_for_ssh(provision_config)
+    require_passwordless_sudo(provision_config)
+    password = config.internal_wifi(provision_config).password
+    command = " && ".join(
+        [
+            "sudo nmcli connection modify showco-private "
+            "802-11-wireless-security.key-mgmt wpa-psk "
+            "802-11-wireless-security.psk " + shlex.quote(password),
+            "sudo nmcli connection up showco-private",
+        ]
+    )
+    print(f"Updating private Wi-Fi password on {provision_config.ssh_target}...")
+    ssh.run_ssh(provision_config, command)
+
+
 def validate_remote_worktrees(provision_config: config.Config) -> None:
     print(f"Checking target repository worktrees on {provision_config.ssh_target}...")
     ssh.run_ssh(

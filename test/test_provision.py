@@ -29,6 +29,7 @@ class ProvisionTests(unittest.TestCase):
                 "True",
                 "--lyte-daemon-config",
                 "patches/test-daemon.toml",
+                "--password",
             ],
         )
 
@@ -37,6 +38,29 @@ class ProvisionTests(unittest.TestCase):
         self.assertEqual(options.recs_repo, "https://github.com/rec/recs.git")
         self.assertTrue(options.lyte_enabled)
         self.assertEqual(options.lyte_daemon_config, Path("patches/test-daemon.toml"))
+        self.assertTrue(options.password)
+
+    def test_password_only_updates_the_private_wifi_password(self) -> None:
+        options = provision.ProvisionOptions(
+            config_path=Path("config.toml"),
+            secrets=Path("secrets.toml"),
+            password=True,
+        )
+
+        with (
+            mock.patch(
+                "showco.provision.provision.config.read_toml",
+                side_effect=[values(), {}],
+            ),
+            mock.patch("showco.provision.provision.validate_config"),
+            mock.patch(
+                "showco.provision.remote.update_private_wifi_password"
+            ) as update_password,
+        ):
+            result = provision.run(options)
+
+        self.assertEqual(result, 0)
+        update_password.assert_called_once()
 
     def test_run_finishes_after_successful_provisioning(self) -> None:
         options = provision.ProvisionOptions(
@@ -424,6 +448,34 @@ class ProvisionTests(unittest.TestCase):
 
         self.assertEqual(
             run_ssh.call_args_list[0].args[1], remote.PASSWORDLESS_SUDO_COMMAND
+        )
+
+    def test_password_update_changes_only_private_wifi_connection(self) -> None:
+        provision_config = make_config(
+            values(
+                networks=networks(
+                    internal_wifi={"name": "showbox", "password": "private password"},
+                    external_wifi={"name": "Venue"},
+                )
+            )
+        )
+        with (
+            mock.patch("showco.provision.ssh.wait_for_ssh") as wait_for_ssh,
+            mock.patch(
+                "showco.provision.remote.require_passwordless_sudo"
+            ) as require_sudo,
+            mock.patch("showco.provision.ssh.run_ssh") as run_ssh,
+        ):
+            remote.update_private_wifi_password(provision_config)
+
+        wait_for_ssh.assert_called_once_with(provision_config)
+        require_sudo.assert_called_once_with(provision_config)
+        run_ssh.assert_called_once_with(
+            provision_config,
+            "sudo nmcli connection modify showco-private "
+            "802-11-wireless-security.key-mgmt wpa-psk "
+            "802-11-wireless-security.psk 'private password' && "
+            "sudo nmcli connection up showco-private",
         )
 
     def test_provision_waits_for_reboot_and_reports_verification(self) -> None:

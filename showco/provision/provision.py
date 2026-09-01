@@ -32,6 +32,12 @@ class ProvisionOptions(BaseModel, frozen=True):
     lyte_repo: str | None = None
     lyte_enabled: bool | None = None
     lyte_daemon_config: Path | None = None
+    password: Annotated[
+        bool,
+        tyro.conf.arg(
+            help="Update only the configured private Wi-Fi password on the target"
+        ),
+    ] = False
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -63,6 +69,10 @@ def run(options: ProvisionOptions) -> int:
         lyte_daemon_config=options.lyte_daemon_config,
     )
     validate_config(provision_config)
+    if options.password:
+        remote.update_private_wifi_password(provision_config)
+        print(f"Updated private Wi-Fi password on {provision_config.ssh_target}.")
+        return 0
     from .. import update
 
     if not update.prepare_local_repositories(
