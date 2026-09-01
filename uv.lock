@@ -659,7 +659,7 @@ wheels = [
 [[package]]
 name = "reccy"
 version = "0.1.0"
-source = { git = "ssh://git@github.com/rec/reccy.git?rev=446a2c4a6f0437463e4a3e6eaa39b4b5597ec106#446a2c4a6f0437463e4a3e6eaa39b4b5597ec106" }
+source = { git = "https://github.com/rec/reccy.git?rev=446a2c4a6f0437463e4a3e6eaa39b4b5597ec106#446a2c4a6f0437463e4a3e6eaa39b4b5597ec106" }
 dependencies = [
     { name = "pydantic" },
     { name = "strenum" },
@@ -670,7 +670,7 @@ dependencies = [
 [[package]]
 name = "recs"
 version = "0.12.5"
-source = { git = "ssh://git@github.com/rec/recs.git?rev=e7d0ffb0b88a422895fb07f6ea43b667b92ccd67#e7d0ffb0b88a422895fb07f6ea43b667b92ccd67" }
+source = { git = "ssh://git@github.com/rec/recs.git?rev=d572e68359a275794abf5add54c80289cf564c3b#d572e68359a275794abf5add54c80289cf564c3b" }
 dependencies = [
     { name = "humanfriendly" },
     { name = "mido" },
@@ -764,8 +764,8 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "pydantic", specifier = ">=2.13.4" },
-    { name = "reccy", git = "ssh://git@github.com/rec/reccy.git?rev=446a2c4a6f0437463e4a3e6eaa39b4b5597ec106" },
-    { name = "recs", git = "ssh://git@github.com/rec/recs.git?rev=e7d0ffb0b88a422895fb07f6ea43b667b92ccd67" },
+    { name = "reccy", git = "https://github.com/rec/reccy.git?rev=446a2c4a6f0437463e4a3e6eaa39b4b5597ec106" },
+    { name = "recs", git = "ssh://git@github.com/rec/recs.git?rev=d572e68359a275794abf5add54c80289cf564c3b" },
     { name = "tqdm", specifier = ">=4.70.0" },
     { name = "typing-extensions", specifier = ">=4.10.0" },
     { name = "tyro", specifier = ">=1.0.15" },
