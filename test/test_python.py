@@ -69,7 +69,10 @@ def target_config() -> config.Config:
         {
             "network": {"host": "bertrand.local", "user": "tom"},
             "paths": {"root": "/srv/show-projects"},
-            "networks": {},
+            "networks": {
+                "internal": {"subnet": "10.0.0.0/24", "wifi": {}},
+                "external": {"wifi": {}},
+            },
             "usb": {},
             "twitch": {},
             "lyte": {},

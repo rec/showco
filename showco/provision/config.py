@@ -4,6 +4,7 @@ import os
 import sys
 import tomllib
 from functools import cached_property
+from ipaddress import IPv4Address, IPv4Network, ip_network
 from pathlib import Path
 
 from pydantic import BaseModel, Field
@@ -19,8 +20,6 @@ class GitRepo(BaseModel, frozen=True):
 
 class Network(BaseModel, frozen=True):
     name: str = ""
-    dhcp_start: str = ""
-    dhcp_end: str = ""
     ip_address: str = ""
     subnet: str = ""
     password: str = ""
@@ -122,6 +121,8 @@ def config_from_values(
     )
     paths = table_value(values, "paths")
     git = table_value(values, "git")
+    network_values = table_value(values, "networks")
+    mixers = mixer_specs(values.get("mixers", []), internal_subnet(network_values))
     result = Config(
         network=network_config,
         paths=Paths(
@@ -131,8 +132,8 @@ def config_from_values(
                 default=Path("/home") / network_config.user / "code",
             )
         ),
-        networks=networks_value(table_value(values, "networks")),
-        mixers=mixer_specs(values.get("mixers", [])),
+        networks=networks_value(network_values, mixers),
+        mixers=mixers,
         twitch=twitch_value(table_value(values, "twitch")),
         lyte=lyte_value(
             table_value(values, "lyte"),
@@ -158,60 +159,128 @@ def config_from_values(
             values, "accept_changed_host_key", default=True
         ),
     )
-    validate_x18_mixer_hosts(result)
     return result
 
 
-def mixer_specs(value: object) -> list[MixerSpec]:
+def mixer_specs(value: object, subnet: str) -> list[MixerSpec]:
     if not isinstance(value, list):
         sys.exit("ERROR: mixers must be an array of tables")
+    resolved = []
+    for index, mixer in enumerate(value):
+        if not is_toml_table(mixer):
+            resolved.append(mixer)
+            continue
+        ip_address = mixer.get("ip_address")
+        port = mixer.get("port")
+        if (ip_address is None) != (port is None):
+            sys.exit(
+                f"ERROR: mixers[{index}].ip_address and mixers[{index}].port "
+                "must be provided together"
+            )
+        resolved_mixer = dict(mixer)
+        if ip_address is not None:
+            host = address_at_offset(
+                subnet,
+                ip_address_value(ip_address, f"mixers[{index}].ip_address"),
+                f"mixers[{index}].ip_address",
+            )
+            resolved_mixer["ip_address"] = host
+            for name in ("probe", "osc"):
+                endpoint = resolved_mixer.get(name)
+                if is_toml_table(endpoint):
+                    resolved_mixer[name] = {
+                        **endpoint,
+                        "host": host,
+                        "port": port,
+                    }
+        resolved.append(resolved_mixer)
     try:
-        return MixerSpecs.model_validate({"mixers": value}).mixers
+        return MixerSpecs.model_validate({"mixers": resolved}).mixers
     except ValueError as error:
         sys.exit(f"ERROR: invalid mixers: {error}")
 
 
-def validate_x18_mixer_hosts(config: Config) -> None:
-    network = x18(config)
-    mixer = next((mixer for mixer in config.mixers if mixer.name == "X18"), None)
-    if network is None or mixer is None:
-        return
-    for endpoint in (mixer.probe, mixer.osc):
-        if endpoint is not None and endpoint.host != network.ip_address:
-            sys.exit(
-                "ERROR: X18 mixer endpoint host must match "
-                "networks.internal.wired.x18.ip_address"
-            )
-
-
 def networks_value(
-    values: dict[str, object],
+    values: dict[str, object], mixers: list[MixerSpec]
 ) -> dict[str, dict[str, dict[str, Network]]]:
+    internal = table_value(values, "internal")
+    external = table_value(values, "external")
+    subnet = internal_subnet(values)
+    x18_mixer = next((mixer for mixer in mixers if mixer.name == "X18"), None)
+    wired = {}
+    if x18_mixer is not None and x18_mixer.ip_address:
+        wired["x18"] = Network(
+            name="x18",
+            ip_address=x18_mixer.ip_address,
+            subnet=subnet,
+        )
     return {
-        k: network_kind_dict(table_value(values, k), f"networks.{k}") for k in values
+        "internal": {
+            "wired": wired,
+            "wifi": {
+                "private": network_value(
+                    table_value(internal, "wifi"),
+                    "networks.internal.wifi",
+                    subnet,
+                )
+            },
+        },
+        "external": {
+            "wifi": {
+                "external": network_value(
+                    table_value(external, "wifi"),
+                    "networks.external.wifi",
+                    "",
+                )
+            }
+        },
     }
 
 
-def network_kind_dict(
-    values: dict[str, object], name: str
-) -> dict[str, dict[str, Network]]:
-    return {k: network_dict(table_value(values, k), f"{name}.{k}") for k in values}
+def network_value(values: dict[str, object], name: str, subnet: str) -> Network:
+    ip_address = values.get("ip_address")
+    return Network(
+        name=string_value(values, "name"),
+        ip_address=(
+            address_at_offset(
+                subnet,
+                ip_address_value(ip_address, f"{name}.ip_address"),
+                f"{name}.ip_address",
+            )
+            if ip_address is not None
+            else ""
+        ),
+        password=string_value(values, "password"),
+    )
 
 
-def network_dict(values: dict[str, object], name: str) -> dict[str, Network]:
-    networks = {}
-    for k, v in values.items():
-        if not is_toml_table(v):
-            sys.exit(f"ERROR: {name}.{k} must be a table")
-        networks[k] = Network(
-            name=string_value(v, "name"),
-            dhcp_start=string_value(v, "dhcp_start"),
-            dhcp_end=string_value(v, "dhcp_end"),
-            ip_address=string_value(v, "ip_address"),
-            subnet=string_value(v, "subnet"),
-            password=string_value(v, "password"),
-        )
-    return networks
+def internal_subnet(values: dict[str, object]) -> str:
+    return require_value(
+        "networks.internal.subnet",
+        string_value(table_value(values, "internal"), "subnet"),
+    )
+
+
+def ip_address_value(value: object, name: str) -> int:
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    sys.exit(f"ERROR: {name} must be an integer")
+
+
+def address_at_offset(subnet: str, offset: int, name: str) -> str:
+    try:
+        network = ip_network(subnet, strict=False)
+    except ValueError:
+        sys.exit("ERROR: networks.internal.subnet must be a valid IPv4 subnet")
+    if not isinstance(network, IPv4Network):
+        sys.exit("ERROR: networks.internal.subnet must be an IPv4 subnet")
+    address = IPv4Address(int(network.network_address) + offset)
+    if address not in network or address in (
+        network.network_address,
+        network.broadcast_address,
+    ):
+        sys.exit(f"ERROR: {name} must identify a usable address in {network}")
+    return str(address)
 
 
 def first_network(

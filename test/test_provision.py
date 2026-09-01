@@ -135,8 +135,11 @@ class ProvisionTests(unittest.TestCase):
 
         self.assertEqual(
             config.networks["internal"]["wired"]["x18"].ip_address,
-            "10.43.0.18",
+            "10.0.0.18",
         )
+        x18 = next(mixer for mixer in config.mixers if mixer.name == "X18")
+        self.assertEqual(x18.probe.host if x18.probe else "", "10.0.0.18")
+        self.assertEqual(x18.osc.port if x18.osc else 0, 10024)
 
     def test_duplicate_mixer_names_are_rejected(self) -> None:
         with self.assertRaisesRegex(SystemExit, "mixer names must be unique"):
@@ -149,21 +152,20 @@ class ProvisionTests(unittest.TestCase):
                 )
             )
 
-    def test_x18_mixer_host_must_match_wired_network(self) -> None:
-        with self.assertRaisesRegex(SystemExit, "must match"):
+    def test_mixer_ip_address_and_port_must_be_provided_together(self) -> None:
+        with self.assertRaisesRegex(SystemExit, "must be provided together"):
             make_config(
                 values(
                     mixers=[
                         {
                             "name": "X18",
-                            "probe": {
-                                "host": "10.43.0.19",
-                                "port": 10024,
-                            },
+                            "ip_address": 18,
                         }
                     ]
                 )
             )
+        with self.assertRaisesRegex(SystemExit, "must be provided together"):
+            make_config(values(mixers=[{"name": "X18", "port": 10024}]))
 
     def test_mixer_endpoint_requires_a_host(self) -> None:
         with self.assertRaisesRegex(SystemExit, "must not be empty"):
@@ -1002,7 +1004,7 @@ class ProvisionTests(unittest.TestCase):
             commands,
         )
         self.assertIn(
-            "ip -4 -o address show dev br-x18 | grep -F 10.43.0.1/24",
+            "ip -4 -o address show dev br-x18 | grep -F 10.0.0.1/24",
             commands,
         )
         self.assertIn(
@@ -1097,10 +1099,10 @@ def values(**overrides: object) -> dict[str, object]:
             {
                 "name": "X18",
                 "audio_device_names": ["X18", "XR18"],
-                "probe": {"host": "10.43.0.18", "port": 10024, "protocol": "udp"},
+                "port": 10024,
+                "ip_address": 18,
+                "probe": {"protocol": "udp"},
                 "osc": {
-                    "host": "10.43.0.18",
-                    "port": 10024,
                     "subscription_path": "/xremote",
                     "resubscribe_period": 10,
                 },
@@ -1126,6 +1128,9 @@ def values(**overrides: object) -> dict[str, object]:
             result[k] = config.merge_values(result[k], v)
         else:
             result[k] = v
+    internal = result["networks"]["internal"]
+    if not internal.pop("_x18", True):
+        result["mixers"] = result["mixers"][1:]
     return result
 
 
@@ -1135,22 +1140,17 @@ def networks(
     internal_wifi: dict[str, object] | None = None,
     external_wifi: dict[str, object] | None = None,
 ) -> dict[str, object]:
-    wired_networks: dict[str, object] = {}
-    if x18:
-        wired_networks = {
-            "x18": {
-                "name": "x18",
-                "ip_address": "10.43.0.18",
-                "subnet": "10.43.0.0/24",
-            }
-        }
     return {
         "internal": {
-            "wired": wired_networks,
-            "wifi": {"private": internal_wifi or {"name": "showbox"}},
+            "_x18": x18,
+            "subnet": "10.0.0.0/24",
+            "wifi": {
+                **{"name": "showbox", "ip_address": 1},
+                **(internal_wifi or {}),
+            },
         },
         "external": {
-            "wifi": {"external": external_wifi or {}},
+            "wifi": external_wifi or {},
         },
     }
 
