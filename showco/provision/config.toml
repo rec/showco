@@ -1,36 +1,32 @@
 [network]
 host = "bertrand.local"
-web_port = 17352
+web_port = 10000
 swap_wifi = false
 topology = ""
 
 [paths]
 root = "/home/tom/code"
 
-[networks.internal.wired.x18]
-name = "x18"
-ip_address = "10.43.0.18"
-subnet = "10.43.0.0/24"
+[networks.internal]
+subnet = "10.0.0.0/24"
 
-[networks.internal.wifi.private]
+[networks.internal.wifi]
 name = "showbox"
-ip_address = "10.43.0.1"
+ip_address = 1
 
-[networks.external.wifi.external]
+[networks.external.wifi]
 name = "Livebox-F13E"
 
 [[mixers]]
 name = "X18"
 audio_device_names = ["X18", "XR18"]
+port = 10024
+ip_address = 18
 
 [mixers.probe]
-host = "10.43.0.18"
-port = 10024
 protocol = "udp"
 
 [mixers.osc]
-host = "10.43.0.18"
-port = 10024
 subscription_path = "/xremote"
 resubscribe_period = 10
 
