@@ -159,7 +159,10 @@ class NetworkConfigTests(unittest.TestCase):
 
     def test_x18_bridge_includes_ethernet_and_wifi_ports(self) -> None:
         commands = network_config.network_commands(
-            make_network_config(topology=network_config.NetworkTopology.PRIVATE),
+            make_network_config(
+                topology=network_config.NetworkTopology.PRIVATE,
+                private_wifi_password="private password",
+            ),
             network_config.assign_wifi(
                 [
                     network_config.WifiInterface(name="wlan0"),
@@ -174,6 +177,14 @@ class NetworkConfigTests(unittest.TestCase):
         script = commands[0][2]
         self.assertIn("trap rollback ERR", script)
         self.assertIn("showco-private-rollback", script)
+        self.assertIn(
+            "802-11-wireless-security.key-mgmt wpa-psk "
+            "802-11-wireless-security.proto rsn "
+            "802-11-wireless-security.pairwise ccmp "
+            "802-11-wireless-security.group ccmp "
+            "802-11-wireless-security.pmf disable",
+            script,
+        )
         self.assertLess(
             script.index("\nsudo nmcli connection up showco-private\n"),
             script.index("sudo nmcli connection delete showco-x18"),
@@ -185,6 +196,7 @@ class NetworkConfigTests(unittest.TestCase):
                 x18=False,
                 external_wifi_name="Livebox-F13E",
                 topology=network_config.NetworkTopology.MIXED,
+                private_wifi_password="private password",
             ),
             network_config.assign_wifi(
                 [
@@ -211,6 +223,32 @@ class NetworkConfigTests(unittest.TestCase):
                     "showco-private",
                     "ssid",
                     "showbox",
+                    "password",
+                    "private password",
+                ],
+                [
+                    "sudo",
+                    "nmcli",
+                    "connection",
+                    "modify",
+                    "showco-private",
+                    "802-11-wireless-security.key-mgmt",
+                    "wpa-psk",
+                    "802-11-wireless-security.proto",
+                    "rsn",
+                    "802-11-wireless-security.pairwise",
+                    "ccmp",
+                    "802-11-wireless-security.group",
+                    "ccmp",
+                    "802-11-wireless-security.pmf",
+                    "disable",
+                ],
+                [
+                    "sudo",
+                    "nmcli",
+                    "connection",
+                    "up",
+                    "showco-private",
                 ],
                 [
                     "sudo",
@@ -334,6 +372,7 @@ class NetworkConfigTests(unittest.TestCase):
             make_network_config(
                 x18=False,
                 topology=network_config.NetworkTopology.PRIVATE,
+                private_wifi_password="private password",
             ),
             network_config.assign_wifi(
                 [network_config.WifiInterface(name="wlan0")], swap_wifi=False
@@ -355,6 +394,28 @@ class NetworkConfigTests(unittest.TestCase):
                 "showco-private",
                 "ssid",
                 "showbox",
+                "password",
+                "private password",
+            ],
+        )
+        self.assertEqual(
+            commands[1],
+            [
+                "sudo",
+                "nmcli",
+                "connection",
+                "modify",
+                "showco-private",
+                "802-11-wireless-security.key-mgmt",
+                "wpa-psk",
+                "802-11-wireless-security.proto",
+                "rsn",
+                "802-11-wireless-security.pairwise",
+                "ccmp",
+                "802-11-wireless-security.group",
+                "ccmp",
+                "802-11-wireless-security.pmf",
+                "disable",
             ],
         )
 

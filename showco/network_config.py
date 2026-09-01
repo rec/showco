@@ -204,17 +204,27 @@ def network_commands(
     if x18_network is not None:
         commands.append(x18_bridge_command(provision_config, assignment.primary))
         return commands
-    commands.extend(
-        [
-            private_wifi_command(provision_config, assignment.primary),
-            nmcli_command(
-                "connection",
-                "modify",
-                PRIVATE_WIFI_CONNECTION,
-                "connection.autoconnect",
-                "yes",
-            ),
-        ]
+    commands = [private_wifi_command(provision_config, assignment.primary)]
+    if config.internal_wifi(provision_config).password:
+        commands.extend(
+            [
+                nmcli_command(
+                    "connection",
+                    "modify",
+                    PRIVATE_WIFI_CONNECTION,
+                    *private_wifi_security_arguments(),
+                ),
+                nmcli_command("connection", "up", PRIVATE_WIFI_CONNECTION),
+            ]
+        )
+    commands.append(
+        nmcli_command(
+            "connection",
+            "modify",
+            PRIVATE_WIFI_CONNECTION,
+            "connection.autoconnect",
+            "yes",
+        )
     )
     return commands
 
@@ -235,6 +245,21 @@ def private_wifi_command(
     if network.password:
         command.extend(["password", network.password])
     return command
+
+
+def private_wifi_security_arguments() -> list[str]:
+    return [
+        "802-11-wireless-security.key-mgmt",
+        "wpa-psk",
+        "802-11-wireless-security.proto",
+        "rsn",
+        "802-11-wireless-security.pairwise",
+        "ccmp",
+        "802-11-wireless-security.group",
+        "ccmp",
+        "802-11-wireless-security.pmf",
+        "disable",
+    ]
 
 
 def nmcli_command(*arguments: str) -> list[str]:
@@ -325,7 +350,7 @@ def x18_bridge_command(
     if network.password:
         script.append(
             "sudo nmcli connection modify "
-            f"{wifi_connection} 802-11-wireless-security.key-mgmt wpa-psk "
+            f"{wifi_connection} {' '.join(private_wifi_security_arguments())} "
             f"802-11-wireless-security.psk {shlex_quote(network.password)}"
         )
     script.extend(
