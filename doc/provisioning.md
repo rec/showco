@@ -28,36 +28,38 @@ The script reads defaults from:
 ```toml
 [network]
 host = "recs-stage.local"
-web_port = 17352
+web_port = 10000
 swap_wifi = false
 topology = ""
 
-[networks.internal.wired.x18]
-name = "x18"
-ip_address = "10.43.0.18"
-subnet = "10.43.0.0/24"
+[networks.internal]
+subnet = "10.0.0.0/24"
 
-[networks.internal.wifi.private]
+[networks.internal.wifi]
 name = "showbox"
-ip_address = "10.42.0.1"
-dhcp_start = "10.42.0.50"
-dhcp_end = "10.42.0.200"
+ip_address = 1
 
-[networks.external.wifi.external]
+[networks.external.wifi]
 name = "Venue WiFi"
+
+[[mixers]]
+name = "X18"
+ip_address = 18
+port = 10024
+
+[mixers.probe]
+protocol = "udp"
+
+[mixers.osc]
+subscription_path = "/xremote"
+resubscribe_period = 10
 
 [twitch]
 enabled = false
-
-[git.recs]
-url = "https://github.com/rec/recs.git"
-
-[git.twitcho]
-url = "https://github.com/rec/twitcho.git"
-
-[git.showco]
-url = "https://github.com/rec/showco.git"
 ```
+
+Each repository defaults to `https://github.com/rec/NAME.git`; add a
+`[git.NAME]` table only to override that location or refname.
 
 If `network.user` is omitted, the provisioning script uses the local `USER`
 environment variable. It is an error if neither is set. The SSH port defaults to
@@ -72,10 +74,10 @@ uses key-based SSH only.
 Wi-Fi passwords belong in `showco/provision/secrets.toml`:
 
 ```toml
-[networks.internal.wifi.private]
+[networks.internal.wifi]
 password = "..."
 
-[networks.external.wifi.external]
+[networks.external.wifi]
 password = "..."
 ```
 
@@ -93,10 +95,11 @@ first Wi-Fi interface is primary and an optional second Wi-Fi interface is
 secondary. Set `network.swap_wifi = true` to make the second interface primary
 when one is present.
 
-When `[networks.internal.wired.x18]` is present, the network tool also
-configures the Pi Ethernet jack as the X18 control link. It uses the first
-usable address in `networks.internal.wired.x18.subnet` for the Pi and expects
-the X18 at `networks.internal.wired.x18.ip_address`.
+`networks.internal.subnet` defines the show network. `ip_address` values for
+the private Wi-Fi and mixers are host-number offsets within that subnet. A
+mixer is networked only when it defines both `ip_address` and `port`; defining
+only one is an error. A networked mixer named `X18` makes the network tool
+configure the Pi Ethernet jack as the X18 control link.
 
 `network.topology` may be empty, `public`, `private`, or `mixed`:
 

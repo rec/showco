@@ -426,15 +426,13 @@ class NetworkConfigTests(unittest.TestCase):
         )
 
     def test_x18_bridge_address_uses_private_wifi_address(self) -> None:
-        config = make_network_config(private_wifi_ip_address="10.43.0.1")
+        config = make_network_config(private_wifi_ip_address=1)
 
         self.assertEqual(network_config.x18_bridge_address(config), "10.43.0.1/24")
 
-    def test_x18_bridge_address_rejects_other_subnet(self) -> None:
-        config = make_network_config(private_wifi_ip_address="10.42.0.1")
-
-        with self.assertRaisesRegex(SystemExit, "must be within"):
-            network_config.x18_bridge_address(config)
+    def test_private_wifi_address_rejects_network_address(self) -> None:
+        with self.assertRaisesRegex(SystemExit, "usable address"):
+            make_network_config(private_wifi_ip_address=0)
 
     def test_config_reads_enabled_from_twitch_table(self) -> None:
         config = config_from_values(
@@ -442,7 +440,8 @@ class NetworkConfigTests(unittest.TestCase):
                 "network": {"host": "recs-stage.local", "user": "tom"},
                 "networks": {
                     "internal": {
-                        "wifi": {"private": {"name": "showbox"}},
+                        "subnet": "10.0.0.0/24",
+                        "wifi": {"name": "showbox", "ip_address": 1},
                     },
                 },
                 "twitch": {"enabled": True},
@@ -466,15 +465,22 @@ def make_network_config(
     topology: network_config.NetworkTopology | None = None,
     twitch_enabled: bool = False,
     private_wifi_name: str = "showbox",
-    private_wifi_ip_address: str = "",
+    private_wifi_ip_address: int = 1,
     private_wifi_password: str = "",
     external_wifi_name: str = "",
     external_wifi_password: str = "",
     x18_subnet: str = "10.43.0.0/24",
 ) -> Config:
-    wired: dict[str, object] = {}
+    mixers: list[dict[str, object]] = []
     if x18:
-        wired["x18"] = {"name": "x18", "subnet": x18_subnet}
+        mixers.append(
+            {
+                "name": "X18",
+                "ip_address": 18,
+                "port": 10024,
+                "probe": {"protocol": "udp"},
+            }
+        )
     return config_from_values(
         {
             "network": {
@@ -485,24 +491,21 @@ def make_network_config(
             },
             "networks": {
                 "internal": {
-                    "wired": wired,
+                    "subnet": x18_subnet,
                     "wifi": {
-                        "private": {
-                            "name": private_wifi_name,
-                            "ip_address": private_wifi_ip_address,
-                            "password": private_wifi_password,
-                        },
+                        "name": private_wifi_name,
+                        "ip_address": private_wifi_ip_address,
+                        "password": private_wifi_password,
                     },
                 },
                 "external": {
                     "wifi": {
-                        "external": {
-                            "name": external_wifi_name,
-                            "password": external_wifi_password,
-                        },
+                        "name": external_wifi_name,
+                        "password": external_wifi_password,
                     },
                 },
             },
+            "mixers": mixers,
             "twitch": {"enabled": twitch_enabled},
             "git": {
                 "reccy": {"url": "https://github.com/rec/reccy.git"},

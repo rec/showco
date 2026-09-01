@@ -76,6 +76,8 @@ class MixerOscSpec(BaseModel):
 
 
 class MixerSpec(AudioMidiDeviceSpec, frozen=True):
+    ip_address: str = ""
+    port: int | None = None
     probe: MixerProbeSpec | None = None
     osc: MixerOscSpec | None = None
 
