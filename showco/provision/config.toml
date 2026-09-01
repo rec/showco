@@ -15,8 +15,6 @@ subnet = "10.43.0.0/24"
 [networks.internal.wifi.private]
 name = "showbox"
 ip_address = "10.43.0.1"
-dhcp_start = "10.43.0.50"
-dhcp_end = "10.43.0.200"
 
 [networks.external.wifi.external]
 name = "Livebox-F13E"
@@ -73,18 +71,3 @@ state = "SaqhIYFnE124j25yv7OJm8FQ9yLIceEh"
 [lyte]
 enabled = false
 daemon_config = "patches/wearable-daemon.toml"
-
-[git.reccy]
-url = "https://github.com/rec/reccy.git"
-
-[git.recs]
-url = "https://github.com/rec/recs.git"
-
-[git.twitcho]
-url = "https://github.com/rec/twitcho.git"
-
-[git.lyte]
-url = "https://github.com/rec/lyte.git"
-
-[git.showco]
-url = "https://github.com/rec/showco.git"

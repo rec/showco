@@ -112,6 +112,18 @@ class ProvisionTests(unittest.TestCase):
             parsed.lyte.daemon_config, Path("patches/wearable-daemon.toml")
         )
 
+    def test_git_repositories_default_to_github(self) -> None:
+        configuration = values()
+        del configuration["git"]
+
+        parsed = make_config(configuration)
+
+        self.assertEqual(parsed.git.reccy.url, "https://github.com/rec/reccy.git")
+        self.assertEqual(parsed.git.recs.url, "https://github.com/rec/recs.git")
+        self.assertEqual(parsed.git.twitcho.url, "https://github.com/rec/twitcho.git")
+        self.assertEqual(parsed.git.showco.url, "https://github.com/rec/showco.git")
+        self.assertEqual(parsed.git.lyte.url, "https://github.com/rec/lyte.git")
+
     def test_lyte_daemon_config_must_be_within_lyte_checkout(self) -> None:
         with self.assertRaisesRegex(SystemExit, "must be relative"):
             make_config(values(lyte={"daemon_config": "/etc/lyte.toml"}))

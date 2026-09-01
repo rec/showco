@@ -331,7 +331,11 @@ def merge_values(
 
 
 def git_repo(name: str, values: dict[str, object], *, override: str | None) -> GitRepo:
-    url = override or string_value(values, "url")
+    url = override or string_value(
+        values,
+        "url",
+        default=f"https://github.com/rec/{name}.git",
+    )
     return GitRepo(
         url=require_value(f"git.{name}.url", url),
         refname=string_value(values, "refname"),
