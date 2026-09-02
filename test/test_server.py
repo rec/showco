@@ -93,6 +93,8 @@ class ServerTests(unittest.TestCase):
 
         self.assertIn('id="channels"', html)
         self.assertIn('new EventSource("/waveforms")', html)
+        self.assertIn("<script>  function serviceDetail(service)", html)
+        self.assertIn("  const WAVEFORM_SECONDS = 8", html)
         self.assertIn(
             ".levels {\n  grid-template-columns: repeat(3, minmax(0, 1fr));", html
         )

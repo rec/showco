@@ -495,6 +495,7 @@ def _twitcho_actions(title_fields: list[str]) -> str:
 
 
 def page(title: str, body: str, *, script: str = "") -> str:
+    page_script = f"<script>{script}</script>" if script else ""
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -516,7 +517,7 @@ def page(title: str, body: str, *, script: str = "") -> str:
   </header>
   <main>{body}</main>
   <script>{site_file("shutdown-action.js")}</script>
-  {script}
+  {page_script}
 </body>
 </html>"""
 
