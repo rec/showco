@@ -65,5 +65,5 @@ config_dir = "$HOME/.config/twitcho"
 state = "SaqhIYFnE124j25yv7OJm8FQ9yLIceEh"
 
 [lyte]
-enabled = false
+enabled = true
 daemon_config = "patches/wearable-daemon.toml"
