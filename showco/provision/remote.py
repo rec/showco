@@ -1,15 +1,19 @@
 from __future__ import annotations
 
 import shlex
+import string
 import sys
 from pathlib import Path
-from subprocess import CalledProcessError
+from subprocess import CalledProcessError, TimeoutExpired
+
+from reccy import subprocess
 
 from .. import network_config, repositories
 from . import config, script, ssh, verify
 
 SSH_CLEANUP_TIMEOUT_SECONDS = 15
 REMOTE_PROVISION_TIMEOUT_SECONDS = 1_800
+PROVISIONING_FINGERPRINT_NAME = "provisioning-fingerprint"
 WIFI_STATUS_COMMAND = "nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device status"
 PASSWORDLESS_SUDO_COMMAND = (
     "sudo -n true || { "
@@ -25,6 +29,7 @@ def provision_remote(
     remote_script: str,
     *,
     system: bool = False,
+    fingerprint: str | None = None,
 ) -> None:
     uploaded = False
     if provision_config.accept_changed_host_key:
@@ -63,6 +68,8 @@ def provision_remote(
         verify.report_verification_results(
             verify.wait_for_provisioning_ready(provision_config, topology)
         )
+        if fingerprint is not None:
+            record_applied_provisioning_fingerprint(provision_config, fingerprint)
     finally:
         if uploaded:
             try:
@@ -102,21 +109,53 @@ def require_passwordless_sudo(provision_config: config.Config) -> None:
     ssh.run_ssh(provision_config, PASSWORDLESS_SUDO_COMMAND)
 
 
-def update_private_wifi_password(provision_config: config.Config) -> None:
-    print(f"Waiting for SSH connection to {provision_config.ssh_target}...")
-    ssh.wait_for_ssh(provision_config)
-    require_passwordless_sudo(provision_config)
-    password = config.internal_wifi(provision_config).password
+def applied_provisioning_fingerprint(provision_config: config.Config) -> str | None:
+    try:
+        path = provisioning_fingerprint_path(provision_config)
+        completed = subprocess.run(
+            ssh.ssh_command(
+                provision_config,
+                provision_config.ssh_target,
+                f"cat {shlex.quote(str(path))}",
+            ),
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=ssh.SSH_VERIFICATION_TIMEOUT_SECONDS,
+        )
+    except TimeoutExpired:
+        return None
+    fingerprint = completed.stdout.strip()
+    if completed.returncode != 0 or len(fingerprint) != 64:
+        return None
+    if not all(character in string.hexdigits for character in fingerprint):
+        return None
+    return fingerprint
+
+
+def record_applied_provisioning_fingerprint(
+    provision_config: config.Config, fingerprint: str
+) -> None:
+    path = provisioning_fingerprint_path(provision_config)
+    temporary = path.with_name(f".{path.name}.XXXXXX")
     command = " && ".join(
         [
-            "sudo nmcli connection modify showco-private "
-            "802-11-wireless-security.key-mgmt wpa-psk "
-            "802-11-wireless-security.psk " + shlex.quote(password),
-            "sudo nmcli connection up showco-private",
+            f"mkdir -p {shlex.quote(str(path.parent))}",
+            f"temporary=$(mktemp {shlex.quote(str(temporary))})",
+            f"printf '%s\\n' {shlex.quote(fingerprint)} > \"$temporary\"",
+            f'mv "$temporary" {shlex.quote(str(path))}',
         ]
     )
-    print(f"Updating private Wi-Fi password on {provision_config.ssh_target}...")
     ssh.run_ssh(provision_config, command)
+
+
+def provisioning_fingerprint_path(provision_config: config.Config) -> Path:
+    return (
+        Path("/home")
+        / provision_config.network.user
+        / ".local/state/showco"
+        / (PROVISIONING_FINGERPRINT_NAME)
+    )
 
 
 def validate_remote_worktrees(provision_config: config.Config) -> None:

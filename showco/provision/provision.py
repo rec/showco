@@ -11,7 +11,7 @@ import tyro
 from pydantic import BaseModel
 
 from .. import machine_role
-from . import config, remote, script
+from . import config, remote, script, state
 
 PROVISION_DIR = Path(__file__).resolve().parent
 
@@ -36,12 +36,6 @@ class ProvisionOptions(BaseModel, frozen=True):
         bool,
         tyro.conf.arg(help="Refresh operating-system packages before provisioning"),
     ] = False
-    password: Annotated[
-        bool,
-        tyro.conf.arg(
-            help="Update only the configured private Wi-Fi password on the target"
-        ),
-    ] = False
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -54,7 +48,7 @@ def main(argv: list[str] | None = None) -> int:
     return run(options)
 
 
-def run(options: ProvisionOptions) -> int:
+def resolved_config(options: ProvisionOptions) -> config.Config:
     env = config.merge_values(
         config.read_toml(options.config_path), config.read_toml(options.secrets)
     )
@@ -73,10 +67,13 @@ def run(options: ProvisionOptions) -> int:
         lyte_daemon_config=options.lyte_daemon_config,
     )
     validate_config(provision_config)
-    if options.password:
-        remote.update_private_wifi_password(provision_config)
-        print(f"Updated private Wi-Fi password on {provision_config.ssh_target}.")
-        return 0
+    return provision_config
+
+
+def run(
+    options: ProvisionOptions, *, provision_config: config.Config | None = None
+) -> int:
+    provision_config = provision_config or resolved_config(options)
     from .. import update
 
     if not update.prepare_local_repositories(
@@ -100,7 +97,13 @@ def run(options: ProvisionOptions) -> int:
         fp.write(script.REMOTE_SCRIPT)
     try:
         remote.provision_remote(
-            provision_config, local_script, remote_script, system=options.system
+            provision_config,
+            local_script,
+            remote_script,
+            system=options.system,
+            fingerprint=state.provisioning_fingerprint(
+                provision_config, script.REMOTE_SCRIPT
+            ),
         )
     finally:
         local_script.unlink(missing_ok=True)

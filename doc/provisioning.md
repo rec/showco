@@ -118,13 +118,20 @@ external network, second Wi-Fi presence, and `twitch.enabled`.
 After confirming SSH works, run:
 
 ```bash
-showco provision
+showco go
 ```
 
-Or override the connection on the command line:
+`showco go` provisions when the target has no applied configuration fingerprint,
+or when the resolved local configuration or provisioning script has changed. When
+the fingerprint matches, it performs `showco update` instead. The target records
+only the fingerprint after a successful provision and verification; it never
+stores configuration or secrets in that marker.
+
+Use `showco provision` to force provisioning, including `--system` for an APT
+refresh. Override the connection on either command line:
 
 ```bash
-showco provision \
+showco go \
   --host bertrand.local \
   --port 22
 ```
@@ -201,8 +208,8 @@ Before relying on script changes:
 python -m py_compile showco/provision/provision.py showco/twitcho/auth.py
 ```
 
-Do not run `showco provision` as a routine verification step. It mutates a
-real Raspberry Pi.
+Do not run `showco provision` or `showco go` as a routine verification step.
+They mutate a real Raspberry Pi when provisioning is needed.
 
 ## Open decisions
 
