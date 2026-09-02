@@ -842,6 +842,12 @@ class ProvisionTests(unittest.TestCase):
         self.assertNotIn('tee "$service_file"', script.REMOTE_SCRIPT)
         self.assertNotIn("ExecStart=$command", script.REMOTE_SCRIPT)
 
+    def test_remote_script_restarts_changed_services(self) -> None:
+        self.assertIn("user_systemctl restart recs.service", script.REMOTE_SCRIPT)
+        self.assertIn("user_systemctl restart showco.service", script.REMOTE_SCRIPT)
+        self.assertIn("user_systemctl restart twitcho.service", script.REMOTE_SCRIPT)
+        self.assertIn("user_systemctl restart lyte.service", script.REMOTE_SCRIPT)
+
     def test_remote_script_reboots_only_when_the_system_requires_it(self) -> None:
         network = script.REMOTE_SCRIPT.index('phase "configuring network"')
         reboot = script.REMOTE_SCRIPT.index('phase "rebooting"')

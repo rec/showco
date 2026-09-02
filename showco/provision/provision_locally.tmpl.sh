@@ -504,6 +504,7 @@ $RECS_OSC_NODES_TOML")
     env XDG_RUNTIME_DIR="/run/user/$uid" \
     PATH="$ROOT/recs/.venv/bin:/home/$SHOW_USER/.local/bin:$PATH" \
     bash -lc "cd '$ROOT/recs' && uv run --locked recs daemon install $quoted_args"
+  user_systemctl restart recs.service
   record_service_state recs "$input"
 }
 
@@ -523,6 +524,7 @@ $SHOWCO_MIXERS_TOML")
     env XDG_RUNTIME_DIR="/run/user/$uid" \
     PATH="$ROOT/showco/.venv/bin:/home/$SHOW_USER/.local/bin:$PATH" \
     bash -lc "mkdir -p /home/$SHOW_USER/.config/showco && printf '%s' \"$SHOWCO_MIXERS_TOML\" > /home/$SHOW_USER/.config/showco/mixers.toml && cd '$ROOT/showco' && uv run --locked showco run install-service --root '$ROOT' $(showco_args)"
+  user_systemctl restart showco.service
   record_service_state showco "$input"
 }
 
@@ -552,6 +554,7 @@ $(sha256sum "$config_path" | awk '{print $1}')")
     env XDG_RUNTIME_DIR="/run/user/$uid" \
     PATH="$ROOT/twitcho/.venv/bin:/home/$SHOW_USER/.local/bin:$PATH" \
     bash -lc "cd '$ROOT/twitcho' && uv run --locked twitcho daemon install --config $quoted_config"
+  user_systemctl restart twitcho.service
   record_service_state twitcho "$input"
 }
 
@@ -581,6 +584,7 @@ $(sha256sum "$config_path" | awk '{print $1}')")
     env XDG_RUNTIME_DIR="/run/user/$uid" \
     PATH="$ROOT/lyte/.venv/bin:/home/$SHOW_USER/.local/bin:$PATH" \
     bash -lc "cd '$ROOT/lyte' && uv run --locked lyte daemon install --config $quoted_config"
+  user_systemctl restart lyte.service
   record_service_state lyte "$input"
 }
 
