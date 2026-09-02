@@ -121,6 +121,11 @@ Showco HTTP revision, and configured hardware conditions.
   target update may reset it to a known commit or upstream state. The local
   development checkout is never reset by this process.
 
+`showco go` compares the resolved local provisioning configuration and generated
+script with the fingerprint recorded by the target after its last successful
+provision. It runs `showco update` when they match and full provisioning when
+they do not.
+
 `showco python` is a developer-machine diagnostic shortcut that executes a
 one-line Python expression in the target Showco checkout and environment.
 
