@@ -912,6 +912,10 @@ def start_or_refresh_service_step(
             return install_lyte_service(
                 root, provision_config.lyte.daemon_config, run_command
             )
+        if service_name == "twitcho":
+            return install_twitcho_service(
+                root, provision_config.network.user, run_command
+            )
     return run_service_step(
         service_name, "refresh" if refresh_definitions else "start", run_command
     )
@@ -956,6 +960,19 @@ def install_recs_service(
         )
     command = f"cd {shlex.quote(str(directory))} && {shlex.join(arguments)}"
     return run_step("recs", "install service", ["sh", "-c", command], run_command)
+
+
+def install_twitcho_service(
+    root: Path, user: str, run_command: RunCommand
+) -> StepResult:
+    directory = root / "twitcho"
+    config_path = Path("/home") / user / ".config/twitcho/config.json"
+    command = (
+        f"cd {shlex.quote(str(directory))} && "
+        "uv run --locked twitcho daemon install "
+        f"--config {shlex.quote(str(config_path))}"
+    )
+    return run_step("twitcho", "install service", ["sh", "-c", command], run_command)
 
 
 def run_step(
