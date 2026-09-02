@@ -483,7 +483,7 @@ class UpdateTests(unittest.TestCase):
             commands.index(["git", "-C", "/code/twitcho", "pull", "--ff-only"]),
         )
         self.assertIn(["systemctl", "--user", "stop", "recs.service"], commands)
-        self.assertEqual(refresh.call_count, 3)
+        self.assertEqual(refresh.call_count, 1)
 
     def test_target_update_knows_reccy_affects_recs_and_showco(self) -> None:
         commands: list[list[str]] = []
@@ -518,7 +518,7 @@ class UpdateTests(unittest.TestCase):
         self.assertIn(["systemctl", "--user", "stop", "recs.service"], commands)
         self.assertIn(["systemctl", "--user", "stop", "showco.service"], commands)
         self.assertIn(["git", "-C", "/code/reccy", "pull", "--ff-only"], commands)
-        self.assertEqual(refresh.call_count, 2)
+        self.assertEqual(refresh.call_count, 1)
 
     def test_target_update_reinstalls_lyte_with_lyte_environment(self) -> None:
         commands: list[list[str]] = []
@@ -562,7 +562,11 @@ class UpdateTests(unittest.TestCase):
             ],
             commands,
         )
-        self.assertEqual(refresh.call_count, 2)
+        self.assertIn(
+            ["sh", "-c", "cd /code/recs && uv run --locked recs daemon install"],
+            commands,
+        )
+        self.assertEqual(refresh.call_count, 1)
 
     def test_target_update_restarts_lyte_service(self) -> None:
         commands: list[list[str]] = []
@@ -1332,6 +1336,7 @@ def make_config(lyte_enabled: bool = False) -> object:
 
     class Config:
         network = Network()
+        mixers = []
 
         class Twitch:
             enabled = False
