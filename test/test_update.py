@@ -379,7 +379,10 @@ class UpdateTests(unittest.TestCase):
             ],
         )
         self.assertEqual(commands[-1][:2], ["sh", "-c"])
-        self.assertIn("http://127.0.0.1:17352/status", commands[-1][2])
+        self.assertIn(
+            f"http://127.0.0.1:{update.provisioning_config().network.web_port}/status",
+            commands[-1][2],
+        )
 
     def test_target_update_resets_to_force_pushed_upstream(self) -> None:
         commands: list[list[str]] = []
@@ -460,7 +463,10 @@ class UpdateTests(unittest.TestCase):
             ],
         )
         self.assertEqual(commands[-2][:2], ["sh", "-c"])
-        self.assertIn("http://127.0.0.1:17352/status", commands[-2][2])
+        self.assertIn(
+            f"http://127.0.0.1:{update.provisioning_config().network.web_port}/status",
+            commands[-2][2],
+        )
         self.assertEqual(
             commands[-1], ["sh", "-c", update.recs.status_changes_command()]
         )
@@ -1232,7 +1238,7 @@ class UpdateTests(unittest.TestCase):
             commands.append(list(command))
             return subprocess.CompletedProcess(command, 0, "", "")
 
-        result = update.showco_revision_step(Path("/code"), run_command)
+        result = update.showco_revision_step(Path("/code"), 17352, run_command)
 
         self.assertTrue(result.ok)
         self.assertEqual(

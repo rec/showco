@@ -223,7 +223,12 @@ def update_target(
     with progress_bar(len(programs), output) as progress:
         if "showco" in selected:
             return update_target_with_showco(
-                programs, run_command, output, progress, refresh_definitions
+                programs,
+                provision_config.network.web_port,
+                run_command,
+                output,
+                progress,
+                refresh_definitions,
             )
         service_names = selected_service_names(programs)
         results = [run_service_step(n, "stop", run_command) for n in service_names]
@@ -239,7 +244,11 @@ def update_target(
             for n in service_names
         )
         if "showco" in service_names:
-            results.append(showco_revision_step(root, run_command))
+            results.append(
+                showco_revision_step(
+                    root, provision_config.network.web_port, run_command
+                )
+            )
         if "recs" in service_names:
             results.append(recs_status_changes_step(run_command))
     report_failures(results, output)
@@ -248,6 +257,7 @@ def update_target(
 
 def update_target_with_showco(
     programs: list[Program],
+    web_port: int,
     run_command: RunCommand,
     output: TextIO,
     progress: tqdm,
@@ -276,7 +286,7 @@ def update_target_with_showco(
             "showco", "refresh" if refresh_definitions else "start", run_command
         )
     )
-    results.append(showco_revision_step(showco.directory.parent, run_command))
+    results.append(showco_revision_step(showco.directory.parent, web_port, run_command))
     if "recs" in selected_service_names(programs):
         results.append(recs_status_changes_step(run_command))
     report_failures(results, output)
@@ -390,8 +400,10 @@ def recs_status_changes_step(run_command: RunCommand) -> StepResult:
     )
 
 
-def showco_revision_step(root: Path, run_command: RunCommand) -> StepResult:
-    command = revision.showco_revision_command(root, retry=True)
+def showco_revision_step(
+    root: Path, web_port: int, run_command: RunCommand
+) -> StepResult:
+    command = revision.showco_revision_command(root, web_port, retry=True)
     return run_step("showco", "web UI revision", ["sh", "-c", command], run_command)
 
 

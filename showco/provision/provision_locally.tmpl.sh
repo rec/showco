@@ -647,6 +647,8 @@ phase() {
 }
 
 main() {
+  sudo rm -f /run/showco-provision-reboot-required
+
   phase "checking user"
   id "$SHOW_USER" >/dev/null
 

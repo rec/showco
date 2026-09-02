@@ -90,7 +90,11 @@ def verify_provisioning(
         verify_remote_command(
             provision_config,
             "showco web UI revision",
-            revision.showco_revision_command(provision_config.paths.root, retry=False),
+            revision.showco_revision_command(
+                provision_config.paths.root,
+                provision_config.network.web_port,
+                retry=False,
+            ),
         ),
         verify_remote_command(
             provision_config,
