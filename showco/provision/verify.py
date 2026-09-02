@@ -67,32 +67,8 @@ def verify_provisioning(
         ),
         verify_remote_command(
             provision_config,
-            "reccy project status is clean",
-            project_status_command("reccy", provision_config.paths.root),
-            expect_empty_stdout=True,
-        ),
-        verify_remote_command(
-            provision_config,
-            "recs project status is clean",
-            project_status_command("recs", provision_config.paths.root),
-            expect_empty_stdout=True,
-        ),
-        verify_remote_command(
-            provision_config,
-            "twitcho project status is clean",
-            project_status_command("twitcho", provision_config.paths.root),
-            expect_empty_stdout=True,
-        ),
-        verify_remote_command(
-            provision_config,
-            "lyte project status is clean",
-            project_status_command("lyte", provision_config.paths.root),
-            expect_empty_stdout=True,
-        ),
-        verify_remote_command(
-            provision_config,
-            "showco project status is clean",
-            project_status_command("showco", provision_config.paths.root),
+            "target project statuses are clean",
+            project_statuses_command(provision_config.paths.root),
             expect_empty_stdout=True,
         ),
         verify_remote_command(
@@ -155,6 +131,17 @@ def wait_for_provisioning_ready(
 
 def project_status_command(project: str, root: Path) -> str:
     return f"git -C {shlex.quote(str(root / project))} status --short"
+
+
+def project_statuses_command(root: Path) -> str:
+    root_value = shlex.quote(str(root))
+    return (
+        "for project in reccy recs twitcho lyte showco; do "
+        f"status=$(git -C {root_value}/$project status --short) || exit $?; "
+        'if [ -n "$status" ]; then '
+        'printf \'%s:\\n%s\\n\' "$project" "$status"; fi; '
+        "done"
+    )
 
 
 def user_systemctl_command(arguments: str) -> str:

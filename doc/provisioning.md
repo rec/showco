@@ -162,12 +162,19 @@ The script:
 - clones or updates `reccy`, `recs`, `twitcho`, `lyte`, and `showco` from public HTTPS URLs
 - runs `uv sync` in each checkout
 - enables lingering for the configured user so user services start at boot
-- installs and starts the `recs` user service
-- installs and starts the `showco` user service
+- installs or refreshes the `recs` user service
+- installs or refreshes the `showco` user service
 - writes `~/PROVISIONING-NEXT-STEPS.txt`
 
-The script is intended to be rerunnable. Existing git checkouts are updated with
-`fetch --all --prune` and `pull --ff-only`.
+The script is intended to be rerunnable. Existing git checkouts fetch their
+tracked upstream branch and reset to it.
+
+On an already provisioned target, it skips unchanged base-package setup, locale
+and journal configuration, the Lyte Python installation, and unchanged active
+service definitions. It prints the duration of every phase. Use
+`showco provision --system` when you specifically want to refresh APT packages;
+ordinary provisioning installs missing packages but does not perform an APT
+upgrade.
 
 ## Secrets
 

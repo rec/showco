@@ -32,6 +32,10 @@ class ProvisionOptions(BaseModel, frozen=True):
     lyte_repo: str | None = None
     lyte_enabled: bool | None = None
     lyte_daemon_config: Path | None = None
+    system: Annotated[
+        bool,
+        tyro.conf.arg(help="Refresh operating-system packages before provisioning"),
+    ] = False
     password: Annotated[
         bool,
         tyro.conf.arg(
@@ -95,7 +99,9 @@ def run(options: ProvisionOptions) -> int:
         local_script = Path(fp.name)
         fp.write(script.REMOTE_SCRIPT)
     try:
-        remote.provision_remote(provision_config, local_script, remote_script)
+        remote.provision_remote(
+            provision_config, local_script, remote_script, system=options.system
+        )
     finally:
         local_script.unlink(missing_ok=True)
     print(f"Provisioned {provision_config.ssh_target}.")

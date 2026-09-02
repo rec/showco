@@ -2,6 +2,42 @@
 set -euo pipefail
 
 NETWORK_CHANGED=false
+PHASE_STARTED_SECONDS=0
+SYSTEM_UPDATE=${SYSTEM_UPDATE:-false}
+
+install_base_packages() {
+  local state_file="/var/lib/showco/system-packages.sha256"
+  local desired_hash
+  local installed_hash=
+  local package
+  local missing=()
+
+  desired_hash=$(printf '%s\n' "$@" | sha256sum | awk '{print $1}')
+  if [[ -f "$state_file" ]]; then
+    installed_hash=$(sudo cat "$state_file")
+  fi
+  for package in "$@"; do
+    if ! dpkg-query -W -f='${db:Status-Status}' "$package" 2>/dev/null \
+      | grep -Fx installed >/dev/null; then
+      missing+=("$package")
+    fi
+  done
+  if [[ "$SYSTEM_UPDATE" != true && "$desired_hash" == "$installed_hash" \
+    && ${#missing[@]} -eq 0 ]]; then
+    printf 'Base packages are already installed.\n'
+    return
+  fi
+
+  sudo apt-get update
+  if [[ "$SYSTEM_UPDATE" == true || -z "$installed_hash" ]]; then
+    sudo apt-get upgrade -y
+  fi
+  if [[ ${#missing[@]} -gt 0 ]]; then
+    sudo apt-get install -y "${missing[@]}"
+  fi
+  sudo install -d -m 0755 /var/lib/showco
+  printf '%s\n' "$desired_hash" | sudo tee "$state_file" >/dev/null
+}
 
 install_uv() {
   if sudo -H -u "$SHOW_USER" env PATH="/home/$SHOW_USER/.local/bin:$PATH" \
@@ -11,7 +47,25 @@ install_uv() {
   curl -LsSf https://astral.sh/uv/install.sh | sudo -H -u "$SHOW_USER" sh
 }
 
+install_lyte_python() {
+  if sudo -H -u "$SHOW_USER" env PATH="/home/$SHOW_USER/.local/bin:$PATH" \
+    bash -lc "uv python find 3.13 >/dev/null 2>&1"; then
+    printf 'Lyte Python is already installed.\n'
+    return
+  fi
+  sudo -H -u "$SHOW_USER" env PATH="/home/$SHOW_USER/.local/bin:$PATH" \
+    bash -lc "uv python install 3.13"
+}
+
 configure_locale() {
+  if locale -a | grep -E -x 'en_US\.utf-?8' >/dev/null \
+    && grep -F -x 'LANG=en_US.UTF-8' /etc/default/locale >/dev/null \
+    && grep -F -x 'LC_CTYPE=en_US.UTF-8' /etc/default/locale >/dev/null; then
+    export LANG=en_US.UTF-8
+    export LC_CTYPE=en_US.UTF-8
+    unset LC_ALL
+    return
+  fi
   sudo sed -i 's/^# *en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen
   sudo locale-gen en_US.UTF-8
   sudo update-locale LANG=en_US.UTF-8 LC_CTYPE=en_US.UTF-8
@@ -21,6 +75,12 @@ configure_locale() {
 }
 
 configure_journal() {
+  if sudo test -f /etc/systemd/journald.conf.d/showco.conf \
+    && sudo grep -F -x '[Journal]' /etc/systemd/journald.conf.d/showco.conf >/dev/null \
+    && sudo grep -F -x 'Storage=persistent' /etc/systemd/journald.conf.d/showco.conf >/dev/null \
+    && sudo test -d /var/log/journal; then
+    return
+  fi
   sudo install -d -m 2755 /etc/systemd/journald.conf.d /var/log/journal
   printf '[Journal]\nStorage=persistent\n' \
     | sudo tee /etc/systemd/journald.conf.d/showco.conf >/dev/null
@@ -391,11 +451,36 @@ user_systemctl() {
     systemctl --user "$@"
 }
 
+service_is_current() {
+  local name=$1
+  local input=$2
+  local state_file="/home/$SHOW_USER/.local/state/showco/$name-service.sha256"
+  local hash
+
+  hash=$(printf '%s' "$input" | sha256sum | awk '{print $1}')
+  [[ -f "$state_file" && "$(cat "$state_file")" == "$hash" ]] \
+    && user_systemctl is-active --quiet "$name.service"
+}
+
+record_service_state() {
+  local name=$1
+  local input=$2
+  local state_file="/home/$SHOW_USER/.local/state/showco/$name-service.sha256"
+
+  printf '%s' "$input" | sha256sum | awk '{print $1}' \
+    | sudo -H -u "$SHOW_USER" tee "$state_file" >/dev/null
+}
+
+service_input() {
+  printf '%s\n%s\n%s\n' "$(sha256sum "$0" | awk '{print $1}')" "$ROOT" "$1"
+}
+
 install_recs_service() {
   local quoted_args=
   local osc_nodes=
   local uid
   local args=()
+  local input
   uid=$(id -u "$SHOW_USER")
   while IFS= read -r device_name; do
     [[ -n "$device_name" ]] && args+=(--include "$device_name")
@@ -412,25 +497,45 @@ install_recs_service() {
   if [[ ${#args[@]} -gt 0 ]]; then
     quoted_args=$(printf '%q ' "${args[@]}")
   fi
+  input=$(service_input "$(git -C "$ROOT/recs" rev-parse HEAD)
+$RECS_AUDIO_DEVICE_NAMES
+$RECS_MIDI_INPUT_NAMES
+$RECS_OSC_NODES_TOML")
+  if service_is_current recs "$input"; then
+    printf 'Recs service is already installed.\n'
+    return
+  fi
   sudo -H -u "$SHOW_USER" \
     env XDG_RUNTIME_DIR="/run/user/$uid" \
     PATH="$ROOT/recs/.venv/bin:/home/$SHOW_USER/.local/bin:$PATH" \
     bash -lc "cd '$ROOT/recs' && uv run --locked recs daemon install $quoted_args"
+  record_service_state recs "$input"
 }
 
 install_showco_service() {
   local uid
+  local input
   uid=$(id -u "$SHOW_USER")
+  input=$(service_input "$(git -C "$ROOT/showco" rev-parse HEAD)
+$SHOWCO_PORT
+$TWITCHO_ENABLED
+$SHOWCO_MIXERS_TOML")
+  if service_is_current showco "$input"; then
+    printf 'Showco service is already installed.\n'
+    return
+  fi
   sudo -H -u "$SHOW_USER" \
     env XDG_RUNTIME_DIR="/run/user/$uid" \
     PATH="$ROOT/showco/.venv/bin:/home/$SHOW_USER/.local/bin:$PATH" \
     bash -lc "mkdir -p /home/$SHOW_USER/.config/showco && printf '%s' \"$SHOWCO_MIXERS_TOML\" > /home/$SHOW_USER/.config/showco/mixers.toml && cd '$ROOT/showco' && uv run --locked showco run install-service --root '$ROOT' $(showco_args)"
+  record_service_state showco "$input"
 }
 
 install_twitcho_service() {
   local config_path
   local quoted_config
   local uid
+  local input
   if [[ "$TWITCHO_ENABLED" != true ]]; then
     printf 'Twitcho service is disabled.\n'
     return
@@ -442,16 +547,24 @@ install_twitcho_service() {
   fi
   quoted_config=$(printf '%q' "$config_path")
   uid=$(id -u "$SHOW_USER")
+  input=$(service_input "$(git -C "$ROOT/twitcho" rev-parse HEAD)
+$(sha256sum "$config_path" | awk '{print $1}')")
+  if service_is_current twitcho "$input"; then
+    printf 'Twitcho service is already installed.\n'
+    return
+  fi
   sudo -H -u "$SHOW_USER" \
     env XDG_RUNTIME_DIR="/run/user/$uid" \
     PATH="$ROOT/twitcho/.venv/bin:/home/$SHOW_USER/.local/bin:$PATH" \
     bash -lc "cd '$ROOT/twitcho' && uv run --locked twitcho daemon install --config $quoted_config"
+  record_service_state twitcho "$input"
 }
 
 install_lyte_service() {
   local config_path
   local quoted_config
   local uid
+  local input
   if [[ "$LYTE_ENABLED" != true ]]; then
     printf 'Lyte MIDI service is disabled.\n'
     return
@@ -463,10 +576,17 @@ install_lyte_service() {
   fi
   quoted_config=$(printf '%q' "$config_path")
   uid=$(id -u "$SHOW_USER")
+  input=$(service_input "$(git -C "$ROOT/lyte" rev-parse HEAD)
+$(sha256sum "$config_path" | awk '{print $1}')")
+  if service_is_current lyte "$input"; then
+    printf 'Lyte MIDI service is already installed.\n'
+    return
+  fi
   sudo -H -u "$SHOW_USER" \
     env XDG_RUNTIME_DIR="/run/user/$uid" \
     PATH="$ROOT/lyte/.venv/bin:/home/$SHOW_USER/.local/bin:$PATH" \
     bash -lc "cd '$ROOT/lyte' && uv run --locked lyte daemon install --config $quoted_config"
+  record_service_state lyte "$input"
 }
 
 write_provisioning_report() {
@@ -521,7 +641,11 @@ write_provisioning_report() {
 }
 
 phase() {
+  if (( PHASE_STARTED_SECONDS > 0 )); then
+    printf '    completed in %ss\n' "$((SECONDS - PHASE_STARTED_SECONDS))"
+  fi
   printf '\n==> %s\n' "$1"
+  PHASE_STARTED_SECONDS=$SECONDS
 }
 
 main() {
@@ -557,9 +681,7 @@ main() {
   )
   printf 'Installing packages:\n'
   printf '  %s\n' "${packages[@]}"
-  sudo apt-get update
-  sudo apt-get upgrade -y
-  sudo apt-get install -y "${packages[@]}"
+  install_base_packages "${packages[@]}"
 
   phase "creating directories"
   sudo mkdir -p "$ROOT"
@@ -583,9 +705,12 @@ main() {
   phase "installing uv"
   install_uv
 
+  phase "configuring GitHub URLs"
+  sudo -H -u "$SHOW_USER" git config --global url."https://github.com/".insteadOf \
+    "ssh://git@github.com/"
+
   phase "installing Lyte Python"
-  sudo -H -u "$SHOW_USER" env PATH="/home/$SHOW_USER/.local/bin:$PATH" \
-    bash -lc "uv python install 3.13"
+  install_lyte_python
 
   phase "syncing repositories"
   sync_repo reccy "$RECCY_REPO" "$RECCY_REFNAME"
@@ -639,6 +764,7 @@ TEXT
   else
     printf 'Reboot not required.\n'
   fi
+  printf 'Provisioning completed in %ss\n' "$SECONDS"
 }
 
 main "$@"
