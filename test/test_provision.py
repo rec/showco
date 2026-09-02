@@ -1085,20 +1085,22 @@ class ProvisionTests(unittest.TestCase):
             result = verify.verify_mixer_devices(config)
 
         self.assertTrue(all(value.error == "" for value in result))
-        self.assertEqual(result[0].note, "X18 not detected")
+        self.assertEqual(result[0].name, "X18 USB audio")
+        self.assertEqual(result[0].note, "X18/XR18 not detected")
 
-    def test_mixer_audio_device_check_uses_selector(self) -> None:
+    def test_mixer_audio_device_check_accepts_any_selector(self) -> None:
         config = make_config(values())
         with mock.patch(
             "reccy.subprocess.run",
             return_value=subprocess.CompletedProcess(["ssh"], 0, "", ""),
         ) as run:
-            verify.verify_mixer_audio_input(config, "X18", "X18")
+            result = verify.verify_mixer_audio_inputs(config, "X18", ["X18", "XR18"])
 
         self.assertIn(
-            "arecord -l | grep -Fi -e X18 >/dev/null",
+            "arecord -l | grep -Fi -e X18 -e XR18 >/dev/null",
             run.call_args.args[0],
         )
+        self.assertEqual(result.name, "X18 USB audio")
 
     def test_remote_script_includes_mixer_selectors(self) -> None:
         self.assertIn(

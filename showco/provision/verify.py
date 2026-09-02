@@ -213,9 +213,11 @@ def verify_twitcho_service(provision_config: config.Config) -> VerificationResul
 def verify_mixer_devices(provision_config: config.Config) -> list[VerificationResult]:
     return [
         *(
-            verify_mixer_audio_input(provision_config, mixer.name, name)
+            verify_mixer_audio_inputs(
+                provision_config, mixer.name, mixer.audio_device_names
+            )
             for mixer in provision_config.mixers
-            for name in mixer.audio_device_names
+            if mixer.audio_device_names
         ),
         *(
             verify_mixer_midi_input(provision_config, mixer.name, name)
@@ -225,10 +227,12 @@ def verify_mixer_devices(provision_config: config.Config) -> list[VerificationRe
     ]
 
 
-def verify_mixer_audio_input(
-    provision_config: config.Config, mixer_name: str, selector: str
+def verify_mixer_audio_inputs(
+    provision_config: config.Config, mixer_name: str, selectors: list[str]
 ) -> VerificationResult:
-    command = f"arecord -l | grep -Fi -e {shlex.quote(selector)} >/dev/null"
+    selector_options = " ".join(f"-e {shlex.quote(s)}" for s in selectors)
+    selector_names = "/".join(selectors)
+    command = f"arecord -l | grep -Fi {selector_options} >/dev/null"
     try:
         completed = subprocess.run(
             ssh.ssh_command(
@@ -244,16 +248,16 @@ def verify_mixer_audio_input(
         )
     except TimeoutExpired:
         return VerificationResult(
-            name=f"{mixer_name} USB audio {selector}",
+            name=f"{mixer_name} USB audio",
             error="",
             note=f"detection timed out after {ssh.SSH_VERIFICATION_TIMEOUT_SECONDS}s",
         )
     if completed.returncode == 0:
-        return VerificationResult(name=f"{mixer_name} USB audio {selector}", error="")
+        return VerificationResult(name=f"{mixer_name} USB audio", error="")
     return VerificationResult(
-        name=f"{mixer_name} USB audio {selector}",
+        name=f"{mixer_name} USB audio",
         error="",
-        note=f"{selector} not detected",
+        note=f"{selector_names} not detected",
     )
 
 
