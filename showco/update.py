@@ -14,7 +14,7 @@ from reccy import subprocess
 from tqdm import tqdm
 
 from . import machine_role, recs, repositories, revision, services
-from .provision import config, provision, ssh
+from .provision import config, provision, script, ssh
 
 RunCommand = Callable[
     [Sequence[str]],
@@ -242,7 +242,7 @@ def update_target(
                 n,
                 refresh_definitions,
                 root,
-                provision_config.lyte.daemon_config,
+                provision_config,
                 run_command,
             )
             for n in service_names
@@ -283,7 +283,7 @@ def update_target_with_showco(
                 n,
                 refresh_definitions,
                 showco.directory.parent,
-                provisioning_config().lyte.daemon_config,
+                provisioning_config(),
                 run_command,
             )
             for n in service_names
@@ -294,7 +294,7 @@ def update_target_with_showco(
             "showco",
             refresh_definitions,
             showco.directory.parent,
-            provisioning_config().lyte.daemon_config,
+            provisioning_config(),
             run_command,
         )
     )
@@ -902,11 +902,16 @@ def start_or_refresh_service_step(
     service_name: str,
     refresh_definitions: bool,
     root: Path,
-    lyte_daemon_config: Path,
+    provision_config: config.Config,
     run_command: RunCommand,
 ) -> StepResult:
-    if refresh_definitions and service_name == "lyte":
-        return install_lyte_service(root, lyte_daemon_config, run_command)
+    if refresh_definitions:
+        if service_name == "recs":
+            return install_recs_service(root, provision_config, run_command)
+        if service_name == "lyte":
+            return install_lyte_service(
+                root, provision_config.lyte.daemon_config, run_command
+            )
     return run_service_step(
         service_name, "refresh" if refresh_definitions else "start", run_command
     )
@@ -923,6 +928,34 @@ def install_lyte_service(
         f"--config {shlex.quote(str(config_path))}"
     )
     return run_step("lyte", "install service", ["sh", "-c", command], run_command)
+
+
+def install_recs_service(
+    root: Path, provision_config: config.Config, run_command: RunCommand
+) -> StepResult:
+    directory = root / "recs"
+    arguments = ["uv", "run", "--locked", "recs", "daemon", "install"]
+    for name in script.unique_selectors(
+        n for mixer in provision_config.mixers for n in mixer.audio_device_names
+    ):
+        arguments.extend(["--include", name])
+    for name in script.unique_selectors(
+        n for mixer in provision_config.mixers for n in mixer.midi_input_names
+    ):
+        arguments.extend(["--midi-include", name])
+    if any(mixer.osc for mixer in provision_config.mixers):
+        arguments.extend(
+            [
+                "--osc-nodes",
+                str(
+                    Path("/home")
+                    / provision_config.network.user
+                    / ".config/recs/mixers.toml"
+                ),
+            ]
+        )
+    command = f"cd {shlex.quote(str(directory))} && {shlex.join(arguments)}"
+    return run_step("recs", "install service", ["sh", "-c", command], run_command)
 
 
 def run_step(
