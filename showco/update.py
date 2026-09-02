@@ -238,8 +238,12 @@ def update_target(
             progress.update()
 
         results.extend(
-            run_service_step(
-                n, "refresh" if refresh_definitions else "start", run_command
+            start_or_refresh_service_step(
+                n,
+                refresh_definitions,
+                root,
+                provision_config.lyte.daemon_config,
+                run_command,
             )
             for n in service_names
         )
@@ -275,15 +279,23 @@ def update_target_with_showco(
         progress.set_description_str(f"Updating {program.name}")
         results.extend(update_program_on_target(program, run_command))
         results.extend(
-            run_service_step(
-                n, "refresh" if refresh_definitions else "start", run_command
+            start_or_refresh_service_step(
+                n,
+                refresh_definitions,
+                showco.directory.parent,
+                provisioning_config().lyte.daemon_config,
+                run_command,
             )
             for n in service_names
         )
         progress.update()
     results.append(
-        run_service_step(
-            "showco", "refresh" if refresh_definitions else "start", run_command
+        start_or_refresh_service_step(
+            "showco",
+            refresh_definitions,
+            showco.directory.parent,
+            provisioning_config().lyte.daemon_config,
+            run_command,
         )
     )
     results.append(showco_revision_step(showco.directory.parent, web_port, run_command))
@@ -884,6 +896,33 @@ def run_service_step(
         returncode=0,
         output=result.details,
     )
+
+
+def start_or_refresh_service_step(
+    service_name: str,
+    refresh_definitions: bool,
+    root: Path,
+    lyte_daemon_config: Path,
+    run_command: RunCommand,
+) -> StepResult:
+    if refresh_definitions and service_name == "lyte":
+        return install_lyte_service(root, lyte_daemon_config, run_command)
+    return run_service_step(
+        service_name, "refresh" if refresh_definitions else "start", run_command
+    )
+
+
+def install_lyte_service(
+    root: Path, daemon_config: Path, run_command: RunCommand
+) -> StepResult:
+    directory = root / "lyte"
+    config_path = directory / daemon_config
+    command = (
+        f"cd {shlex.quote(str(directory))} && "
+        "uv run --locked lyte daemon install "
+        f"--config {shlex.quote(str(config_path))}"
+    )
+    return run_step("lyte", "install service", ["sh", "-c", command], run_command)
 
 
 def run_step(

@@ -520,6 +520,50 @@ class UpdateTests(unittest.TestCase):
         self.assertIn(["git", "-C", "/code/reccy", "pull", "--ff-only"], commands)
         self.assertEqual(refresh.call_count, 2)
 
+    def test_target_update_reinstalls_lyte_with_lyte_environment(self) -> None:
+        commands: list[list[str]] = []
+
+        def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+            commands.append(list(command))
+            if command[-2:] == ["branch", "--show-current"]:
+                return subprocess.CompletedProcess(command, 0, "main\n", "")
+            if command[-2:] == ["status", "--porcelain"]:
+                return subprocess.CompletedProcess(command, 0, "", "")
+            if command[-2:] == ["rev-parse", "HEAD"]:
+                return subprocess.CompletedProcess(command, 0, "same\n", "")
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        with (
+            mock.patch(
+                "showco.services.service.current_platform", return_value=Platform.linux
+            ),
+            mock.patch(
+                "showco.update.provisioning_config", return_value=make_config(True)
+            ),
+            mock.patch(
+                "showco.services.refresh_service_definition",
+                return_value=StatusResult(installed=True, running=True),
+            ) as refresh,
+        ):
+            result = update.update_target(
+                ["reccy"],
+                root=Path("/code"),
+                run_command=run_command,
+                output=StringIO(),
+            )
+
+        self.assertEqual(result, 0)
+        self.assertIn(
+            [
+                "sh",
+                "-c",
+                "cd /code/lyte && uv run --locked lyte daemon install "
+                "--config /code/lyte/patches/wearable-daemon.toml",
+            ],
+            commands,
+        )
+        self.assertEqual(refresh.call_count, 2)
+
     def test_target_update_restarts_lyte_service(self) -> None:
         commands: list[list[str]] = []
 
@@ -1284,6 +1328,7 @@ def make_config(lyte_enabled: bool = False) -> object:
         user = "tom"
         host = "bertrand.local"
         ssh_port = 22
+        web_port = 17_352
 
     class Config:
         network = Network()
@@ -1295,6 +1340,7 @@ def make_config(lyte_enabled: bool = False) -> object:
 
         class Lyte:
             enabled = lyte_enabled
+            daemon_config = Path("patches/wearable-daemon.toml")
 
         lyte = Lyte()
 
