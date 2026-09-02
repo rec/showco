@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-NETWORK_CHANGED=false
 PHASE_STARTED_SECONDS=0
 SYSTEM_UPDATE=${SYSTEM_UPDATE:-false}
 
@@ -426,7 +425,6 @@ configure_network() {
     printf '%s\n' "$configuration_hash" \
       | sudo -H -u "$SHOW_USER" tee "$state_file" >/dev/null
     sudo chmod 600 "$state_file"
-    NETWORK_CHANGED=true
   fi
   return "$status"
 }
@@ -758,7 +756,7 @@ TEXT
   configure_network
 
   phase "rebooting"
-  if [[ "$NETWORK_CHANGED" == true || -f /var/run/reboot-required ]]; then
+  if [[ -f /var/run/reboot-required ]]; then
     sudo touch /run/showco-provision-reboot-required
     printf 'Reboot required.\n'
   else
