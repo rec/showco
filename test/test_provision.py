@@ -838,7 +838,7 @@ class ProvisionTests(unittest.TestCase):
         self.assertNotIn('tee "$service_file"', script.REMOTE_SCRIPT)
         self.assertNotIn("ExecStart=$command", script.REMOTE_SCRIPT)
 
-    def test_remote_script_marks_required_reboots(self) -> None:
+    def test_remote_script_reboots_only_when_the_system_requires_it(self) -> None:
         network = script.REMOTE_SCRIPT.index('phase "configuring network"')
         reboot = script.REMOTE_SCRIPT.index('phase "rebooting"')
 
@@ -849,6 +849,10 @@ class ProvisionTests(unittest.TestCase):
         self.assertNotIn(
             "sudo systemd-run --on-active=2s /usr/bin/systemctl reboot",
             script.REMOTE_SCRIPT,
+        )
+        self.assertNotIn("NETWORK_CHANGED", script.REMOTE_SCRIPT)
+        self.assertIn(
+            "if [[ -f /var/run/reboot-required ]]; then", script.REMOTE_SCRIPT
         )
         self.assertLess(network, reboot)
 
