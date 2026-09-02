@@ -568,6 +568,28 @@ class UpdateTests(unittest.TestCase):
         )
         self.assertEqual(refresh.call_count, 1)
 
+    def test_twitcho_install_uses_twitcho_environment(self) -> None:
+        commands: list[list[str]] = []
+
+        def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+            commands.append(list(command))
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        result = update.install_twitcho_service(Path("/code"), "tom", run_command)
+
+        self.assertTrue(result.ok)
+        self.assertEqual(
+            commands,
+            [
+                [
+                    "sh",
+                    "-c",
+                    "cd /code/twitcho && uv run --locked twitcho daemon install "
+                    "--config /home/tom/.config/twitcho/config.json",
+                ]
+            ],
+        )
+
     def test_target_update_restarts_lyte_service(self) -> None:
         commands: list[list[str]] = []
 
