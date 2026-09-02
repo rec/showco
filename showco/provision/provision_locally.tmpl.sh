@@ -263,26 +263,23 @@ sync_repo() {
   local before=
   local after
   local changed=false
-  local upstream
-  local remote
-  local branch
 
   prepare_checkout_path "$path"
   if [[ -d "$path/.git" ]]; then
     before=$(sudo -H -u "$SHOW_USER" git -C "$path" rev-parse HEAD)
-    upstream=$(sudo -H -u "$SHOW_USER" git -C "$path" rev-parse \
-      --abbrev-ref --symbolic-full-name '@{upstream}')
-    remote=${upstream%%/*}
-    branch=${upstream#*/}
-    sudo -H -u "$SHOW_USER" git -C "$path" fetch "$remote" \
-      "+refs/heads/$branch:refs/remotes/$remote/$branch"
-    sudo -H -u "$SHOW_USER" git -C "$path" reset --hard "$remote/$branch"
+    sudo -H -u "$SHOW_USER" git -C "$path" remote set-url origin "$url"
   else
     sudo -H -u "$SHOW_USER" git clone "$url" "$path"
     changed=true
   fi
   if [[ -n "$refname" && "$refname" != TODO ]]; then
-    sudo -H -u "$SHOW_USER" git -C "$path" checkout "$refname"
+    sudo -H -u "$SHOW_USER" git -C "$path" fetch origin "$refname"
+    sudo -H -u "$SHOW_USER" git -C "$path" checkout --detach FETCH_HEAD
+  else
+    sudo -H -u "$SHOW_USER" git -C "$path" fetch origin \
+      "+refs/heads/main:refs/remotes/origin/main"
+    sudo -H -u "$SHOW_USER" git -C "$path" checkout --force main
+    sudo -H -u "$SHOW_USER" git -C "$path" reset --hard origin/main
   fi
 
   after=$(sudo -H -u "$SHOW_USER" git -C "$path" rev-parse HEAD)
