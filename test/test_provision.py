@@ -745,23 +745,27 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn("Moving non-git checkout aside", script.REMOTE_SCRIPT)
         self.assertIn('sudo mv "$path" "$backup"', script.REMOTE_SCRIPT)
 
-    def test_remote_script_resets_target_checkout_to_its_upstream(self) -> None:
-        upstream = script.REMOTE_SCRIPT.index("--symbolic-full-name '@{upstream}'")
-        fetch = script.REMOTE_SCRIPT.index('git -C "$path" fetch "$remote"')
-        reset = script.REMOTE_SCRIPT.index(
-            'git -C "$path" reset --hard "$remote/$branch"'
-        )
+    def test_remote_script_resets_target_checkout_to_main(self) -> None:
+        fetch = script.REMOTE_SCRIPT.index('git -C "$path" fetch origin')
+        checkout = script.REMOTE_SCRIPT.index('git -C "$path" checkout --force main')
+        reset = script.REMOTE_SCRIPT.index('git -C "$path" reset --hard origin/main')
 
-        self.assertLess(upstream, fetch)
-        self.assertLess(fetch, reset)
+        self.assertLess(fetch, checkout)
+        self.assertLess(checkout, reset)
         self.assertIn(
-            '"+refs/heads/$branch:refs/remotes/$remote/$branch"',
+            '"+refs/heads/main:refs/remotes/origin/main"',
             script.REMOTE_SCRIPT,
+        )
+        self.assertIn(
+            'git -C "$path" remote set-url origin "$url"', script.REMOTE_SCRIPT
         )
         self.assertNotIn('git -C "$path" pull --ff-only', script.REMOTE_SCRIPT)
 
     def test_remote_script_checks_out_configured_refname(self) -> None:
-        self.assertIn('git -C "$path" checkout "$refname"', script.REMOTE_SCRIPT)
+        self.assertIn('git -C "$path" fetch origin "$refname"', script.REMOTE_SCRIPT)
+        self.assertIn(
+            'git -C "$path" checkout --detach FETCH_HEAD', script.REMOTE_SCRIPT
+        )
         self.assertIn(
             'sync_repo reccy "$RECCY_REPO" "$RECCY_REFNAME"', script.REMOTE_SCRIPT
         )
