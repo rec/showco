@@ -4,7 +4,7 @@ import shlex
 from pathlib import Path
 
 
-def showco_revision_command(root: Path, *, retry: bool) -> str:
+def showco_revision_command(root: Path, port: int, *, retry: bool) -> str:
     showco_directory = shlex.quote(str(root / "showco"))
     retry_options = ""
     if retry:
@@ -14,6 +14,6 @@ def showco_revision_command(root: Path, *, retry: bool) -> str:
     return (
         f"expected=$(git -C {showco_directory} rev-parse HEAD) && "
         f"curl --fail --silent --show-error {retry_options}"
-        "http://127.0.0.1:17352/status | "
+        f"http://127.0.0.1:{port}/status | "
         'grep --fixed-strings "\\"revision\\":\\"$expected\\""'
     )

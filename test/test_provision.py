@@ -854,6 +854,12 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn(
             "if [[ -f /var/run/reboot-required ]]; then", script.REMOTE_SCRIPT
         )
+        self.assertLess(
+            script.REMOTE_SCRIPT.index(
+                "sudo rm -f /run/showco-provision-reboot-required"
+            ),
+            network,
+        )
         self.assertLess(network, reboot)
 
     def test_remote_script_configures_locale_before_package_updates(self) -> None:
