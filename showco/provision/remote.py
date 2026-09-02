@@ -23,6 +23,8 @@ def provision_remote(
     provision_config: config.Config,
     local_script: Path,
     remote_script: str,
+    *,
+    system: bool = False,
 ) -> None:
     uploaded = False
     if provision_config.accept_changed_host_key:
@@ -46,7 +48,7 @@ def provision_remote(
         print(f"Running provisioning on {provision_config.ssh_target}...")
         ssh.run_ssh(
             provision_config,
-            script.remote_command(provision_config, remote_script),
+            script.remote_command(provision_config, remote_script, system=system),
             timeout_seconds=REMOTE_PROVISION_TIMEOUT_SECONDS,
         )
 

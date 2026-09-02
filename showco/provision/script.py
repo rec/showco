@@ -11,7 +11,9 @@ REMOTE_SCRIPT_TEMPLATE = "provision_locally.tmpl.sh"
 REMOTE_SCRIPT = (SCRIPT_DIR / REMOTE_SCRIPT_TEMPLATE).read_text()
 
 
-def remote_command(provision_config: config.Config, remote_script: str) -> str:
+def remote_command(
+    provision_config: config.Config, remote_script: str, *, system: bool = False
+) -> str:
     private = config.internal_wifi(provision_config)
     external = config.external_wifi(provision_config)
     x18_network = config.x18(provision_config)
@@ -40,6 +42,7 @@ def remote_command(provision_config: config.Config, remote_script: str) -> str:
         "LYTE_REPO": provision_config.git.lyte.url,
         "LYTE_REFNAME": provision_config.git.lyte.refname,
         "SHOWCO_PORT": str(provision_config.network.web_port),
+        "SYSTEM_UPDATE": shell_bool(system),
         "X18": shell_bool(x18_network is not None),
         "SWAP_WIFI": shell_bool(provision_config.network.swap_wifi),
         "NETWORK_TOPOLOGY": provision_config.network.topology,

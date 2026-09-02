@@ -29,6 +29,7 @@ class ProvisionTests(unittest.TestCase):
                 "True",
                 "--lyte-daemon-config",
                 "patches/test-daemon.toml",
+                "--system",
                 "--password",
             ],
         )
@@ -38,6 +39,7 @@ class ProvisionTests(unittest.TestCase):
         self.assertEqual(options.recs_repo, "https://github.com/rec/recs.git")
         self.assertTrue(options.lyte_enabled)
         self.assertEqual(options.lyte_daemon_config, Path("patches/test-daemon.toml"))
+        self.assertTrue(options.system)
         self.assertTrue(options.password)
 
     def test_password_only_updates_the_private_wifi_password(self) -> None:
@@ -103,6 +105,23 @@ class ProvisionTests(unittest.TestCase):
             provision.run(options)
 
         self.assertEqual(prepare.call_args.args[0], update.REPOSITORY_NAMES)
+
+    def test_run_passes_system_update_to_remote_provisioning(self) -> None:
+        options = provision.ProvisionOptions(
+            config_path=Path("config.toml"), secrets=Path("secrets.toml"), system=True
+        )
+        with (
+            mock.patch(
+                "showco.provision.provision.config.read_toml",
+                side_effect=[values(), {}],
+            ),
+            mock.patch("showco.provision.provision.validate_config"),
+            mock.patch("showco.update.prepare_local_repositories", return_value=True),
+            mock.patch("showco.provision.remote.provision_remote") as provision_remote,
+        ):
+            provision.run(options)
+
+        self.assertTrue(provision_remote.call_args.kwargs["system"])
 
     def test_lyte_defaults_to_disabled(self) -> None:
         parsed = make_config(values())
@@ -760,6 +779,21 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn("uv sync --locked", script.REMOTE_SCRIPT)
         self.assertIn("uv sync --locked --check", script.REMOTE_SCRIPT)
 
+    def test_remote_script_configures_github_urls_before_syncing(self) -> None:
+        github_urls = script.REMOTE_SCRIPT.index(
+            'git config --global url."https://github.com/".insteadOf'
+        )
+        syncing = script.REMOTE_SCRIPT.index('phase "syncing repositories"')
+
+        self.assertLess(github_urls, syncing)
+
+    def test_remote_script_skips_unchanged_system_and_services(self) -> None:
+        self.assertIn("install_base_packages()", script.REMOTE_SCRIPT)
+        self.assertIn("Base packages are already installed.", script.REMOTE_SCRIPT)
+        self.assertIn("service_is_current()", script.REMOTE_SCRIPT)
+        self.assertIn("record_service_state()", script.REMOTE_SCRIPT)
+        self.assertIn("completed in %ss", script.REMOTE_SCRIPT)
+
     def test_remote_script_uses_locked_uv_run(self) -> None:
         self.assertIn("uv run --locked showco run network-config", script.REMOTE_SCRIPT)
         self.assertIn("uv run --locked recs daemon install", script.REMOTE_SCRIPT)
@@ -819,17 +853,19 @@ class ProvisionTests(unittest.TestCase):
         self.assertLess(network, reboot)
 
     def test_remote_script_configures_locale_before_package_updates(self) -> None:
-        locale = script.REMOTE_SCRIPT.index('phase "configuring locale"')
-        journal = script.REMOTE_SCRIPT.index('phase "configuring persistent journal"')
-        update = script.REMOTE_SCRIPT.index("sudo apt-get update")
-        upgrade = script.REMOTE_SCRIPT.index("sudo apt-get upgrade -y")
-        install = script.REMOTE_SCRIPT.index("sudo apt-get install -y")
+        main = script.REMOTE_SCRIPT.rindex("main() {")
+        locale = script.REMOTE_SCRIPT.index('phase "configuring locale"', main)
+        journal = script.REMOTE_SCRIPT.index(
+            'phase "configuring persistent journal"', main
+        )
+        install = script.REMOTE_SCRIPT.index(
+            'install_base_packages "${packages[@]}"', main
+        )
 
-        self.assertLess(locale, update)
         self.assertLess(locale, journal)
-        self.assertLess(journal, update)
-        self.assertLess(update, upgrade)
-        self.assertLess(upgrade, install)
+        self.assertIn("sudo apt-get update", script.REMOTE_SCRIPT)
+        self.assertIn("sudo apt-get upgrade -y", script.REMOTE_SCRIPT)
+        self.assertLess(journal, install)
 
     def test_remote_script_configures_persistent_journal(self) -> None:
         self.assertIn("Storage=persistent", script.REMOTE_SCRIPT)
@@ -837,11 +873,13 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn("systemctl restart systemd-journald", script.REMOTE_SCRIPT)
 
     def test_remote_script_exports_locale_before_package_updates(self) -> None:
-        export = script.REMOTE_SCRIPT.index("export LC_CTYPE=en_US.UTF-8")
-        update = script.REMOTE_SCRIPT.index("sudo apt-get update")
-
+        main = script.REMOTE_SCRIPT.rindex("main() {")
+        locale = script.REMOTE_SCRIPT.index("configure_locale", main)
+        install = script.REMOTE_SCRIPT.index(
+            'install_base_packages "${packages[@]}"', main
+        )
         self.assertIn("unset LC_ALL", script.REMOTE_SCRIPT)
-        self.assertLess(export, update)
+        self.assertLess(locale, install)
 
     def test_read_toml_preserves_string_lists(self) -> None:
         with TemporaryDirectory() as directory:
@@ -909,6 +947,15 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn("PRIVATE_WIFI_PASSWORD='private password'", command)
         self.assertIn("X18=false", command)
         self.assertIn("RECS_REFNAME=''", command)
+
+    def test_remote_command_passes_system_update_request(self) -> None:
+        command = script.remote_command(
+            make_config(values(networks=networks(x18=False))),
+            "/tmp/provision.sh",
+            system=True,
+        )
+
+        self.assertIn("SYSTEM_UPDATE=true", command)
 
     def test_remote_worktree_command_reports_all_tracked_changes(self) -> None:
         command = shlex.split(
@@ -987,11 +1034,10 @@ class ProvisionTests(unittest.TestCase):
 
         commands = [c.args[0][-1] for c in run.call_args_list]
         self.assertFalse([r for r in results if r.error])
-        for project in ["reccy", "recs", "twitcho", "showco"]:
-            self.assertIn(
-                verify.project_status_command(project, Path("/srv/show-projects")),
-                commands,
-            )
+        self.assertIn(
+            verify.project_statuses_command(Path("/srv/show-projects")),
+            commands,
+        )
         self.assertIn(
             "uid=$(id -u); XDG_RUNTIME_DIR=/run/user/$uid "
             'cd /srv/show-projects/showco && PATH="$HOME/.local/bin:$PATH" '
