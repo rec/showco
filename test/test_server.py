@@ -138,6 +138,41 @@ class ServerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "exceeds"):
             handler._form()
 
+    def test_invalid_utf8_action_request_returns_bad_request(self) -> None:
+        handler = object.__new__(ShowcoHandler)
+        handler.path = "/actions"
+        handler.headers = {"Content-Length": "1"}
+        handler.rfile = BytesIO(b"\xff")
+        handler.send_error = mock.Mock()
+
+        handler._do_post()
+
+        handler.send_error.assert_called_once_with(
+            400, "action body is not valid UTF-8"
+        )
+
+    def test_malformed_action_request_returns_bad_request(self) -> None:
+        handler = object.__new__(ShowcoHandler)
+        handler.path = "/actions"
+        handler.headers = {"Content-Length": "6"}
+        handler.rfile = BytesIO(b"action")
+        handler.send_error = mock.Mock()
+
+        handler._do_post()
+
+        handler.send_error.assert_called_once_with(400, "action body is malformed")
+
+    def test_invalid_content_length_returns_payload_too_large(self) -> None:
+        handler = object.__new__(ShowcoHandler)
+        handler.path = "/actions"
+        handler.headers = {"Content-Length": "unknown"}
+        handler.rfile = BytesIO()
+        handler.send_error = mock.Mock()
+
+        handler._do_post()
+
+        handler.send_error.assert_called_once_with(413, "invalid Content-Length")
+
     def test_status_pages_have_five_page_navigation(self) -> None:
         html = channels_page(
             models.ShowStatus(
@@ -648,6 +683,22 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(len(messages), 10)
         self.assertEqual(messages[0], "unknown action unknown-11")
         self.assertEqual(messages[-1], "unknown action unknown-2")
+
+    def test_action_transport_error_is_recorded_as_a_failure(self) -> None:
+        recs = mock.Mock()
+        recs.calibrate.side_effect = OSError("recs socket unavailable")
+        app = ShowcoApp(
+            recs,
+            rehearsal.RehearsalTwitchoClient(),
+            rehearsal.RehearsalSystemMonitor(),
+            rehearsal.RehearsalMixersMonitor(),
+        )
+
+        result = app.run_action({"action": "recs-calibrate"})
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.message, "recs socket unavailable")
+        self.assertEqual(app.recent_actions(), [result])
 
     def test_actions_do_not_overlap(self) -> None:
         calls = 0
