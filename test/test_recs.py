@@ -158,6 +158,36 @@ class RecsTests(unittest.TestCase):
 
         self.assertEqual([batch.sequence for batch in batches], [1, 2])
 
+    def test_waveform_bridge_marks_evicted_event_history_as_missed(self) -> None:
+        with mock.patch.object(recs, "MAX_WAVEFORM_EVENTS", 2):
+            bridge = WaveformBridge()
+        for generation in range(1, 4):
+            bridge.receive(
+                rpc.Event(
+                    name="waveform_layout",
+                    data={
+                        "source": "Mixer",
+                        "generation": generation,
+                        "sample_rate": 48_000,
+                        "bucket_frames": 960,
+                        "tracks": [{"channels": [1]}],
+                    },
+                )
+            )
+
+        missed, events = bridge.events_since(0)
+
+        self.assertTrue(missed)
+        self.assertEqual(events, [])
+
+    def test_invalid_waveform_event_reconnects_subscription(self) -> None:
+        bridge = WaveformBridge()
+        with mock.patch.object(recs.LOGGER, "error") as error:
+            bridge.receive(rpc.Event(name="waveform_layout", data={}))
+
+        self.assertTrue(bridge.reconnect.is_set())
+        error.assert_called_once()
+
     def test_waveform_bridge_subscribes_to_recs(self) -> None:
         subscribed = Event()
         events = FakeWaveformEvents()
@@ -177,6 +207,7 @@ class RecsTests(unittest.TestCase):
         control.call.assert_called_once_with("subscribe_waveforms")
         self.assertTrue(events.started)
         self.assertTrue(events.closed)
+        self.assertFalse(bridge.thread.is_alive())
 
     def test_reads_named_osc_statuses(self) -> None:
         statuses = _osc_status(

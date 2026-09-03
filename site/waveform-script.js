@@ -123,5 +123,8 @@
     events.addEventListener("waveform", event => {
       addWaveformBatch(JSON.parse(event.data));
     });
+    events.addEventListener("waveform_resync", () => {
+      tracks.clear();
+    });
     requestAnimationFrame(renderWaveforms);
   }
