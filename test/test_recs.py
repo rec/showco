@@ -271,6 +271,49 @@ class RecsTests(unittest.TestCase):
 
         self.assertEqual(status.service.state, "offline")
 
+    def test_snapshot_failure_does_not_hide_current_file_status(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "status.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "updated_at": time.time(),
+                        "rows": [],
+                    }
+                )
+            )
+            client = RecsClient(status_path=path)
+            with mock.patch("showco.recs.rpc.Client") as rpc_client:
+                rpc_client.return_value.call.side_effect = TimeoutError("slow")
+                status = client.status()
+
+        self.assertEqual(status.service.state, "connected")
+        self.assertEqual(status.snapshot_error, "recs status_snapshot failed: slow")
+        rpc_client.assert_called_once_with(
+            recs.paths.external_control_endpoint(),
+            role="showco",
+            timeout=recs.STATUS_SNAPSHOT_TIMEOUT_SECONDS,
+        )
+
+    def test_status_snapshot_uses_short_lived_cache(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "status.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "updated_at": time.time(),
+                        "rows": [],
+                    }
+                )
+            )
+            client = RecsClient(status_path=path)
+            with mock.patch("showco.recs.rpc.Client") as rpc_client:
+                rpc_client.return_value.call.return_value = {"midi": []}
+                client.status()
+                client.status()
+
+        rpc_client.return_value.call.assert_called_once_with("status_snapshot")
+
     def test_reports_status_read_failure_as_error(self) -> None:
         with TemporaryDirectory() as directory:
             path = Path(directory) / "status.json"

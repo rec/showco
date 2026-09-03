@@ -229,6 +229,22 @@ class ServerTests(unittest.TestCase):
         self.assertIn("Pi temperature", html)
         self.assertIn("52.8 °C", html)
 
+    def test_health_page_shows_recs_snapshot_error(self) -> None:
+        html = health_page(
+            models.ShowStatus(
+                recs=models.RecsStatus(
+                    service=models.ServiceStatus(name="recs", state="connected"),
+                    snapshot_error="recs status_snapshot failed: slow",
+                ),
+                twitcho=models.TwitchoStatus(
+                    service=models.ServiceStatus(name="twitcho", state="disabled")
+                ),
+            )
+        )
+
+        self.assertIn('id="recs-snapshot"', html)
+        self.assertIn("recs snapshot: recs status_snapshot failed: slow", html)
+
     def test_health_page_shows_lyte_output_error(self) -> None:
         html = health_page(
             models.ShowStatus(

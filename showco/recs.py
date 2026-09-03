@@ -22,6 +22,8 @@ STALE_AFTER_SECONDS = 3.0
 STATUS_CHANGE_WAIT_SECONDS = 4
 STATUS_CHANGE_SAMPLE_COUNT = 3
 STATUS_ERROR_LIMIT = 3
+STATUS_SNAPSHOT_CACHE_SECONDS = 1.0
+STATUS_SNAPSHOT_TIMEOUT_SECONDS = 0.25
 WINDOWS_PIPE = r"\\.\pipe\recs"
 MAX_WAVEFORM_BATCHES = 80
 MAX_WAVEFORM_EVENTS = 400
@@ -160,12 +162,20 @@ class RecsClient:
         status_path: Path | None = None,
         metadata_path: Path | None = None,
         stale_after_seconds: float = STALE_AFTER_SECONDS,
+        snapshot_cache_seconds: float = STATUS_SNAPSHOT_CACHE_SECONDS,
+        snapshot_timeout_seconds: float = STATUS_SNAPSHOT_TIMEOUT_SECONDS,
     ) -> None:
         paths = recs_paths()
         self.status_path = status_path or paths.status
         self.metadata_path = metadata_path or paths.metadata
         self.stale_after_seconds = stale_after_seconds
+        self.snapshot_cache_seconds = snapshot_cache_seconds
+        self.snapshot_timeout_seconds = snapshot_timeout_seconds
         self.track_name_lock = threading.Lock()
+        self.snapshot_lock = threading.Lock()
+        self.snapshot: dict[str, object] | None = None
+        self.snapshot_checked_at = 0.0
+        self.snapshot_error: str | None = None
 
     def status(self) -> models.RecsStatus:
         if not self.status_path.exists():
@@ -219,7 +229,7 @@ class RecsClient:
         rows = _rows(data.get("rows"))
         totals = rows[0] if rows else {}
 
-        snapshot = self._external_command("status_snapshot")
+        snapshot, snapshot_error = self._status_snapshot()
         x18 = _x18_status(snapshot)
         return models.RecsStatus(
             service=models.ServiceStatus(
@@ -236,6 +246,7 @@ class RecsClient:
             client_count=_int(data.get("client_count")) or 0,
             channels=channel_levels(rows),
             errors=_error_records(data.get("errors")),
+            snapshot_error=snapshot_error,
             x18=x18,
             midi=_midi_status(snapshot),
         )
@@ -503,14 +514,31 @@ class RecsClient:
         finally:
             connection.close()
 
+    def _status_snapshot(self) -> tuple[dict[str, object] | None, str | None]:
+        with self.snapshot_lock:
+            now = time.monotonic()
+            if now - self.snapshot_checked_at < self.snapshot_cache_seconds:
+                return self.snapshot, self.snapshot_error
+            response = self._external_command(
+                "status_snapshot", timeout=self.snapshot_timeout_seconds
+            )
+            self.snapshot_checked_at = now
+            if _object_dict(response):
+                self.snapshot = response
+                self.snapshot_error = None
+            elif isinstance(response, models.ActionResult):
+                self.snapshot_error = response.message
+            else:
+                self.snapshot_error = "recs status snapshot is not an object"
+            return self.snapshot, self.snapshot_error
+
     def _external_command(
-        self, command: str, **parameters: object
+        self, command: str, *, timeout: float = 1.0, **parameters: object
     ) -> str | dict[str, object] | models.ActionResult:
         try:
-            return rpc.Client(paths.external_control_endpoint(), role="showco").call(
-                command,
-                **parameters,
-            )
+            return rpc.Client(
+                paths.external_control_endpoint(), role="showco", timeout=timeout
+            ).call(command, **parameters)
         except (ConnectionError, OSError, TimeoutError, ValueError) as error:
             return models.ActionResult(
                 ok=False, message=f"recs {command} failed: {error}"

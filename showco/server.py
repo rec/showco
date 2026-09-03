@@ -445,6 +445,7 @@ def health_page(status: models.ShowStatus) -> str:
         <section>
           <h2>Health</h2>
           <p id="recs-health">recs: {_service_detail(recs.state, recs.last_error)}</p>
+          <p id="recs-snapshot">recs snapshot: {_snapshot_detail(status.recs)}</p>
           <p id="twitcho-health">
             twitcho: {_service_detail(twitcho.state, twitcho.last_error)}
           </p>
@@ -753,6 +754,10 @@ def _streaming_text(status: models.ShowStatus) -> str:
 
 def _service_detail(state: str, error: str | None) -> str:
     return f"{state}: {error}" if error else state
+
+
+def _snapshot_detail(status: models.RecsStatus) -> str:
+    return status.snapshot_error or "connected"
 
 
 def _temperature(status: models.ShowStatus) -> str:
