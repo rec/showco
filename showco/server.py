@@ -44,7 +44,6 @@ class ShowcoApp:
         system: SystemMonitor,
         mixers: MixersMonitor,
         twitcho_restart: Callable[[], models.ActionResult] | None = None,
-        x18_status: Callable[[], models.RecorderStatus] | None = None,
         waveforms: WaveformBridge | None = None,
         lyte: LyteClient | None = None,
     ) -> None:
@@ -53,7 +52,6 @@ class ShowcoApp:
         self.system = system
         self.mixers = mixers
         self.twitcho_restart = twitcho_restart or services.restart_twitcho_service
-        self.x18_status = x18_status
         self.waveforms = waveforms
         self.lyte = lyte
         self.revision = source_revision()
@@ -88,7 +86,6 @@ class ShowcoApp:
                 {channel.device for channel in recs.channels},
                 {midi.name: midi.state for midi in recs.midi},
             ),
-            x18=recs.x18,
             revision=self.revision,
             run_started_at=self.run_started_at,
         )
@@ -381,7 +378,6 @@ def make_server(
     twitcho_restart: Callable[[], models.ActionResult] | None = None,
     twitcho_enabled: bool = False,
     lyte_enabled: bool = False,
-    x18_status: Callable[[], models.RecorderStatus] | None = None,
 ) -> ThreadingHTTPServer:
     handler = type("ConfiguredShowcoHandler", (ShowcoHandler,), {})
     recs_client = recs or RecsClient()
@@ -394,7 +390,6 @@ def make_server(
         system or SystemMonitor(),
         mixers or MixersMonitor([]),
         twitcho_restart if twitcho_enabled else None,
-        x18_status,
         waveforms,
         LyteClient(enabled=lyte_enabled),
     )
@@ -453,8 +448,7 @@ def health_page(status: models.ShowStatus) -> str:
           <p>Pi temperature: <span id="temperature">{_temperature(status)}</span></p>
           <p>Twitch bitrate: <span id="bitrate">{_bitrate(status)}</span></p>
           <div id="mixers">{_mixers(status)}</div>
-          <p>X18 OSC recorder:
-            <span id="x18-recorder">{_x18_recorder(status)}</span></p>
+          <div id="osc-recorders">{_osc_recorders(status.recs.osc)}</div>
         </section>
         """,
         script=site_file("status-script.js"),
@@ -812,16 +806,22 @@ def _mixer_detail(mixer: models.MixerStatus) -> str:
     return detail
 
 
-def _x18_recorder(status: models.ShowStatus) -> str:
-    if status.x18.state == "disabled":
-        return "disabled"
-    if status.x18.last_error:
-        return status.x18.last_error
-    if status.x18.log_path and status.x18.log_size is not None:
-        return (
-            f"{status.x18.state}: {status.x18.log_path} ({status.x18.log_size} bytes)"
-        )
-    return status.x18.state
+def _osc_recorders(statuses: list[models.RecorderStatus]) -> str:
+    if not statuses:
+        return "<p>No OSC recorders.</p>"
+    return "".join(
+        f"<p>{html.escape(status.name)} OSC recorder: "
+        f"{html.escape(_osc_recorder_detail(status))}</p>"
+        for status in statuses
+    )
+
+
+def _osc_recorder_detail(status: models.RecorderStatus) -> str:
+    if status.last_error:
+        return f"{status.state}: {status.last_error}"
+    if status.log_path and status.log_size is not None:
+        return f"{status.state}: {status.log_path} ({status.log_size} bytes)"
+    return status.state
 
 
 def _recs_errors(errors: list[models.ErrorRecord]) -> str:

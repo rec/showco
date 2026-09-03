@@ -365,11 +365,19 @@
           return row;
         }));
       }
-      const x18Recorder = document.getElementById("x18-recorder");
-      if (x18Recorder) {
-        x18Recorder.textContent = status.x18.last_error || status.x18.log_path === null
-          ? status.x18.last_error || status.x18.state
-          : `${status.x18.state}: ${status.x18.log_path} (${status.x18.log_size} bytes)`;
+      const oscRecorders = document.getElementById("osc-recorders");
+      if (oscRecorders) {
+        oscRecorders.replaceChildren(...status.recs.osc.map(recorder => {
+          const row = document.createElement("p");
+          const detail = recorder.last_error
+            ? `${recorder.state}: ${recorder.last_error}`
+            : recorder.log_path === null
+              ? recorder.state
+              : `${recorder.state}: ${recorder.log_path} (${recorder.log_size} bytes)`;
+          row.textContent = `${recorder.name} OSC recorder: ${detail}`;
+          return row;
+        }));
+        if (!status.recs.osc.length) oscRecorders.textContent = "No OSC recorders.";
       }
       })
       .catch(() => {});

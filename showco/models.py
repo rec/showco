@@ -29,6 +29,7 @@ class ChannelLevel(BaseModel, frozen=True):
 
 
 class RecorderStatus(BaseModel, frozen=True):
+    name: str = ""
     state: str = "disabled"
     log_path: str | None = None
     log_size: int | None = None
@@ -61,7 +62,7 @@ class RecsStatus(BaseModel, frozen=True):
     channels: list[ChannelLevel] = Field(default_factory=list)
     errors: list[ErrorRecord] = Field(default_factory=list)
     snapshot_error: str | None = None
-    x18: RecorderStatus = Field(default_factory=RecorderStatus)
+    osc: list[RecorderStatus] = Field(default_factory=list)
     midi: list[MidiStatus] = Field(default_factory=list)
 
 
@@ -114,6 +115,5 @@ class ShowStatus(BaseModel, frozen=True):
     )
     system: SystemStatus = Field(default_factory=SystemStatus)
     mixers: list[MixerStatus] = Field(default_factory=list)
-    x18: RecorderStatus = Field(default_factory=RecorderStatus)
     revision: str | None = None
     run_started_at: float = 0.0

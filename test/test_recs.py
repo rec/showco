@@ -23,7 +23,7 @@ from showco import models, recs
 from showco.recs import (
     RecsClient,
     WaveformBridge,
-    _x18_status,
+    _osc_status,
     channel_levels,
     level_state,
     replace_track_name,
@@ -178,8 +178,8 @@ class RecsTests(unittest.TestCase):
         self.assertTrue(events.started)
         self.assertTrue(events.closed)
 
-    def test_reads_uppercase_x18_osc_status(self) -> None:
-        status = _x18_status(
+    def test_reads_named_osc_statuses(self) -> None:
+        statuses = _osc_status(
             {
                 "osc": [
                     {
@@ -192,9 +192,10 @@ class RecsTests(unittest.TestCase):
             }
         )
 
-        self.assertEqual(status.state, "running")
-        self.assertEqual(status.log_path, "X18.jsonl")
-        self.assertEqual(status.log_size, 12)
+        self.assertEqual(statuses[0].name, "X18")
+        self.assertEqual(statuses[0].state, "running")
+        self.assertEqual(statuses[0].log_path, "X18.jsonl")
+        self.assertEqual(statuses[0].log_size, 12)
 
     def test_status_changes_command_checks_successive_updated_at_values(self) -> None:
         command = recs.status_changes_command()
