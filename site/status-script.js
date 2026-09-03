@@ -22,6 +22,19 @@
     return `${twitcho.stream_state}${twitcho.muted ? ", muted" : ""}`;
   }
 
+  function lyteDetail(lyte) {
+    if (lyte.service.last_error) {
+      return `${lyte.service.state}: ${lyte.service.last_error}`;
+    }
+    if (lyte.service.state === "disabled") return "disabled";
+    const details = [`${lyte.daemon_state}, ${lyte.output_state}`];
+    if (lyte.host) details.push(lyte.host);
+    if (lyte.active_test) details.push("test active");
+    else if (lyte.queued_test) details.push("test queued");
+    if (lyte.frame_send_count !== null) details.push(`${lyte.frame_send_count} frames`);
+    return details.join(", ");
+  }
+
   function mixerDetail(mixer) {
     if (mixer.error) return `${mixer.state}: ${mixer.error}`;
     const missing = [];
@@ -324,6 +337,8 @@
         "streaming", status.twitcho.service, streamingText(status.twitcho),
         "twitcho-health",
       );
+      const lyteHealth = document.getElementById("lyte-health");
+      if (lyteHealth) lyteHealth.textContent = `lyte: ${lyteDetail(status.lyte)}`;
       updateChannels(status.recs.channels);
       updateRecsErrors(status.recs.errors);
       const temperature = document.getElementById("temperature");

@@ -28,6 +28,7 @@ class WebUiOptions(BaseModel, frozen=True):
     port: int = 17_352
     mixers_config: Path = Path()
     twitcho_enabled: bool = False
+    lyte_enabled: bool = False
     rehearsal_mode: Annotated[
         bool,
         tyro.conf.arg(
@@ -58,6 +59,7 @@ def run_web_ui(options: WebUiOptions) -> int:
             options.port,
             mixers=MixersMonitor(load_mixer_specs(options.mixers_config)),
             twitcho_enabled=options.twitcho_enabled,
+            lyte_enabled=options.lyte_enabled,
         )
         print(f"showco listening on http://{options.host}:{options.port}")
     try:

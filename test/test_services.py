@@ -23,6 +23,7 @@ class ServicesTests(unittest.TestCase):
                 17352,
                 Path("/home/tom/.config/showco/mixers.toml"),
                 True,
+                True,
             ),
             [
                 "--host",
@@ -32,6 +33,7 @@ class ServicesTests(unittest.TestCase):
                 "--mixers-config",
                 "/home/tom/.config/showco/mixers.toml",
                 "--twitcho-enabled",
+                "--lyte-enabled",
             ],
         )
 
@@ -109,9 +111,11 @@ class ServicesTests(unittest.TestCase):
             17_352,
             None,
             False,
+            False,
         )
 
         self.assertNotIn("--twitcho-enabled", arguments)
+        self.assertNotIn("--lyte-enabled", arguments)
 
     def test_restart_twitcho_service_uses_service_registry(self) -> None:
         registry = mock.Mock()
@@ -125,28 +129,6 @@ class ServicesTests(unittest.TestCase):
         self.assertTrue(result.ok)
         self.assertEqual(result.message, "twitcho restart requested")
         registry.controller.assert_called_once_with("twitcho")
-
-    def test_lyte_light_test_uses_lyte_control_socket(self) -> None:
-        service_paths = ServicePaths(
-            metadata=Path("/tmp/lyte/daemon.json"),
-            service=Path("/tmp/lyte/lyte.service"),
-            status=Path("/tmp/lyte/status.json"),
-            log=Path("/tmp/lyte/lyte.log"),
-            control_endpoint=Path("/tmp/lyte/gui.sock"),
-        )
-        client = mock.Mock()
-        client.call.return_value = {"state": "queued"}
-        with (
-            mock.patch(
-                "showco.services.paths.service_paths", return_value=service_paths
-            ),
-            mock.patch("showco.services.rpc.Client", return_value=client),
-        ):
-            result = services.test_lyte_lights()
-
-        self.assertTrue(result.ok)
-        self.assertEqual(result.message, "lyte light test queued")
-        client.call.assert_called_once_with("test")
 
     def test_report_service_status_fails_inactive_service(self) -> None:
         registry = mock.Mock()

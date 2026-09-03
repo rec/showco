@@ -435,6 +435,9 @@ showco_args() {
   if [[ "$TWITCHO_ENABLED" == true ]]; then
     args+=(--twitcho-enabled)
   fi
+  if [[ "$LYTE_ENABLED" == true ]]; then
+    args+=(--lyte-enabled)
+  fi
   printf '%q ' "${args[@]}"
 }
 
@@ -515,6 +518,7 @@ install_showco_service() {
   input=$(service_input "$(git -C "$ROOT/showco" rev-parse HEAD)
 $SHOWCO_PORT
 $TWITCHO_ENABLED
+$LYTE_ENABLED
 $SHOWCO_MIXERS_TOML")
   if service_is_current showco "$input"; then
     printf 'Showco service is already installed.\n'
