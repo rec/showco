@@ -85,6 +85,24 @@ class TwitchoTests(unittest.TestCase):
         )
         current_time.assert_called_once_with()
 
+    def test_local_action_requires_ok_reply(self) -> None:
+        result = FakeTwitchoClient({"queued": True}).action("mute")
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.message, "twitcho sent an invalid mute response")
+
+    def test_twitch_api_action_accepts_object_reply(self) -> None:
+        result = FakeTwitchoClient({"data": []}).action("clip")
+
+        self.assertTrue(result.ok)
+        self.assertEqual(result.message, "twitcho clip succeeded")
+
+    def test_twitch_api_action_rejects_string_reply(self) -> None:
+        result = FakeTwitchoClient("ok").action("clip")
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.message, "twitcho sent an invalid clip response")
+
 
 class FakeTwitchoClient(TwitchoClient):
     def __init__(self, reply: str | dict[str, object] | ConnectionError) -> None:
