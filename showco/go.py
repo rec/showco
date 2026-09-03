@@ -14,7 +14,10 @@ def main(argv: list[str] | None = None) -> int:
         args=argv,
         description="Provision or update the show-control target",
     )
-    return run(options)
+    result = run(options)
+    if result == 0:
+        print("Successfully completed")
+    return result
 
 
 def run(options: provision.GoOptions) -> int:
