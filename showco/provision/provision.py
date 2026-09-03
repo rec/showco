@@ -38,6 +38,7 @@ class GoOptions(BaseModel, frozen=True):
     repositories: Annotated[list[str] | None, tyro.conf.Positional] = None
     remote: bool = False
     target_machine: bool = False
+    clear_settings: bool = True
     autosquash: int | None = Field(default=None, ge=0)
 
 

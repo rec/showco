@@ -127,6 +127,12 @@ the fingerprint matches, it updates all repositories instead. The target records
 only the fingerprint after a successful provision and verification; it never
 stores configuration or secrets in that marker.
 
+When `showco go` takes the update path, it clears Recs's saved webpage settings
+from `~/.config/recs/settings.json` before updating. This returns mutable
+attributes, track names, and stereo groupings to the values supplied by the
+updated Recs configuration. Use `--no-clear-settings` to preserve those saved
+operator changes for one update.
+
 Use `showco go --system` to force provisioning with an APT refresh. Pass
 repository names or `--autosquash` to update locally, or `--remote` to update
 the target directly from GitHub. Override the connection on the command line:

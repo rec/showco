@@ -4,6 +4,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import tyro
+
 from showco import go, update
 from showco.provision import provision
 
@@ -144,6 +146,7 @@ class GoTests(unittest.TestCase):
             target_config=provision_config,
             output=mock.ANY,
             autosquash=50,
+            clear_settings=True,
         )
         provision_target.assert_not_called()
 
@@ -167,6 +170,7 @@ class GoTests(unittest.TestCase):
             root=None,
             target_config=provision_config,
             output=mock.ANY,
+            clear_settings=True,
         )
         local.assert_not_called()
 
@@ -175,7 +179,25 @@ class GoTests(unittest.TestCase):
             result = go.run(self.options(target_machine=True, repositories=["recs"]))
 
         self.assertEqual(result, 0)
-        update_target.assert_called_once_with(["recs"], root=None)
+        update_target.assert_called_once_with(["recs"], root=None, clear_settings=True)
+
+    def test_clear_settings_option_is_forwarded_to_target_update(self) -> None:
+        with mock.patch("showco.update.update_target", return_value=0) as update_target:
+            result = go.run(
+                self.options(
+                    target_machine=True,
+                    repositories=["recs"],
+                    clear_settings=False,
+                )
+            )
+
+        self.assertEqual(result, 0)
+        update_target.assert_called_once_with(["recs"], root=None, clear_settings=False)
+
+    def test_no_clear_settings_option_preserves_recs_settings(self) -> None:
+        options = tyro.cli(provision.GoOptions, args=["--no-clear-settings"])
+
+        self.assertFalse(options.clear_settings)
 
     def test_system_cannot_be_combined_with_update_options(self) -> None:
         with self.assertRaisesRegex(SystemExit, "cannot be combined"):

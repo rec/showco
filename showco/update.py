@@ -49,6 +49,7 @@ def update_from_provisioning_machine(
     run_command: RunCommand | None = None,
     output: TextIO = sys.stdout,
     autosquash: int = 50,
+    clear_settings: bool = True,
 ) -> int:
     run_command = run_command or run_command_with_timeout
     provision_config = target_config or provisioning_config()
@@ -64,7 +65,11 @@ def update_from_provisioning_machine(
     with progress_bar(1, output) as progress:
         target_host = host or provision_config.network.host
         ssh_target = f"{provision_config.network.user}@{target_host}"
-        command = remote_update_command(selected, root or provision_config.paths.root)
+        command = remote_update_command(
+            selected,
+            root or provision_config.paths.root,
+            clear_settings=clear_settings,
+        )
         progress.set_description_str(f"Updating {ssh_target}")
         target_result = run_remote_step(
             "target",
@@ -111,12 +116,16 @@ def update_remote_target(
     root: Path | None = None,
     target_config: config.Config | None = None,
     output: TextIO = sys.stdout,
+    clear_settings: bool = True,
 ) -> int:
     provision_config = target_config or provisioning_config()
     target_host = host or provision_config.network.host
     ssh_target = f"{provision_config.network.user}@{target_host}"
     command = remote_update_command(
-        selected, root or provision_config.paths.root, skip_worktree_check=True
+        selected,
+        root or provision_config.paths.root,
+        skip_worktree_check=True,
+        clear_settings=clear_settings,
     )
     tqdm.write(f"Updating {ssh_target} from GitHub", file=output)
     with progress_bar(1, output) as progress:
@@ -139,10 +148,19 @@ def update_target(
     root: Path | None = None,
     run_command: RunCommand | None = None,
     output: TextIO = sys.stdout,
+    clear_settings: bool = False,
 ) -> int:
     provision_config = provisioning_config()
     root = root or provision_config.paths.root
     run_command = run_command or run_command_with_timeout
+    if clear_settings:
+        print("Clearing saved Recs settings.", file=output)
+        clear_settings_result = clear_recs_settings_step(
+            provision_config.network.user, run_command
+        )
+        if not clear_settings_result.ok:
+            report_failures([clear_settings_result], output)
+            return 1
     programs = programs_for_repositories(
         selected,
         root,
@@ -341,6 +359,15 @@ def recs_status_changes_step(run_command: RunCommand) -> StepResult:
         return result
     return result.model_copy(
         update={"output": recs.status_failure_summary(result.output)}
+    )
+
+
+def clear_recs_settings_step(user: str, run_command: RunCommand) -> StepResult:
+    return run_step(
+        "recs",
+        "clear saved settings",
+        ["rm", "-f", str(Path("/home") / user / ".config/recs/settings.json")],
+        run_command,
     )
 
 
@@ -716,16 +743,16 @@ def provisioning_config() -> config.Config:
 
 
 def remote_update_command(
-    selected: list[str], root: Path, *, skip_worktree_check: bool = False
+    selected: list[str],
+    root: Path,
+    *,
+    skip_worktree_check: bool = False,
+    clear_settings: bool = True,
 ) -> str:
-    arguments = shlex.join(
-        [
-            "--target-machine",
-            "--root",
-            str(root),
-            *selected,
-        ]
-    )
+    arguments_list = ["--target-machine", "--root", str(root)]
+    if not clear_settings:
+        arguments_list.append("--no-clear-settings")
+    arguments = shlex.join([*arguments_list, *selected])
     showco_directory = shlex.quote(str(root / "showco"))
     dependency_directories = shlex.join(
         [str(root / name) for name in ["reccy", "recs", "twitcho", "lyte"]]
