@@ -662,12 +662,14 @@ main() {
   phase "installing base packages"
   packages=(
     alsa-utils
+    build-essential
     ca-certificates
     curl
     emacs
     ffmpeg
     git
     libegl1
+    libasound2-dev
     libportaudio2
     libsndfile1
     locales
