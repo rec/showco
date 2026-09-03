@@ -9,7 +9,7 @@ from collections import deque
 from collections.abc import Callable
 from pathlib import Path
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from reccy import ipc, logging, rpc
 from reccy.models import DaemonMetadata
 from recs.base.waveform import WaveformBatchData, WaveformLayoutData
@@ -403,7 +403,12 @@ class RecsClient:
     def action(self, command: str, **fields: object) -> models.ActionResult:
         payload: dict[str, object] = {"type": command}
         payload.update({k: v for k, v in fields.items() if v not in ("", None)})
-        request = gui_protocol.MESSAGE.validate_python(payload)
+        try:
+            request = gui_protocol.MESSAGE.validate_python(payload)
+        except ValidationError:
+            return models.ActionResult(
+                ok=False, message=f"recs does not support {command}"
+            )
         if not isinstance(request, gui_protocol.Request):
             return models.ActionResult(
                 ok=False, message=f"recs does not support {command}"

@@ -462,8 +462,6 @@ def actions_page(
           {field_action("recs-key-label", "Set Recs key label", ["key", "label"])}
           {button("recs-pause-recording", "Pause recording")}
           {button("recs-resume-recording", "Resume recording")}
-          {button("recs-stop-recording", "Stop recording", confirm=True)}
-          {button("recs-start-recording", "Start recording")}
           {button("recs-status-snapshot", "Recs status snapshot")}
           {button("recs-disk-status", "Recs disk status")}
           {button("recs-list-devices", "List Recs devices")}
@@ -792,9 +790,7 @@ RECS_ACTIONS = {
     "recs-reload-profiles": "reload_profiles",
     "recs-resume-recording": "resume_recording",
     "recs-set-noise-floor": "set_noise_floor",
-    "recs-start-recording": "start_recording",
     "recs-status-snapshot": "status_snapshot",
-    "recs-stop-recording": "stop_recording",
 }
 
 TWITCHO_ACTIONS = {
