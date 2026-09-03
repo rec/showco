@@ -16,6 +16,7 @@ from urllib import parse
 from reccy import logging
 
 from . import models, services
+from .lyte import LyteClient
 from .mixer import MixersMonitor
 from .recs import RecsClient, WaveformBridge
 from .system import SystemMonitor
@@ -43,6 +44,7 @@ class ShowcoApp:
         twitcho_restart: Callable[[], models.ActionResult] | None = None,
         x18_status: Callable[[], models.RecorderStatus] | None = None,
         waveforms: WaveformBridge | None = None,
+        lyte: LyteClient | None = None,
     ) -> None:
         self.recs = recs
         self.twitcho = twitcho
@@ -51,6 +53,7 @@ class ShowcoApp:
         self.twitcho_restart = twitcho_restart or services.restart_twitcho_service
         self.x18_status = x18_status
         self.waveforms = waveforms
+        self.lyte = lyte
         self.revision = source_revision()
         self.run_started_at = time.time()
         self.action_log: list[models.ActionResult] = []
@@ -71,6 +74,13 @@ class ShowcoApp:
         return models.ShowStatus(
             recs=recs,
             twitcho=twitcho,
+            lyte=(
+                self.lyte.status()
+                if self.lyte is not None
+                else models.LyteStatus(
+                    service=models.ServiceStatus(name="lyte", state="disabled")
+                )
+            ),
             system=self.system.status(),
             mixers=self.mixers.status(
                 {channel.device for channel in recs.channels},
@@ -125,7 +135,11 @@ class ShowcoApp:
             elif action == "twitcho-restart":
                 result = self.twitcho_restart()
             elif action == "lyte-test":
-                result = services.test_lyte_lights()
+                result = (
+                    self.lyte.test()
+                    if self.lyte is not None
+                    else models.ActionResult(ok=False, message="lyte is disabled")
+                )
             elif action in TWITCHO_ACTIONS:
                 if self.twitcho is None:
                     result = models.ActionResult(
@@ -183,6 +197,7 @@ class ShowcoHandler(BaseHTTPRequestHandler):
                 actions_page(
                     self.app.recent_actions(),
                     twitcho_enabled=self.app.twitcho is not None,
+                    lyte_enabled=self.app.lyte is not None and self.app.lyte.enabled,
                 )
             )
             return
@@ -346,6 +361,7 @@ def make_server(
     mixers: MixersMonitor | None = None,
     twitcho_restart: Callable[[], models.ActionResult] | None = None,
     twitcho_enabled: bool = False,
+    lyte_enabled: bool = False,
     x18_status: Callable[[], models.RecorderStatus] | None = None,
 ) -> ThreadingHTTPServer:
     handler = type("ConfiguredShowcoHandler", (ShowcoHandler,), {})
@@ -361,6 +377,7 @@ def make_server(
         twitcho_restart if twitcho_enabled else None,
         x18_status,
         waveforms,
+        LyteClient(enabled=lyte_enabled),
     )
     handler.app = app
     server = ShowcoServer((host, port), handler)
@@ -412,6 +429,7 @@ def health_page(status: models.ShowStatus) -> str:
           <p id="twitcho-health">
             twitcho: {_service_detail(twitcho.state, twitcho.last_error)}
           </p>
+          <p id="lyte-health">lyte: {_lyte_detail(status.lyte)}</p>
           <p>Pi temperature: <span id="temperature">{_temperature(status)}</span></p>
           <p>Twitch bitrate: <span id="bitrate">{_bitrate(status)}</span></p>
           <div id="mixers">{_mixers(status)}</div>
@@ -465,7 +483,10 @@ def error_timestamp(value: str) -> float | None:
 
 
 def actions_page(
-    action_log: list[models.ActionResult], *, twitcho_enabled: bool = True
+    action_log: list[models.ActionResult],
+    *,
+    twitcho_enabled: bool = True,
+    lyte_enabled: bool = True,
 ) -> str:
     title_fields = ["title", "category", "tags"]
     noise_floor = field_action(
@@ -489,7 +510,7 @@ def actions_page(
           {button("recs-list-devices", "List Recs devices")}
           {button("recs-capabilities", "Recs capabilities")}
           {shutdown_action()}
-          {button("lyte-test", "Test lights")}
+          {button("lyte-test", "Test lights") if lyte_enabled else ""}
           {_twitcho_actions(title_fields) if twitcho_enabled else ""}
         </section>
         <section>
@@ -725,6 +746,23 @@ def _bitrate(status: models.ShowStatus) -> str:
     if status.twitcho.output_bitrate_kbps is None:
         return "unknown"
     return f"{status.twitcho.output_bitrate_kbps:.0f} kbps"
+
+
+def _lyte_detail(status: models.LyteStatus) -> str:
+    if status.service.last_error:
+        return f"{status.service.state}: {status.service.last_error}"
+    if status.service.state == "disabled":
+        return "disabled"
+    details = [f"{status.daemon_state}, {status.output_state}"]
+    if status.host:
+        details.append(status.host)
+    if status.active_test:
+        details.append("test active")
+    elif status.queued_test:
+        details.append("test queued")
+    if status.frame_send_count is not None:
+        details.append(f"{status.frame_send_count} frames")
+    return ", ".join(details)
 
 
 def _mixers(status: models.ShowStatus) -> str:

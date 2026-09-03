@@ -7,6 +7,7 @@ from threading import Event, Lock, Thread
 from unittest import mock
 
 from showco import models, rehearsal
+from showco.lyte import LyteClient
 from showco.server import (
     ERROR_PAGE_LIMIT,
     ShowcoApp,
@@ -144,6 +145,30 @@ class ServerTests(unittest.TestCase):
 
         self.assertIn("Pi temperature", html)
         self.assertIn("52.8 °C", html)
+
+    def test_health_page_shows_lyte_output_error(self) -> None:
+        html = health_page(
+            models.ShowStatus(
+                recs=models.RecsStatus(
+                    service=models.ServiceStatus(name="recs", state="connected")
+                ),
+                twitcho=models.TwitchoStatus(
+                    service=models.ServiceStatus(name="twitcho", state="disabled")
+                ),
+                lyte=models.LyteStatus(
+                    service=models.ServiceStatus(
+                        name="lyte",
+                        state="error",
+                        last_error="controller unreachable",
+                    ),
+                    daemon_state="streaming",
+                    output_state="failed",
+                ),
+            )
+        )
+
+        self.assertIn('id="lyte-health"', html)
+        self.assertIn("lyte: error: controller unreachable", html)
 
     def test_health_page_shows_bitrate_and_mixer_latency(self) -> None:
         html = health_page(
@@ -412,20 +437,22 @@ class ServerTests(unittest.TestCase):
         self.assertIn('button.setAttribute("aria-busy", "true")', html)
         self.assertIn('button:active, button[aria-busy="true"]', html)
 
-    def test_lyte_light_test_uses_service_control(self) -> None:
+    def test_lyte_light_test_uses_lyte_client(self) -> None:
         app = ShowcoApp(
             rehearsal.RehearsalRecsClient(),
             rehearsal.RehearsalTwitchoClient(),
             rehearsal.RehearsalSystemMonitor(),
             rehearsal.RehearsalMixersMonitor(),
         )
+        lyte = mock.Mock(spec=LyteClient)
         expected = models.ActionResult(ok=True, message="lyte light test queued")
-        with mock.patch(
-            "showco.server.services.test_lyte_lights", return_value=expected
-        ):
-            result = app.run_action({"action": "lyte-test"})
+        lyte.test.return_value = expected
+        app.lyte = lyte
+
+        result = app.run_action({"action": "lyte-test"})
 
         self.assertEqual(result, expected)
+        lyte.test.assert_called_once_with()
 
     def test_twitch_restart_action_uses_service_restart(self) -> None:
         restart = mock.Mock(

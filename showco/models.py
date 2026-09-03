@@ -75,6 +75,20 @@ class TwitchoStatus(BaseModel, frozen=True):
     output_bitrate_kbps: float | None = None
 
 
+class LyteStatus(BaseModel, frozen=True):
+    service: ServiceStatus
+    daemon_state: str = "disabled"
+    output_state: str = "unknown"
+    host: str | None = None
+    device_mac: str | None = None
+    planned_led_count: int | None = None
+    actual_led_count: int | None = None
+    frame_send_count: int | None = None
+    last_frame_sent_at: str | None = None
+    queued_test: bool = False
+    active_test: bool = False
+
+
 class SystemStatus(BaseModel, frozen=True):
     temperature_c: float | None = None
     temperature_error: str | None = None
@@ -92,6 +106,11 @@ class MixerStatus(BaseModel, frozen=True):
 class ShowStatus(BaseModel, frozen=True):
     recs: RecsStatus
     twitcho: TwitchoStatus
+    lyte: LyteStatus = Field(
+        default_factory=lambda: LyteStatus(
+            service=ServiceStatus(name="lyte", state="disabled")
+        )
+    )
     system: SystemStatus = Field(default_factory=SystemStatus)
     mixers: list[MixerStatus] = Field(default_factory=list)
     x18: RecorderStatus = Field(default_factory=RecorderStatus)

@@ -9,7 +9,7 @@ from subprocess import CompletedProcess
 from typing import ClassVar
 
 from pydantic import BaseModel
-from reccy import paths, reccy, rpc, service, service_spec
+from reccy import paths, reccy, service, service_spec
 from reccy.models import DaemonMetadata, ServiceSpec, StatusResult
 
 from . import machine_role, models
@@ -49,6 +49,7 @@ def install_showco_service(
     port: int = 17_352,
     mixers_config: Path | None = None,
     twitcho_enabled: bool = False,
+    lyte_enabled: bool = False,
 ) -> int:
     daemon = ShowcoDaemon(platform=paths.current_platform())
     result = daemon.install_service(
@@ -59,6 +60,7 @@ def install_showco_service(
                 port,
                 mixers_config,
                 twitcho_enabled,
+                lyte_enabled,
             ),
         ]
     )
@@ -71,12 +73,15 @@ def showco_args(
     port: int,
     mixers_config: Path | None,
     twitcho_enabled: bool,
+    lyte_enabled: bool,
 ) -> list[str]:
     result = ["--host", host, "--port", str(port)]
     if mixers_config is not None:
         result.extend(["--mixers-config", str(mixers_config)])
     if twitcho_enabled:
         result.append("--twitcho-enabled")
+    if lyte_enabled:
+        result.append("--lyte-enabled")
     return result
 
 
@@ -85,21 +90,6 @@ def restart_twitcho_service() -> models.ActionResult:
     if result.running:
         return models.ActionResult(ok=True, message="twitcho restart requested")
     return models.ActionResult(ok=False, message="twitcho service did not start")
-
-
-def test_lyte_lights() -> models.ActionResult:
-    control_endpoint = paths.service_paths(
-        LYTE_SERVICE, paths.current_platform()
-    ).control_endpoint
-    if control_endpoint is None:
-        return models.ActionResult(ok=False, message="lyte does not support control")
-    try:
-        result = rpc.Client(control_endpoint, role="showco").call("test")
-    except (ConnectionError, OSError, TimeoutError, ValueError) as error:
-        return models.ActionResult(ok=False, message=f"lyte test failed: {error}")
-    if isinstance(result, dict) and result.get("state") == "queued":
-        return models.ActionResult(ok=True, message="lyte light test queued")
-    return models.ActionResult(ok=False, message="lyte did not queue light test")
 
 
 def refresh_service_definition(
@@ -156,6 +146,7 @@ def install_main(argv: list[str] | None = None) -> int:
     parser.add_argument("--port", default=17_352, type=int)
     parser.add_argument("--mixers-config", type=Path)
     parser.add_argument("--twitcho-enabled", action="store_true")
+    parser.add_argument("--lyte-enabled", action="store_true")
     parser.add_argument("--root", required=True, type=Path)
     args = parser.parse_args(argv)
     return install_showco_service(
@@ -163,6 +154,7 @@ def install_main(argv: list[str] | None = None) -> int:
         port=args.port,
         mixers_config=args.mixers_config,
         twitcho_enabled=args.twitcho_enabled,
+        lyte_enabled=args.lyte_enabled,
         root=args.root,
     )
 
