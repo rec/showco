@@ -60,6 +60,7 @@ class RecsStatus(BaseModel, frozen=True):
     client_count: int = 0
     channels: list[ChannelLevel] = Field(default_factory=list)
     errors: list[ErrorRecord] = Field(default_factory=list)
+    snapshot_error: str | None = None
     x18: RecorderStatus = Field(default_factory=RecorderStatus)
     midi: list[MidiStatus] = Field(default_factory=list)
 

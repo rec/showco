@@ -333,6 +333,10 @@
       updateService(
         "recording", status.recs.service, recordingText(status.recs), "recs-health",
       );
+      const recsSnapshot = document.getElementById("recs-snapshot");
+      if (recsSnapshot) {
+        recsSnapshot.textContent = `recs snapshot: ${status.recs.snapshot_error || "connected"}`;
+      }
       updateService(
         "streaming", status.twitcho.service, streamingText(status.twitcho),
         "twitcho-health",
