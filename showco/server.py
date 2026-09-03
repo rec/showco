@@ -459,6 +459,12 @@ def health_page(status: models.ShowStatus) -> str:
           <div id="mixers">{_mixers(status)}</div>
           <div id="osc-recorders">{_osc_recorders(status.recs.osc)}</div>
         </section>
+        <section>
+          <h2>Recs errors</h2>
+          <div id="recs-errors" data-limit="{ERROR_PAGE_LIMIT}">
+            {_recs_errors(status.recs.errors[-ERROR_PAGE_LIMIT:])}
+          </div>
+        </section>
         """,
         script=site_file("status-script.js"),
     )
