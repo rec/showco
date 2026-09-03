@@ -17,6 +17,30 @@ class GoTests(unittest.TestCase):
             **kwargs,
         )
 
+    def test_main_prints_completion_after_success(self) -> None:
+        options = self.options()
+        with (
+            mock.patch("showco.go.tyro.cli", return_value=options),
+            mock.patch("showco.go.run", return_value=0),
+            mock.patch("builtins.print") as print_message,
+        ):
+            result = go.main([])
+
+        self.assertEqual(result, 0)
+        print_message.assert_called_once_with("Successfully completed")
+
+    def test_main_does_not_print_completion_after_failure(self) -> None:
+        options = self.options()
+        with (
+            mock.patch("showco.go.tyro.cli", return_value=options),
+            mock.patch("showco.go.run", return_value=1),
+            mock.patch("builtins.print") as print_message,
+        ):
+            result = go.main([])
+
+        self.assertEqual(result, 1)
+        print_message.assert_not_called()
+
     def test_matching_configuration_updates_target(self) -> None:
         provision_config = mock.Mock(ssh_target="tom@bertrand.local")
         with (
