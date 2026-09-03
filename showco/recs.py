@@ -230,7 +230,6 @@ class RecsClient:
         totals = rows[0] if rows else {}
 
         snapshot, snapshot_error = self._status_snapshot()
-        x18 = _x18_status(snapshot)
         return models.RecsStatus(
             service=models.ServiceStatus(
                 name="recs",
@@ -247,7 +246,7 @@ class RecsClient:
             channels=channel_levels(rows),
             errors=_error_records(data.get("errors")),
             snapshot_error=snapshot_error,
-            x18=x18,
+            osc=_osc_status(snapshot),
             midi=_midi_status(snapshot),
         )
 
@@ -800,24 +799,29 @@ def _error_records(value: object) -> list[models.ErrorRecord]:
     return errors
 
 
-def _x18_status(value: object) -> models.RecorderStatus:
+def _osc_status(value: object) -> list[models.RecorderStatus]:
     if not _object_dict(value):
-        return models.RecorderStatus()
+        return []
     nodes = value.get("osc")
     if not isinstance(nodes, list):
-        return models.RecorderStatus()
+        return []
+    statuses = []
     for node in nodes:
         if not _object_dict(node):
             continue
-        if (_string(node.get("name")) or "").casefold() != "x18":
+        name = _string(node.get("name"))
+        if name is None:
             continue
-        return models.RecorderStatus(
-            state=_string(node.get("state")) or "running",
-            log_path=_string(node.get("path")),
-            log_size=_int(node.get("size")),
-            last_error=_string(node.get("last_error")),
+        statuses.append(
+            models.RecorderStatus(
+                name=name,
+                state=_string(node.get("state")) or "running",
+                log_path=_string(node.get("path")),
+                log_size=_int(node.get("size")),
+                last_error=_string(node.get("last_error")),
+            )
         )
-    return models.RecorderStatus()
+    return statuses
 
 
 def _midi_status(value: object) -> list[models.MidiStatus]:

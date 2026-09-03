@@ -290,6 +290,34 @@ class ServerTests(unittest.TestCase):
         self.assertIn("X18: connected: 4.2 ms", html)
         self.assertIn("4.2 ms", html)
 
+    def test_health_page_shows_named_osc_recorders(self) -> None:
+        html = health_page(
+            models.ShowStatus(
+                recs=models.RecsStatus(
+                    service=models.ServiceStatus(name="recs", state="connected"),
+                    osc=[
+                        models.RecorderStatus(
+                            name="X18",
+                            state="running",
+                            log_path="X18.jsonl",
+                            log_size=12,
+                        ),
+                        models.RecorderStatus(
+                            name="Flow 8",
+                            state="error",
+                            last_error="unreachable",
+                        ),
+                    ],
+                ),
+                twitcho=models.TwitchoStatus(
+                    service=models.ServiceStatus(name="twitcho", state="disabled")
+                ),
+            )
+        )
+
+        self.assertIn("X18 OSC recorder: running: X18.jsonl (12 bytes)", html)
+        self.assertIn("Flow 8 OSC recorder: error: unreachable", html)
+
     def test_health_page_shows_named_mixer_input_progress(self) -> None:
         html = health_page(
             models.ShowStatus(
