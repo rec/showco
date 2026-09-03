@@ -14,6 +14,8 @@ from ..models import ActionResult, ServiceStatus, TwitchoStatus
 CONTROL_ENDPOINT = Path.home() / ".local/state/twitcho/gui.sock"
 AUDIO_STALE_SECONDS = 5.0
 ACTIVE_STREAM_STATES = {"streaming", "muted"}
+LOCAL_ACTIONS = {"mute", "unmute", "stop"}
+TWITCH_API_ACTIONS = {"update_stream_info", "chat", "announce", "clip", "marker"}
 
 
 class TwitchoHealthOptions(BaseModel, frozen=True):
@@ -83,9 +85,14 @@ class TwitchoClient:
                 ok=False,
                 message=str(error),
             )
-        if isinstance(result, str):
-            return ActionResult(ok=True, message=result)
-        return ActionResult(ok=True, message=f"twitcho {command} succeeded")
+        if command in LOCAL_ACTIONS and result == "ok":
+            return ActionResult(ok=True, message=f"twitcho {command} succeeded")
+        if command in TWITCH_API_ACTIONS and isinstance(result, dict):
+            return ActionResult(ok=True, message=f"twitcho {command} succeeded")
+        return ActionResult(
+            ok=False,
+            message=f"twitcho sent an invalid {command} response",
+        )
 
     def _call(self, command: str, **fields: object) -> str | dict[str, object]:
         return rpc.Client(self.control_endpoint, role="showco").call(command, **fields)
