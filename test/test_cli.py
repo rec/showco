@@ -19,11 +19,11 @@ class CliTests(unittest.TestCase):
         self.assertEqual(options.port, 17_352)
         self.assertTrue(options.rehearsal_mode)
 
-    def test_dispatches_provision_subcommand(self) -> None:
-        with patch.object(cli.provision, "main", return_value=7) as provision:
-            self.assertEqual(cli.main(["provision", "--help"]), 7)
+    def test_dispatches_go_subcommand(self) -> None:
+        with patch.object(cli.go, "main", return_value=7) as go:
+            self.assertEqual(cli.main(["go", "recs"]), 7)
 
-        provision.assert_called_once_with(["--help"])
+        go.assert_called_once_with(["recs"])
 
     def test_dispatches_prepare_card_subcommand(self) -> None:
         with patch.object(cli.card, "main", return_value=7) as prepare_card:
@@ -40,12 +40,6 @@ class CliTests(unittest.TestCase):
 
         twitcho.assert_called_once_with(["--help"])
 
-    def test_dispatches_update_subcommand(self) -> None:
-        with patch.object(cli.update, "main", return_value=7) as update:
-            self.assertEqual(cli.main(["update", "recs"]), 7)
-
-        update.assert_called_once_with(["recs"])
-
     def test_dispatches_logs_subcommand(self) -> None:
         with patch.object(cli.logs, "main", return_value=7) as logs:
             self.assertEqual(cli.main(["logs", "--lines=50", "recs"]), 7)
@@ -60,6 +54,10 @@ class CliTests(unittest.TestCase):
 
     def test_rejects_unknown_subcommand(self) -> None:
         self.assertEqual(cli.main(["unknown"]), 2)
+
+    def test_rejects_removed_subcommands(self) -> None:
+        self.assertEqual(cli.main(["update"]), 2)
+        self.assertEqual(cli.main(["provision"]), 2)
 
 
 if __name__ == "__main__":

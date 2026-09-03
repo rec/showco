@@ -8,15 +8,14 @@ from string import hexdigits
 from typing import Annotated
 
 import tyro
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from .. import machine_role
 from . import config, remote, script, state
 
 PROVISION_DIR = Path(__file__).resolve().parent
 
 
-class ProvisionOptions(BaseModel, frozen=True):
+class GoOptions(BaseModel, frozen=True):
     config_path: Annotated[Path, tyro.conf.arg(name="config")] = (
         PROVISION_DIR / "config.toml"
     )
@@ -36,19 +35,13 @@ class ProvisionOptions(BaseModel, frozen=True):
         bool,
         tyro.conf.arg(help="Refresh operating-system packages before provisioning"),
     ] = False
+    repositories: Annotated[list[str] | None, tyro.conf.Positional] = None
+    remote: bool = False
+    target_machine: bool = False
+    autosquash: int | None = Field(default=None, ge=0)
 
 
-def main(argv: list[str] | None = None) -> int:
-    machine_role.require_provisioning_machine("showco provision")
-    options = tyro.cli(
-        ProvisionOptions,
-        args=argv,
-        description="Provision a reachable Raspberry Pi over SSH",
-    )
-    return run(options)
-
-
-def resolved_config(options: ProvisionOptions) -> config.Config:
+def resolved_config(options: GoOptions) -> config.Config:
     env = config.merge_values(
         config.read_toml(options.config_path), config.read_toml(options.secrets)
     )
@@ -70,9 +63,7 @@ def resolved_config(options: ProvisionOptions) -> config.Config:
     return provision_config
 
 
-def run(
-    options: ProvisionOptions, *, provision_config: config.Config | None = None
-) -> int:
+def run(options: GoOptions, *, provision_config: config.Config | None = None) -> int:
     provision_config = provision_config or resolved_config(options)
     from .. import update
 
@@ -195,7 +186,3 @@ def lyte_daemon_config_path(provision_config: config.Config, root: Path) -> Path
 
 def local_checkout_directory() -> Path:
     return PROVISION_DIR.parents[2]
-
-
-if __name__ == "__main__":
-    sys.exit(main())

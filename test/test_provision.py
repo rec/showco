@@ -15,9 +15,9 @@ from showco.provision import config, provision, remote, script, ssh, state, veri
 
 
 class ProvisionTests(unittest.TestCase):
-    def test_provision_options_accept_existing_flags(self) -> None:
+    def test_go_options_accept_provisioning_and_update_flags(self) -> None:
         options = tyro.cli(
-            provision.ProvisionOptions,
+            provision.GoOptions,
             args=[
                 "--host",
                 "bertrand.local",
@@ -30,6 +30,10 @@ class ProvisionTests(unittest.TestCase):
                 "--lyte-daemon-config",
                 "patches/test-daemon.toml",
                 "--system",
+                "--remote",
+                "--autosquash",
+                "0",
+                "recs",
             ],
         )
 
@@ -39,9 +43,12 @@ class ProvisionTests(unittest.TestCase):
         self.assertTrue(options.lyte_enabled)
         self.assertEqual(options.lyte_daemon_config, Path("patches/test-daemon.toml"))
         self.assertTrue(options.system)
+        self.assertTrue(options.remote)
+        self.assertEqual(options.autosquash, 0)
+        self.assertEqual(options.repositories, ["recs"])
 
     def test_run_finishes_after_successful_provisioning(self) -> None:
-        options = provision.ProvisionOptions(
+        options = provision.GoOptions(
             config_path=Path("config.toml"),
             secrets=Path("secrets.toml"),
         )
@@ -64,7 +71,7 @@ class ProvisionTests(unittest.TestCase):
         self.assertEqual(result, 0)
 
     def test_run_prepares_local_repositories_with_update(self) -> None:
-        options = provision.ProvisionOptions(
+        options = provision.GoOptions(
             config_path=Path("config.toml"), secrets=Path("secrets.toml")
         )
         with (
@@ -83,7 +90,7 @@ class ProvisionTests(unittest.TestCase):
         self.assertEqual(prepare.call_args.args[0], update.REPOSITORY_NAMES)
 
     def test_run_passes_system_update_to_remote_provisioning(self) -> None:
-        options = provision.ProvisionOptions(
+        options = provision.GoOptions(
             config_path=Path("config.toml"), secrets=Path("secrets.toml"), system=True
         )
         with (

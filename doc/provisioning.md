@@ -63,7 +63,7 @@ Each repository defaults to `https://github.com/rec/NAME.git`; add a
 
 If `network.user` is omitted, the provisioning script uses the local `USER`
 environment variable. It is an error if neither is set. The SSH port defaults to
-22; override it with `showco provision --port 2222` when needed.
+22; override it with `showco go --port 2222` when needed.
 
 Set the Raspberry Pi hostname in Raspberry Pi Imager before first boot. Use that
 same name for `network.host`, including `.local` when connecting by mDNS.
@@ -123,12 +123,13 @@ showco go
 
 `showco go` provisions when the target has no applied configuration fingerprint,
 or when the resolved local configuration or provisioning script has changed. When
-the fingerprint matches, it performs `showco update` instead. The target records
+the fingerprint matches, it updates all repositories instead. The target records
 only the fingerprint after a successful provision and verification; it never
 stores configuration or secrets in that marker.
 
-Use `showco provision` to force provisioning, including `--system` for an APT
-refresh. Override the connection on either command line:
+Use `showco go --system` to force provisioning with an APT refresh. Pass
+repository names or `--autosquash` to update locally, or `--remote` to update
+the target directly from GitHub. Override the connection on the command line:
 
 ```bash
 showco go \
@@ -179,7 +180,7 @@ tracked upstream branch and reset to it.
 On an already provisioned target, it skips unchanged base-package setup, locale
 and journal configuration, the Lyte Python installation, and unchanged active
 service definitions. It prints the duration of every phase. Use
-`showco provision --system` when you specifically want to refresh APT packages;
+`showco go --system` when you specifically want to refresh APT packages;
 ordinary provisioning installs missing packages but does not perform an APT
 upgrade.
 
@@ -208,7 +209,7 @@ Before relying on script changes:
 python -m py_compile showco/provision/provision.py showco/twitcho/auth.py
 ```
 
-Do not run `showco provision` or `showco go` as a routine verification step.
+Do not run `showco go` as a routine verification step.
 They mutate a real Raspberry Pi when provisioning is needed.
 
 ## Open decisions
