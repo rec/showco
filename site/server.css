@@ -136,7 +136,15 @@ button {
   background: #f0c24b;
   border: 2px solid #171717;
   border-radius: 0.5rem;
+  box-shadow: 0 3px 0 #171717;
+  cursor: pointer;
   font-weight: 800;
 }
+button:active, button[aria-busy="true"] {
+  background: #d6a928;
+  box-shadow: none;
+  transform: translateY(3px);
+}
+button[aria-busy="true"] { cursor: wait; }
 .ok { color: #14853d; }
 .failed { color: #b3261e; }

@@ -409,6 +409,8 @@ class ServerTests(unittest.TestCase):
 
         self.assertIn('value="lyte-test"', html)
         self.assertIn(">Test lights</button>", html)
+        self.assertIn('button.setAttribute("aria-busy", "true")', html)
+        self.assertIn('button:active, button[aria-busy="true"]', html)
 
     def test_lyte_light_test_uses_service_control(self) -> None:
         app = ShowcoApp(
