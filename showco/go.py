@@ -30,7 +30,11 @@ def run(options: provision.GoOptions) -> int:
             sys.exit(
                 "ERROR: --system and --remote are unavailable on the target machine"
             )
-        return update.update_target(selected, root=options.root)
+        return update.update_target(
+            selected,
+            root=options.root,
+            clear_settings=options.clear_settings,
+        )
 
     machine_role.require_provisioning_machine("showco go")
     update_requested = (
@@ -46,6 +50,7 @@ def run(options: provision.GoOptions) -> int:
             root=options.root,
             target_config=provision_config,
             output=sys.stdout,
+            clear_settings=options.clear_settings,
         )
     if update_requested:
         return update.update_from_provisioning_machine(
@@ -55,6 +60,7 @@ def run(options: provision.GoOptions) -> int:
             target_config=provision_config,
             output=sys.stdout,
             autosquash=options.autosquash or 50,
+            clear_settings=options.clear_settings,
         )
     if options.system:
         print(f"System update requested: provisioning {provision_config.ssh_target}...")
@@ -81,4 +87,5 @@ def run(options: provision.GoOptions) -> int:
         root=options.root,
         target_config=provision_config,
         output=sys.stdout,
+        clear_settings=options.clear_settings,
     )

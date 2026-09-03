@@ -92,6 +92,40 @@ class UpdateTests(unittest.TestCase):
             )
         )
 
+    def test_remote_update_command_can_preserve_recs_settings(self) -> None:
+        command = update.remote_update_command(
+            ["recs"], Path("/code"), clear_settings=False
+        )
+
+        self.assertTrue(
+            command.endswith(
+                "uv run --locked showco go --target-machine --root /code "
+                "--no-clear-settings recs"
+            )
+        )
+
+    def test_target_update_clears_saved_recs_settings(self) -> None:
+        commands: list[list[str]] = []
+
+        def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+            commands.append(list(command))
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        with mock.patch("showco.update.programs_for_repositories", return_value=[]):
+            result = update.update_target(
+                ["lyte"],
+                root=Path("/code"),
+                run_command=run_command,
+                output=StringIO(),
+                clear_settings=True,
+            )
+
+        self.assertEqual(result, 0)
+        self.assertEqual(
+            commands[0],
+            ["rm", "-f", "/home/tom/.config/recs/settings.json"],
+        )
+
     def test_target_update_pulls_selected_repositories_and_restarts_services(
         self,
     ) -> None:
