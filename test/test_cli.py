@@ -25,6 +25,12 @@ class CliTests(unittest.TestCase):
 
         go.assert_called_once_with(["recs"])
 
+    def test_dispatches_go_without_a_subcommand(self) -> None:
+        with patch.object(cli.go, "main", return_value=7) as go:
+            self.assertEqual(cli.main([]), 7)
+
+        go.assert_called_once_with([])
+
     def test_dispatches_prepare_card_subcommand(self) -> None:
         with patch.object(cli.card, "main", return_value=7) as prepare_card:
             self.assertEqual(cli.main(["prepare-card", "--boot", "/Volumes/bootfs"]), 7)
