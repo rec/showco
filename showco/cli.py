@@ -16,10 +16,8 @@ from . import (
     python,
     rehearsal,
     services,
-    update,
 )
 from .mixer import MixersMonitor, load_mixer_specs
-from .provision import provision
 from .server import make_server
 from .twitcho import auth, client
 
@@ -77,11 +75,9 @@ def main(argv: list[str] | None = None) -> int:
             "run": run_command,
             "prepare-card": card.main,
             "go": go.main,
-            "provision": provision.main,
             "logs": logs.main,
             "python": python.main,
             "twitcho": twitcho_command,
-            "update": update.main,
         },
         argv,
         prog="showco",

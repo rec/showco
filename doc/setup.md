@@ -37,7 +37,7 @@ Raspberry Pi OS Lite images do not expose that setting in Raspberry Pi Imager.
    the Pi host, user, X18 network, internal Wi-Fi, external Wi-Fi, Twitch, Lyte, and
    USB device settings are correct for this test.
 
-10. From the developer machine, run `uv run showco provision`.
+10. From the developer machine, run `uv run showco go`.
 
 11. Wait for provisioning to finish, reboot the Pi, reconnect over SSH, and print
     `Success!`.

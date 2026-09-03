@@ -18,89 +18,6 @@ class UpdateTests(unittest.TestCase):
         ensure_log.start()
         self.addCleanup(ensure_log.stop)
 
-    def test_update_host_override_is_used_for_target_ssh(self) -> None:
-        with (
-            mock.patch(
-                "showco.update.machine_role.machine_role",
-                return_value="provisioning",
-            ),
-            mock.patch(
-                "showco.update.update_from_provisioning_machine", return_value=0
-            ) as update_from_provisioning_machine,
-            mock.patch("showco.update.tqdm.write") as write,
-        ):
-            result = update.main(["--host", "other.local", "recs"])
-
-        self.assertEqual(result, 0)
-        self.assertEqual(
-            update_from_provisioning_machine.call_args.args,
-            (["recs"],),
-        )
-        self.assertEqual(
-            update_from_provisioning_machine.call_args.kwargs,
-            {"host": "other.local", "autosquash": 50},
-        )
-        write.assert_called_once_with("Success!")
-
-    def test_update_root_override_is_used_for_target_ssh(self) -> None:
-        with (
-            mock.patch(
-                "showco.update.machine_role.machine_role",
-                return_value="provisioning",
-            ),
-            mock.patch(
-                "showco.update.update_from_provisioning_machine", return_value=0
-            ) as update_from_provisioning_machine,
-            mock.patch("showco.update.tqdm.write"),
-        ):
-            result = update.main(["--root", "/srv/show-projects", "recs"])
-
-        self.assertEqual(result, 0)
-        self.assertEqual(
-            update_from_provisioning_machine.call_args.kwargs,
-            {
-                "host": None,
-                "root": Path("/srv/show-projects"),
-                "autosquash": 50,
-            },
-        )
-
-    def test_update_accepts_zero_autosquash(self) -> None:
-        with (
-            mock.patch(
-                "showco.update.machine_role.machine_role",
-                return_value="provisioning",
-            ),
-            mock.patch(
-                "showco.update.update_from_provisioning_machine", return_value=0
-            ) as update_from_provisioning_machine,
-            mock.patch("showco.update.tqdm.write"),
-        ):
-            result = update.main(["--autosquash=0", "recs"])
-
-        self.assertEqual(result, 0)
-        self.assertEqual(
-            update_from_provisioning_machine.call_args.kwargs,
-            {"host": None, "autosquash": 0},
-        )
-
-    def test_remote_update_skips_local_repositories(self) -> None:
-        with (
-            mock.patch(
-                "showco.update.machine_role.machine_role",
-                return_value="provisioning",
-            ),
-            mock.patch("showco.update.update_remote_target", return_value=0) as remote,
-            mock.patch("showco.update.update_from_provisioning_machine") as local,
-            mock.patch("showco.update.tqdm.write"),
-        ):
-            result = update.main(["--remote", "--host", "other.local", "recs"])
-
-        self.assertEqual(result, 0)
-        self.assertEqual(remote.call_args.args, (["recs"],))
-        self.assertEqual(remote.call_args.kwargs, {"host": "other.local"})
-        local.assert_not_called()
-
     def test_remote_update_reports_target_before_ssh(self) -> None:
         output = StringIO()
         with mock.patch(
@@ -119,29 +36,6 @@ class UpdateTests(unittest.TestCase):
 
         self.assertEqual(result, 0)
         self.assertEqual(output.getvalue(), "Updating tom@bertrand.local from GitHub\n")
-
-    def test_target_machine_override_runs_target_update(self) -> None:
-        with (
-            mock.patch("showco.update.machine_role.machine_role", return_value=""),
-            mock.patch("showco.update.update_target", return_value=0) as update_target,
-            mock.patch("showco.update.tqdm.write") as write,
-        ):
-            result = update.main(["--target-machine", "recs"])
-
-        self.assertEqual(result, 0)
-        self.assertEqual(update_target.call_args.args, (["recs"],))
-        write.assert_called_once_with("Success!")
-
-    def test_update_prints_failure_summary(self) -> None:
-        with (
-            mock.patch("showco.update.machine_role.machine_role", return_value=""),
-            mock.patch("showco.update.update_target", return_value=1),
-            mock.patch("showco.update.tqdm.write") as write,
-        ):
-            result = update.main(["--target-machine", "recs"])
-
-        self.assertEqual(result, 1)
-        write.assert_called_once_with("ERROR: update failed")
 
     def test_remote_update_command_quotes_root_with_spaces(self) -> None:
         command = update.remote_update_command(["recs"], Path("/srv/show projects"))
@@ -180,7 +74,7 @@ class UpdateTests(unittest.TestCase):
         )
         self.assertTrue(
             command.endswith(
-                "uv run --locked showco update --target-machine "
+                "uv run --locked showco go --target-machine "
                 "--root '/srv/show projects' recs"
             )
         )
@@ -194,41 +88,7 @@ class UpdateTests(unittest.TestCase):
         self.assertIn('git reset --hard "$remote/$branch"', command)
         self.assertTrue(
             command.endswith(
-                "uv run --locked showco update --target-machine --root /code recs"
-            )
-        )
-
-    def test_legacy_remote_update_command_has_no_update_arguments(self) -> None:
-        command = update.legacy_remote_update_command(Path("/srv/show projects"))
-
-        self.assertEqual(
-            command,
-            "cd '/srv/show projects/showco' && "
-            'PATH="$HOME/.local/bin:$PATH" '
-            "uv run --locked showco update",
-        )
-
-    def test_rejected_update_arguments_requires_tyro_option_error(self) -> None:
-        self.assertTrue(
-            update.rejected_update_arguments(
-                update.StepResult(
-                    program="target",
-                    step="update",
-                    command=["ssh"],
-                    returncode=2,
-                    output="Unrecognized options: --root",
-                )
-            )
-        )
-        self.assertFalse(
-            update.rejected_update_arguments(
-                update.StepResult(
-                    program="target",
-                    step="update",
-                    command=["ssh"],
-                    returncode=1,
-                    output="git pull failed",
-                )
+                "uv run --locked showco go --target-machine --root /code recs"
             )
         )
 
@@ -681,8 +541,7 @@ class UpdateTests(unittest.TestCase):
         self.assertIn("uv sync --locked --directory /code/showco", remote_command)
         self.assertTrue(
             remote_command.endswith(
-                "uv run --locked showco update --target-machine "
-                "--root /code showco reccy"
+                "uv run --locked showco go --target-machine --root /code showco reccy"
             )
         )
         self.assertIn("ConnectTimeout=2", remote_update.call_args.args[2])
@@ -895,71 +754,6 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(environment["GIT_SEQUENCE_EDITOR"], ":")
         self.assertEqual(environment["GIT_EDITOR"], ":")
 
-    def test_provisioning_update_retries_old_target_without_arguments(self) -> None:
-        def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
-            if command[-2:] == ["branch", "--show-current"]:
-                return subprocess.CompletedProcess(command, 0, "main\n", "")
-            if command[-2:] == ["status", "--porcelain"]:
-                return subprocess.CompletedProcess(command, 0, "", "")
-            if command[-1:] == ["@{upstream}"]:
-                return subprocess.CompletedProcess(command, 0, "origin/main\n", "")
-            return subprocess.CompletedProcess(command, 0, "", "")
-
-        rejected = update.StepResult(
-            program="target",
-            step="update",
-            command=["ssh"],
-            returncode=2,
-            output="Unrecognized options: --target-machine",
-        )
-        succeeded = update.StepResult(
-            program="target",
-            step="legacy update",
-            command=["ssh"],
-            returncode=0,
-            output="",
-        )
-        updated = update.StepResult(
-            program="target",
-            step="update",
-            command=["ssh"],
-            returncode=0,
-            output="",
-        )
-        with (
-            mock.patch(
-                "showco.update.provisioning_config",
-                return_value=make_config(),
-            ),
-            mock.patch(
-                "showco.update.run_remote_step",
-                side_effect=[rejected, succeeded, updated],
-            ) as remote_update,
-        ):
-            result = update.update_from_provisioning_machine(
-                ["showco"],
-                root=Path("/code"),
-                local_root=Path("/code"),
-                run_command=run_command,
-                output=StringIO(),
-            )
-
-        self.assertEqual(result, 0)
-        self.assertEqual(remote_update.call_count, 3)
-        self.assertEqual(
-            remote_update.call_args_list[1].args[2][-1],
-            'cd /code/showco && PATH="$HOME/.local/bin:$PATH" '
-            "uv run --locked showco update",
-        )
-        self.assertIn(
-            "uv run --locked showco update --target-machine --root /code showco",
-            remote_update.call_args.args[2][-1],
-        )
-        self.assertIn(
-            'git reset --hard "$remote/$branch"',
-            remote_update.call_args.args[2][-1],
-        )
-
     def test_target_update_rejects_non_main_branches_before_stopping_services(
         self,
     ) -> None:
@@ -1047,7 +841,7 @@ class UpdateTests(unittest.TestCase):
         )
 
     def test_remote_step_reports_remote_output(self) -> None:
-        command = ["ssh", "tom@bertrand.local", "showco update"]
+        command = ["ssh", "tom@bertrand.local", "showco go"]
         with mock.patch(
             "showco.update.subprocess.run",
             return_value=subprocess.CompletedProcess(

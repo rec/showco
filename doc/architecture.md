@@ -103,28 +103,26 @@ the private network so an error does not leave the target inaccessible.
 
 ## Provisioning And Updates
 
-`showco provision` runs only on the provisioning machine. It reads the
-non-secret configuration and the local secret overlay, validates them before
-making remote changes, waits for SSH, uploads a generated Bash script, and
-runs that script on the target. The remote script performs locale, package,
-storage, checkout, dependency, network, and service setup. It reboots only
-when required, then the provisioning machine verifies enabled services, the
-Showco HTTP revision, and configured hardware conditions.
+`showco go` runs on the provisioning machine. With no update options, it
+compares the resolved local provisioning configuration and generated script with
+the fingerprint recorded by the target after its last successful provision. It
+runs full provisioning when they differ, otherwise it updates all repositories.
+Provisioning reads the non-secret configuration and local secret overlay,
+validates them before making remote changes, waits for SSH, uploads a generated
+Bash script, and runs that script on the target. The remote script performs
+locale, package, storage, checkout, dependency, network, and service setup. It
+reboots only when required, then the provisioning machine verifies enabled
+services, the Showco HTTP revision, and configured hardware conditions.
 
-`showco update` has two modes.
-
-- On the provisioning machine it checks and pushes selected sibling checkouts,
-  then calls the target update through SSH.
-- On the target it stops affected services, records their commits, updates each
-  checkout, synchronizes changed dependencies, restarts services, and verifies
-  Showco and Recs when applicable. The target checkout is disposable: a failed
-  target update may reset it to a known commit or upstream state. The local
-  development checkout is never reset by this process.
-
-`showco go` compares the resolved local provisioning configuration and generated
-script with the fingerprint recorded by the target after its last successful
-provision. It runs `showco update` when they match and full provisioning when
-they do not.
+Repository arguments, `--autosquash`, or `--remote` select update mode. Normal
+update mode checks and pushes selected sibling checkouts before calling the
+target through SSH. `--remote` updates the target directly from GitHub without
+examining local checkouts. On the target, `--target-machine` stops affected
+services, records their commits, updates each checkout, synchronizes changed
+dependencies, restarts services, and verifies Showco and Recs when applicable.
+The target checkout is disposable: a failed target update may reset it to a
+known commit or upstream state. The local development checkout is never reset
+by this process.
 
 `showco python` is a developer-machine diagnostic shortcut that executes a
 one-line Python expression in the target Showco checkout and environment.

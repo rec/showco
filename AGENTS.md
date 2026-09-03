@@ -13,7 +13,7 @@ client-side tooling unless the user explicitly asks for that direction.
 
 ## Important Modules
 
-- `showco/cli.py`: command-line parsing, `showco update`, rehearsal mode, and
+- `showco/cli.py`: command-line parsing, `showco go`, rehearsal mode, and
   optional Twitcho supervision.
 - `showco/server.py`: request handling, app orchestration, action dispatch, HTML,
   CSS, and form behavior.
@@ -67,7 +67,7 @@ Recheck before reporting, and separate pre-existing diagnostics from regressions
 
 - Do not launch `uv run showco`, rehearsal mode, system services, Twitch flows,
   or hardware-facing checks unless the user explicitly asks.
-- Do not run `showco update` as a verification step. It pushes or pulls sibling
+- Do not run `showco go` as a verification step. It pushes or pulls sibling
   repos and stops/restarts user services.
 - Recs and Twitcho are sibling editable dependencies. Changes that belong in
   those projects should be made there only when the user scopes the task that

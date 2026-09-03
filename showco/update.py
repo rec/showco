@@ -6,14 +6,13 @@ import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from subprocess import CalledProcessError, CompletedProcess, TimeoutExpired
-from typing import Annotated, TextIO
+from typing import TextIO
 
-import tyro
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from reccy import subprocess
 from tqdm import tqdm
 
-from . import machine_role, recs, repositories, revision, services
+from . import recs, repositories, revision, services
 from .provision import config, provision, script, ssh
 
 RunCommand = Callable[
@@ -28,17 +27,6 @@ class Program(BaseModel, frozen=True):
     service_names: list[str]
 
 
-class UpdateOptions(BaseModel, frozen=True):
-    repositories: Annotated[list[str], tyro.conf.Positional] = Field(
-        default_factory=list
-    )
-    host: str | None = None
-    root: Path | None = None
-    target_machine: bool = False
-    remote: bool = False
-    autosquash: int = Field(default=50, ge=0)
-
-
 class StepResult(BaseModel, frozen=True):
     program: str
     step: str
@@ -49,46 +37,6 @@ class StepResult(BaseModel, frozen=True):
     @property
     def ok(self) -> bool:
         return self.returncode == 0
-
-
-def main(argv: list[str] | None = None) -> int:
-    options = tyro.cli(
-        UpdateOptions,
-        args=sys.argv[1:] if argv is None else argv,
-        description="Push development repositories and update the target machine",
-    )
-    selected = selected_repositories(options.repositories)
-    if (
-        options.target_machine
-        or machine_role.machine_role() == machine_role.TARGET_ROLE
-    ):
-        if options.root is None:
-            result = update_target(selected)
-        else:
-            result = update_target(selected, root=options.root)
-    elif options.remote:
-        if options.root is None:
-            result = update_remote_target(selected, host=options.host)
-        else:
-            result = update_remote_target(
-                selected, host=options.host, root=options.root
-            )
-    else:
-        if options.root is None:
-            result = update_from_provisioning_machine(
-                selected,
-                host=options.host,
-                autosquash=options.autosquash,
-            )
-        else:
-            result = update_from_provisioning_machine(
-                selected,
-                host=options.host,
-                root=options.root,
-                autosquash=options.autosquash,
-            )
-    tqdm.write("Success!" if result == 0 else "ERROR: update failed")
-    return result
 
 
 def update_from_provisioning_machine(
@@ -123,22 +71,6 @@ def update_from_provisioning_machine(
             "update",
             ssh.ssh_command(provision_config, ssh_target, command),
         )
-        if rejected_update_arguments(target_result):
-            target_result = run_remote_step(
-                "target",
-                "legacy update",
-                ssh.ssh_command(
-                    provision_config,
-                    ssh_target,
-                    legacy_remote_update_command(root or provision_config.paths.root),
-                ),
-            )
-            if target_result.ok:
-                target_result = run_remote_step(
-                    "target",
-                    "update",
-                    ssh.ssh_command(provision_config, ssh_target, command),
-                )
         progress.update()
     if not target_result.ok:
         report_failure(target_result, output)
@@ -825,19 +757,8 @@ def remote_update_command(
         f"{showco_directory} && "
         f"cd {showco_directory} && "
         'PATH="$HOME/.local/bin:$PATH" '
-        f"uv run --locked showco update {arguments}"
+        f"uv run --locked showco go {arguments}"
     ).rstrip()
-
-
-def legacy_remote_update_command(root: Path) -> str:
-    return (
-        f'cd {shlex.quote(str(root / "showco"))} && PATH="$HOME/.local/bin:$PATH" '
-        "uv run --locked showco update"
-    )
-
-
-def rejected_update_arguments(result: StepResult) -> bool:
-    return not result.ok and "Unrecognized options:" in result.output
 
 
 def run_service_step(
