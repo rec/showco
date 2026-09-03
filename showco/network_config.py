@@ -65,9 +65,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def configure_network_from_paths(options: NetworkConfigOptions) -> int:
-    values = config.merge_values(
-        config.read_toml(options.config_path), config.read_toml(options.secrets)
-    )
+    values = config.load_values(options.config_path, options.secrets)
     return configure_network(config.config_from_values(values), dry_run=options.dry_run)
 
 

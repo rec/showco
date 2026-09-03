@@ -943,6 +943,17 @@ class ProvisionTests(unittest.TestCase):
             },
         )
 
+    def test_load_values_merges_config_and_secrets_files(self) -> None:
+        with TemporaryDirectory() as directory:
+            config_path = Path(directory) / "config.toml"
+            secrets_path = Path(directory) / "secrets.toml"
+            config_path.write_text("[network]\nhost = 'pi'\n")
+            secrets_path.write_text("[network]\npassword = 'secret'\n")
+
+            values = config.load_values(config_path, secrets_path)
+
+        self.assertEqual(values, {"network": {"host": "pi", "password": "secret"}})
+
     def test_remote_command_passes_network_config(self) -> None:
         config = make_config(
             values(

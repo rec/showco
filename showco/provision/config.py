@@ -386,6 +386,10 @@ def read_toml(path: Path) -> dict[str, object]:
     return {k: toml_value(v) for k, v in parsed.items()}
 
 
+def load_values(config_path: Path, secrets_path: Path) -> dict[str, object]:
+    return merge_values(read_toml(config_path), read_toml(secrets_path))
+
+
 def merge_values(
     config: dict[str, object], secrets: dict[str, object]
 ) -> dict[str, object]:
