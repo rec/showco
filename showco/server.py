@@ -24,6 +24,7 @@ from .twitcho.client import TwitchoClient
 
 MAX_ACTION_BYTES = 65_536
 MAX_CONCURRENT_REQUESTS = 8
+MAX_WAVEFORM_CONNECTIONS = 4
 ERROR_PAGE_LIMIT = 25
 LOGGER = logging.get_logger(__name__)
 SITE_DIRECTORY = Path(__file__).parent.parent / "site"
@@ -209,13 +210,17 @@ class ShowcoHandler(BaseHTTPRequestHandler):
             self.send_response(204)
             self.end_headers()
             return
-        self.send_response(200)
-        self.send_header("Cache-Control", "no-store")
-        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
-        self.send_header("Connection", "keep-alive")
-        self.end_headers()
-        layouts, batches, changed = bridge.snapshot()
+        server = cast(ShowcoServer, self.server)
+        if not server.waveform_slots.acquire(blocking=False):
+            self.send_error(503, "Too many waveform connections")
+            return
         try:
+            self.send_response(200)
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+            self.send_header("Connection", "keep-alive")
+            self.end_headers()
+            layouts, batches, changed = bridge.snapshot()
             for layout in layouts:
                 self._waveform_event("waveform_layout", layout.model_dump())
             for batch in batches:
@@ -231,6 +236,8 @@ class ShowcoHandler(BaseHTTPRequestHandler):
                 changed = updated
         except (BrokenPipeError, ConnectionResetError, OSError):
             return
+        finally:
+            server.waveform_slots.release()
 
     def _waveform_event(self, name: str, data: dict[str, object]) -> None:
         message = f"event: {name}\ndata: {json.dumps(data, separators=(',', ':'))}\n\n"
@@ -324,10 +331,12 @@ class ShowcoHandler(BaseHTTPRequestHandler):
 class ShowcoServer(ThreadingHTTPServer):
     app: ShowcoApp
     request_slots: threading.BoundedSemaphore
+    waveform_slots: threading.BoundedSemaphore
 
     def __init__(self, address: tuple[str, int], handler: type[ShowcoHandler]) -> None:
         super().__init__(address, handler)
         self.request_slots = threading.BoundedSemaphore(MAX_CONCURRENT_REQUESTS)
+        self.waveform_slots = threading.BoundedSemaphore(MAX_WAVEFORM_CONNECTIONS)
         self.daemon_threads = True
 
     def server_close(self) -> None:
