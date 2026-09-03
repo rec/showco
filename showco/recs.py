@@ -29,6 +29,7 @@ MAX_WAVEFORM_BATCHES = 80
 MAX_WAVEFORM_EVENTS = 400
 WAVEFORM_RECONNECT_SECONDS = 1.0
 WAVEFORM_FAILURE_LOG_SECONDS = 60.0
+WAVEFORM_CLOSE_SECONDS = 1.0
 LOGGER = logging.get_logger(__name__)
 
 
@@ -72,6 +73,8 @@ class WaveformBridge:
         self.reconnect.set()
         with self.condition:
             self.condition.notify_all()
+        if self.thread is not None:
+            self.thread.join(WAVEFORM_CLOSE_SECONDS)
 
     def snapshot(self) -> tuple[list[WaveformLayoutData], list[WaveformBatchData], int]:
         with self.condition:
@@ -89,16 +92,22 @@ class WaveformBridge:
 
     def events_since(
         self, changed: int
-    ) -> list[tuple[int, str, WaveformLayoutData | WaveformBatchData]]:
+    ) -> tuple[bool, list[tuple[int, str, WaveformLayoutData | WaveformBatchData]]]:
         with self.condition:
-            return [event for event in self.events if event[0] > changed]
+            if self.events and changed < self.events[0][0] - 1:
+                return True, []
+            return False, [event for event in self.events if event[0] > changed]
 
     def receive(self, event: rpc.Event) -> None:
-        if event.name == "waveform_layout":
-            self._layout(WaveformLayoutData.model_validate(event.data))
-        elif event.name == "waveform":
-            self._batch(WaveformBatchData.model_validate(event.data))
-        elif event.name in {"shutdown", "stopped"}:
+        try:
+            if event.name == "waveform_layout":
+                self._layout(WaveformLayoutData.model_validate(event.data))
+            elif event.name == "waveform":
+                self._batch(WaveformBatchData.model_validate(event.data))
+            elif event.name in {"shutdown", "stopped"}:
+                self.reconnect.set()
+        except ValidationError as error:
+            LOGGER.error("recs sent invalid waveform event: %s", error)
             self.reconnect.set()
 
     def _run(self) -> None:

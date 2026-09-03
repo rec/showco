@@ -232,7 +232,16 @@ class ShowcoHandler(BaseHTTPRequestHandler):
                     self.wfile.write(b": heartbeat\n\n")
                     self.wfile.flush()
                     continue
-                for _, name, event in bridge.events_since(changed):
+                missed, events = bridge.events_since(changed)
+                if missed:
+                    self._waveform_event("waveform_resync", {})
+                    layouts, batches, changed = bridge.snapshot()
+                    for layout in layouts:
+                        self._waveform_event("waveform_layout", layout.model_dump())
+                    for batch in batches:
+                        self._waveform_event("waveform", batch.model_dump())
+                    continue
+                for _, name, event in events:
                     self._waveform_event(name, event.model_dump())
                 changed = updated
         except (BrokenPipeError, ConnectionResetError, OSError):

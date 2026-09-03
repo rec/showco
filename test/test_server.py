@@ -103,7 +103,7 @@ class ServerTests(unittest.TestCase):
         bridge.wait_for_change.return_value = 1
         event = mock.Mock()
         event.model_dump.return_value = {}
-        bridge.events_since.return_value = [(1, "waveform", event)]
+        bridge.events_since.return_value = (False, [(1, "waveform", event)])
         handler = object.__new__(ShowcoHandler)
         handler.app = mock.Mock(waveforms=bridge)
         handler.server = mock.Mock(
@@ -117,6 +117,42 @@ class ServerTests(unittest.TestCase):
         handler._waveforms()
 
         self.assertTrue(handler.server.waveform_slots.acquire(blocking=False))
+
+    def test_missed_waveform_events_resend_the_current_snapshot(self) -> None:
+        layout = mock.Mock()
+        layout.model_dump.return_value = {"source": "Mixer"}
+        batch = mock.Mock()
+        batch.model_dump.return_value = {"source": "Mixer"}
+        bridge = mock.Mock()
+        bridge.stopped = Event()
+        bridge.snapshot.side_effect = [([], [], 0), ([layout], [batch], 3)]
+
+        def wait_for_change(changed: int, timeout: float) -> int:
+            bridge.stopped.set()
+            return 3
+
+        bridge.wait_for_change.side_effect = wait_for_change
+        bridge.events_since.return_value = (True, [])
+        handler = object.__new__(ShowcoHandler)
+        handler.app = mock.Mock(waveforms=bridge)
+        handler.server = mock.Mock(
+            waveform_slots=BoundedSemaphore(MAX_WAVEFORM_CONNECTIONS),
+        )
+        handler.send_response = mock.Mock()
+        handler.send_header = mock.Mock()
+        handler.end_headers = mock.Mock()
+        handler._waveform_event = mock.Mock()
+
+        handler._waveforms()
+
+        self.assertEqual(
+            handler._waveform_event.call_args_list,
+            [
+                mock.call("waveform_resync", {}),
+                mock.call("waveform_layout", {"source": "Mixer"}),
+                mock.call("waveform", {"source": "Mixer"}),
+            ],
+        )
 
     def test_waveform_connections_do_not_use_normal_request_slots(self) -> None:
         handler = object.__new__(ShowcoHandler)
