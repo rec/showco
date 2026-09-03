@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import ClassVar, cast
 from urllib import parse
 
+from pydantic import ValidationError
 from reccy import logging
 
 from . import models, services
@@ -95,72 +96,75 @@ class ShowcoApp:
     def run_action(self, form: dict[str, str]) -> models.ActionResult:
         with self.action_lock:
             action = form.get("action", "")
-            if action == "recs-calibrate":
-                result = self.recs.calibrate()
-            elif action == "recs-track-name":
-                result = self.recs.set_track_name(
-                    form.get("device", ""),
-                    form.get("channel", ""),
-                    form.get("track_name", ""),
-                )
-            elif action == "recs-set-stereo":
-                result = self.recs.set_stereo(
-                    form.get("device", ""), _channel_numbers(form.get("channels", ""))
-                )
-            elif action == "recs-set-attr":
-                try:
-                    value = json.loads(form.get("value", ""))
-                except json.JSONDecodeError:
-                    result = models.ActionResult(
-                        ok=False,
-                        message="recs attribute value must be valid JSON",
-                    )
-                else:
-                    result = self.recs.set_attr(form.get("address", ""), value)
-            elif action == "recs-shutdown":
-                if form.get("confirmation") == "shutdown":
-                    result = self.recs.shutdown()
-                else:
-                    result = models.ActionResult(
-                        ok=True, message="recs shutdown canceled"
-                    )
-            elif action in RECS_ACTIONS:
-                try:
-                    fields = _recs_fields(form)
-                except ValueError as e:
-                    result = models.ActionResult(ok=False, message=str(e))
-                else:
-                    result = self.recs.action(RECS_ACTIONS[action], **fields)
-            elif action == "twitcho-restart" and self.twitcho is None:
-                result = models.ActionResult(ok=False, message="twitcho is disabled")
-            elif action == "twitcho-restart":
-                result = self.twitcho_restart()
-            elif action == "lyte-test":
-                result = (
-                    self.lyte.test()
-                    if self.lyte is not None
-                    else models.ActionResult(ok=False, message="lyte is disabled")
-                )
-            elif action in TWITCHO_ACTIONS:
-                if self.twitcho is None:
-                    result = models.ActionResult(
-                        ok=False, message="twitcho is disabled"
-                    )
-                else:
-                    result = self.twitcho.action(
-                        TWITCHO_ACTIONS[action], **_twitcho_fields(form)
-                    )
-            else:
-                result = models.ActionResult(
-                    ok=False, message=f"unknown action {action}"
-                )
+            try:
+                result = self._dispatch_action(action, form)
+            except (
+                ConnectionError,
+                OSError,
+                TimeoutError,
+                ValidationError,
+                ValueError,
+            ) as error:
+                result = models.ActionResult(ok=False, message=str(error))
             with self.action_log_lock:
                 self.action_log = [result, *self.action_log[:9]]
             return result
 
+    def _dispatch_action(
+        self, action: str, form: dict[str, str]
+    ) -> models.ActionResult:
+        if action == "recs-calibrate":
+            return self.recs.calibrate()
+        if action == "recs-track-name":
+            return self.recs.set_track_name(
+                form.get("device", ""),
+                form.get("channel", ""),
+                form.get("track_name", ""),
+            )
+        if action == "recs-set-stereo":
+            return self.recs.set_stereo(
+                form.get("device", ""), _channel_numbers(form.get("channels", ""))
+            )
+        if action == "recs-set-attr":
+            try:
+                value = json.loads(form.get("value", ""))
+            except json.JSONDecodeError:
+                return models.ActionResult(
+                    ok=False,
+                    message="recs attribute value must be valid JSON",
+                )
+            return self.recs.set_attr(form.get("address", ""), value)
+        if action == "recs-shutdown":
+            if form.get("confirmation") == "shutdown":
+                return self.recs.shutdown()
+            return models.ActionResult(ok=True, message="recs shutdown canceled")
+        if action in RECS_ACTIONS:
+            return self.recs.action(RECS_ACTIONS[action], **_recs_fields(form))
+        if action == "twitcho-restart" and self.twitcho is None:
+            return models.ActionResult(ok=False, message="twitcho is disabled")
+        if action == "twitcho-restart":
+            return self.twitcho_restart()
+        if action == "lyte-test":
+            return (
+                self.lyte.test()
+                if self.lyte is not None
+                else models.ActionResult(ok=False, message="lyte is disabled")
+            )
+        if action in TWITCHO_ACTIONS:
+            if self.twitcho is None:
+                return models.ActionResult(ok=False, message="twitcho is disabled")
+            return self.twitcho.action(TWITCHO_ACTIONS[action], **_twitcho_fields(form))
+        return models.ActionResult(ok=False, message=f"unknown action {action}")
+
     def recent_actions(self) -> list[models.ActionResult]:
         with self.action_log_lock:
             return list(self.action_log)
+
+
+class FormError(ValueError):
+    def __init__(self, status: int, message: str) -> None:
+        self.status = status
+        self.message = message
 
 
 class ShowcoHandler(BaseHTTPRequestHandler):
@@ -258,8 +262,8 @@ class ShowcoHandler(BaseHTTPRequestHandler):
             return
         try:
             form = self._form()
-        except ValueError as error:
-            self.send_error(413, str(error))
+        except FormError as error:
+            self.send_error(error.status, error.message)
             return
         result = self.app.run_action(form)
         self._log_action(form.get("action", ""), result)
@@ -277,12 +281,18 @@ class ShowcoHandler(BaseHTTPRequestHandler):
         try:
             length = int(self.headers.get("Content-Length", "0"))
         except ValueError:
-            raise ValueError("invalid Content-Length") from None
+            raise FormError(413, "invalid Content-Length") from None
         if length < 0 or length > MAX_ACTION_BYTES:
-            raise ValueError(f"action body exceeds {MAX_ACTION_BYTES} bytes")
-        body = self.rfile.read(length).decode()
-        parsed = parse.parse_qs(body)
-        return {k: v[-1] for k, v in parsed.items() if v}
+            raise FormError(413, f"action body exceeds {MAX_ACTION_BYTES} bytes")
+        try:
+            body = self.rfile.read(length).decode()
+        except UnicodeDecodeError:
+            raise FormError(400, "action body is not valid UTF-8") from None
+        try:
+            pairs = parse.parse_qsl(body, strict_parsing=True)
+        except ValueError:
+            raise FormError(400, "action body is malformed") from None
+        return {key: value for key, value in pairs}
 
     def _acquire_request(self) -> bool:
         if cast(ShowcoServer, self.server).request_slots.acquire(blocking=False):
