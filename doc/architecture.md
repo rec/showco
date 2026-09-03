@@ -25,13 +25,13 @@ The target uses user-level systemd services with user lingering enabled:
 
 | Service | Responsibility | Showco relationship |
 | --- | --- | --- |
-| `recs.service` | Capture and record X18 USB audio. | Showco reads its status and sends Recs control requests. |
-| `showco.service` | Serve the local web UI and start the X18 OSC recorder when configured. | The central browser-facing service. |
+| `recs.service` | Capture and record mixer USB audio and record configured OSC nodes. | Showco reads its status and sends Recs control requests. |
+| `showco.service` | Serve the local web UI. | The central browser-facing service. |
 | `lyte.service` | Control lighting when enabled. | Installed and checked by provisioning and updates; it is not part of the Showco HTTP request path. |
 | `twitcho.service` | Run Twitch streaming and its external controls when enabled. | Showco queries it and forwards explicit operator actions. |
 
-Showco must remain usable when Recs, Lyte, Twitcho, the mixer, or the X18 OSC
-recorder is unavailable. Their failures are represented in status or action
+Showco must remain usable when Recs, Lyte, Twitcho, a mixer, or an OSC recorder
+is unavailable. Their failures are represented in status or action
 results rather than preventing the HTTP service from starting.
 
 ## Web UI
@@ -80,11 +80,11 @@ The X18 has two independent paths to the target:
   bridges the private Wi-Fi access point and the Pi Ethernet interface so the
   tablet can reach the mixer.
 
-When `--x18-host` is supplied to `showco run`, Showco launches a child process
-that subscribes to X18 OSC on UDP port 10024. It writes decoded packets to
-timestamped JSONL files and publishes a small status file. This recorder is
-read-only: it sends `/xremote` only to maintain the subscription and never
-changes mixer state.
+Recs owns generic OSC recording. Its configured nodes may subscribe, poll, or
+listen for continuous telemetry and write timestamped JSONL recordings. Showco
+shows each named recorder independently from mixer reachability. An X18 node
+uses `/xremote` only to maintain its subscription and never changes mixer
+state.
 
 ## Network Topologies
 
@@ -103,26 +103,25 @@ the private network so an error does not leave the target inaccessible.
 
 ## Provisioning And Updates
 
-`showco go` runs on the provisioning machine. With no update options, it
-compares the resolved local provisioning configuration and generated script with
-the fingerprint recorded by the target after its last successful provision. It
-runs full provisioning when they differ, otherwise it updates all repositories.
-Provisioning reads the non-secret configuration and local secret overlay,
-validates them before making remote changes, waits for SSH, uploads a generated
-Bash script, and runs that script on the target. The remote script performs
-locale, package, storage, checkout, dependency, network, and service setup. It
-reboots only when required, then the provisioning machine verifies enabled
+`showco go` runs on the provisioning machine. With no repository or remote
+update option, it compares the resolved local provisioning configuration and
+generated script with the fingerprint recorded by the target after its last
+successful provision. It runs full provisioning when they differ, otherwise it
+updates all repositories. Provisioning reads the non-secret configuration and
+local secret overlay, validates them before making remote changes, waits for
+SSH, uploads a generated Bash script, and runs that script on the target. The
+remote script performs locale, package, storage, checkout, dependency, network,
+and service setup. It reboots only when required, then verifies enabled
 services, the Showco HTTP revision, and configured hardware conditions.
 
 Repository arguments, `--autosquash`, or `--remote` select update mode. Normal
 update mode checks and pushes selected sibling checkouts before calling the
 target through SSH. `--remote` updates the target directly from GitHub without
-examining local checkouts. On the target, `--target-machine` stops affected
-services, records their commits, updates each checkout, synchronizes changed
-dependencies, restarts services, and verifies Showco and Recs when applicable.
-The target checkout is disposable: a failed target update may reset it to a
-known commit or upstream state. The local development checkout is never reset
-by this process.
+examining local checkouts. On the target, the update stops affected services,
+records their commits, updates each checkout, synchronizes changed dependencies,
+restarts services, and verifies Showco and Recs when applicable. The target
+checkout is disposable: a failed target update may reset it to a known commit or
+upstream state. The local development checkout is never reset by this process.
 
 `showco python` is a developer-machine diagnostic shortcut that executes a
 one-line Python expression in the target Showco checkout and environment.
@@ -141,10 +140,11 @@ need GitHub credentials.
 
 ## Operational Diagnostics
 
-Service lifecycle and Python application output go to the persistent systemd
-journal. Use `journalctl --user -u <service>.service` on the target for service
-logs. The web UI reports current dependency health and recent operator actions;
-it is not intended to retain complete diagnostic history.
+Each service writes combined application output to its own persistent file at
+`~/.local/state/<service>/<service>.log`. Use `showco logs` to tail the known
+service logs, or pass service names and `--lines` to narrow the output. The web
+UI reports current dependency health and recent operator actions; it is not
+intended to retain complete diagnostic history.
 
 The acceptance and smoke-test documents define the software and hardware
 evidence required before treating the system as ready for a show.
