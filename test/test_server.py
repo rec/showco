@@ -3,13 +3,14 @@ from __future__ import annotations
 import unittest
 from datetime import datetime, timezone
 from io import BytesIO
-from threading import Event, Lock, Thread
+from threading import BoundedSemaphore, Event, Lock, Thread
 from unittest import mock
 
 from showco import models, rehearsal
 from showco.lyte import LyteClient
 from showco.server import (
     ERROR_PAGE_LIMIT,
+    MAX_WAVEFORM_CONNECTIONS,
     ShowcoApp,
     ShowcoHandler,
     actions_page,
@@ -82,6 +83,53 @@ class ServerTests(unittest.TestCase):
             handler.wfile.getvalue(),
             b'event: waveform\ndata: {"source":"Mixer"}\n\n',
         )
+
+    def test_waveform_connection_limit_returns_service_unavailable(self) -> None:
+        handler = object.__new__(ShowcoHandler)
+        handler.app = mock.Mock(waveforms=object())
+        handler.server = mock.Mock(
+            waveform_slots=BoundedSemaphore(0),
+        )
+        handler.send_error = mock.Mock()
+
+        handler._waveforms()
+
+        handler.send_error.assert_called_once_with(503, "Too many waveform connections")
+
+    def test_waveform_disconnect_releases_connection_slot(self) -> None:
+        bridge = mock.Mock()
+        bridge.snapshot.return_value = ([], [], 0)
+        bridge.stopped = Event()
+        bridge.wait_for_change.return_value = 1
+        event = mock.Mock()
+        event.model_dump.return_value = {}
+        bridge.events_since.return_value = [(1, "waveform", event)]
+        handler = object.__new__(ShowcoHandler)
+        handler.app = mock.Mock(waveforms=bridge)
+        handler.server = mock.Mock(
+            waveform_slots=BoundedSemaphore(MAX_WAVEFORM_CONNECTIONS),
+        )
+        handler.send_response = mock.Mock()
+        handler.send_header = mock.Mock()
+        handler.end_headers = mock.Mock()
+        handler._waveform_event = mock.Mock(side_effect=BrokenPipeError)
+
+        handler._waveforms()
+
+        self.assertTrue(handler.server.waveform_slots.acquire(blocking=False))
+
+    def test_waveform_connections_do_not_use_normal_request_slots(self) -> None:
+        handler = object.__new__(ShowcoHandler)
+        handler.server = mock.Mock(
+            request_slots=BoundedSemaphore(1),
+            waveform_slots=BoundedSemaphore(MAX_WAVEFORM_CONNECTIONS),
+        )
+        handler.send_error = mock.Mock()
+        for _ in range(MAX_WAVEFORM_CONNECTIONS):
+            self.assertTrue(handler.server.waveform_slots.acquire(blocking=False))
+
+        self.assertTrue(handler._acquire_request())
+        handler.server.request_slots.release()
 
     def test_form_rejects_large_request(self) -> None:
         handler = object.__new__(ShowcoHandler)
