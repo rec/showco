@@ -24,8 +24,6 @@ Showco uses these requests:
 {"type":"set_key_label","key":"g","label":"guitar solo"}
 {"type":"pause_recording"}
 {"type":"resume_recording"}
-{"type":"start_recording"}
-{"type":"stop_recording"}
 {"type":"capabilities"}
 {"type":"disk_status"}
 {"type":"list_devices"}
