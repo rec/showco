@@ -281,6 +281,21 @@ class ServerTests(unittest.TestCase):
         self.assertIn('id="recs-snapshot"', html)
         self.assertIn("recs snapshot: recs status_snapshot failed: slow", html)
 
+    def test_health_page_shows_empty_recs_errors(self) -> None:
+        html = health_page(
+            models.ShowStatus(
+                recs=models.RecsStatus(
+                    service=models.ServiceStatus(name="recs", state="connected")
+                ),
+                twitcho=models.TwitchoStatus(
+                    service=models.ServiceStatus(name="twitcho", state="disabled")
+                ),
+            )
+        )
+
+        self.assertIn('<div id="recs-errors"', html)
+        self.assertIn("No errors", html)
+
     def test_health_page_shows_lyte_output_error(self) -> None:
         html = health_page(
             models.ShowStatus(
