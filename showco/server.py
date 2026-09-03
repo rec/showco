@@ -6,6 +6,7 @@ import subprocess
 import threading
 import time
 from collections.abc import Callable
+from datetime import datetime
 from functools import cache
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -64,6 +65,9 @@ class ShowcoApp:
         else:
             twitcho = self.twitcho.status()
         recs = self.recs.status()
+        recs = recs.model_copy(
+            update={"errors": errors_since(recs.errors, self.run_started_at)}
+        )
         return models.ShowStatus(
             recs=recs,
             twitcho=twitcho,
@@ -440,6 +444,24 @@ def errors_page(errors: list[models.ErrorRecord]) -> str:
         body,
         script=site_file("status-script.js"),
     )
+
+
+def errors_since(
+    errors: list[models.ErrorRecord], started_at: float
+) -> list[models.ErrorRecord]:
+    return [
+        e
+        for e in errors
+        if (timestamp := error_timestamp(e.timestamp)) is None
+        or timestamp >= started_at
+    ]
+
+
+def error_timestamp(value: str) -> float | None:
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return None
 
 
 def actions_page(

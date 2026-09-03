@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from datetime import datetime, timezone
 from io import BytesIO
 from threading import Event, Lock, Thread
 from unittest import mock
@@ -30,6 +31,34 @@ class ServerTests(unittest.TestCase):
 
         self.assertEqual(app.status().revision, "revision")
         source_revision.assert_called_once_with()
+
+    def test_status_excludes_errors_from_before_the_server_started(self) -> None:
+        recs = mock.Mock()
+        recs.status.return_value = models.RecsStatus(
+            service=models.ServiceStatus(name="recs", state="connected"),
+            errors=[
+                models.ErrorRecord(
+                    timestamp="2026-09-03T18:00:00Z", message="old error"
+                ),
+                models.ErrorRecord(
+                    timestamp="2026-09-03T18:10:00Z", message="new error"
+                ),
+                models.ErrorRecord(timestamp="", message="startup error"),
+            ],
+        )
+        app = ShowcoApp(
+            recs,
+            None,
+            rehearsal.RehearsalSystemMonitor(),
+            rehearsal.RehearsalMixersMonitor(),
+        )
+        app.run_started_at = datetime(
+            2026, 9, 3, 18, 5, tzinfo=timezone.utc
+        ).timestamp()
+
+        errors = app.status().recs.errors
+
+        self.assertEqual([e.message for e in errors], ["new error", "startup error"])
 
     def test_html_is_not_cacheable(self) -> None:
         handler = object.__new__(ShowcoHandler)
