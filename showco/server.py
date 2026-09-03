@@ -56,7 +56,7 @@ class ShowcoApp:
         self.lyte = lyte
         self.revision = source_revision()
         self.run_started_at = time.time()
-        self.action_log: list[models.ActionResult] = []
+        self.action_log: list[models.ActionLogEntry] = []
         self.action_lock = threading.Lock()
         self.action_log_lock = threading.Lock()
 
@@ -104,7 +104,8 @@ class ShowcoApp:
             ) as error:
                 result = models.ActionResult(ok=False, message=str(error))
             with self.action_log_lock:
-                self.action_log = [result, *self.action_log[:9]]
+                entry = action_log_entry(action, result)
+                self.action_log = [entry, *self.action_log[:9]]
             return result
 
     def _dispatch_action(
@@ -153,7 +154,7 @@ class ShowcoApp:
             return self.twitcho.action(TWITCHO_ACTIONS[action], **_twitcho_fields(form))
         return models.ActionResult(ok=False, message=f"unknown action {action}")
 
-    def recent_actions(self) -> list[models.ActionResult]:
+    def recent_actions(self) -> list[models.ActionLogEntry]:
         with self.action_log_lock:
             return list(self.action_log)
 
@@ -512,7 +513,7 @@ def error_timestamp(value: str) -> float | None:
 
 
 def actions_page(
-    action_log: list[models.ActionResult],
+    action_log: list[models.ActionLogEntry],
     *,
     twitcho_enabled: bool = True,
     lyte_enabled: bool = True,
@@ -742,9 +743,27 @@ def shutdown_action() -> str:
     """
 
 
-def action_result(result: models.ActionResult) -> str:
+def action_log_entry(action: str, result: models.ActionResult) -> models.ActionLogEntry:
+    service, separator, command = action.partition("-")
+    if not separator:
+        service, command = "showco", action or "unknown"
+    return models.ActionLogEntry(
+        service=service,
+        command=command,
+        timestamp=datetime.now().astimezone(),
+        result=result,
+    )
+
+
+def action_result(entry: models.ActionLogEntry) -> str:
+    result = entry.result
     state = "ok" if result.ok else "failed"
-    return f'<p class="{state}">{html.escape(result.message)}</p>'
+    timestamp = entry.timestamp.strftime("%H:%M:%S")
+    return (
+        f'<p class="{state}"><time>{timestamp}</time> '
+        f"{html.escape(entry.service)} {html.escape(entry.command)}: "
+        f"{html.escape(result.message)}</p>"
+    )
 
 
 def _recording_text(status: models.ShowStatus) -> str:

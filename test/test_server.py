@@ -615,6 +615,22 @@ class ServerTests(unittest.TestCase):
         self.assertIn('button.setAttribute("aria-busy", "true")', html)
         self.assertIn('button:active, button[aria-busy="true"]', html)
 
+    def test_actions_page_shows_action_history_details(self) -> None:
+        html = actions_page(
+            [
+                models.ActionLogEntry(
+                    service="recs",
+                    command="calibrate",
+                    timestamp=datetime(2026, 9, 4, 12, 34, 56, tzinfo=timezone.utc),
+                    result=models.ActionResult(ok=False, message="socket unavailable"),
+                )
+            ]
+        )
+
+        self.assertIn("12:34:56", html)
+        self.assertIn("recs calibrate: socket unavailable", html)
+        self.assertIn('class="failed"', html)
+
     def test_lyte_light_test_uses_lyte_client(self) -> None:
         app = ShowcoApp(
             rehearsal.RehearsalRecsClient(),
@@ -774,7 +790,7 @@ class ServerTests(unittest.TestCase):
         for i in range(12):
             app.run_action({"action": f"unknown-{i}"})
 
-        messages = [r.message for r in app.recent_actions()]
+        messages = [entry.result.message for entry in app.recent_actions()]
         self.assertEqual(len(messages), 10)
         self.assertEqual(messages[0], "unknown action unknown-11")
         self.assertEqual(messages[-1], "unknown action unknown-2")
@@ -793,7 +809,10 @@ class ServerTests(unittest.TestCase):
 
         self.assertFalse(result.ok)
         self.assertEqual(result.message, "recs socket unavailable")
-        self.assertEqual(app.recent_actions(), [result])
+        entry = app.recent_actions()[0]
+        self.assertEqual(entry.service, "recs")
+        self.assertEqual(entry.command, "calibrate")
+        self.assertEqual(entry.result, result)
 
     def test_actions_do_not_overlap(self) -> None:
         calls = 0

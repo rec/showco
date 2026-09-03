@@ -1,11 +1,20 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 
 class ActionResult(BaseModel, frozen=True):
     ok: bool
     message: str
+
+
+class ActionLogEntry(BaseModel, frozen=True):
+    service: str
+    command: str
+    timestamp: datetime
+    result: ActionResult
 
 
 class ServiceStatus(BaseModel, frozen=True):
