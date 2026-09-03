@@ -735,9 +735,9 @@ def tracked_worktree_changes(status_output: str) -> str:
 
 
 def provisioning_config() -> config.Config:
-    values = config.merge_values(
-        config.read_toml(provision.PROVISION_DIR / "config.toml"),
-        config.read_toml(provision.PROVISION_DIR / "secrets.toml"),
+    values = config.load_values(
+        provision.PROVISION_DIR / "config.toml",
+        provision.PROVISION_DIR / "secrets.toml",
     )
     return config.config_from_values(values)
 

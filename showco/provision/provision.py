@@ -43,9 +43,7 @@ class GoOptions(BaseModel, frozen=True):
 
 
 def resolved_config(options: GoOptions) -> config.Config:
-    env = config.merge_values(
-        config.read_toml(options.config_path), config.read_toml(options.secrets)
-    )
+    env = config.load_values(options.config_path, options.secrets)
     provision_config = config.config_from_values(
         env,
         host=options.host,

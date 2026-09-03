@@ -65,12 +65,7 @@ def exchange_code_command(
     secrets: Path = DEFAULT_SECRETS_PATH,
 ) -> int:
     options = auth_options(config_path, secrets)
-    return exchange_code(
-        config.merge_values(
-            config.read_toml(options.config),
-            config.read_toml(options.secrets),
-        )
-    )
+    return exchange_code(config.load_values(options.config, options.secrets))
 
 
 def validate_token_command(
