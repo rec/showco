@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import Annotated
 
@@ -70,6 +71,9 @@ def run_web_ui(options: WebUiOptions) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     logging.configure()
+    arguments = sys.argv[1:] if argv is None else argv
+    if not arguments:
+        return go.main([])
     return cli.route_command(
         {
             "run": run_command,
@@ -79,7 +83,7 @@ def main(argv: list[str] | None = None) -> int:
             "python": python.main,
             "twitcho": twitcho_command,
         },
-        argv,
+        arguments,
         prog="showco",
     )
 
