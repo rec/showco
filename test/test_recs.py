@@ -46,6 +46,12 @@ class FakeWaveformEvents:
 
 
 class RecsTests(unittest.TestCase):
+    def test_unsupported_action_returns_failure(self) -> None:
+        result = RecsClient().action("stop_recording")
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.message, "recs does not support stop_recording")
+
     def test_waveform_bridge_keeps_current_layout_and_batches(self) -> None:
         bridge = WaveformBridge()
         layout = WaveformLayoutData(
