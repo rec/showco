@@ -648,6 +648,31 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(result, expected)
         lyte.test.assert_called_once_with()
 
+    def test_lyte_reconnection_queues_one_light_test(self) -> None:
+        lyte = mock.Mock(spec=LyteClient)
+        offline = models.LyteStatus(
+            service=models.ServiceStatus(name="lyte", state="offline")
+        )
+        online = models.LyteStatus(
+            service=models.ServiceStatus(name="lyte", state="connected")
+        )
+        lyte.status.side_effect = [offline, online, online, offline, online]
+        lyte.test.return_value = models.ActionResult(
+            ok=True, message="lyte light test queued"
+        )
+        app = ShowcoApp(
+            rehearsal.RehearsalRecsClient(),
+            rehearsal.RehearsalTwitchoClient(),
+            rehearsal.RehearsalSystemMonitor(),
+            rehearsal.RehearsalMixersMonitor(),
+            lyte=lyte,
+        )
+
+        for _ in range(5):
+            app.status()
+
+        self.assertEqual(lyte.test.call_count, 2)
+
     def test_twitch_restart_action_uses_service_restart(self) -> None:
         restart = mock.Mock(
             return_value=models.ActionResult(

@@ -48,6 +48,7 @@ class LyteClientTests(unittest.TestCase):
 
         self.assertTrue(result.ok)
         self.assertEqual(result.message, "lyte light test queued")
+        client.call.assert_called_once_with("test", duration=1.0)
 
     def test_invalid_test_reply_is_an_error(self) -> None:
         client = mock.Mock()
