@@ -7,6 +7,7 @@ from reccy import rpc
 from . import models
 
 CONTROL_ENDPOINT = Path.home() / ".local/state/lyte/gui.sock"
+LIGHT_TEST_LEVEL = 30.0
 LIGHT_TEST_DURATION = 1.0
 
 
@@ -62,7 +63,9 @@ class LyteClient:
         if not self.enabled:
             return models.ActionResult(ok=False, message="lyte is disabled")
         try:
-            result = self._call("test", duration=LIGHT_TEST_DURATION)
+            result = self._call(
+                "test", level=LIGHT_TEST_LEVEL, duration=LIGHT_TEST_DURATION
+            )
         except (ConnectionError, OSError, TimeoutError, ValueError) as error:
             return models.ActionResult(ok=False, message=f"lyte test failed: {error}")
         if isinstance(result, dict) and result.get("state") == "queued":
