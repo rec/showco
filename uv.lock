@@ -7,7 +7,7 @@ resolution-markers = [
 ]
 
 [options]
-exclude-newer = "2026-08-21T10:03:51.274453Z"
+exclude-newer = "2026-08-29T13:21:34.66874Z"
 exclude-newer-span = "P1W"
 
 [[package]]
@@ -730,7 +730,7 @@ wheels = [
 [[package]]
 name = "reccy"
 version = "0.1.0"
-source = { git = "https://github.com/rec/reccy.git?branch=main#9d7c96da2bf4f535d118449b726448adcea1e20f" }
+source = { git = "https://github.com/rec/reccy.git?branch=main#aac3c510fd50fdd218eaf5d2bdffa15c54e7d268" }
 dependencies = [
     { name = "pint" },
     { name = "pydantic" },
@@ -742,7 +742,7 @@ dependencies = [
 [[package]]
 name = "recs"
 version = "0.12.5"
-source = { git = "https://github.com/rec/recs.git?branch=main#111dabf3b2eba4e7a68f283874d271942c46f875" }
+source = { git = "https://github.com/rec/recs.git?branch=main#48b5cf83d3ee6dc0efa03abb9e25fd2bbf22458f" }
 dependencies = [
     { name = "humanfriendly" },
     { name = "mido", extra = ["ports-rtmidi"] },
