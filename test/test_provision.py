@@ -47,6 +47,15 @@ class ProvisionTests(unittest.TestCase):
         self.assertEqual(options.autosquash, 0)
         self.assertEqual(options.repositories, ["recs"])
 
+    def test_go_options_accept_local_update_flags(self) -> None:
+        push = tyro.cli(provision.GoOptions, args=["--push", "recs"])
+        sync = tyro.cli(provision.GoOptions, args=["--sync", "reccy"])
+
+        self.assertTrue(push.push)
+        self.assertEqual(push.repositories, ["recs"])
+        self.assertTrue(sync.sync)
+        self.assertEqual(sync.repositories, ["reccy"])
+
     def test_run_finishes_after_successful_provisioning(self) -> None:
         options = provision.GoOptions(
             config_path=Path("config.toml"),

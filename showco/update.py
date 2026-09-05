@@ -5,6 +5,7 @@ import shlex
 import sys
 import tomllib
 from collections.abc import Callable, Sequence
+from enum import StrEnum, auto
 from pathlib import Path
 from subprocess import CalledProcessError, CompletedProcess, TimeoutExpired
 from typing import TextIO
@@ -46,6 +47,12 @@ class StepResult(BaseModel, frozen=True):
     @property
     def ok(self) -> bool:
         return self.returncode == 0
+
+
+class DependencyRefresh(StrEnum):
+    FAILED = auto()
+    UNCHANGED = auto()
+    UPDATED = auto()
 
 
 def update_from_provisioning_machine(
@@ -140,12 +147,34 @@ def refresh_local_dependencies(
     selected: list[str], root: Path, run_command: RunCommand, output: TextIO
 ) -> bool:
     programs = programs_for_repositories(selected, root)
-    for program in programs:
-        dependencies = INTERNAL_DEPENDENCIES.get(program.name)
-        if dependencies and not refresh_program_dependencies(
-            program, dependencies, run_command, output
-        ):
-            return False
+    updated: list[str] = []
+    unchanged: list[str] = []
+    skipped: list[str] = []
+    with progress_bar(len(programs), output) as progress:
+        for program in programs:
+            progress.set_description_str(f"Synchronizing {program.name}")
+            dependencies = INTERNAL_DEPENDENCIES.get(program.name)
+            if not dependencies:
+                skipped.append(program.name)
+                progress.update()
+                continue
+            result = refresh_program_dependencies(
+                program, dependencies, run_command, output
+            )
+            progress.update()
+            if result == DependencyRefresh.FAILED:
+                return False
+            (updated if result == DependencyRefresh.UPDATED else unchanged).append(
+                program.name
+            )
+    outcomes: list[str] = []
+    if updated:
+        outcomes.append(f"updated {', '.join(updated)}")
+    if unchanged:
+        outcomes.append(f"unchanged {', '.join(unchanged)}")
+    if skipped:
+        outcomes.append(f"no internal dependencies {', '.join(skipped)}")
+    tqdm.write(f"Dependency synchronization: {'; '.join(outcomes)}.", file=output)
     return True
 
 
@@ -154,7 +183,7 @@ def refresh_program_dependencies(
     dependencies: list[str],
     run_command: RunCommand,
     output: TextIO,
-) -> bool:
+) -> DependencyRefresh:
     before_sources = locked_dependency_sources(program, dependencies)
     lock = run_step(
         program.name,
@@ -171,15 +200,15 @@ def refresh_program_dependencies(
     if not lock.ok:
         report_failure(lock, output)
         restore_generated_lockfile(program, run_command, output)
-        return False
+        return DependencyRefresh.FAILED
     if locked_dependency_sources(program, dependencies) == before_sources:
         if not restore_generated_lockfile(program, run_command, output):
-            return False
+            return DependencyRefresh.FAILED
     status, _ = lockfile_status_step(program, run_command)
     if not status.ok:
         report_failure(status, output)
         restore_generated_lockfile(program, run_command, output)
-        return False
+        return DependencyRefresh.FAILED
     verification_commands = [
         (
             "check lockfile",
@@ -202,14 +231,14 @@ def refresh_program_dependencies(
         if not result.ok:
             report_failure(result, output)
             restore_generated_lockfile(program, run_command, output)
-            return False
+            return DependencyRefresh.FAILED
     final_status, final_changed = lockfile_status_step(program, run_command)
     if not final_status.ok:
         report_failure(final_status, output)
         restore_generated_lockfile(program, run_command, output)
-        return False
+        return DependencyRefresh.FAILED
     if not final_changed:
-        return True
+        return DependencyRefresh.UNCHANGED
     stage = run_step(
         program.name,
         "stage lockfile",
@@ -219,7 +248,7 @@ def refresh_program_dependencies(
     if not stage.ok:
         report_failure(stage, output)
         restore_generated_lockfile(program, run_command, output)
-        return False
+        return DependencyRefresh.FAILED
     commit = run_step(
         program.name,
         "commit dependencies",
@@ -236,16 +265,16 @@ def refresh_program_dependencies(
     if not commit.ok:
         report_failure(commit, output)
         restore_generated_lockfile(program, run_command, output)
-        return False
+        return DependencyRefresh.FAILED
     state = publication_state(program, run_command)
     if isinstance(state, StepResult):
         report_failure(state, output)
-        return False
+        return DependencyRefresh.FAILED
     push = normal_push_step(program, state.remote, state.branch, run_command)
     if not push.ok:
         report_failure(push, output)
-        return False
-    return True
+        return DependencyRefresh.FAILED
+    return DependencyRefresh.UPDATED
 
 
 def lockfile_status_step(
