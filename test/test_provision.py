@@ -381,7 +381,7 @@ class ProvisionTests(unittest.TestCase):
         self.assertEqual(run_ssh.call_args_list[-1].args[1], "rm -f /tmp/remote.sh")
 
     def test_run_uses_key_based_ssh_command(self) -> None:
-        with mock.patch("reccy.subprocess.run") as run:
+        with mock.patch("reccy.runtime.subprocess.run") as run:
             ssh.run_command(["ssh"])
 
         run.assert_called_once_with(
@@ -636,7 +636,8 @@ class ProvisionTests(unittest.TestCase):
         connected = subprocess.CompletedProcess(["ssh"], 0, "", "")
         removed = subprocess.CompletedProcess(["ssh-keygen"], 0, "", "")
         with mock.patch(
-            "reccy.subprocess.run", side_effect=[changed_key, removed, connected]
+            "reccy.runtime.subprocess.run",
+            side_effect=[changed_key, removed, connected],
         ) as run:
             self.assertFalse(ssh.ssh_is_reachable(config))
             self.assertTrue(ssh.ssh_is_reachable(config))
@@ -659,7 +660,7 @@ class ProvisionTests(unittest.TestCase):
         changed_key = subprocess.CompletedProcess(
             ["ssh"], 255, "", "WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!"
         )
-        with mock.patch("reccy.subprocess.run", return_value=changed_key):
+        with mock.patch("reccy.runtime.subprocess.run", return_value=changed_key):
             with self.assertRaisesRegex(SystemExit, "accept_changed_host_key"):
                 ssh.ssh_is_reachable(config)
 
@@ -687,7 +688,7 @@ class ProvisionTests(unittest.TestCase):
     def test_run_scp_uses_short_connect_timeout(self) -> None:
         config = make_config(values(networks=networks(x18=False)))
 
-        with mock.patch("reccy.subprocess.run") as run:
+        with mock.patch("reccy.runtime.subprocess.run") as run:
             ssh.run_scp(config, Path("/tmp/local.sh"), "/tmp/remote.sh")
 
         self.assertIn("ConnectTimeout=2", run.call_args.args[0])
@@ -701,7 +702,7 @@ class ProvisionTests(unittest.TestCase):
         )
 
         with (
-            mock.patch("reccy.subprocess.run", side_effect=error),
+            mock.patch("reccy.runtime.subprocess.run", side_effect=error),
             self.assertRaises(SystemExit) as exit_error,
         ):
             ssh.run_ssh(config, "true")
@@ -1055,7 +1056,7 @@ class ProvisionTests(unittest.TestCase):
     def test_verify_provisioning_checks_projects_and_user_services(self) -> None:
         config = make_config(values())
         with mock.patch(
-            "reccy.subprocess.run",
+            "reccy.runtime.subprocess.run",
             return_value=subprocess.CompletedProcess(["ssh"], 0, "", ""),
         ) as run:
             results = verify.verify_provisioning(
@@ -1100,7 +1101,7 @@ class ProvisionTests(unittest.TestCase):
     def test_missing_mixer_devices_are_notes_not_errors(self) -> None:
         config = make_config(values())
         with mock.patch(
-            "reccy.subprocess.run",
+            "reccy.runtime.subprocess.run",
             return_value=subprocess.CompletedProcess(["ssh"], 1, "", ""),
         ):
             result = verify.verify_mixer_devices(config)
@@ -1112,7 +1113,7 @@ class ProvisionTests(unittest.TestCase):
     def test_mixer_audio_device_check_accepts_any_selector(self) -> None:
         config = make_config(values())
         with mock.patch(
-            "reccy.subprocess.run",
+            "reccy.runtime.subprocess.run",
             return_value=subprocess.CompletedProcess(["ssh"], 0, "", ""),
         ) as run:
             result = verify.verify_mixer_audio_inputs(config, "X18", ["X18", "XR18"])

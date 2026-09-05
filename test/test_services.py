@@ -6,7 +6,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import mock
 
-from reccy.models import Platform, ServicePaths, StatusResult
+from reccy.services.models import Platform, ServicePaths, StatusResult
 
 from showco import services
 
@@ -50,15 +50,15 @@ class ServicesTests(unittest.TestCase):
             controller.install.return_value = StatusResult(installed=True, running=True)
             with (
                 mock.patch(
-                    "showco.services.paths.current_platform",
+                    "showco.services.controller.current_platform",
                     return_value=Platform.linux,
                 ),
                 mock.patch(
-                    "showco.services.paths.service_paths",
+                    "showco.services.controller.service_paths",
                     return_value=paths,
                 ),
                 mock.patch(
-                    "showco.services.service.ServiceController",
+                    "showco.services.controller.ServiceController",
                     return_value=controller,
                 ),
             ):

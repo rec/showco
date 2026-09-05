@@ -11,7 +11,7 @@ from typing import Annotated, TextIO
 
 import tyro
 from pydantic import BaseModel
-from reccy import subprocess
+from reccy.runtime import subprocess
 
 from . import machine_role
 from .provision import config

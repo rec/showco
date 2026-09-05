@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from reccy import rpc
+from reccy.protocol import rpc
 
 from . import models
 

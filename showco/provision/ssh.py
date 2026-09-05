@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 from subprocess import CalledProcessError, CompletedProcess, TimeoutExpired
 
-from reccy import subprocess
+from reccy.runtime import subprocess
 
 from . import config
 

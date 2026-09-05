@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 from subprocess import CalledProcessError, TimeoutExpired
 
-from reccy import subprocess
+from reccy.runtime import subprocess
 
 from .. import network_config, repositories
 from . import config, script, ssh, verify

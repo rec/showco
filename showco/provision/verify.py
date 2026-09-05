@@ -8,7 +8,7 @@ from pathlib import Path
 from subprocess import TimeoutExpired
 
 from pydantic import BaseModel
-from reccy import subprocess
+from reccy.runtime import subprocess
 
 from .. import network_config, recs, revision
 from . import config, ssh

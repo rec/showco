@@ -10,8 +10,9 @@ from collections.abc import Callable
 from pathlib import Path
 
 from pydantic import BaseModel, ValidationError
-from reccy import ipc, logging, rpc
-from reccy.models import DaemonMetadata
+from reccy.protocol import ipc, rpc
+from reccy.runtime import logging
+from reccy.services.models import DaemonMetadata
 from recs.base.waveform import WaveformBatchData, WaveformLayoutData
 from recs.daemon import gui_protocol, paths
 from typing_extensions import TypeIs

@@ -6,7 +6,8 @@ from typing import Annotated
 
 import tyro
 from pydantic import BaseModel
-from reccy import cli, logging
+from reccy import cli
+from reccy.runtime import logging
 
 from . import (
     card,

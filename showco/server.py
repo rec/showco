@@ -14,7 +14,7 @@ from typing import ClassVar, cast
 from urllib import parse
 
 from pydantic import ValidationError
-from reccy import logging
+from reccy.runtime import logging
 
 from . import models, services
 from .lyte import LyteClient

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import tyro
 from pydantic import BaseModel
-from reccy import rpc
+from reccy.protocol import rpc
 
 from .. import machine_role
 from ..models import ActionResult, ServiceStatus, TwitchoStatus
