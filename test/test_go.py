@@ -150,6 +150,73 @@ class GoTests(unittest.TestCase):
         )
         provision_target.assert_not_called()
 
+    def test_push_prepares_local_repositories_only(self) -> None:
+        options = self.options(push=True, repositories=["recs"])
+        with (
+            mock.patch(
+                "showco.provision.provision.local_checkout_directory",
+                return_value=Path("/code"),
+            ),
+            mock.patch(
+                "showco.update.prepare_local_repositories", return_value=True
+            ) as prepare,
+            mock.patch("showco.update.refresh_local_dependencies") as refresh,
+            mock.patch("showco.provision.provision.resolved_config") as resolved,
+        ):
+            result = go.run(options)
+
+        self.assertEqual(result, 0)
+        prepare.assert_called_once_with(
+            ["recs", "showco"],
+            Path("/code"),
+            update.run_command_with_timeout,
+            mock.ANY,
+            autosquash=50,
+        )
+        refresh.assert_not_called()
+        resolved.assert_not_called()
+
+    def test_sync_prepares_and_refreshes_local_repositories(self) -> None:
+        options = self.options(sync=True, repositories=["recs"], autosquash=0)
+        with (
+            mock.patch(
+                "showco.provision.provision.local_checkout_directory",
+                return_value=Path("/code"),
+            ),
+            mock.patch(
+                "showco.update.prepare_local_repositories", return_value=True
+            ) as prepare,
+            mock.patch(
+                "showco.update.refresh_local_dependencies", return_value=True
+            ) as refresh,
+            mock.patch("showco.provision.provision.resolved_config") as resolved,
+        ):
+            result = go.run(options)
+
+        self.assertEqual(result, 0)
+        prepare.assert_called_once_with(
+            ["recs", "showco"],
+            Path("/code"),
+            update.run_command_with_timeout,
+            mock.ANY,
+            autosquash=0,
+        )
+        refresh.assert_called_once_with(
+            ["recs", "showco"],
+            Path("/code"),
+            update.run_command_with_timeout,
+            mock.ANY,
+        )
+        resolved.assert_not_called()
+
+    def test_push_and_sync_cannot_be_combined(self) -> None:
+        with self.assertRaisesRegex(SystemExit, "cannot be combined"):
+            go.run(self.options(push=True, sync=True))
+
+    def test_remote_and_sync_cannot_be_combined(self) -> None:
+        with self.assertRaisesRegex(SystemExit, "cannot be combined"):
+            go.run(self.options(remote=True, sync=True))
+
     def test_remote_update_skips_local_repositories(self) -> None:
         provision_config = mock.Mock(ssh_target="tom@bertrand.local")
         options = self.options(remote=True, repositories=["recs"])

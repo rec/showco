@@ -22,13 +22,16 @@ def main(argv: list[str] | None = None) -> int:
 
 def run(options: provision.GoOptions) -> int:
     selected = update.selected_repositories(options.repositories or [])
+    if options.push and options.sync:
+        sys.exit("ERROR: --push and --sync cannot be combined")
     if (
         options.target_machine
         or machine_role.machine_role() == machine_role.TARGET_ROLE
     ):
-        if options.system or options.remote:
+        if options.system or options.remote or options.push or options.sync:
             sys.exit(
-                "ERROR: --system and --remote are unavailable on the target machine"
+                "ERROR: --system, --remote, --push, and --sync are unavailable "
+                "on the target machine"
             )
         return update.update_target(
             selected,
@@ -40,8 +43,30 @@ def run(options: provision.GoOptions) -> int:
     update_requested = (
         options.repositories is not None or options.autosquash is not None
     )
-    if options.system and (update_requested or options.remote):
+    if options.system and (
+        update_requested or options.remote or options.push or options.sync
+    ):
         sys.exit("ERROR: --system cannot be combined with update options")
+    if options.remote and (options.push or options.sync):
+        sys.exit("ERROR: --remote cannot be combined with --push or --sync")
+    if options.push or options.sync:
+        local_root = provision.local_checkout_directory()
+        if not update.prepare_local_repositories(
+            selected,
+            local_root,
+            update.run_command_with_timeout,
+            sys.stdout,
+            autosquash=options.autosquash if options.autosquash is not None else 50,
+        ):
+            return 1
+        if options.sync and not update.refresh_local_dependencies(
+            selected,
+            local_root,
+            update.run_command_with_timeout,
+            sys.stdout,
+        ):
+            return 1
+        return 0
     provision_config = provision.resolved_config(options)
     if options.remote:
         return update.update_remote_target(
