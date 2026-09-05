@@ -135,7 +135,17 @@ operator changes for one update.
 
 Use `showco go --system` to force provisioning with an APT refresh. Pass
 repository names or `--autosquash` to update locally, or `--remote` to update
-the target directly from GitHub. Override the connection on the command line:
+the target directly from GitHub.
+
+Local updates include downstream consumers so their lockfiles and running
+services cannot remain on an older internal dependency. `showco go reccy`
+updates all five managed repositories, while `showco go recs` also updates
+Showco. Before deployment, Showco refreshes internal dependencies from their
+GitHub `main` branches, runs each affected repository's locked test suite, and
+normally pushes any generated `uv.lock` commit. `--remote` skips all local
+publication and dependency-refresh work.
+
+Override the connection on the command line:
 
 ```bash
 showco go \

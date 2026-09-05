@@ -1,1 +1,1 @@
-REPOSITORY_NAMES = ["reccy", "recs", "showco", "twitcho", "lyte"]
+REPOSITORY_NAMES = ["reccy", "recs", "twitcho", "lyte", "showco"]

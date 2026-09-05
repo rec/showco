@@ -75,6 +75,15 @@ def run(options: GoOptions, *, provision_config: config.Config | None = None) ->
         sys.exit(
             "ERROR: local repositories are not ready for Raspberry Pi provisioning"
         )
+    if not update.refresh_local_dependencies(
+        update.REPOSITORY_NAMES,
+        local_checkout_directory(),
+        update.run_command_with_timeout,
+        sys.stdout,
+    ):
+        sys.exit(
+            "ERROR: local dependencies are not ready for Raspberry Pi provisioning"
+        )
     if options.host is not None:
         persist_network_host(options.config_path, options.host)
     if options.root is not None:

@@ -84,7 +84,8 @@ Recheck before reporting, and separate pre-existing diagnostics from regressions
 - Keep dependency/tooling changes in a separate commit from behavior changes.
 - If `uv` updates `uv.lock`, inspect for unrelated `exclude-newer` metadata
   churn before committing.
-- Ignore dirty `uv.lock` files: do not stage or commit them, and do not count
-  them as changed worktrees during provisioning or updates.
+- Reject a dirty `uv.lock` before provisioning or updating. `showco go` may
+  stage and commit only lockfile changes it generated while refreshing internal
+  dependencies; it must not include any other changed path.
 - Leave `doc/checklist.md` untouched unless the user explicitly asks to update
   checklist content.
