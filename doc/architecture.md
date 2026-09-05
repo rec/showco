@@ -123,7 +123,10 @@ all repositories; selecting Recs also includes Showco. Autosquashed history uses
 force-with-lease only against the upstream commit recorded before rewriting.
 Generated dependency commits are never force-pushed. `--remote` updates the
 target directly from GitHub without examining local checkouts or refreshing
-dependencies. On the target, the update stops affected services, records their
+dependencies. `showco --push` stops after publishing the selected local
+histories. `showco --sync` additionally refreshes, tests, commits, and publishes
+their internal dependency lockfiles, but neither command contacts the target.
+On the target, the update stops affected services, records their
 commits, updates each checkout, synchronizes changed dependencies, restarts
 services, and verifies Showco and Recs when applicable. The target checkout is
 disposable: a failed target update may reset it to a known commit or upstream

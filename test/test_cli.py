@@ -31,6 +31,25 @@ class CliTests(unittest.TestCase):
 
         go.assert_called_once_with([])
 
+    def test_dispatches_push_flag_without_go_subcommand(self) -> None:
+        with patch.object(cli.go, "main", return_value=7) as go:
+            self.assertEqual(cli.main(["--push", "recs"]), 7)
+
+        go.assert_called_once_with(["--push", "recs"])
+
+    def test_dispatches_sync_flag_without_go_subcommand(self) -> None:
+        with patch.object(cli.go, "main", return_value=7) as go:
+            self.assertEqual(cli.main(["--sync", "reccy"]), 7)
+
+        go.assert_called_once_with(["--sync", "reccy"])
+
+    def test_dispatches_go_options_before_local_mode_flag(self) -> None:
+        arguments = ["--autosquash", "0", "--push", "recs"]
+        with patch.object(cli.go, "main", return_value=7) as go:
+            self.assertEqual(cli.main(arguments), 7)
+
+        go.assert_called_once_with(arguments)
+
     def test_dispatches_prepare_card_subcommand(self) -> None:
         with patch.object(cli.card, "main", return_value=7) as prepare_card:
             self.assertEqual(cli.main(["prepare-card", "--boot", "/Volumes/bootfs"]), 7)

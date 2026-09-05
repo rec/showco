@@ -145,6 +145,13 @@ GitHub `main` branches, runs each affected repository's locked test suite, and
 normally pushes any generated `uv.lock` commit. `--remote` skips all local
 publication and dependency-refresh work.
 
+Use `showco --push [repository ...]` to autosquash and publish only the affected
+local repositories. Use `showco --sync [repository ...]` to do that and then
+refresh, test, commit, and publish changed internal dependency lockfiles. These
+two local-only modes do not read provisioning configuration or contact the
+target. Their repository arguments use the same downstream-consumer expansion
+as a normal update.
+
 Override the connection on the command line:
 
 ```bash
