@@ -611,7 +611,11 @@ class UpdateTests(unittest.TestCase):
         first_lock = next(i for i, c in enumerate(commands) if c[:2] == ["uv", "lock"])
         self.assertLess(max(push_indexes[:5]), first_lock)
         self.assertIn("ConnectTimeout=2", remote_update.call_args.args[2])
-        self.assertEqual(output.getvalue(), "")
+        self.assertEqual(
+            output.getvalue(),
+            "Dependency synchronization: unchanged recs, twitcho, lyte, showco; "
+            "no internal dependencies reccy.\n",
+        )
 
     def test_provisioning_update_rejects_non_main_branches_before_pushing(self) -> None:
         commands: list[list[str]] = []
@@ -980,7 +984,7 @@ class UpdateTests(unittest.TestCase):
             program, ["reccy"], run_command, StringIO()
         )
 
-        self.assertTrue(result)
+        self.assertEqual(result, update.DependencyRefresh.UNCHANGED)
         self.assertIn(
             [
                 "git",
@@ -1020,7 +1024,7 @@ class UpdateTests(unittest.TestCase):
             program, ["reccy"], run_command, StringIO()
         )
 
-        self.assertTrue(result)
+        self.assertEqual(result, update.DependencyRefresh.UPDATED)
         self.assertEqual(
             commands[0],
             [
@@ -1081,7 +1085,7 @@ class UpdateTests(unittest.TestCase):
             program, ["reccy"], run_command, output
         )
 
-        self.assertFalse(result)
+        self.assertEqual(result, update.DependencyRefresh.FAILED)
         self.assertIn("unexpected paths", output.getvalue())
         self.assertIn(
             [
@@ -1116,7 +1120,7 @@ class UpdateTests(unittest.TestCase):
             program, ["reccy"], run_command, StringIO()
         )
 
-        self.assertFalse(result)
+        self.assertEqual(result, update.DependencyRefresh.FAILED)
         self.assertFalse(any(c[:3] == ["uv", "run", "--locked"] for c in commands))
         self.assertFalse(any("commit" in c for c in commands))
 
@@ -1139,11 +1143,16 @@ class UpdateTests(unittest.TestCase):
                 return subprocess.CompletedProcess(command, 0, "upstream-sha\n", "")
             return subprocess.CompletedProcess(command, 0, "", "")
 
+        output = StringIO()
         result = update.refresh_local_dependencies(
-            ["recs", "showco"], Path("/code"), run_command, StringIO()
+            ["recs", "showco"], Path("/code"), run_command, output
         )
 
         self.assertTrue(result)
+        self.assertEqual(
+            output.getvalue(),
+            "Dependency synchronization: updated recs, showco.\n",
+        )
         recs_push = ["git", "-C", "/code/recs", "push", "origin", "HEAD:main"]
         showco_lock = [
             "uv",
@@ -1156,6 +1165,23 @@ class UpdateTests(unittest.TestCase):
             "recs",
         ]
         self.assertLess(commands.index(recs_push), commands.index(showco_lock))
+
+    def test_refresh_reports_unchanged_and_skipped_repositories(self) -> None:
+        output = StringIO()
+
+        result = update.refresh_local_dependencies(
+            ["reccy", "recs"],
+            Path("/code"),
+            lambda command: subprocess.CompletedProcess(command, 0, "", ""),
+            output,
+        )
+
+        self.assertTrue(result)
+        self.assertEqual(
+            output.getvalue(),
+            "Dependency synchronization: unchanged recs; "
+            "no internal dependencies reccy.\n",
+        )
 
     def test_remote_step_reports_remote_output(self) -> None:
         command = ["ssh", "tom@bertrand.local", "showco go"]
