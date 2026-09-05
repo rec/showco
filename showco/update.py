@@ -734,6 +734,22 @@ def push_program(
     state: PublicationState, run_command: RunCommand, output: TextIO | None = None
 ) -> StepResult:
     program = state.program
+    local_commit = run_step(
+        program.name,
+        "local commit",
+        ["git", "-C", str(program.directory), "rev-parse", "HEAD"],
+        run_command,
+    )
+    if not local_commit.ok:
+        return local_commit
+    if not state.rewritten and local_commit.output.strip() == state.upstream_commit:
+        return StepResult(
+            program=program.name,
+            step="push",
+            command=local_commit.command,
+            returncode=0,
+            output="already published",
+        )
     push = normal_push_step(program, state.remote, state.branch, run_command)
     if push.ok or not state.rewritten:
         return push
