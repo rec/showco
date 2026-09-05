@@ -16,8 +16,8 @@ dependencies = [
 exclude-newer = "1 week"
 
 [tool.uv.sources]
-reccy = { git = "https://github.com/rec/reccy.git", rev = "ac028c7c8434901e3e74b91cce13458af094e741" }
-recs = { git = "ssh://git@github.com/rec/recs.git", rev = "87560eb8ffafd62d8298861869bbb64768fa358f" }
+reccy = { git = "https://github.com/rec/reccy.git", branch = "main" }
+recs = { git = "https://github.com/rec/recs.git", branch = "main" }
 
 [project.scripts]
 showco = "showco.cli:main"
