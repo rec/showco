@@ -115,13 +115,19 @@ and service setup. It reboots only when required, then verifies enabled
 services, the Showco HTTP revision, and configured hardware conditions.
 
 Repository arguments, `--autosquash`, or `--remote` select update mode. Normal
-update mode checks and pushes selected sibling checkouts before calling the
-target through SSH. `--remote` updates the target directly from GitHub without
-examining local checkouts. On the target, the update stops affected services,
-records their commits, updates each checkout, synchronizes changed dependencies,
-restarts services, and verifies Showco and Recs when applicable. The target
-checkout is disposable: a failed target update may reset it to a known commit or
-upstream state. The local development checkout is never reset by this process.
+update mode expands selected libraries to their downstream consumers, checks
+and publishes all affected sibling checkouts, refreshes and tests their locked
+internal dependencies in dependency order, and normally pushes generated
+lockfile commits before calling the target through SSH. Selecting Reccy includes
+all repositories; selecting Recs also includes Showco. Autosquashed history uses
+force-with-lease only against the upstream commit recorded before rewriting.
+Generated dependency commits are never force-pushed. `--remote` updates the
+target directly from GitHub without examining local checkouts or refreshing
+dependencies. On the target, the update stops affected services, records their
+commits, updates each checkout, synchronizes changed dependencies, restarts
+services, and verifies Showco and Recs when applicable. The target checkout is
+disposable: a failed target update may reset it to a known commit or upstream
+state. The local development checkout is never reset by this process.
 
 `showco python` is a developer-machine diagnostic shortcut that executes a
 one-line Python expression in the target Showco checkout and environment.

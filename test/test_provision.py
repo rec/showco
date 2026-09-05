@@ -62,6 +62,7 @@ class ProvisionTests(unittest.TestCase):
                 "showco.provision.provision.validate_config",
             ),
             mock.patch("showco.update.prepare_local_repositories", return_value=True),
+            mock.patch("showco.update.refresh_local_dependencies", return_value=True),
             mock.patch(
                 "showco.provision.remote.provision_remote",
             ),
@@ -83,11 +84,15 @@ class ProvisionTests(unittest.TestCase):
             mock.patch(
                 "showco.update.prepare_local_repositories", return_value=True
             ) as prepare,
+            mock.patch(
+                "showco.update.refresh_local_dependencies", return_value=True
+            ) as refresh,
             mock.patch("showco.provision.remote.provision_remote"),
         ):
             provision.run(options)
 
         self.assertEqual(prepare.call_args.args[0], update.REPOSITORY_NAMES)
+        self.assertEqual(refresh.call_args.args[0], update.REPOSITORY_NAMES)
 
     def test_run_passes_system_update_to_remote_provisioning(self) -> None:
         options = provision.GoOptions(
@@ -100,6 +105,7 @@ class ProvisionTests(unittest.TestCase):
             ),
             mock.patch("showco.provision.provision.validate_config"),
             mock.patch("showco.update.prepare_local_repositories", return_value=True),
+            mock.patch("showco.update.refresh_local_dependencies", return_value=True),
             mock.patch("showco.provision.remote.provision_remote") as provision_remote,
         ):
             provision.run(options)
