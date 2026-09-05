@@ -9,18 +9,17 @@ from subprocess import CompletedProcess
 from typing import ClassVar
 
 from pydantic import BaseModel
-from reccy import paths, reccy, service, service_spec
-from reccy.models import DaemonMetadata, ServiceSpec, StatusResult
+from reccy import reccy
+from reccy.services import controller, paths, spec
+from reccy.services.models import DaemonMetadata, ServiceSpec, StatusResult
 
 from . import machine_role, models
 
 PROJECT_ROOT = Path(__file__).parent.parent
-SHOWCO_SERVICE = service_spec.load(Path(__file__).with_name("service.toml"))
-RECS_SERVICE = service_spec.load(PROJECT_ROOT.parent / "recs/recs/daemon/service.toml")
-LYTE_SERVICE = service_spec.load(PROJECT_ROOT.parent / "lyte/lyte/service.toml")
-TWITCHO_SERVICE = service_spec.load(
-    PROJECT_ROOT.parent / "twitcho/twitcho/service.toml"
-)
+SHOWCO_SERVICE = spec.load(Path(__file__).with_name("service.toml"))
+RECS_SERVICE = spec.load(PROJECT_ROOT.parent / "recs/recs/daemon/service.toml")
+LYTE_SERVICE = spec.load(PROJECT_ROOT.parent / "lyte/lyte/service.toml")
+TWITCHO_SERVICE = spec.load(PROJECT_ROOT.parent / "twitcho/twitcho/service.toml")
 SERVICES = {
     "lyte": LYTE_SERVICE,
     "recs": RECS_SERVICE,
@@ -64,7 +63,7 @@ def install_showco_service(
             ),
         ]
     )
-    service.print_service_status("showco", result)
+    controller.print_service_status("showco", result)
     return 0 if result.running else 1
 
 
@@ -120,14 +119,14 @@ def service_status(name: str) -> StatusResult:
 def service_controller(
     service: ServiceSpec,
     runner: Callable[..., CompletedProcess[str]] | None = None,
-) -> service.ServiceController:
+) -> controller.ServiceController:
     return service_registry(runner=runner).controller(service.name)
 
 
 def service_registry(
     runner: Callable[..., CompletedProcess[str]] | None = None,
-) -> service.ServiceRegistry:
-    return service.ServiceRegistry(
+) -> controller.ServiceRegistry:
+    return controller.ServiceRegistry(
         SERVICES,
         runner=runner,
         status_models=STATUS_MODELS,

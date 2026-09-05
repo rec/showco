@@ -9,8 +9,8 @@ from tempfile import TemporaryDirectory
 from threading import Event
 from unittest import mock
 
-from reccy import rpc
-from reccy.models import DaemonMetadata, Platform
+from reccy.protocol import rpc
+from reccy.services.models import DaemonMetadata, Platform
 from recs.base.waveform import (
     WaveformBatchData,
     WaveformLayoutData,

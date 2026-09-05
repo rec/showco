@@ -9,7 +9,7 @@ from subprocess import CalledProcessError, CompletedProcess, TimeoutExpired
 from typing import TextIO
 
 from pydantic import BaseModel
-from reccy import subprocess
+from reccy.runtime import subprocess
 from tqdm import tqdm
 
 from . import recs, repositories, revision, services

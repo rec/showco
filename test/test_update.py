@@ -7,14 +7,16 @@ from io import StringIO
 from pathlib import Path
 from unittest import mock
 
-from reccy.models import Platform, StatusResult
+from reccy.services.models import Platform, StatusResult
 
 from showco import update
 
 
 class UpdateTests(unittest.TestCase):
     def setUp(self) -> None:
-        ensure_log = mock.patch("reccy.service.ServiceController._ensure_log")
+        ensure_log = mock.patch(
+            "reccy.services.controller.ServiceController._ensure_log"
+        )
         ensure_log.start()
         self.addCleanup(ensure_log.stop)
 
@@ -143,7 +145,7 @@ class UpdateTests(unittest.TestCase):
             return subprocess.CompletedProcess(command, 0, "", "")
 
         with mock.patch(
-            "showco.services.service.current_platform", return_value=Platform.linux
+            "showco.services.controller.current_platform", return_value=Platform.linux
         ):
             result = update.update_target(
                 ["recs"],
@@ -187,7 +189,7 @@ class UpdateTests(unittest.TestCase):
 
         output = StringIO()
         with mock.patch(
-            "showco.services.service.current_platform", return_value=Platform.linux
+            "showco.services.controller.current_platform", return_value=Platform.linux
         ):
             result = update.update_target(
                 ["recs"],
@@ -219,7 +221,7 @@ class UpdateTests(unittest.TestCase):
             return subprocess.CompletedProcess(command, 0, "", "")
 
         with mock.patch(
-            "showco.services.service.current_platform", return_value=Platform.linux
+            "showco.services.controller.current_platform", return_value=Platform.linux
         ):
             result = update.update_target(
                 ["recs"],
@@ -249,7 +251,7 @@ class UpdateTests(unittest.TestCase):
             return subprocess.CompletedProcess(command, 0, "", "")
 
         with mock.patch(
-            "showco.services.service.current_platform", return_value=Platform.linux
+            "showco.services.controller.current_platform", return_value=Platform.linux
         ):
             result = update.update_target(
                 ["showco"],
@@ -297,7 +299,7 @@ class UpdateTests(unittest.TestCase):
             return subprocess.CompletedProcess(command, 0, "", "")
 
         with mock.patch(
-            "showco.services.service.current_platform", return_value=Platform.linux
+            "showco.services.controller.current_platform", return_value=Platform.linux
         ):
             result = update.update_target(
                 ["showco"],
@@ -332,7 +334,8 @@ class UpdateTests(unittest.TestCase):
 
         with (
             mock.patch(
-                "showco.services.service.current_platform", return_value=Platform.linux
+                "showco.services.controller.current_platform",
+                return_value=Platform.linux,
             ),
             mock.patch(
                 "showco.services.refresh_service_definition",
@@ -394,7 +397,8 @@ class UpdateTests(unittest.TestCase):
 
         with (
             mock.patch(
-                "showco.services.service.current_platform", return_value=Platform.linux
+                "showco.services.controller.current_platform",
+                return_value=Platform.linux,
             ),
             mock.patch(
                 "showco.services.refresh_service_definition",
@@ -429,7 +433,8 @@ class UpdateTests(unittest.TestCase):
 
         with (
             mock.patch(
-                "showco.services.service.current_platform", return_value=Platform.linux
+                "showco.services.controller.current_platform",
+                return_value=Platform.linux,
             ),
             mock.patch(
                 "showco.update.provisioning_config", return_value=make_config(True)
@@ -499,7 +504,8 @@ class UpdateTests(unittest.TestCase):
 
         with (
             mock.patch(
-                "showco.services.service.current_platform", return_value=Platform.linux
+                "showco.services.controller.current_platform",
+                return_value=Platform.linux,
             ),
             mock.patch(
                 "showco.update.provisioning_config", return_value=make_config(True)
@@ -1077,7 +1083,7 @@ class UpdateTests(unittest.TestCase):
             return subprocess.CompletedProcess(command, 0, "", "")
 
         with mock.patch(
-            "showco.services.service.current_platform", return_value=Platform.linux
+            "showco.services.controller.current_platform", return_value=Platform.linux
         ):
             result = update.update_target(
                 ["recs"],
@@ -1117,7 +1123,7 @@ class UpdateTests(unittest.TestCase):
             return subprocess.CompletedProcess(command, 0, "", "")
 
         with mock.patch(
-            "showco.services.service.current_platform", return_value=Platform.linux
+            "showco.services.controller.current_platform", return_value=Platform.linux
         ):
             result = update.update_target(
                 ["recs"],
