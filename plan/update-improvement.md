@@ -6,39 +6,20 @@ Keep Reccy, Recs, Showco, Twitcho, and Lyte as independent GitHub repositories
 while making their normal development workflow consistently follow each
 dependency's `main` branch.
 
-`showco update` should remain the integration point. It should publish folded
-local histories once, refresh and test internal dependencies, commit the
-resulting lockfiles, push those new commits normally, and only then update the
-target machine.
+`showco go` is the integration point. A normal update publishes folded local
+histories, refreshes and tests internal dependencies, commits generated
+lockfiles, pushes those commits normally, and only then updates the target
+machine.
 
-Tuney is not currently managed by `showco update` and is outside this plan.
-Moving the projects to Python 3.13 is also independent work and is not required
-for this design.
+`showco go --remote` remains deployment-only. It does not examine or change
+local repositories, refresh dependencies, or create commits.
 
-## Current Behavior
-
-`update_from_provisioning_machine()` currently:
-
-1. Checks that selected local repositories are on `main`.
-2. Autosquashes recent fixup commits.
-3. Pushes each repository, falling back to `--force-with-lease` when folding
-   rewrote published history.
-4. Connects to the target, resets its checkouts to their upstream branches,
-   runs `uv sync --locked`, and restarts or refreshes services.
-
-The repositories currently describe Reccy inconsistently:
-
-- Recs and Showco use exact Git revisions.
-- Twitcho uses an older exact Git revision.
-- Lyte uses an editable sibling path.
-
-Showco also pins Recs to an exact Git revision. Consequently, publishing a new
-dependency does not advance its consumers without manual `pyproject.toml` and
-lockfile edits.
+Tuney is not managed by `showco go` and is outside this plan. Moving the
+projects to Python 3.13 is also independent work.
 
 ## Dependency Graph
 
-Use this graph for ordering:
+Use this graph for ordering and repository selection:
 
 ```text
 Reccy
@@ -51,27 +32,44 @@ Reccy + Recs
 ```
 
 Showco controls Twitcho and Lyte operationally, but does not import them as
-Python packages. Their repositories and lockfiles therefore remain independent
-of Showco's Python dependency resolution.
+Python packages. Their lockfiles remain independent of Showco's dependency
+resolution.
+
+## Selection Semantics
+
+Expand an explicit repository selection to include every managed downstream
+consumer whose lockfile and runtime would otherwise remain on the old version:
+
+- `reccy` selects all five repositories.
+- `recs` also selects Showco.
+- `showco`, `twitcho`, and `lyte` add no repositories.
+
+Combine and deduplicate closures in dependency order. With no explicit
+selection, select all managed repositories as before.
+
+Use the expanded selection for local validation, publication, dependency
+refresh, target updates, environment synchronization, and service restarts. In
+particular, a Reccy-only request must not merely update the Reccy checkout while
+leaving every service locked to an older Reccy commit.
 
 ## Repository Policy Change
 
-Showco's repository instructions currently say never to stage or commit
-`uv.lock`. That rule conflicts with this design. Before implementation, revise
-the rule narrowly:
+Revise Showco's repository instruction about `uv.lock` narrowly:
 
-- Continue to reject a lockfile that was dirty before an update starts.
-- Permit `showco update` to stage and commit only lockfile changes it generated.
-- Never include other tracked or untracked changes in an automatic dependency
+- Reject every tracked file, including `uv.lock`, that was dirty when an update
+  started.
+- Permit `showco go` to stage and commit only lockfile changes it generated.
+- Never include other tracked or untracked files in an automatic dependency
   commit.
-- Inspect and reject unrelated lockfile changes rather than committing them.
+- Recheck changed paths after locking and tests, immediately before staging.
+- Restore only an uncommitted updater-generated `uv.lock` after a failure.
 
 Do not weaken the general clean-worktree requirement.
 
 ## Phase 1: Standardize Internal Sources
 
-Make this one-time migration in the owning repositories, with dependency and
-lockfile changes committed together:
+Make this one-time migration in the owning repositories, with each repository's
+dependency declaration and lockfile committed together:
 
 ```toml
 [tool.uv.sources]
@@ -85,39 +83,41 @@ source similarly:
 recs = { git = "https://github.com/rec/recs.git", branch = "main" }
 ```
 
-Use one Git URL form consistently. The target already rewrites SSH GitHub URLs
-to public HTTPS URLs, but using HTTPS directly avoids requiring that rewrite for
-these public package sources.
+Use public HTTPS consistently for these public package sources. Keep each
+`uv.lock`: the branch source specifies what may be refreshed, while the lockfile
+records the exact tested commit used by that consumer.
 
-Keep each `uv.lock`. A branch source chooses what can be refreshed; the lockfile
-still records the exact tested commit used by that consumer.
+## Phase 2: Validate And Publish Local Histories
 
-## Phase 2: Publish Folded Histories Once
+Before changing any lockfile:
 
-Retain the existing branch checks, autosquash, clean-worktree checks, and
-`push_program()` behavior for the initial publication phase.
+1. Expand the requested selection to its downstream closure.
+2. Verify every selected repository is on `main` with a clean tracked worktree,
+   including a clean `uv.lock`.
+3. Record each selected repository's upstream branch and upstream commit.
+4. Autosquash as configured, recording whether each repository was rewritten.
+5. Push every selected repository.
 
-For every selected repository:
+Try a normal push first. A force push is allowed only when autosquash actually
+rewrote that repository. Its `--force-with-lease` must name the upstream commit
+captured before autosquash. Do not fetch a newer upstream commit and then use
+that newer value as the lease: that could authorize overwriting concurrent
+work.
 
-1. Verify `main` and a clean tracked worktree, including a clean `uv.lock`.
-2. Autosquash as currently configured.
-3. Try a normal push.
-4. If folding made the normal push non-fast-forward, fetch the current upstream
-   commit and use the existing exact `--force-with-lease` push.
+If the remote advanced after the upstream commit was captured, the lease must
+fail. Report the concurrent update and require the user to reconcile it. Finish
+all initial pushes before changing lockfiles. If any push fails, stop before
+lockfile changes or target contact.
 
-This is the only phase allowed to force-push. Finish it for every selected
-repository before creating any dependency-update commits.
+## Phase 3: Refresh And Publish By Dependency Wave
 
-If any initial push fails, stop before changing lockfiles or contacting the
-target.
+Process selected consumers in these waves:
 
-## Phase 3: Refresh Dependencies Locally
+1. Recs, Twitcho, and Lyte, after Reccy has been published.
+2. Showco, after any selected Recs dependency commit has been published.
 
-After all initial pushes succeed, refresh selected consumers in dependency
-order. Use command argument lists and the existing injected `RunCommand`; do not
-construct shell command strings.
-
-Commands are conceptually:
+For each selected consumer, run the appropriate command using the existing
+injected `RunCommand` and an argument list:
 
 ```shell
 uv lock --directory /path/to/recs --upgrade-package reccy
@@ -126,124 +126,116 @@ uv lock --directory /path/to/lyte --upgrade-package reccy
 uv lock --directory /path/to/showco --upgrade-package reccy --upgrade-package recs
 ```
 
-Only refresh a repository selected for this update. With no selection,
-`selected_repositories()` already selects all managed repositories, which gives
-the normal full-system update.
-
-Do not refresh Reccy itself because it has no managed internal dependency.
-
 After locking each consumer:
 
 1. Confirm that only `uv.lock` changed.
 2. Run `uv lock --check --directory <repository>`.
-3. Run that repository's automated test suite in its locked environment.
-4. Do not run applications, services, hardware checks, or target operations as
-   local verification.
+3. Run `uv run --locked --directory <repository> pytest` so the test environment
+   is synchronized to that lockfile before tests execute.
+4. Confirm again that only `uv.lock` changed.
+5. If the lockfile differs from `HEAD`, stage only `uv.lock`, commit it as
+   `Update internal dependencies`, and push it normally.
+6. If the lockfile is unchanged, create no commit and perform no second push.
 
-Process Recs, Twitcho, and Lyte before Showco. Showco must lock only after its
-new Recs commit is available on GitHub.
+The generated dependency push is always fast-forward-only in effect: use a
+normal Git push and never fall back to force. A rejection means the remote
+advanced after Phase 2; report it and stop.
 
-If locking or tests fail, report the repository and failing step, restore only
-the updater-generated lockfile change, and stop before deployment. Do not roll
-back or rewrite the already-published source commits automatically.
-
-## Phase 4: Commit And Normally Push Lockfiles
-
-When a refreshed lockfile differs from `HEAD`, create a repository-local commit
-containing only `uv.lock`. Use one stable message, such as:
-
-```text
-Update internal dependencies
-```
-
-Push this commit normally. Do not call `push_program()` here because its force
-fallback is appropriate only for the initial folded-history publication.
-Provide a separate fast-forward-only push step for generated dependency commits.
-
-The second push must fail rather than force if the remote branch advanced after
-Phase 2. Report that concurrent update and require the user to rerun the command.
-
-If locking produces no change, do not create an empty commit or perform a second
-push for that repository.
-
-Recs must complete its normal lockfile push before Showco resolves Recs from
-GitHub. Twitcho and Lyte can be processed independently after Reccy is
+Complete and publish Recs before locking Showco so Showco can resolve the new
+Recs commit from GitHub. Twitcho and Lyte are independent once Reccy is
 available.
 
-## Phase 5: Update The Target
+If locking, checking, testing, committing, or pushing fails, report the
+repository and step. Restore the current repository's generated, uncommitted
+lockfile change and stop before deployment. Already published source or
+dependency commits remain published and are completed by a later rerun; do not
+rewrite or roll them back automatically.
 
-Run the existing remote update only after every selected dependency refresh,
-test, commit, and normal push succeeds.
+Do not run applications, services, hardware checks, or target operations as
+local verification.
+
+## Phase 4: Update The Target
+
+Run the existing target update with the expanded repository selection only
+after every selected dependency refresh, test, commit, and normal push
+succeeds.
 
 Preserve these target guarantees:
 
-- Fetch and reset each checkout to its upstream `main`.
+- Fetch and reset each selected checkout to its upstream `main`.
 - Use `uv sync --locked`; never resolve or rewrite dependencies on the target.
-- Stop, restart, or refresh services through the existing paths.
+- Stop, restart, or refresh all services affected by the expanded selection.
 - Keep current status and health checks.
-- Do not deploy a partial local dependency update after any preceding failure.
+- Leave the target unchanged when any local publication step fails.
 
-The target should consume the exact commits recorded in the newly published
-lockfiles, even though each `pyproject.toml` names `main` as the available source.
+The target consumes the exact commits in the published lockfiles even though
+each `pyproject.toml` names `main` as the available source.
 
 ## Implementation Shape
 
-Keep the existing public update entry points. Add small operations at the local
-repository-preparation boundary rather than expanding target update logic.
+Keep `showco go` and the current internal update entry points. Add small
+operations at the local repository-preparation boundary; do not expand target
+update logic beyond passing it the expanded selection.
 
-Suggested responsibilities:
+Responsibilities:
 
-- Existing `prepare_local_repositories()`: validation, folding, and initial
-  publication.
-- New dependency refresh coordinator: dependency ordering and selected-consumer
-  filtering.
-- New per-program refresh operation: lock, verify changed paths, and test.
-- New per-program dependency commit operation: stage only `uv.lock` and commit.
-- New normal-push operation: push without force fallback.
+- Selection closure: explicit dependency graph and deterministic expansion.
+- Initial validation: branch, worktree, upstream branch, and upstream commit.
+- Autosquash result: distinguish unchanged repositories from rewritten ones.
+- Initial publication: normal push, with the captured pre-rewrite lease used
+  only for repositories actually rewritten.
+- Consumer refresh: lock, lock check, test, and final changed-path check.
+- Dependency publication: stage only `uv.lock`, commit, and normal push.
 
-Use `Program` and `StepResult`, preserve injected command execution, and report
-failures through the existing reporting functions. Do not introduce a generic
-workflow engine or asynchronous execution.
-
-Represent the dependency graph as small explicit project data close to
-`REPOSITORY_NAMES`. Do not infer dependencies by parsing arbitrary TOML or
-lockfiles at runtime.
+Use `Program` and `StepResult`, preserve injected command execution and existing
+failure reporting, and represent the graph as explicit project data near
+`REPOSITORY_NAMES`. Do not parse arbitrary TOML or lockfiles, introduce a
+workflow engine, or use asynchronous execution.
 
 ## Tests
 
-Extend `test/test_update.py` with injected command results. Tests must not use
-GitHub, modify real sibling repositories, contact the target, or run real
-project test suites.
+Extend `test/test_update.py` and `test/test_go.py` using injected command results.
+Tests must not use GitHub, modify real sibling repositories, contact the target,
+or run real project test suites.
 
 Cover at least:
 
-1. All initial folded-history pushes finish before any lock refresh starts.
-2. Recs, Twitcho, and Lyte refresh after Reccy publication.
-3. Showco refreshes only after Recs' dependency commit was normally pushed.
-4. Partial selections refresh only selected consumers.
-5. Reccy-only updates create no lockfile commit.
-6. An unchanged lockfile creates no commit or second push.
-7. A refresh changes only `uv.lock`; any other changed path aborts the update.
-8. A lock or test failure prevents commits, second pushes, and deployment.
-9. Generated commits stage only `uv.lock`.
-10. Dependency commits use normal pushes and never invoke the force fallback.
-11. A rejected second push aborts and reports a concurrent update.
-12. Remote deployment still uses `uv sync --locked`.
-13. Existing force-with-lease behavior remains available only during the
-    initial folded-history publication.
+1. Selection expansion includes downstream consumers in dependency order.
+2. All initial pushes finish before any lock refresh starts.
+3. Force-with-lease is unavailable when autosquash did not rewrite history.
+4. A rewritten history uses the upstream SHA captured before autosquash.
+5. A rejected lease aborts without lock changes or deployment.
+6. Recs, Twitcho, and Lyte refresh after Reccy publication.
+7. Showco refreshes only after Recs' dependency commit is normally pushed.
+8. A Reccy selection refreshes and deploys every consumer.
+9. A Recs selection also refreshes and deploys Showco.
+10. An unchanged lockfile creates no commit or second push.
+11. Changed paths are checked both before and after tests.
+12. Any changed path other than `uv.lock` aborts the update.
+13. A lock, lock-check, or test failure prevents later commits and deployment.
+14. Generated commits stage only `uv.lock`.
+15. Dependency commits use normal pushes with no force fallback.
+16. A rejected dependency push reports a concurrent update and prevents
+    deployment.
+17. Target deployment receives the expanded selection and still uses
+    `uv sync --locked`.
+18. `--remote` retains its deployment-only behavior.
 
-Keep focused tests for helper behavior and one orchestration test that asserts
-the complete command ordering.
+Keep focused tests for helpers and one orchestration test that asserts the
+complete command ordering.
 
 ## Acceptance Criteria
 
 - The five repositories remain independent GitHub projects.
 - Every managed internal Python dependency names GitHub `main` as its source.
 - Every consumer lockfile records an exact tested dependency commit.
-- One `showco update` invocation performs publication, dependency refresh,
-  verification, lockfile commits, normal follow-up pushes, and deployment.
-- Force-with-lease is possible only before dependency-update commits exist.
-- No force-push occurs after the initial publication phase.
+- One normal `showco go` invocation publishes sources, refreshes dependencies,
+  verifies them, publishes lockfiles, and deploys the complete affected set.
+- Partial selections cannot leave downstream consumers running an older
+  dependency unintentionally.
+- Force-with-lease is possible only for a repository actually rewritten by
+  autosquash and only against its upstream state captured before rewriting.
+- No force push occurs for generated dependency commits.
 - The target never resolves unlocked dependency updates.
 - A failure before deployment leaves the target unchanged and clearly names the
   failed repository and step.
