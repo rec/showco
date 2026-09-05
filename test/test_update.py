@@ -892,6 +892,32 @@ class UpdateTests(unittest.TestCase):
             ],
         )
 
+    def test_push_program_skips_network_when_upstream_matches_head(self) -> None:
+        program = update.Program(
+            name="recs", directory=Path("/code/recs"), service_names=[]
+        )
+        state = update.PublicationState(
+            program=program,
+            remote="origin",
+            branch="main",
+            upstream_commit="same-commit",
+        )
+        commands: list[list[str]] = []
+
+        def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+            commands.append(list(command))
+            return subprocess.CompletedProcess(command, 0, "same-commit\n", "")
+
+        result = update.push_program(state, run_command)
+
+        self.assertTrue(result.ok)
+        self.assertEqual(result.output, "already published")
+        self.assertEqual(
+            commands,
+            [["git", "-C", "/code/recs", "rev-parse", "HEAD"]],
+        )
+        self.assertFalse(any("fetch" in c or "push" in c for c in commands))
+
     def test_push_program_does_not_force_unrewritten_history(self) -> None:
         program = update.Program(
             name="recs", directory=Path("/code/recs"), service_names=[]
@@ -906,6 +932,8 @@ class UpdateTests(unittest.TestCase):
 
         def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
             commands.append(list(command))
+            if command[-2:] == ["rev-parse", "HEAD"]:
+                return subprocess.CompletedProcess(command, 0, "local\n", "")
             return subprocess.CompletedProcess(command, 1, "", "rejected\n")
 
         result = update.push_program(state, run_command)
@@ -913,7 +941,10 @@ class UpdateTests(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertEqual(
             commands,
-            [["git", "-C", "/code/recs", "push", "origin", "HEAD:main"]],
+            [
+                ["git", "-C", "/code/recs", "rev-parse", "HEAD"],
+                ["git", "-C", "/code/recs", "push", "origin", "HEAD:main"],
+            ],
         )
 
     def test_prepare_uses_upstream_captured_before_autosquash(self) -> None:
