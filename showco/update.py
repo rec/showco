@@ -175,15 +175,12 @@ def refresh_program_dependencies(
         report_failure(status, output)
         restore_generated_lockfile(program, run_command, output)
         return False
-    for result in (
-        run_step(
-            program.name,
+    verification_commands = [
+        (
             "check lockfile",
             ["uv", "lock", "--check", "--directory", str(program.directory)],
-            run_command,
         ),
-        run_step(
-            program.name,
+        (
             "test",
             [
                 "uv",
@@ -193,9 +190,10 @@ def refresh_program_dependencies(
                 str(program.directory),
                 "pytest",
             ],
-            run_command,
         ),
-    ):
+    ]
+    for step, command in verification_commands:
+        result = run_step(program.name, step, command, run_command)
         if not result.ok:
             report_failure(result, output)
             restore_generated_lockfile(program, run_command, output)

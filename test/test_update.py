@@ -1038,6 +1038,28 @@ class UpdateTests(unittest.TestCase):
         )
         self.assertFalse(any("commit" in c for c in commands))
 
+    def test_refresh_program_stops_after_failed_lock_check(self) -> None:
+        program = update.Program(
+            name="recs", directory=Path("/code/recs"), service_names=[]
+        )
+        commands: list[list[str]] = []
+
+        def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+            commands.append(list(command))
+            if command[-2:] == ["status", "--porcelain"]:
+                return subprocess.CompletedProcess(command, 0, " M uv.lock\n", "")
+            if command[:3] == ["uv", "lock", "--check"]:
+                return subprocess.CompletedProcess(command, 1, "", "invalid lock\n")
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        result = update.refresh_program_dependencies(
+            program, ["reccy"], run_command, StringIO()
+        )
+
+        self.assertFalse(result)
+        self.assertFalse(any(c[:3] == ["uv", "run", "--locked"] for c in commands))
+        self.assertFalse(any("commit" in c for c in commands))
+
     def test_refresh_publishes_recs_before_locking_showco(self) -> None:
         commands: list[list[str]] = []
 
