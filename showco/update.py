@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import shlex
 import sys
+import tomllib
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from subprocess import CalledProcessError, CompletedProcess, TimeoutExpired
@@ -154,6 +155,7 @@ def refresh_program_dependencies(
     run_command: RunCommand,
     output: TextIO,
 ) -> bool:
+    before_sources = locked_dependency_sources(program, dependencies)
     lock = run_step(
         program.name,
         "refresh dependencies",
@@ -170,6 +172,9 @@ def refresh_program_dependencies(
         report_failure(lock, output)
         restore_generated_lockfile(program, run_command, output)
         return False
+    if locked_dependency_sources(program, dependencies) == before_sources:
+        if not restore_generated_lockfile(program, run_command, output):
+            return False
     status, _ = lockfile_status_step(program, run_command)
     if not status.ok:
         report_failure(status, output)
@@ -271,9 +276,32 @@ def lockfile_status_step(
     return status.model_copy(update={"output": ""}), bool(tracked)
 
 
+def locked_dependency_sources(
+    program: Program, dependencies: list[str]
+) -> dict[str, str]:
+    data = tomllib.loads((program.directory / "uv.lock").read_text())
+    packages = data.get("package", [])
+    if not isinstance(packages, list):
+        return {}
+    result = {}
+    for package in packages:
+        if not isinstance(package, dict):
+            continue
+        name = package.get("name")
+        source = package.get("source")
+        if (
+            isinstance(name, str)
+            and name in dependencies
+            and isinstance(source, dict)
+            and isinstance(git := source.get("git"), str)
+        ):
+            result[name] = git
+    return result
+
+
 def restore_generated_lockfile(
     program: Program, run_command: RunCommand, output: TextIO
-) -> None:
+) -> bool:
     result = run_step(
         program.name,
         "restore generated lockfile",
@@ -291,6 +319,7 @@ def restore_generated_lockfile(
     )
     if not result.ok:
         report_failure(result, output)
+    return result.ok
 
 
 def update_remote_target(

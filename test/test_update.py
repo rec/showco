@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import tempfile
 import unittest
 from collections.abc import Sequence
 from io import StringIO
@@ -19,6 +20,27 @@ class UpdateTests(unittest.TestCase):
         )
         ensure_log.start()
         self.addCleanup(ensure_log.stop)
+        self.read_locked_sources = update.locked_dependency_sources
+        locked_sources = mock.patch(
+            "showco.update.locked_dependency_sources", return_value={}
+        )
+        self.locked_sources = locked_sources.start()
+        self.addCleanup(locked_sources.stop)
+
+    def test_locked_dependency_sources_reads_known_git_packages(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "uv.lock").write_text(
+                '[[package]]\nname = "reccy"\n'
+                'source = { git = "https://example/reccy#commit" }\n\n'
+                '[[package]]\nname = "pytest"\n'
+                'source = { registry = "https://pypi.org/simple" }\n'
+            )
+            program = update.Program(name="recs", directory=root, service_names=[])
+
+            result = self.read_locked_sources(program, ["reccy"])
+
+        self.assertEqual(result, {"reccy": "https://example/reccy#commit"})
 
     def test_remote_update_reports_target_before_ssh(self) -> None:
         output = StringIO()
@@ -944,11 +966,45 @@ class UpdateTests(unittest.TestCase):
             ],
         )
 
+    def test_refresh_program_restores_cutoff_only_lock_change(self) -> None:
+        program = update.Program(
+            name="recs", directory=Path("/code/recs"), service_names=[]
+        )
+        commands: list[list[str]] = []
+
+        def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+            commands.append(list(command))
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        result = update.refresh_program_dependencies(
+            program, ["reccy"], run_command, StringIO()
+        )
+
+        self.assertTrue(result)
+        self.assertIn(
+            [
+                "git",
+                "-C",
+                "/code/recs",
+                "restore",
+                "--staged",
+                "--worktree",
+                "--",
+                "uv.lock",
+            ],
+            commands,
+        )
+        self.assertFalse(any("commit" in c for c in commands))
+
     def test_refresh_program_commits_only_changed_lockfile(self) -> None:
         program = update.Program(
             name="recs", directory=Path("/code/recs"), service_names=[]
         )
         commands: list[list[str]] = []
+        self.locked_sources.side_effect = [
+            {"reccy": "old"},
+            {"reccy": "new"},
+        ]
 
         def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
             commands.append(list(command))
@@ -1003,6 +1059,10 @@ class UpdateTests(unittest.TestCase):
         )
         commands: list[list[str]] = []
         status_count = 0
+        self.locked_sources.side_effect = [
+            {"reccy": "old"},
+            {"reccy": "new"},
+        ]
 
         def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
             nonlocal status_count
@@ -1062,6 +1122,12 @@ class UpdateTests(unittest.TestCase):
 
     def test_refresh_publishes_recs_before_locking_showco(self) -> None:
         commands: list[list[str]] = []
+        self.locked_sources.side_effect = [
+            {"reccy": "old"},
+            {"reccy": "new"},
+            {"reccy": "old", "recs": "old"},
+            {"reccy": "new", "recs": "new"},
+        ]
 
         def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
             commands.append(list(command))
