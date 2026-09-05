@@ -27,6 +27,14 @@ class Program(BaseModel, frozen=True):
     service_names: list[str]
 
 
+class PublicationState(BaseModel, frozen=True):
+    program: Program
+    remote: str
+    branch: str
+    upstream_commit: str
+    rewritten: bool = False
+
+
 class StepResult(BaseModel, frozen=True):
     program: str
     step: str
@@ -53,13 +61,17 @@ def update_from_provisioning_machine(
 ) -> int:
     run_command = run_command or run_command_with_timeout
     provision_config = target_config or provisioning_config()
+    selected = expand_repository_selection(selected)
+    local_directory = local_root or provision.local_checkout_directory()
     if not prepare_local_repositories(
         selected,
-        local_root or provision.local_checkout_directory(),
+        local_directory,
         run_command,
         output,
         autosquash=autosquash,
     ):
+        return 1
+    if not refresh_local_dependencies(selected, local_directory, run_command, output):
         return 1
 
     with progress_bar(1, output) as progress:
@@ -94,19 +106,193 @@ def prepare_local_repositories(
     programs = programs_for_repositories(selected, root)
     if not check_main_branches(programs, run_command, output):
         return False
-    if autosquash and not autosquash_programs(
-        programs, autosquash, run_command, output
-    ):
+    clean_results = [clean_worktree_step(p, run_command) for p in programs]
+    if failures := [r for r in clean_results if not r.ok]:
+        report_failures(failures, output)
         return False
+    states = []
+    for program in programs:
+        state = publication_state(program, run_command)
+        if isinstance(state, StepResult):
+            report_failure(state, output)
+            return False
+        states.append(state)
+    if autosquash:
+        rewritten_states = autosquash_publications(
+            states, autosquash, run_command, output
+        )
+        if rewritten_states is None:
+            return False
+        states = rewritten_states
     with progress_bar(len(programs), output) as progress:
-        for program in programs:
-            progress.set_description_str(f"Pushing {program.name}")
-            result = push_program(program, run_command, output)
+        for state in states:
+            progress.set_description_str(f"Pushing {state.program.name}")
+            result = push_program(state, run_command, output)
             progress.update()
             if not result.ok:
                 report_failure(result, output)
                 return False
     return True
+
+
+def refresh_local_dependencies(
+    selected: list[str], root: Path, run_command: RunCommand, output: TextIO
+) -> bool:
+    programs = programs_for_repositories(selected, root)
+    for program in programs:
+        dependencies = INTERNAL_DEPENDENCIES.get(program.name)
+        if dependencies and not refresh_program_dependencies(
+            program, dependencies, run_command, output
+        ):
+            return False
+    return True
+
+
+def refresh_program_dependencies(
+    program: Program,
+    dependencies: list[str],
+    run_command: RunCommand,
+    output: TextIO,
+) -> bool:
+    lock = run_step(
+        program.name,
+        "refresh dependencies",
+        [
+            "uv",
+            "lock",
+            "--directory",
+            str(program.directory),
+            *(a for n in dependencies for a in ("--upgrade-package", n)),
+        ],
+        run_command,
+    )
+    if not lock.ok:
+        report_failure(lock, output)
+        restore_generated_lockfile(program, run_command, output)
+        return False
+    status, _ = lockfile_status_step(program, run_command)
+    if not status.ok:
+        report_failure(status, output)
+        restore_generated_lockfile(program, run_command, output)
+        return False
+    for result in (
+        run_step(
+            program.name,
+            "check lockfile",
+            ["uv", "lock", "--check", "--directory", str(program.directory)],
+            run_command,
+        ),
+        run_step(
+            program.name,
+            "test",
+            [
+                "uv",
+                "run",
+                "--locked",
+                "--directory",
+                str(program.directory),
+                "pytest",
+            ],
+            run_command,
+        ),
+    ):
+        if not result.ok:
+            report_failure(result, output)
+            restore_generated_lockfile(program, run_command, output)
+            return False
+    final_status, final_changed = lockfile_status_step(program, run_command)
+    if not final_status.ok:
+        report_failure(final_status, output)
+        restore_generated_lockfile(program, run_command, output)
+        return False
+    if not final_changed:
+        return True
+    stage = run_step(
+        program.name,
+        "stage lockfile",
+        ["git", "-C", str(program.directory), "add", "--", "uv.lock"],
+        run_command,
+    )
+    if not stage.ok:
+        report_failure(stage, output)
+        restore_generated_lockfile(program, run_command, output)
+        return False
+    commit = run_step(
+        program.name,
+        "commit dependencies",
+        [
+            "git",
+            "-C",
+            str(program.directory),
+            "commit",
+            "-m",
+            "Update internal dependencies",
+        ],
+        run_command,
+    )
+    if not commit.ok:
+        report_failure(commit, output)
+        restore_generated_lockfile(program, run_command, output)
+        return False
+    state = publication_state(program, run_command)
+    if isinstance(state, StepResult):
+        report_failure(state, output)
+        return False
+    push = normal_push_step(program, state.remote, state.branch, run_command)
+    if not push.ok:
+        report_failure(push, output)
+        return False
+    return True
+
+
+def lockfile_status_step(
+    program: Program, run_command: RunCommand
+) -> tuple[StepResult, bool]:
+    status = run_step(
+        program.name,
+        "dependency changed paths",
+        ["git", "-C", str(program.directory), "status", "--porcelain"],
+        run_command,
+    )
+    if not status.ok:
+        return status, False
+    tracked = [s for s in status.output.splitlines() if not s.startswith("??")]
+    invalid = [s for s in tracked if s[3:] != "uv.lock"]
+    if invalid:
+        return (
+            StepResult(
+                program=program.name,
+                step="dependency changed paths",
+                command=status.command,
+                returncode=1,
+                output="dependency refresh changed unexpected paths:\n"
+                + "\n".join(invalid),
+            ),
+            False,
+        )
+    return status.model_copy(update={"output": ""}), bool(tracked)
+
+
+def restore_generated_lockfile(
+    program: Program, run_command: RunCommand, output: TextIO
+) -> None:
+    result = run_step(
+        program.name,
+        "restore generated lockfile",
+        [
+            "git",
+            "-C",
+            str(program.directory),
+            "restore",
+            "--staged",
+            "--worktree",
+            "--",
+            "uv.lock",
+        ],
+        run_command,
+    )
+    if not result.ok:
+        report_failure(result, output)
 
 
 def update_remote_target(
@@ -395,11 +581,16 @@ def selected_repositories(arguments: list[str]) -> list[str]:
             + ", ".join(invalid)
             + f"\nExpected one of: {', '.join(REPOSITORY_NAMES)}"
         )
-    result = []
-    for a in arguments:
-        if a not in result:
-            result.append(a)
-    return result
+    return expand_repository_selection(arguments)
+
+
+def expand_repository_selection(selected: list[str]) -> list[str]:
+    expanded = {
+        name
+        for selected_name in selected
+        for name in DOWNSTREAM_REPOSITORIES[selected_name]
+    }
+    return [n for n in REPOSITORY_NAMES if n in expanded]
 
 
 def programs_for_repositories(
@@ -431,12 +622,9 @@ def selected_service_names(programs: list[Program]) -> list[str]:
     return result
 
 
-def push_program(
-    program: Program, run_command: RunCommand, output: TextIO | None = None
-) -> StepResult:
-    clean = clean_worktree_step(program, run_command)
-    if not clean.ok:
-        return clean
+def publication_state(
+    program: Program, run_command: RunCommand
+) -> PublicationState | StepResult:
     upstream = run_step(
         program.name,
         "upstream",
@@ -462,79 +650,43 @@ def push_program(
             returncode=2,
             output=f"bad upstream {upstream.output.strip()}",
         )
-    push = run_step(
-        program.name,
-        "push",
-        ["git", "-C", str(program.directory), "push", remote, f"HEAD:{branch}"],
-        run_command,
-    )
-    if push.ok:
-        return push
-    fetch = run_step(
-        program.name,
-        "fetch upstream",
-        [
-            "git",
-            "-C",
-            str(program.directory),
-            "fetch",
-            remote,
-            f"+refs/heads/{branch}:refs/remotes/{remote}/{branch}",
-        ],
-        run_command,
-    )
-    if not fetch.ok:
-        return StepResult(
-            program=program.name,
-            step=fetch.step,
-            command=fetch.command,
-            returncode=fetch.returncode,
-            output=(
-                f"regular push failed:\n{push.output.rstrip()}\n"
-                f"could not fetch current upstream commit:\n{fetch.output}"
-            ),
-        )
-    upstream_commit = run_step(
+    commit = run_step(
         program.name,
         "upstream commit",
-        [
-            "git",
-            "-C",
-            str(program.directory),
-            "log",
-            "-1",
-            "--format=%H%n%s",
-            f"{remote}/{branch}",
-        ],
+        ["git", "-C", str(program.directory), "rev-parse", "@{upstream}"],
         run_command,
     )
-    if not upstream_commit.ok:
+    if not commit.ok:
+        return commit
+    if not (upstream_commit := commit.output.strip()):
         return StepResult(
             program=program.name,
-            step=upstream_commit.step,
-            command=upstream_commit.command,
-            returncode=upstream_commit.returncode,
-            output=(
-                f"regular push failed:\n{push.output.rstrip()}\n"
-                f"could not read current upstream commit:\n{upstream_commit.output}"
-            ),
-        )
-    upstream_sha, _, _ = upstream_commit.output.partition("\n")
-    if not upstream_sha:
-        return StepResult(
-            program=program.name,
-            step=upstream_commit.step,
-            command=upstream_commit.command,
+            step="upstream commit",
+            command=commit.command,
             returncode=2,
-            output=(
-                f"regular push failed:\n{push.output.rstrip()}\n"
-                "current upstream commit is empty"
-            ),
+            output="upstream commit is empty",
         )
+    return PublicationState(
+        program=program,
+        remote=remote,
+        branch=branch,
+        upstream_commit=upstream_commit,
+    )
+
+
+def push_program(
+    state: PublicationState, run_command: RunCommand, output: TextIO | None = None
+) -> StepResult:
+    program = state.program
+    push = normal_push_step(program, state.remote, state.branch, run_command)
+    if push.ok or not state.rewritten:
+        return push
     if output:
         tqdm.write(f"{program.name} regular push rejected", file=output)
-        tqdm.write(f"{program.name} current upstream commit:", file=output)
-        tqdm.write(upstream_commit.output.rstrip(), file=output)
+        tqdm.write(
+            f"{program.name} pre-autosquash upstream commit: {state.upstream_commit}",
+            file=output,
+        )
     force_push = run_step(
         program.name,
         "push --force-with-lease",
@@ -543,9 +695,9 @@ def push_program(
             "-C",
             str(program.directory),
             "push",
-            f"--force-with-lease=refs/heads/{branch}:{upstream_sha}",
-            remote,
-            f"HEAD:{branch}",
+            f"--force-with-lease=refs/heads/{state.branch}:{state.upstream_commit}",
+            state.remote,
+            f"HEAD:{state.branch}",
         ],
         run_command,
     )
@@ -565,6 +717,24 @@ def push_program(
     )
 
 
+def normal_push_step(
+    program: Program, remote: str, branch: str, run_command: RunCommand
+) -> StepResult:
+    return run_step(
+        program.name,
+        "push",
+        [
+            "git",
+            "-C",
+            str(program.directory),
+            "push",
+            remote,
+            f"HEAD:{branch}",
+        ],
+        run_command,
+    )
+
+
 def check_main_branches(
     programs: list[Program], run_command: RunCommand, output: TextIO
 ) -> bool:
@@ -576,17 +746,23 @@ def check_main_branches(
     return False
 
 
-def autosquash_programs(
-    programs: list[Program], limit: int, run_command: RunCommand, output: TextIO
-) -> bool:
-    for program in programs:
-        result = autosquash_program(program, limit, run_command)
+def autosquash_publications(
+    states: list[PublicationState],
+    limit: int,
+    run_command: RunCommand,
+    output: TextIO,
+) -> list[PublicationState] | None:
+    result_states = []
+    for state in states:
+        result = autosquash_program(state.program, limit, run_command)
         if result is None:
+            result_states.append(state)
             continue
         if not result.ok:
             report_failure(result, output)
-            return False
-    return True
+            return None
+        result_states.append(state.model_copy(update={"rewritten": True}))
+    return result_states
 
 
 def autosquash_program(
@@ -1063,6 +1239,19 @@ def report_failure(result: StepResult, output: TextIO) -> None:
 
 
 REPOSITORY_NAMES = repositories.REPOSITORY_NAMES
+DOWNSTREAM_REPOSITORIES = {
+    "reccy": ["reccy", "recs", "twitcho", "lyte", "showco"],
+    "recs": ["recs", "showco"],
+    "twitcho": ["twitcho"],
+    "lyte": ["lyte"],
+    "showco": ["showco"],
+}
+INTERNAL_DEPENDENCIES = {
+    "recs": ["reccy"],
+    "twitcho": ["reccy"],
+    "lyte": ["reccy"],
+    "showco": ["reccy", "recs"],
+}
 SERVICES_BY_REPOSITORY = {
     "reccy": ["recs", "showco", "twitcho", "lyte"],
     "recs": ["recs"],

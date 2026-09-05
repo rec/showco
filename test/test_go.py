@@ -140,7 +140,7 @@ class GoTests(unittest.TestCase):
 
         self.assertEqual(result, 0)
         update_target.assert_called_once_with(
-            ["recs"],
+            ["recs", "showco"],
             host=None,
             root=None,
             target_config=provision_config,
@@ -165,7 +165,7 @@ class GoTests(unittest.TestCase):
 
         self.assertEqual(result, 0)
         remote.assert_called_once_with(
-            ["recs"],
+            ["recs", "showco"],
             host=None,
             root=None,
             target_config=provision_config,
@@ -179,7 +179,9 @@ class GoTests(unittest.TestCase):
             result = go.run(self.options(target_machine=True, repositories=["recs"]))
 
         self.assertEqual(result, 0)
-        update_target.assert_called_once_with(["recs"], root=None, clear_settings=True)
+        update_target.assert_called_once_with(
+            ["recs", "showco"], root=None, clear_settings=True
+        )
 
     def test_clear_settings_option_is_forwarded_to_target_update(self) -> None:
         with mock.patch("showco.update.update_target", return_value=0) as update_target:
@@ -192,7 +194,9 @@ class GoTests(unittest.TestCase):
             )
 
         self.assertEqual(result, 0)
-        update_target.assert_called_once_with(["recs"], root=None, clear_settings=False)
+        update_target.assert_called_once_with(
+            ["recs", "showco"], root=None, clear_settings=False
+        )
 
     def test_no_clear_settings_option_preserves_recs_settings(self) -> None:
         options = tyro.cli(provision.GoOptions, args=["--no-clear-settings"])

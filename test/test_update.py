@@ -581,9 +581,13 @@ class UpdateTests(unittest.TestCase):
         self.assertIn("uv sync --locked --directory /code/showco", remote_command)
         self.assertTrue(
             remote_command.endswith(
-                "uv run --locked showco go --target-machine --root /code showco reccy"
+                "uv run --locked showco go --target-machine --root /code "
+                "reccy recs twitcho lyte showco"
             )
         )
+        push_indexes = [i for i, c in enumerate(commands) if "push" in c]
+        first_lock = next(i for i, c in enumerate(commands) if c[:2] == ["uv", "lock"])
+        self.assertLess(max(push_indexes[:5]), first_lock)
         self.assertIn("ConnectTimeout=2", remote_update.call_args.args[2])
         self.assertEqual(output.getvalue(), "")
 
@@ -818,34 +822,26 @@ class UpdateTests(unittest.TestCase):
         )
         self.assertIn("repository is on feature, expected main", output.getvalue())
 
-    def test_push_program_force_pushes_with_current_upstream_commit(self) -> None:
+    def test_push_program_force_pushes_with_pre_autosquash_upstream(self) -> None:
         commands: list[list[str]] = []
 
         def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
             commands.append(list(command))
-            if command[-2:] == ["status", "--porcelain"]:
-                return subprocess.CompletedProcess(command, 0, "", "")
-            if command[-1:] == ["@{upstream}"]:
-                return subprocess.CompletedProcess(command, 0, "origin/main\n", "")
             if command[-3:] == ["push", "origin", "HEAD:main"]:
                 return subprocess.CompletedProcess(command, 1, "", "rejected\n")
-            if command[-2:] == [
-                "origin",
-                "+refs/heads/main:refs/remotes/origin/main",
-            ]:
-                return subprocess.CompletedProcess(command, 0, "", "")
-            if command[-1:] == ["origin/main"]:
-                return subprocess.CompletedProcess(
-                    command,
-                    0,
-                    "1234567890abcdef\nRemote commit subject\n",
-                    "",
-                )
             return subprocess.CompletedProcess(command, 0, "forced\n", "")
 
         output = StringIO()
         result = update.push_program(
-            update.Program(name="recs", directory=Path("/code/recs"), service_names=[]),
+            update.PublicationState(
+                program=update.Program(
+                    name="recs", directory=Path("/code/recs"), service_names=[]
+                ),
+                remote="origin",
+                branch="main",
+                upstream_commit="1234567890abcdef",
+                rewritten=True,
+            ),
             run_command,
             output,
         )
@@ -853,20 +849,10 @@ class UpdateTests(unittest.TestCase):
         self.assertTrue(result.ok)
         self.assertEqual(result.step, "push --force-with-lease")
         self.assertIn("recs regular push rejected", output.getvalue())
-        self.assertIn("recs current upstream commit:", output.getvalue())
-        self.assertIn("1234567890abcdef\nRemote commit subject", output.getvalue())
+        self.assertIn("recs pre-autosquash upstream commit", output.getvalue())
+        self.assertIn("1234567890abcdef", output.getvalue())
         self.assertIn("recs push --force-with-lease: ok", output.getvalue())
-        self.assertIn(
-            [
-                "git",
-                "-C",
-                "/code/recs",
-                "fetch",
-                "origin",
-                "+refs/heads/main:refs/remotes/origin/main",
-            ],
-            commands,
-        )
+        self.assertFalse(any("fetch" in c for c in commands))
         self.assertEqual(
             commands[-1],
             [
@@ -879,6 +865,209 @@ class UpdateTests(unittest.TestCase):
                 "HEAD:main",
             ],
         )
+
+    def test_push_program_does_not_force_unrewritten_history(self) -> None:
+        program = update.Program(
+            name="recs", directory=Path("/code/recs"), service_names=[]
+        )
+        state = update.PublicationState(
+            program=program,
+            remote="origin",
+            branch="main",
+            upstream_commit="original",
+        )
+        commands: list[list[str]] = []
+
+        def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+            commands.append(list(command))
+            return subprocess.CompletedProcess(command, 1, "", "rejected\n")
+
+        result = update.push_program(state, run_command)
+
+        self.assertFalse(result.ok)
+        self.assertEqual(
+            commands,
+            [["git", "-C", "/code/recs", "push", "origin", "HEAD:main"]],
+        )
+
+    def test_prepare_uses_upstream_captured_before_autosquash(self) -> None:
+        commands: list[list[str]] = []
+
+        def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+            commands.append(list(command))
+            if command[-2:] == ["branch", "--show-current"]:
+                return subprocess.CompletedProcess(command, 0, "main\n", "")
+            if command[-2:] == ["status", "--porcelain"]:
+                return subprocess.CompletedProcess(command, 0, "", "")
+            if "--symbolic-full-name" in command:
+                return subprocess.CompletedProcess(command, 0, "origin/main\n", "")
+            if command[-2:] == ["rev-parse", "@{upstream}"]:
+                return subprocess.CompletedProcess(
+                    command, 0, "before-autosquash\n", ""
+                )
+            if command[3:5] == ["log", "-n"]:
+                return subprocess.CompletedProcess(
+                    command, 0, "fixup\0fixup! feature\0feature\0feature\0", ""
+                )
+            if command[-2:] == ["rev-parse", "fixup^"]:
+                return subprocess.CompletedProcess(command, 0, "parent\n", "")
+            if command[-3:] == ["push", "origin", "HEAD:main"]:
+                return subprocess.CompletedProcess(command, 1, "", "rejected\n")
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        result = update.prepare_local_repositories(
+            ["recs"], Path("/code"), run_command, StringIO()
+        )
+
+        self.assertTrue(result)
+        capture = ["git", "-C", "/code/recs", "rev-parse", "@{upstream}"]
+        rebase = [
+            "git",
+            "-C",
+            "/code/recs",
+            "rebase",
+            "--interactive",
+            "--autosquash",
+            "parent",
+        ]
+        self.assertLess(commands.index(capture), commands.index(rebase))
+        self.assertEqual(
+            commands[-1],
+            [
+                "git",
+                "-C",
+                "/code/recs",
+                "push",
+                "--force-with-lease=refs/heads/main:before-autosquash",
+                "origin",
+                "HEAD:main",
+            ],
+        )
+
+    def test_refresh_program_commits_only_changed_lockfile(self) -> None:
+        program = update.Program(
+            name="recs", directory=Path("/code/recs"), service_names=[]
+        )
+        commands: list[list[str]] = []
+
+        def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+            commands.append(list(command))
+            if command[-2:] == ["status", "--porcelain"]:
+                return subprocess.CompletedProcess(command, 0, " M uv.lock\n", "")
+            if "--symbolic-full-name" in command:
+                return subprocess.CompletedProcess(command, 0, "origin/main\n", "")
+            if command[-2:] == ["rev-parse", "@{upstream}"]:
+                return subprocess.CompletedProcess(command, 0, "upstream-sha\n", "")
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        result = update.refresh_program_dependencies(
+            program, ["reccy"], run_command, StringIO()
+        )
+
+        self.assertTrue(result)
+        self.assertEqual(
+            commands[0],
+            [
+                "uv",
+                "lock",
+                "--directory",
+                "/code/recs",
+                "--upgrade-package",
+                "reccy",
+            ],
+        )
+        self.assertEqual(
+            commands.count(["git", "-C", "/code/recs", "status", "--porcelain"]),
+            2,
+        )
+        self.assertIn(["git", "-C", "/code/recs", "add", "--", "uv.lock"], commands)
+        self.assertIn(
+            [
+                "git",
+                "-C",
+                "/code/recs",
+                "commit",
+                "-m",
+                "Update internal dependencies",
+            ],
+            commands,
+        )
+        self.assertEqual(
+            commands[-1],
+            ["git", "-C", "/code/recs", "push", "origin", "HEAD:main"],
+        )
+
+    def test_refresh_program_rejects_unexpected_changed_path(self) -> None:
+        program = update.Program(
+            name="recs", directory=Path("/code/recs"), service_names=[]
+        )
+        commands: list[list[str]] = []
+        status_count = 0
+
+        def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+            nonlocal status_count
+            commands.append(list(command))
+            if command[-2:] == ["status", "--porcelain"]:
+                status_count += 1
+                if status_count == 1:
+                    return subprocess.CompletedProcess(command, 0, " M uv.lock\n", "")
+                return subprocess.CompletedProcess(
+                    command, 0, " M pyproject.toml\n M uv.lock\n", ""
+                )
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        output = StringIO()
+        result = update.refresh_program_dependencies(
+            program, ["reccy"], run_command, output
+        )
+
+        self.assertFalse(result)
+        self.assertIn("unexpected paths", output.getvalue())
+        self.assertIn(
+            [
+                "git",
+                "-C",
+                "/code/recs",
+                "restore",
+                "--staged",
+                "--worktree",
+                "--",
+                "uv.lock",
+            ],
+            commands,
+        )
+        self.assertFalse(any("commit" in c for c in commands))
+
+    def test_refresh_publishes_recs_before_locking_showco(self) -> None:
+        commands: list[list[str]] = []
+
+        def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+            commands.append(list(command))
+            if command[-2:] == ["status", "--porcelain"]:
+                return subprocess.CompletedProcess(command, 0, " M uv.lock\n", "")
+            if "--symbolic-full-name" in command:
+                return subprocess.CompletedProcess(command, 0, "origin/main\n", "")
+            if command[-2:] == ["rev-parse", "@{upstream}"]:
+                return subprocess.CompletedProcess(command, 0, "upstream-sha\n", "")
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        result = update.refresh_local_dependencies(
+            ["recs", "showco"], Path("/code"), run_command, StringIO()
+        )
+
+        self.assertTrue(result)
+        recs_push = ["git", "-C", "/code/recs", "push", "origin", "HEAD:main"]
+        showco_lock = [
+            "uv",
+            "lock",
+            "--directory",
+            "/code/showco",
+            "--upgrade-package",
+            "reccy",
+            "--upgrade-package",
+            "recs",
+        ]
+        self.assertLess(commands.index(recs_push), commands.index(showco_lock))
 
     def test_remote_step_reports_remote_output(self) -> None:
         command = ["ssh", "tom@bertrand.local", "showco go"]
@@ -902,8 +1091,8 @@ class UpdateTests(unittest.TestCase):
                 "showco.update.provisioning_config",
                 return_value=make_config(),
             ),
-            mock.patch("showco.update.check_main_branches", return_value=True),
-            mock.patch("showco.update.push_program"),
+            mock.patch("showco.update.prepare_local_repositories", return_value=True),
+            mock.patch("showco.update.refresh_local_dependencies", return_value=True),
             mock.patch(
                 "showco.update.run_remote_step",
                 return_value=update.StepResult(
@@ -926,8 +1115,8 @@ class UpdateTests(unittest.TestCase):
                 "showco.update.provisioning_config",
                 return_value=make_config(),
             ),
-            mock.patch("showco.update.check_main_branches", return_value=True),
-            mock.patch("showco.update.push_program"),
+            mock.patch("showco.update.prepare_local_repositories", return_value=True),
+            mock.patch("showco.update.refresh_local_dependencies", return_value=True),
             mock.patch(
                 "showco.update.run_remote_step",
                 return_value=update.StepResult(
@@ -974,17 +1163,9 @@ class UpdateTests(unittest.TestCase):
             commands,
             [
                 ["git", "-C", "/code/recs", "branch", "--show-current"],
-                [
-                    "git",
-                    "-C",
-                    "/code/recs",
-                    "log",
-                    "-n",
-                    "50",
-                    "--format=%H%x00%s%x00",
-                    "HEAD",
-                ],
+                ["git", "-C", "/code/showco", "branch", "--show-current"],
                 ["git", "-C", "/code/recs", "status", "--porcelain"],
+                ["git", "-C", "/code/showco", "status", "--porcelain"],
             ],
         )
 
@@ -1161,6 +1342,15 @@ class UpdateTests(unittest.TestCase):
 
     def test_selected_repositories_defaults_to_all(self) -> None:
         self.assertEqual(update.selected_repositories([]), update.REPOSITORY_NAMES)
+
+    def test_reccy_selection_includes_all_consumers_in_dependency_order(self) -> None:
+        self.assertEqual(
+            update.selected_repositories(["reccy"]),
+            ["reccy", "recs", "twitcho", "lyte", "showco"],
+        )
+
+    def test_recs_selection_includes_showco(self) -> None:
+        self.assertEqual(update.selected_repositories(["recs"]), ["recs", "showco"])
 
     def test_disabled_twitcho_has_no_service_to_restart(self) -> None:
         programs = update.programs_for_repositories(
