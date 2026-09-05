@@ -128,14 +128,17 @@ uv lock --directory /path/to/showco --upgrade-package reccy --upgrade-package re
 
 After locking each consumer:
 
-1. Confirm that only `uv.lock` changed.
-2. Run `uv lock --check --directory <repository>`.
-3. Run `uv run --locked --directory <repository> pytest` so the test environment
+1. Compare the known internal packages' locked Git sources before and after the
+   refresh. If none moved, restore the generated lockfile so a rolling
+   `exclude-newer` timestamp alone does not create a commit.
+2. Confirm that only `uv.lock` changed.
+3. Run `uv lock --check --directory <repository>`.
+4. Run `uv run --locked --directory <repository> pytest` so the test environment
    is synchronized to that lockfile before tests execute.
-4. Confirm again that only `uv.lock` changed.
-5. If the lockfile differs from `HEAD`, stage only `uv.lock`, commit it as
+5. Confirm again that only `uv.lock` changed.
+6. If the lockfile differs from `HEAD`, stage only `uv.lock`, commit it as
    `Update internal dependencies`, and push it normally.
-6. If the lockfile is unchanged, create no commit and perform no second push.
+7. If the lockfile is unchanged, create no commit and perform no second push.
 
 The generated dependency push is always fast-forward-only in effect: use a
 normal Git push and never fall back to force. A rejection means the remote
@@ -189,8 +192,9 @@ Responsibilities:
 
 Use `Program` and `StepResult`, preserve injected command execution and existing
 failure reporting, and represent the graph as explicit project data near
-`REPOSITORY_NAMES`. Do not parse arbitrary TOML or lockfiles, introduce a
-workflow engine, or use asynchronous execution.
+`REPOSITORY_NAMES`. Parse only the known internal package source entries needed
+for no-op detection; do not infer the graph from arbitrary TOML or lockfiles,
+introduce a workflow engine, or use asynchronous execution.
 
 ## Tests
 
