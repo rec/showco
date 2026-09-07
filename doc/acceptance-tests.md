@@ -1,154 +1,194 @@
-# Acceptance tests
+# Hardware Acceptance Tests
 
-Run these tests when the Raspberry Pi arrives and again after every meaningful
-hardware, OS, network, or service change.
+Run this checklist after first provisioning and after meaningful hardware, OS,
+network, service, recording, lighting, or streaming changes. Automated tests do
+not prove that external devices performed their work.
 
-Do not treat the box as stage-ready until every required test passes.
+Record the date, deployed commit IDs, attached devices, recording destination,
+and pass/fail result outside this document for each acceptance run.
 
 ## 1. Boot and access
 
 Pass criteria:
 
-- Pi boots headless.
-- tablet joins the Pi show network.
-- SSH works from a trusted machine.
-- Showco opens on the tablet.
-- system clock is correct enough for logs and file names.
+- The Pi boots without interactive input.
+- SSH key authentication and `sudo -n true` succeed.
+- Enabled user services start after boot.
+- The tablet opens Showco at the configured port.
+- The target clock is correct enough for logs and recording names.
 
 Commands:
 
 ```bash
-hostname
-date
-systemctl --user status showco
+ssh USER@HOST 'date; sudo -n true'
+ssh USER@HOST 'systemctl --user status recs showco'
+showco logs showco recs --lines 100
 ```
+
+Replace `USER@HOST` with the target SSH login.
+
+Add `lyte` or `twitcho` to the service and log commands when enabled.
 
 ## 2. Storage
 
+Use the recording-disk path reported on Showco's Health page rather than
+assuming a fixed mount point.
+
 Pass criteria:
 
-- external storage is mounted at the expected path.
-- Recs recording path is on external storage.
-- the SD card is not used for show recordings.
-- a write test succeeds.
+- The intended removable disk is mounted and is the disk reported by Recs.
+- Available space and the estimated recording duration are plausible.
+- A write and sync on that filesystem succeed.
+- Recordings are not being written to the Raspberry Pi SD card.
+
+Commands, replacing `PATH` with the reported path:
+
+```bash
+findmnt -T PATH
+df -h PATH
+touch PATH/showco-write-test
+sync
+rm PATH/showco-write-test
+```
+
+## 3. Audio, MIDI, and mixer control
+
+Pass criteria:
+
+- Each configured USB audio device appears in `arecord -l`.
+- Each configured MIDI input appears in Recs status.
+- The Channels page shows the expected tracks and recording indicators.
+- The tablet controls the mixer over the intended Ethernet path.
+- Disconnecting and reconnecting each USB device returns it to recording
+  without restarting the Pi.
 
 Commands:
 
 ```bash
-findmnt /mnt/recs
-df -h /mnt/recs
-touch /mnt/recs/write-test && rm /mnt/recs/write-test
+ssh USER@HOST 'arecord -l; arecord -L'
+showco logs recs --lines 200
 ```
 
-## 3. X18 USB audio
-
-Pass criteria:
-
-- X18 appears as an input device.
-- all expected input channels are visible.
-- sample rate is 48 kHz.
-- Recs can open the device.
-
-Commands:
-
-```bash
-arecord -l
-arecord -L
-```
+The current X18 UDP probe sends `/xremote` and waits for a reply. A waiting or
+failed probe is not by itself proof that the mixer is unreachable. Confirm with
+the tablet mixer application and, when diagnosing, packet capture or recent Recs
+OSC feedback.
 
 ## 4. Recs recording
 
 Pass criteria:
 
-- Recs starts as a daemon.
-- Showco reports Recs connected.
-- Showco shows level state changes for active inputs.
-- a ten-minute recording writes files to external storage.
-- logs show no buffer overruns, dropped blocks, or write stalls.
-- stopping or rebooting leaves a recoverable manifest/session file.
+- Recs starts and Showco reports a connected, current status snapshot.
+- Channel waveforms update smoothly while audio is present.
+- Track-name and stereo changes survive a page reload.
+- Pause and resume change recording state without losing the web response.
+- A short recording creates growing files on the reported removable disk.
+- After stopping Recs, files remain readable and complete.
+- After unmounting and remounting the disk, those files are still present.
+- Logs contain no unexplained overruns, dropped blocks, or write failures.
+
+Do not use Showco counters as the only evidence that bytes reached storage.
+Inspect the files and play or decode a sample recording.
+
+## 5. Showco pages and actions
+
+Pass criteria:
+
+- Channels, Health, Attributes, Actions, and Errors all load on the tablet.
+- An unavailable service does not make another page unavailable.
+- The Health page updates CPU, memory, disk, temperature, mixer, MIDI, and OSC
+  state without a reload.
+- With no current Recs errors, Health and Errors explicitly show no errors.
+- Action buttons visibly enter and leave their busy state.
+- Successful and failed actions appear under Recent actions and in the Showco
+  log with useful details.
+- Calibration, marker, profile reload, pause, resume, and status actions return
+  the expected result.
+- Recs shutdown and Twitch stop require deliberate confirmation.
+
+## 6. Monitoring retention
+
+Pass criteria:
+
+- CPU or memory load appears on Health within a few seconds.
+- One aggregate record is appended per minute.
+- A clean Showco shutdown writes the final partial minute.
+- Files older than the seven-day UTC retention window are removed.
+- Monitoring failures appear in the Showco log and do not stop the web UI.
 
 Commands:
 
 ```bash
-systemctl --user status recs
-journalctl --user -u recs --since "10 minutes ago"
+ssh USER@HOST \
+  'ls -l ~/.local/state/showco/monitoring; tail ~/.local/state/showco/monitoring/*.jsonl'
 ```
 
-## 5. Showco actions
+## 7. Lyte
+
+Only required when Lyte is enabled.
 
 Pass criteria:
 
-- noise-floor calibration button reports success when Recs is configured for
-  calibration.
-- muting Twitcho updates Showco status.
-- unmuting Twitcho updates Showco status.
-- destructive or show-ending buttons require confirmation.
-- failed actions remain visible in the recent-action log.
+- Lyte reaches connected state and Showco reports its output details.
+- Lyte connecting after Showco queues one automatic light test.
+- Test lights runs for one second, peaks at 30 percent, and leaves the lights
+  off afterward.
+- Disconnecting and reconnecting the lighting network restores control and
+  permits another automatic test.
+- A failed test appears in Recent actions and both service logs.
 
-## 6. Twitcho local stream process
+## 8. Twitcho and Twitch
 
-Pass criteria:
-
-- Showco starts Twitcho when launched with `--twitcho-config`.
-- Showco reports Twitcho connected.
-- Twitcho audio seconds increase while streaming.
-- Twitcho mute produces silence in the stream path.
-- Twitcho stop terminates the streaming process cleanly.
-- Restart Twitch starts a fresh Twitcho attempt from Showco.
-
-Commands:
-
-```bash
-systemctl --user status showco
-journalctl --user -u showco --since "10 minutes ago"
-```
-
-## 7. Twitch API side effects
-
-Only required when Twitch streaming is part of the show.
+Only required when Twitch is enabled.
 
 Pass criteria:
 
-- token has the required scopes.
-- update stream information succeeds.
-- send chat message succeeds.
-- send announcement succeeds.
-- create clip succeeds when the channel is live.
-- create stream marker succeeds when the channel is live.
-- Showco displays failures clearly when Twitch rejects a request.
+- Twitcho starts as a user service and Showco reports it connected.
+- Audio time and bitrate advance while streaming.
+- Mute and unmute affect the stream path.
+- Restart creates a fresh streaming attempt and stop terminates cleanly.
+- Updating stream information, chat, announcement, clip, and marker actions
+  either succeed or display Twitch's rejection clearly.
+- Loss of internet does not stop Recs recording.
 
-## 8. Network isolation and reachability
-
-Pass criteria:
-
-- tablet can reach Showco.
-- tablet can control the X18 through the planned network path.
-- X18 wired Ethernet remains reachable while the Pi access point is active.
-- internet path for Twitcho works if Twitch is enabled.
-- losing internet does not stop Recs recording.
-
-## 9. Reboot recovery
+## 9. Network and late devices
 
 Pass criteria:
 
-- after power cycle, all enabled services return to the expected state.
-- Showco returns without manual shell commands.
-- Recs does not record to the wrong path if external storage is missing.
-- logs clearly explain any failed service.
+- The tablet receives an address on the configured internal subnet.
+- Showco is reachable at the configured internal Wi-Fi address and web port.
+- The mixer is reachable at its configured host offset.
+- The private topology works with no external network.
+- Mixed topology keeps private mixer control while using external Wi-Fi.
+- Devices absent at boot can arrive later, disappear, and return without
+  reprovisioning.
 
-## 10. Field-length soak
+Test the real startup order: boot the Pi first, power the X18 several minutes
+later, and attach any later mixer or MIDI device after the system has been
+running for at least an hour.
+
+## 10. Reboot and update recovery
 
 Pass criteria:
 
-- run for at least the maximum expected show length plus setup time.
-- no Recs dropouts.
-- no unbounded log growth.
-- no disk-full or storage-stall warnings.
-- Showco remains responsive from the tablet.
-- Twitcho remains connected or reports failures clearly.
+- A power cycle restores all enabled services without manual shell commands.
+- Missing removable storage does not silently redirect recording to the SD card.
+- `showco` reports success only after target verification completes.
+- A no-change `showco` run takes the update path rather than reprovisioning.
+- A failed deployment leaves enough information in file logs to identify the
+  failed repository, service, or verification step.
 
-Recommended minimum:
+## 11. Field-length soak
 
-- 5 hours recording.
-- Twitcho enabled if it will be used live.
-- tablet connected to the Pi network throughout.
+Run for the maximum expected show duration plus setup time, with every service
+that will be used live. Five hours is the current minimum.
+
+Pass criteria:
+
+- No audio dropout, unbounded log growth, disk-full warning, or storage stall.
+- Showco remains responsive on the tablet.
+- Waveforms remain smooth and recover after reconnecting the browser.
+- Lyte continues sending frames when enabled.
+- Twitcho remains connected or reports recovery failures clearly.
+- The final recordings remain readable after all services stop and the disk is
+  remounted.

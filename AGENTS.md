@@ -13,30 +13,34 @@ client-side tooling unless the user explicitly asks for that direction.
 
 ## Important Modules
 
-- `showco/cli.py`: command-line parsing, `showco go`, rehearsal mode, and
-  optional Twitcho supervision.
+- `showco/cli.py`: command routing, `showco go`, and rehearsal mode.
 - `showco/server.py`: request handling, app orchestration, action dispatch, HTML,
-  CSS, and form behavior.
-- `showco/models.py`: shared status/result dataclasses. Keep these simple and
+  and form behavior. Static CSS and JavaScript live in `site/`.
+- `showco/models.py`: shared status/result Pydantic models. Keep these simple and
   explicit.
-- `showco/recs.py`: adapter for Recs status files and GUI daemon protocol.
-- `showco/twitcho.py`: socket protocol adapter for Twitcho control/status.
-- `showco/twitcho_supervisor.py`: subprocess supervision and restart policy for
-  a managed Twitcho process.
+- `showco/recs_control.py`, `showco/recs_snapshot.py`, and `showco/recs.py`:
+  public Recs RPC, cached status, actions, and waveform integration.
+- `showco/twitcho/`: Twitcho RPC and Twitch authentication adapters.
+- `showco/lyte.py`: Lyte status and light-test RPC adapter.
 - `showco/mixer.py`: TCP/UDP mixer reachability probes.
-- `showco/system.py`: Raspberry Pi temperature probe.
+- `showco/system.py` and `showco/monitoring.py`: Raspberry Pi health sampling
+  and retained monitoring aggregates.
 - `showco/rehearsal.py`: in-process fakes for local rehearsal and tests.
-- `showco/update.py`: operational update helper for recs, reccy, twitcho, and
-  showco.
+- `showco/provision/`: configuration, card preparation, remote provisioning,
+  verification, and the generated target script.
+- `showco/update.py` and `showco/local_update.py`: target deployment and local
+  publication for reccy, recs, twitcho, lyte, and showco.
 
 ## Coding Conventions
 
-- Prefer the standard library and existing dependencies. Current runtime
-  dependencies are local editable `recs` and `twitcho` packages.
-- Keep implementations direct. This codebase uses small classes, dataclasses,
-  plain functions, dependency injection for tests, and explicit status objects.
+- Prefer the standard library and existing dependencies. Showco imports Reccy
+  and Recs directly and manages Reccy, Recs, Twitcho, and Lyte as sibling target
+  checkouts.
+- Keep implementations direct. This codebase uses small classes, Pydantic
+  models, plain functions, dependency injection for tests, and explicit status
+  objects.
 - Preserve the current adapter boundaries: Recs, Twitcho, mixer, system, and
-  supervisor behavior should remain independently testable.
+  Lyte behavior should remain independently testable.
 - Keep user-visible strings stable unless changing the UI behavior is the point
   of the task. Tests often assert visible HTML and action messages.
 - Use injected paths, sockets, subprocess runners, and fakes in tests instead of
@@ -44,7 +48,7 @@ client-side tooling unless the user explicitly asks for that direction.
 - Do not add retries, background tasks, broad compatibility paths, or new
   abstractions unless the existing failure mode or user request justifies them.
 - Do not store secrets in the repository unless the user explicitly scopes work
-  to a private/unpushable branch. Treat `scripts/secrets.toml` as secret
+  to a private/unpushable branch. Treat `showco/provision/secrets.toml` as secret
   operational material.
 
 ## Testing
@@ -57,11 +61,11 @@ Focused tests:
 uv run pytest test/test_server.py
 uv run pytest test/test_twitcho.py
 uv run pytest test/test_recs.py
-uv run pytest test/test_twitcho_supervisor.py
+uv run pytest test/test_provision.py
+uv run pytest test/test_update.py
 ```
 
-Historical note: `ty check showco` has had baseline diagnostics in adapter code.
-Recheck before reporting, and separate pre-existing diagnostics from regressions.
+`ty check showco` is expected to pass.
 
 ## Runtime And Hardware Boundaries
 
@@ -69,7 +73,7 @@ Recheck before reporting, and separate pre-existing diagnostics from regressions
   or hardware-facing checks unless the user explicitly asks.
 - Do not run `showco go` as a verification step. It pushes or pulls sibling
   repos and stops/restarts user services.
-- Recs and Twitcho are sibling editable dependencies. Changes that belong in
+- Reccy, Recs, Twitcho, and Lyte are sibling projects. Changes that belong in
   those projects should be made there only when the user scopes the task that
   way.
 - Hardware/Twitch acceptance details live in `doc/`. Automated tests do not prove
@@ -87,5 +91,3 @@ Recheck before reporting, and separate pre-existing diagnostics from regressions
 - Reject a dirty `uv.lock` before provisioning or updating. `showco go` may
   stage and commit only lockfile changes it generated while refreshing internal
   dependencies; it must not include any other changed path.
-- Leave `doc/checklist.md` untouched unless the user explicitly asks to update
-  checklist content.
