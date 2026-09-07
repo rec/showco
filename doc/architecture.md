@@ -50,12 +50,33 @@ The server composes status from independent adapters:
 - `TwitchoClient` uses Reccy RPC when Twitcho is enabled.
 - `MixerMonitor` probes the configured X18 endpoint, caching results briefly to
   avoid probing per browser request.
-- `SystemMonitor` reports local Raspberry Pi information.
+- `SystemMonitor` reads local Raspberry Pi temperature, aggregate CPU usage,
+  and memory usage.
+- `PerformanceMonitor` samples system and Recs recording-disk status once per
+  second for the Health page and minute history.
 - `X18RecorderSupervisor` reports the state of the optional OSC subprocess.
 
 HTTP request concurrency is bounded. Stateful control actions are serialized,
 and the short recent-action log is protected by its own lock. Browser status
 polling updates the display without requiring a page reload.
+
+## Performance Monitoring
+
+Showco runs one sampler thread inside the web service. It reads CPU, memory,
+temperature, and Recs' cached recording-disk status once per second whether or
+not a browser is connected. The latest completed sample is returned by
+`GET /status` and displayed as CPU, memory, and recording-disk meters on the
+existing Health page.
+
+The sampler aggregates each UTC minute and appends one JSON object to
+`~/.local/state/showco/monitoring/YYYY-MM-DD.jsonl`. Records include CPU average
+and peak, memory average and peak, minimum free space on the latest recording
+disk, and whether a Recs disk alert or pause occurred. Showco keeps seven UTC
+calendar days. A clean shutdown writes the final partial minute.
+
+Monitoring history is diagnostic only. A sampling or history-write failure is
+logged when its state changes and does not make the web UI unavailable. The
+sampler thread stops and joins when the HTTP server closes.
 
 ## Recs Integration
 

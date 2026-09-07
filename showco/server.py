@@ -19,6 +19,7 @@ from reccy.runtime import logging
 from . import models, services
 from .lyte import LyteClient
 from .mixer import MixersMonitor
+from .monitoring import PerformanceMonitor
 from .recs import RecsClient, WaveformBridge
 from .system import SystemMonitor
 from .twitcho.client import TwitchoClient
@@ -41,7 +42,7 @@ class ShowcoApp:
         self,
         recs: RecsClient,
         twitcho: TwitchoClient | None,
-        system: SystemMonitor,
+        system: SystemMonitor | PerformanceMonitor,
         mixers: MixersMonitor,
         twitcho_restart: Callable[[], models.ActionResult] | None = None,
         waveforms: WaveformBridge | None = None,
@@ -360,6 +361,7 @@ class ShowcoHandler(BaseHTTPRequestHandler):
 
 class ShowcoServer(ThreadingHTTPServer):
     app: ShowcoApp
+    performance: PerformanceMonitor | None
     request_slots: threading.BoundedSemaphore
     waveform_slots: threading.BoundedSemaphore
 
@@ -367,9 +369,12 @@ class ShowcoServer(ThreadingHTTPServer):
         super().__init__(address, handler)
         self.request_slots = threading.BoundedSemaphore(MAX_CONCURRENT_REQUESTS)
         self.waveform_slots = threading.BoundedSemaphore(MAX_WAVEFORM_CONNECTIONS)
+        self.performance = None
         self.daemon_threads = True
 
     def server_close(self) -> None:
+        if self.performance is not None:
+            self.performance.close()
         if self.app.waveforms is not None:
             self.app.waveforms.close()
         super().server_close()
@@ -401,16 +406,23 @@ def make_server(
     twitcho_restart: Callable[[], models.ActionResult] | None = None,
     twitcho_enabled: bool = False,
     lyte_enabled: bool = False,
+    performance_enabled: bool = False,
 ) -> ThreadingHTTPServer:
     handler = type("ConfiguredShowcoHandler", (ShowcoHandler,), {})
     recs_client = recs or RecsClient()
     waveforms = WaveformBridge() if isinstance(recs_client, RecsClient) else None
     if waveforms is not None:
         waveforms.start()
+    system_monitor = system or SystemMonitor()
+    performance = (
+        PerformanceMonitor(system_monitor, recs_client.snapshot_client.status)
+        if performance_enabled
+        else None
+    )
     app = ShowcoApp(
         recs_client,
         (twitcho or TwitchoClient()) if twitcho_enabled else None,
-        system or SystemMonitor(),
+        performance or system_monitor,
         mixers or MixersMonitor([]),
         twitcho_restart if twitcho_enabled else None,
         waveforms,
@@ -419,6 +431,9 @@ def make_server(
     handler.app = app
     server = ShowcoServer((host, port), handler)
     server.app = app
+    server.performance = performance
+    if performance is not None:
+        performance.start()
     return server
 
 
@@ -449,6 +464,24 @@ def channels_page(status: models.ShowStatus) -> str:
 def health_page(status: models.ShowStatus) -> str:
     recs = status.recs.service
     twitcho = status.twitcho.service
+    disk_critical = status.recs.disk is not None and (
+        status.recs.disk.alert_active or status.recs.disk.paused_for_disk_space
+    )
+    performance = "".join(
+        [
+            _performance_row("cpu", "CPU", _cpu_percent(status), _cpu(status)),
+            _performance_row(
+                "memory", "Memory", _memory_percent(status), _memory(status)
+            ),
+            _performance_row(
+                "disk",
+                "Recording disk",
+                _disk_percent(status.recs),
+                _disk(status.recs),
+                force_critical=disk_critical,
+            ),
+        ]
+    )
     return page(
         "Health",
         f"""
@@ -459,6 +492,12 @@ def health_page(status: models.ShowStatus) -> str:
                 "streaming", "Streaming", twitcho.state, _streaming_text(status)
             )
         }
+        </section>
+        <section>
+          <h2>Performance</h2>
+          <div class="performance">
+            {performance}
+          </div>
         </section>
         <section>
           <h2>Health</h2>
@@ -805,6 +844,96 @@ def _temperature(status: models.ShowStatus) -> str:
     if status.system.temperature_c is not None:
         return f"{status.system.temperature_c:.1f} °C"
     return status.system.temperature_error or "unknown"
+
+
+def _performance_row(
+    identifier: str,
+    label: str,
+    percent: float | None,
+    detail: str,
+    *,
+    force_critical: bool = False,
+) -> str:
+    state = _performance_state(percent, force_critical=force_critical)
+    value = f' value="{percent:.2f}"' if percent is not None else ""
+    return f"""
+      <div class="performance-row {state}" id="{identifier}-performance">
+        <b>{html.escape(label)}</b>
+        <meter id="{identifier}-meter" min="0" max="100"{value}></meter>
+        <span id="{identifier}-value">{html.escape(detail)}</span>
+      </div>
+    """
+
+
+def _performance_state(percent: float | None, *, force_critical: bool = False) -> str:
+    if force_critical or percent is not None and percent >= 95:
+        return "critical"
+    if percent is not None and percent >= 85:
+        return "warning"
+    return "normal"
+
+
+def _cpu_percent(status: models.ShowStatus) -> float | None:
+    return status.system.cpu_percent
+
+
+def _cpu(status: models.ShowStatus) -> str:
+    if status.system.cpu_percent is None:
+        return status.system.cpu_error or "unknown"
+    return f"{status.system.cpu_percent:.0f}%"
+
+
+def _memory_percent(status: models.ShowStatus) -> float | None:
+    used = status.system.memory_used_bytes
+    total = status.system.memory_total_bytes
+    if used is None or total is None or total <= 0:
+        return None
+    return 100 * used / total
+
+
+def _memory(status: models.ShowStatus) -> str:
+    used = status.system.memory_used_bytes
+    total = status.system.memory_total_bytes
+    percent = _memory_percent(status)
+    if used is None or total is None or percent is None:
+        return status.system.memory_error or "unknown"
+    return f"{_bytes(used)} / {_bytes(total)} ({percent:.0f}%)"
+
+
+def _disk_percent(status: models.RecsStatus) -> float | None:
+    if status.disk is None or status.disk.total_bytes <= 0:
+        return None
+    return 100 * status.disk.used_bytes / status.disk.total_bytes
+
+
+def _disk(status: models.RecsStatus) -> str:
+    disk = status.disk
+    if disk is None:
+        return (
+            status.disk_error or status.snapshot_error or "recording disk unavailable"
+        )
+    percent = 100 * disk.used_bytes / disk.total_bytes
+    detail = (
+        f"{disk.path}: {_bytes(disk.free_bytes)} free / {_bytes(disk.total_bytes)}"
+        f" ({percent:.0f}% used)"
+    )
+    if disk.estimated_seconds_remaining is not None:
+        detail += f", {_duration(disk.estimated_seconds_remaining)} remaining"
+    if disk.paused_for_disk_space:
+        detail = f"paused: {detail}"
+    elif disk.alert_active:
+        detail = f"alert: {detail}"
+    if status.disk_error or status.snapshot_error:
+        detail += f", stale: {status.disk_error or status.snapshot_error}"
+    return detail
+
+
+def _bytes(value: int) -> str:
+    if value >= 1024**3:
+        return f"{value / 1024**3:.1f} GiB"
+    if value >= 1024**2:
+        return f"{value / 1024**2:.1f} MiB"
+    return f"{value / 1024:.1f} KiB"
 
 
 def _bitrate(status: models.ShowStatus) -> str:

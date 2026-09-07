@@ -17,6 +17,8 @@ STATUS_SNAPSHOT_TIMEOUT_SECONDS = 0.25
 
 class SnapshotStatus(BaseModel, frozen=True):
     error: str | None = None
+    disk: models.RecordingDiskStatus | None = None
+    disk_error: str | None = None
     osc: list[models.RecorderStatus] = Field(default_factory=list)
     midi: list[models.MidiStatus] = Field(default_factory=list)
 
@@ -52,7 +54,10 @@ class RecsSnapshotClient:
                 return self._failure(f"recs status_snapshot failed: {error}")
             if not object_dict(response):
                 return self._failure("recs status snapshot is not an object")
+            disk, disk_error = recording_disk_status(response.get("disk"))
             self.current = SnapshotStatus(
+                disk=disk or self.current.disk,
+                disk_error=disk_error,
                 osc=osc_status(response),
                 midi=midi_status(response),
             )
@@ -107,9 +112,59 @@ def midi_status(value: object) -> list[models.MidiStatus]:
     ]
 
 
+def recording_disk_status(
+    value: object,
+) -> tuple[models.RecordingDiskStatus | None, str | None]:
+    if not object_dict(value):
+        return None, "recs disk status is not an object"
+    path = _string(value.get("path"))
+    used = _int(value.get("used_bytes"))
+    free = _int(value.get("free_bytes"))
+    total = _int(value.get("total_bytes"))
+    remaining_value = value.get("estimated_seconds_remaining")
+    remaining = _number(remaining_value)
+    threshold_value = value.get("alert_threshold")
+    threshold = _string(threshold_value)
+    alert = value.get("alert_active", False)
+    paused = value.get("paused_for_disk_space", False)
+    if (
+        not path
+        or used is None
+        or free is None
+        or total is None
+        or min(used, free) < 0
+        or total <= 0
+        or used + free > total
+        or (remaining is None and remaining_value is not None)
+        or (threshold is None and threshold_value is not None)
+        or not isinstance(alert, bool)
+        or not isinstance(paused, bool)
+    ):
+        return None, "recs disk status is invalid"
+    return (
+        models.RecordingDiskStatus(
+            path=path,
+            used_bytes=used,
+            free_bytes=free,
+            total_bytes=total,
+            estimated_seconds_remaining=remaining,
+            alert_threshold=threshold,
+            alert_active=alert,
+            paused_for_disk_space=paused,
+        ),
+        None,
+    )
+
+
 def _string(value: object) -> str | None:
     return value if isinstance(value, str) else None
 
 
 def _int(value: object) -> int | None:
     return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def _number(value: object) -> float | None:
+    if isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0:
+        return float(value)
+    return None

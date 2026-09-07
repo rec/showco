@@ -251,6 +251,8 @@ class RecsClient:
             channels=channel_levels(rows),
             errors=_error_records(data.get("errors")),
             snapshot_error=snapshot.error,
+            disk=snapshot.disk,
+            disk_error=snapshot.disk_error,
             osc=snapshot.osc,
             midi=snapshot.midi,
         )
