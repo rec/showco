@@ -15,16 +15,13 @@ from reccy.runtime import logging
 from reccy.services.models import DaemonMetadata
 from recs.base.waveform import WaveformBatchData, WaveformLayoutData
 from recs.daemon import gui_protocol, paths
-from typing_extensions import TypeIs
 
-from . import models
+from . import models, recs_snapshot
 
 STALE_AFTER_SECONDS = 3.0
 STATUS_CHANGE_WAIT_SECONDS = 4
 STATUS_CHANGE_SAMPLE_COUNT = 3
 STATUS_ERROR_LIMIT = 3
-STATUS_SNAPSHOT_CACHE_SECONDS = 1.0
-STATUS_SNAPSHOT_TIMEOUT_SECONDS = 0.25
 WINDOWS_PIPE = r"\\.\pipe\recs"
 MAX_WAVEFORM_BATCHES = 80
 MAX_WAVEFORM_EVENTS = 400
@@ -172,20 +169,18 @@ class RecsClient:
         status_path: Path | None = None,
         metadata_path: Path | None = None,
         stale_after_seconds: float = STALE_AFTER_SECONDS,
-        snapshot_cache_seconds: float = STATUS_SNAPSHOT_CACHE_SECONDS,
-        snapshot_timeout_seconds: float = STATUS_SNAPSHOT_TIMEOUT_SECONDS,
+        snapshot_cache_seconds: float = recs_snapshot.STATUS_SNAPSHOT_CACHE_SECONDS,
+        snapshot_timeout_seconds: float = recs_snapshot.STATUS_SNAPSHOT_TIMEOUT_SECONDS,
     ) -> None:
         paths = recs_paths()
         self.status_path = status_path or paths.status
         self.metadata_path = metadata_path or paths.metadata
         self.stale_after_seconds = stale_after_seconds
-        self.snapshot_cache_seconds = snapshot_cache_seconds
-        self.snapshot_timeout_seconds = snapshot_timeout_seconds
         self.track_name_lock = threading.Lock()
-        self.snapshot_lock = threading.Lock()
-        self.snapshot: dict[str, object] | None = None
-        self.snapshot_checked_at = 0.0
-        self.snapshot_error: str | None = None
+        self.snapshot_client = recs_snapshot.RecsSnapshotClient(
+            cache_seconds=snapshot_cache_seconds,
+            timeout_seconds=snapshot_timeout_seconds,
+        )
 
     def status(self) -> models.RecsStatus:
         if not self.status_path.exists():
@@ -239,7 +234,7 @@ class RecsClient:
         rows = _rows(data.get("rows"))
         totals = rows[0] if rows else {}
 
-        snapshot, snapshot_error = self._status_snapshot()
+        snapshot = self.snapshot_client.status()
         return models.RecsStatus(
             service=models.ServiceStatus(
                 name="recs",
@@ -255,9 +250,9 @@ class RecsClient:
             client_count=_int(data.get("client_count")) or 0,
             channels=channel_levels(rows),
             errors=_error_records(data.get("errors")),
-            snapshot_error=snapshot_error,
-            osc=_osc_status(snapshot),
-            midi=_midi_status(snapshot),
+            snapshot_error=snapshot.error,
+            osc=snapshot.osc,
+            midi=snapshot.midi,
         )
 
     def calibrate(self) -> models.ActionResult:
@@ -396,7 +391,7 @@ class RecsClient:
             value = self._external_command("get_cfg", address=address)
             if isinstance(value, models.ActionResult):
                 return value
-            if not _object_dict(value) or value.get("address") != address:
+            if not recs_snapshot.object_dict(value) or value.get("address") != address:
                 return models.ActionResult(
                     ok=False,
                     message=f"recs did not send {address} value",
@@ -522,24 +517,6 @@ class RecsClient:
             return models.ActionResult(ok=False, message=f"{failure_prefix}: {e}")
         finally:
             connection.close()
-
-    def _status_snapshot(self) -> tuple[dict[str, object] | None, str | None]:
-        with self.snapshot_lock:
-            now = time.monotonic()
-            if now - self.snapshot_checked_at < self.snapshot_cache_seconds:
-                return self.snapshot, self.snapshot_error
-            response = self._external_command(
-                "status_snapshot", timeout=self.snapshot_timeout_seconds
-            )
-            self.snapshot_checked_at = now
-            if _object_dict(response):
-                self.snapshot = response
-                self.snapshot_error = None
-            elif isinstance(response, models.ActionResult):
-                self.snapshot_error = response.message
-            else:
-                self.snapshot_error = "recs status snapshot is not an object"
-            return self.snapshot, self.snapshot_error
 
     def _external_command(
         self, command: str, *, timeout: float = 1.0, **parameters: object
@@ -782,13 +759,9 @@ def _rows(value: object) -> list[dict[str, object]]:
         return []
     rows: list[dict[str, object]] = []
     for r in value:
-        if _object_dict(r):
+        if recs_snapshot.object_dict(r):
             rows.append(r)
     return rows
-
-
-def _object_dict(value: object) -> TypeIs[dict[str, object]]:
-    return isinstance(value, dict) and all(isinstance(k, str) for k in value)
 
 
 def _string(value: object) -> str | None:
@@ -800,53 +773,13 @@ def _error_records(value: object) -> list[models.ErrorRecord]:
         return []
     errors = []
     for v in value:
-        if not _object_dict(v):
+        if not recs_snapshot.object_dict(v):
             continue
         timestamp = _string(v.get("timestamp"))
         message = _string(v.get("message"))
         if timestamp is not None and message is not None:
             errors.append(models.ErrorRecord(timestamp=timestamp, message=message))
     return errors
-
-
-def _osc_status(value: object) -> list[models.RecorderStatus]:
-    if not _object_dict(value):
-        return []
-    nodes = value.get("osc")
-    if not isinstance(nodes, list):
-        return []
-    statuses = []
-    for node in nodes:
-        if not _object_dict(node):
-            continue
-        name = _string(node.get("name"))
-        if name is None:
-            continue
-        statuses.append(
-            models.RecorderStatus(
-                name=name,
-                state=_string(node.get("state")) or "running",
-                log_path=_string(node.get("path")),
-                log_size=_int(node.get("size")),
-                last_error=_string(node.get("last_error")),
-            )
-        )
-    return statuses
-
-
-def _midi_status(value: object) -> list[models.MidiStatus]:
-    if not _object_dict(value):
-        return []
-    midi = value.get("midi")
-    if not isinstance(midi, list):
-        return []
-    return [
-        models.MidiStatus(name=name, state=state)
-        for item in midi
-        if _object_dict(item)
-        and (name := _string(item.get("name"))) is not None
-        and (state := _string(item.get("state"))) is not None
-    ]
 
 
 def _float(value: object) -> float | None:
@@ -869,7 +802,9 @@ def _channels(value: object) -> list[int]:
 def error_message(value: object) -> str:
     if isinstance(value, str):
         return value
-    if _object_dict(value) and isinstance(message := value.get("message"), str):
+    if recs_snapshot.object_dict(value) and isinstance(
+        message := value.get("message"), str
+    ):
         return message
     return ""
 
