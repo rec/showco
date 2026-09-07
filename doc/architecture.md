@@ -1,186 +1,163 @@
 # Showco Architecture
 
-Showco is the browser-facing control surface for a small, self-contained live
-show system. It runs on the target Raspberry Pi and coordinates the recorder,
-the X18 mixer, optional lighting, and optional Twitch streaming without taking
-audio or mixer-control ownership from their dedicated programs.
+Showco is the operator-facing web service for a small live-show system. It
+coordinates other programs while leaving recording, lighting, and streaming in
+their dedicated services.
 
-## System Roles
+## Deployment
 
-There are two machines.
+There are two machine roles:
 
-- The provisioning machine holds the operational configuration and uses SSH to
-  provision and update the target.
-- The target machine runs the show services and exposes the Showco web UI to
-  the private show network.
+- The provisioning machine holds configuration and secrets, publishes local
+  repositories, and reaches the target over SSH.
+- The target Raspberry Pi runs the show services and exposes Showco to the show
+  network.
 
-The projects live as sibling checkouts below one configurable root directory:
-`reccy`, `recs`, `showco`, `twitcho`, and `lyte`. Reccy supplies the shared
-daemon, service, IPC, process, logging, and persistence facilities. The other
-projects remain independently deployable services.
-
-## Runtime Services
+The target keeps `reccy`, `recs`, `twitcho`, `lyte`, and `showco` as sibling Git
+checkouts under `[paths].root`. Each project has its own locked `uv` environment.
+They share one uv-managed Python 3.13 installation and package cache.
 
 The target uses user-level systemd services with user lingering enabled:
 
-| Service | Responsibility | Showco relationship |
+| Service | Responsibility | Showco integration |
 | --- | --- | --- |
-| `recs.service` | Capture and record mixer USB audio and record configured OSC nodes. | Showco reads its status and sends Recs control requests. |
-| `showco.service` | Serve the local web UI. | The central browser-facing service. |
-| `lyte.service` | Control lighting when enabled. | Installed and checked by provisioning and updates; it is not part of the Showco HTTP request path. |
-| `twitcho.service` | Run Twitch streaming and its external controls when enabled. | Showco queries it and forwards explicit operator actions. |
+| `recs.service` | Record audio, MIDI, and configured OSC nodes. | Status, control, configuration, and waveforms over public Reccy RPC endpoints. |
+| `showco.service` | Serve the web UI and monitoring sampler. | Browser-facing service. |
+| `lyte.service` | Render and transmit lighting output. | Status and light tests over Reccy RPC when enabled. |
+| `twitcho.service` | Stream to Twitch and expose stream controls. | Status and operator actions over Reccy RPC when enabled. |
 
-Showco must remain usable when Recs, Lyte, Twitcho, a mixer, or an OSC recorder
-is unavailable. Their failures are represented in status or action
-results rather than preventing the HTTP service from starting.
+Unavailable optional services are represented as disabled or offline. Recs,
+mixer, MIDI, OSC, and monitoring failures are reported without preventing the
+HTTP service from starting.
 
-## Web UI
+## HTTP service
 
-`showco run` starts a standard-library `ThreadingHTTPServer`. It exposes:
+`showco run` creates a standard-library `ThreadingHTTPServer`. HTML is rendered
+in `showco/server.py`; CSS and JavaScript are read once from `site/` using
+`functools.cache`.
 
-- `GET /` and `GET /home`: the current status and Recs mutable-attribute form.
-- `GET /actions`: explicit Recs and optional Twitcho controls.
-- `POST /actions`: action dispatch, returning JSON when requested or redirecting
-  to the actions page for ordinary form submissions.
-- `GET /status`: a JSON snapshot for browser polling and deployment checks.
+The routes are:
 
-The server composes status from independent adapters:
+| Method and path | Purpose |
+| --- | --- |
+| `GET /`, `GET /channels` | Channels, track names, stereo controls, and waveforms. |
+| `GET /health` | Recording, streaming, service, mixer, OSC, MIDI, and machine health. |
+| `GET /attributes` | Mutable Recs settings. |
+| `GET /actions` | Operator actions and the ten most recent action results. |
+| `GET /errors` | Up to 25 Recs errors from the current Showco run. |
+| `GET /status` | Current status as JSON for browser polling and deployment checks. |
+| `GET /waveforms` | Server-sent Recs waveform events. |
+| `POST /actions` | Serialized Recs, Lyte, or Twitcho action dispatch. |
 
-- `RecsClient` reads status and sends one-request controls through Recs' public
-  Reccy RPC endpoint.
-- `TwitchoClient` uses Reccy RPC when Twitcho is enabled.
-- `MixerMonitor` probes the configured X18 endpoint, caching results briefly to
-  avoid probing per browser request.
-- `SystemMonitor` reads local Raspberry Pi temperature, aggregate CPU usage,
-  and memory usage.
-- `PerformanceMonitor` samples system and Recs recording-disk status once per
-  second for the Health page and minute history.
-- `X18RecorderSupervisor` reports the state of the optional OSC subprocess.
+Ordinary form posts redirect to the Actions page. Requests with
+`Accept: application/json` receive the action result directly. Ordinary request
+handling is limited to eight concurrent requests; waveform streams have a
+separate limit of four. Actions are serialized so concurrent browser requests
+cannot issue overlapping service mutations.
 
-HTTP request concurrency is bounded. Stateful control actions are serialized,
-and the short recent-action log is protected by its own lock. Browser status
-polling updates the display without requiring a page reload.
+## Recs
 
-## Performance Monitoring
+`RecsControlClient` creates a public `reccy.protocol.rpc.Client` for each
+request and serializes access because Recs permits one outstanding Showco
+control request. Operator actions have a six-second timeout. Status snapshots
+have a 250 ms timeout and are cached for one second.
 
-Showco runs one sampler thread inside the web service. It reads CPU, memory,
-temperature, and Recs' cached recording-disk status once per second whether or
-not a browser is connected. The latest completed sample is returned by
-`GET /status` and displayed as CPU, memory, and recording-disk meters on the
-existing Health page.
+`status_snapshot` is the web UI's source for recording and pause state, channel
+rows, errors, recording-disk state, MIDI inputs, and OSC recorders. After a
+transport failure, the last valid snapshot remains visible and is marked stale.
+An invalid response is marked as an error. Errors older than the current Showco
+process are filtered from the web pages.
 
-The sampler aggregates each UTC minute and appends one JSON object to
-`~/.local/state/showco/monitoring/YYYY-MM-DD.jsonl`. Records include CPU average
-and peak, memory average and peak, minimum free space on the latest recording
-disk, and whether a Recs disk alert or pause occurred. Showco keeps seven UTC
-calendar days. A clean shutdown writes the final partial minute.
+Waveform support uses Recs' public event endpoint. Showco connects the event
+client, requests `subscribe_waveforms`, retains bounded layout and sample
+history, and serves it to browsers through `/waveforms`. It reconnects after an
+event failure and sends a full resynchronization when a browser falls behind.
+On shutdown it requests `unsubscribe_waveforms` and closes the event client.
 
-Monitoring history is diagnostic only. A sampling or history-write failure is
-logged when its state changes and does not make the web UI unavailable. The
-sampler thread stops and joins when the HTTP server closes.
+Showco does not use a private Recs GUI protocol. Provisioning does inspect
+Recs' atomically written `~/.local/state/recs/status.json`, but only to verify
+that the deployed daemon continues publishing status.
 
-## Recs Integration
+## Mixers and OSC
 
-Showco uses Recs' public Reccy RPC control endpoint for status, calibration,
-track editing, recording actions, mutable configuration, waveform subscription,
-and shutdown. A shared client serializes these one-request connections because
-Recs permits only one outstanding control request. Showco validates each
-command's documented result at the adapter boundary.
+Mixer configuration combines three independent signals:
 
-The cached `status_snapshot` response is the web service's runtime source for
-recording state, rows, errors, disk use, MIDI inputs, and OSC recorders. A later
-transport failure retains the last snapshot but marks it stale; an invalid
-response marks it erroneous. Provisioning separately checks that Recs'
-atomically-written status file advances, but the web adapter does not read that
-file.
+- Recs-reported audio device names.
+- Recs-reported MIDI input names.
+- An optional cached TCP or UDP network probe.
 
-Waveform data arrives through Recs' public event endpoint after Showco enables
-it with `subscribe_waveforms`. Showco disables it with
-`unsubscribe_waveforms` when the server closes.
+A mixer can therefore be waiting, partially ready, connected, or in error. A
+network probe is attempted at most once every five seconds with a 500 ms
+timeout. The current UDP probe sends `/xremote` and requires a UDP response;
+this is only a reachability heuristic and must be checked against real mixer
+control during hardware acceptance.
 
-## X18 Integration
+Recs owns generic OSC recording. Showco converts each mixer's OSC subscription
+configuration into Recs node configuration and displays the node status. For an
+X18, `/xremote` is periodically renewed to retain feedback; successful renewals
+are not written as recording events.
 
-The X18 has two independent paths to the target:
+USB audio and Ethernet control are separate paths. In private and mixed network
+topologies, NetworkManager bridges the private Wi-Fi access point and Ethernet
+so the tablet and mixer share the internal subnet. In public topology, Ethernet
+is configured directly on that subnet.
 
-- USB audio is owned by Recs.
-- Ethernet carries mixer control. In the private topology, NetworkManager
-  bridges the private Wi-Fi access point and the Pi Ethernet interface so the
-  tablet can reach the mixer.
+## Lyte and Twitcho
 
-Recs owns generic OSC recording. Its configured nodes may subscribe, poll, or
-listen for continuous telemetry and write timestamped JSONL recordings. Showco
-shows each named recorder independently from mixer reachability. An X18 node
-uses `/xremote` only to maintain its subscription and never changes mixer
-state.
+When Lyte is enabled, Showco polls its Reccy RPC status and exposes a one-second,
+30-percent light test. The first transition to connected during a Showco run
+automatically queues the same test. A later disconnect permits another test
+when Lyte reconnects.
 
-## Network Topologies
+When Twitcho is enabled, Showco polls its Reccy RPC status and exposes restart,
+mute, unmute, stop, stream-information, chat, announcement, clip, and marker
+actions. Disabled Lyte and Twitcho services do not produce their action controls.
 
-Network configuration is based on the provisioning TOML rather than hard-coded
-interface names. The selected topology is one of:
+## Performance monitoring
 
-- `private`: the selected Wi-Fi interface provides the private show network.
-- `public`: the primary Wi-Fi joins an external network.
-- `mixed`: the private access point uses one Wi-Fi interface and the external
-  network uses a second interface.
+The web service starts one sampler thread in normal target mode. Once per
+second it reads Raspberry Pi temperature, aggregate CPU use, memory use, and
+Recs' cached recording-disk state. The Health page displays the latest values.
 
-The configured X18 wired network is either a direct Ethernet configuration for
-the public topology or a bridge member in the private and mixed topologies.
-Network reconfiguration creates a temporary rollback profile before changing
-the private network so an error does not leave the target inaccessible.
+At each UTC minute boundary, Showco appends an aggregate JSON object to
+`~/.local/state/showco/monitoring/YYYY-MM-DD.jsonl`. Records contain CPU average
+and peak, memory average and peak, minimum recording-disk free space, the latest
+space estimate, disk alert and pause occurrence, and metric errors. Seven UTC
+calendar days are retained. Clean shutdown writes the partial final minute.
 
-## Provisioning And Updates
+Sampling and history-write failures are logged only when their state changes;
+they do not make the web service unavailable.
 
-`showco go` runs on the provisioning machine. With no repository or remote
-update option, it compares the resolved local provisioning configuration and
-generated script with the fingerprint recorded by the target after its last
-successful provision. It runs full provisioning when they differ, otherwise it
-updates all repositories. Provisioning reads the non-secret configuration and
-local secret overlay, validates them before making remote changes, waits for
-SSH, uploads a generated Bash script, and runs that script on the target. The
-remote script performs locale, package, storage, checkout, dependency, network,
-and service setup. It reboots only when required, then verifies enabled
-services, the Showco HTTP revision, and configured hardware conditions.
+## Provisioning and updates
 
-Repository arguments, `--autosquash`, or `--remote` select update mode. Normal
-update mode expands selected libraries to their downstream consumers, checks
-and publishes all affected sibling checkouts, refreshes and tests their locked
-internal dependencies in dependency order, and normally pushes generated
-lockfile commits before calling the target through SSH. Selecting Reccy includes
-all repositories; selecting Recs also includes Showco. Autosquashed history uses
-force-with-lease only against the upstream commit recorded before rewriting.
-Generated dependency commits are never force-pushed. `--remote` updates the
-target directly from GitHub without examining local checkouts or refreshing
-dependencies. `showco --push` stops after publishing the selected local
-histories. `showco --sync` additionally refreshes, tests, commits, and publishes
-their internal dependency lockfiles, but neither command contacts the target.
-On the target, the update stops affected services, records their
-commits, updates each checkout, synchronizes changed dependencies, restarts
-services, and verifies Showco and Recs when applicable. The target checkout is
-disposable: a failed target update may reset it to a known commit or upstream
-state. The local development checkout is never reset by this process.
+`showco` and `showco go` choose between provisioning and updating by comparing
+the resolved configuration and generated provisioning script with the
+fingerprint stored on the target after the last successful provision.
 
-`showco python` is a developer-machine diagnostic shortcut that executes a
-one-line Python expression in the target Showco checkout and environment.
+Provisioning validates local inputs, publishes and synchronizes the five local
+repositories, verifies passwordless SSH and sudo, uploads a generated Bash
+script, and configures packages, storage, Python, repositories, networking, and
+services. It reboots only when the target records that one is required, then
+performs bounded service and hardware checks before storing the fingerprint.
 
-## Configuration And Secrets
+An update publishes selected local repositories and downstream consumers,
+refreshes their internal dependency lockfiles, updates disposable target
+checkouts, synchronizes changed environments, restarts affected services, and
+verifies applicable services. `--remote` skips local repository work and
+updates the target from GitHub. `--push` and `--sync` stop before contacting the
+target.
 
-The configuration model mirrors the TOML structure.
+See `doc/provisioning.md` for command and configuration details.
 
-- `showco/provision/config.toml` contains topology, paths, project URLs,
-  enabled-service settings, and non-secret defaults.
-- `showco/provision/secrets.toml` overlays passwords and streaming credentials.
+## Persistent state and logs
 
-The root directory can be supplied with `--root` and is persisted in the
-configuration. Repository URLs are public HTTPS URLs, so target updates do not
-need GitHub credentials.
+Showco's persistent state is under `~/.local/state/showco/`. It includes its
+combined service log, monitoring history, provisioning fingerprint, and service
+configuration hashes. The network configuration hash is stored under
+`~/.config/showco/`. Recs owns web-edited mutable settings in
+`~/.config/recs/settings.json`; updates clear that file by default.
 
-## Operational Diagnostics
-
-Each service writes combined application output to its own persistent file at
-`~/.local/state/<service>/<service>.log`. Use `showco logs` to tail the known
-service logs, or pass service names and `--lines` to narrow the output. The web
-UI reports current dependency health and recent operator actions; it is not
-intended to retain complete diagnostic history.
-
-The acceptance and smoke-test documents define the software and hardware
-evidence required before treating the system as ready for a show.
+Each managed service writes combined stdout, stderr, and application logging to
+`~/.local/state/<service>/<service>.log`. `showco logs` reads those files from
+the provisioning machine over SSH. The web UI retains only current Recs errors
+and ten in-memory action results, so it is not a replacement for service logs.

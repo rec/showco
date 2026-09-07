@@ -1,36 +1,54 @@
-# Raspberry Pi provisioning
+# Provisioning and Updating
 
-Provisioning starts from a Raspberry Pi that already boots, has networking, and
-accepts SSH login. This can be a freshly imaged Raspberry Pi OS Lite machine or
-an existing Pi.
+Showco provisions a Raspberry Pi that already boots, is reachable over SSH,
+and has an account matching the configured user. Provisioning is driven from a
+development machine and displays remote progress and failures directly.
 
-The provisioning script runs setup commands over SSH so progress and failures
-are visible from the development machine.
+## Prerequisites
 
-## Files
+- Python 3.13 and `uv` on the provisioning machine.
+- Local sibling checkouts of `reccy`, `recs`, `twitcho`, `lyte`, and `showco`.
+- Raspberry Pi OS Lite with the intended hostname and user configured.
+- Key-based SSH access to the target.
+- Passwordless `sudo` on the target user.
 
-```text
-doc/provisioning.md
-showco/provision/config.toml
-showco/provision/secrets.toml
-showco/provision/provision.py
+For a new Raspberry Pi Imager card, insert the card while its boot volume is
+mounted and run:
+
+```bash
+showco prepare-card
 ```
+
+The command finds external physical disks no larger than 256 GiB. If exactly
+one is available it selects it; otherwise pass `--card /dev/diskN`. It prints
+`diskutil list` output and requires the exact answer `yes` before adding
+passwordless sudo commands to the existing cloud-init `user-data`. It then
+ejects the card and tells you when it may be removed. It does not image or mount
+the card.
 
 ## Configuration
 
-The script reads defaults from:
+The defaults are read from:
 
-- `showco/provision/config.toml`
-- `showco/provision/secrets.toml`
+```text
+showco/provision/config.toml
+showco/provision/secrets.toml
+```
 
-`showco/provision/config.toml` contains non-secret operational values, including:
+The second file recursively overlays the first. Keep non-secret deployment
+values in `config.toml` and credentials in the ignored local `secrets.toml`.
+
+A representative non-secret configuration is:
 
 ```toml
 [network]
-host = "recs-stage.local"
+host = "bertrand.local"
 web_port = 10000
 swap_wifi = false
 topology = ""
+
+[paths]
+root = "/home/tom/code"
 
 [networks.internal]
 subnet = "10.0.0.0/24"
@@ -44,8 +62,9 @@ name = "Venue WiFi"
 
 [[mixers]]
 name = "X18"
-ip_address = 18
+audio_device_names = ["X18", "XR18"]
 port = 10024
+ip_address = 18
 
 [mixers.probe]
 protocol = "udp"
@@ -54,24 +73,15 @@ protocol = "udp"
 subscription_path = "/xremote"
 resubscribe_period = 10
 
+[lyte]
+enabled = false
+daemon_config = "patches/wearable-daemon.toml"
+
 [twitch]
 enabled = false
 ```
 
-Each repository defaults to `https://github.com/rec/NAME.git`; add a
-`[git.NAME]` table only to override that location or refname.
-
-If `network.user` is omitted, the provisioning script uses the local `USER`
-environment variable. It is an error if neither is set. The SSH port defaults to
-22; override it with `showco go --port 2222` when needed.
-
-Set the Raspberry Pi hostname in Raspberry Pi Imager before first boot. Use that
-same name for `network.host`, including `.local` when connecting by mDNS.
-
-`showco/provision/secrets.toml` contains secret operational values. Provisioning
-uses key-based SSH only.
-
-Wi-Fi passwords belong in `showco/provision/secrets.toml`:
+Passwords are overlaid separately:
 
 ```toml
 [networks.internal.wifi]
@@ -81,164 +91,162 @@ password = "..."
 password = "..."
 ```
 
-## Network configuration
+Important configuration rules:
 
-After provisioning, run the network configuration tool on the Pi:
+- `network.user` defaults to the provisioning machine's `USER`; `network.host`
+  is required and `network.ssh_port` defaults to 22.
+- `paths.root` must be absolute and defaults to `/home/USER/code`.
+- `networks.internal.subnet` is required and must be an IPv4 subnet.
+- Wi-Fi and mixer `ip_address` values are integer host offsets in that subnet.
+  With `10.0.0.0/24`, offsets `1` and `18` become `10.0.0.1` and `10.0.0.18`.
+- A networked mixer must define both `ip_address` and `port`, or neither.
+- Mixer audio and MIDI name lists are prefixes matched against Recs status.
+- Each repository defaults to `https://github.com/rec/NAME.git`. Add a
+  `[git.NAME]` table only to override `url` or `refname`.
+- `accept_changed_host_key` defaults to true. Provisioning removes the old
+  local `known_hosts` entry before connecting to a newly imaged target.
+- The external Wi-Fi name and a valid 8-63 character private Wi-Fi password are
+  currently required by provisioning validation.
+- `lyte.daemon_config` is relative to the Lyte checkout and must exist whenever
+  Lyte is enabled.
 
-```bash
-showco run network-config --dry-run
-showco run network-config
-```
+Command-line `--host`, `--user`, `--port`, and `--root` override the resolved
+configuration. During provisioning, host and root overrides are also written
+back to the selected non-secret config file after local preflight succeeds.
 
-The network tool detects Wi-Fi interfaces with NetworkManager. By default, the
-first Wi-Fi interface is primary and an optional second Wi-Fi interface is
-secondary. Set `network.swap_wifi = true` to make the second interface primary
-when one is present.
+## Network topologies
 
-`networks.internal.subnet` defines the show network. `ip_address` values for
-the private Wi-Fi and mixers are host-number offsets within that subnet. A
-mixer is networked only when it defines both `ip_address` and `port`; defining
-only one is an error. A networked mixer named `X18` makes the network tool
-configure the Pi Ethernet jack as the X18 control link.
+`network.topology` accepts `public`, `private`, `mixed`, or an empty string:
 
-`network.topology` may be empty, `public`, `private`, or `mixed`:
+- `public`: primary Wi-Fi joins the external network; Ethernet uses the
+  internal mixer subnet when an X18 is configured.
+- `private`: primary Wi-Fi provides the internal access point; Ethernet is
+  bridged into it when an X18 is configured.
+- `mixed`: primary Wi-Fi provides the internal bridged network and secondary
+  Wi-Fi joins the external network.
 
-- `public`: the primary Wi-Fi connects to the external network; secondary Wi-Fi
-  is disconnected.
-- `private`: the primary Wi-Fi provides the show network for the tablet and X18;
-  secondary Wi-Fi is disconnected.
-- `mixed`: the primary Wi-Fi provides the show network, and the secondary Wi-Fi
-  connects to the external network.
+When the value is empty, Showco chooses from external-network configuration,
+second-interface availability, and whether Twitch is enabled. `swap_wifi`
+reverses the first two detected Wi-Fi interfaces.
 
-When `network.topology` is empty, the tool selects it from the configured
-external network, second Wi-Fi presence, and `twitch.enabled`.
+Provisioning generates temporary config and secret files on the target and
+runs `showco run network-config` itself. It hashes the effective network input
+and skips NetworkManager changes when that hash is unchanged. Network changes
+use a temporary rollback connection so a failed command can restore the prior
+private access point.
 
-## Single command
+## Default command
 
-After confirming SSH works, run:
-
-```bash
-showco go
-```
-
-`showco go` provisions when the target has no applied configuration fingerprint,
-or when the resolved local configuration or provisioning script has changed. When
-the fingerprint matches, it updates all repositories instead. The target records
-only the fingerprint after a successful provision and verification; it never
-stores configuration or secrets in that marker.
-
-When `showco go` takes the update path, it clears Recs's saved webpage settings
-from `~/.config/recs/settings.json` before updating. This returns mutable
-attributes, track names, and stereo groupings to the values supplied by the
-updated Recs configuration. Use `--no-clear-settings` to preserve those saved
-operator changes for one update.
-
-Use `showco go --system` to force provisioning with an APT refresh. Pass
-repository names or `--autosquash` to update locally, or `--remote` to update
-the target directly from GitHub.
-
-Local updates include downstream consumers so their lockfiles and running
-services cannot remain on an older internal dependency. `showco go reccy`
-updates all five managed repositories, while `showco go recs` also updates
-Showco. Before deployment, Showco refreshes internal dependencies from their
-GitHub `main` branches, runs each affected repository's locked test suite, and
-normally pushes any generated `uv.lock` commit. `--remote` skips all local
-publication and dependency-refresh work.
-
-Use `showco --push [repository ...]` to autosquash and publish only the affected
-local repositories. Use `showco --sync [repository ...]` to do that and then
-refresh, test, commit, and publish changed internal dependency lockfiles. These
-two local-only modes do not read provisioning configuration or contact the
-target. Their repository arguments use the same downstream-consumer expansion
-as a normal update.
-
-Override the connection on the command line:
+Run:
 
 ```bash
-showco go \
-  --host bertrand.local \
-  --port 22
+showco
 ```
 
-Before running the provisioning script, this should work:
+This is equivalent to `showco go`. Showco compares the local provisioning
+fingerprint with `~/.local/state/showco/provisioning-fingerprint` on the target.
+It provisions when the fingerprint is absent or different and otherwise runs a
+normal update. The fingerprint is written only after provisioning and target
+verification succeed.
+
+Use `showco go --system` to force provisioning and request APT update and
+upgrade work. The first provisioning also runs an APT upgrade; ordinary reruns
+install missing packages without repeating the full upgrade.
+
+Provisioning:
+
+1. Validates configuration and local repository state.
+2. Publishes all five repositories and refreshes their internal lockfiles.
+3. Removes a stale SSH host key when configured and waits for SSH.
+4. Requires `sudo -n` to succeed and rejects dirty target checkouts.
+5. Checks the available Wi-Fi interfaces and proposed topology.
+6. Uploads and runs a generated Bash script with a 30-minute timeout.
+7. Configures locale, persistent journal storage, base packages, mount rules,
+   uv, shared Python 3.13, repositories, networking, and enabled services.
+8. Writes `~/PROVISIONING-REPORT.txt` and
+   `~/PROVISIONING-NEXT-STEPS.txt` on the target.
+9. Reboots only when `/var/run/reboot-required` was present.
+10. Verifies enabled services, Showco's HTTP revision, Recs status progress,
+    and configured audio/MIDI devices.
+
+## Updating
+
+Passing repository names or `--autosquash` selects update mode:
 
 ```bash
-ssh "$USER@recs-stage.local"
+showco go recs
+showco go reccy showco
+showco go --autosquash 20
 ```
 
-Before the Pi's first boot, prepare its newly written boot volume from the
-developer machine:
+An empty repository list means all five repositories. Selection expands to
+downstream consumers so internal lockfiles cannot remain pinned to an old
+dependency. Selecting Reccy includes every repository; selecting Recs includes
+Showco.
+
+A normal update checks main branches and clean worktrees, autosquashes recent
+fixup commits, pushes local histories, and refreshes internal Git dependencies
+in lockfiles. Repositories with internal dependencies run their locked test
+suites before generated lockfile changes are committed and pushed. The target
+is then updated. Target checkouts are reset to their upstream commits and are
+treated as disposable deployment copies. Local development checkouts are never
+reset.
+
+Use direct remote mode when the required commits are already on GitHub:
 
 ```bash
-showco prepare-card
+showco go --remote [repository ...]
 ```
 
-This updates Raspberry Pi Imager's `user-data` cloud-init file to enable
-passwordless `sudo` for the configured Showco user. It selects a single mounted
-external physical disk of 256 GiB or smaller and requires confirmation before
-changing it. Use `--card /dev/disk4` when more than one card is present.
-Provisioning checks this with `sudo -n` before it runs remote setup, so it
-cannot block waiting for an unknown account password.
+This skips all local repository checks and publication. It updates the target
+from GitHub and does not pass `--remote` into the target command.
 
-## What the script does
+Local-only publication modes are:
 
-The script:
+```bash
+showco --push [repository ...]
+showco --sync [repository ...]
+```
 
-- checks the remote system with `uname`, `id`, `sudo`, and `apt-get`
-- copies a temporary provisioning script to the Pi
-- installs base packages
-- configures `en_US.UTF-8` as the system locale
-- installs `uv` for the configured user if needed
-- creates code, config, state, and recording directories
-- clones or updates `reccy`, `recs`, `twitcho`, `lyte`, and `showco` from public HTTPS URLs
-- runs `uv sync` in each checkout
-- enables lingering for the configured user so user services start at boot
-- installs or refreshes the `recs` user service
-- installs or refreshes the `showco` user service
-- writes `~/PROVISIONING-NEXT-STEPS.txt`
+`--push` checks, autosquashes, and publishes selected repositories without
+fetching when local and upstream commits already match. `--sync` performs that
+work and then refreshes, tests, commits, and publishes internal lockfile changes.
+Neither contacts the target.
 
-The script is intended to be rerunnable. Existing git checkouts fetch their
-tracked upstream branch and reset to it.
+Updates clear `~/.config/recs/settings.json` by default so mutable web settings,
+track names, and stereo groups return to deployed Recs configuration. Pass
+`--no-clear-settings` to preserve them for one update.
 
-On an already provisioned target, it skips unchanged base-package setup, locale
-and journal configuration, the Python 3.13 installation, and unchanged active
-service definitions. It prints the duration of every phase. Use
-`showco go --system` when you specifically want to refresh APT packages;
-ordinary provisioning installs missing packages but does not perform an APT
-upgrade.
+## Diagnostics
+
+Fetch combined service logs from the provisioning machine:
+
+```bash
+showco logs
+showco logs recs showco --lines 500
+```
+
+Known services are `showco`, `recs`, `twitcho`, and `lyte`. Their files are
+`~/.local/state/SERVICE/SERVICE.log` on the target. A missing service log is
+reported by `tail`; it is not silently ignored.
+
+For a small target-side Python inspection without opening an interactive SSH
+session:
+
+```bash
+showco python 'import sys; print(sys.version)'
+```
+
+This executes `.venv/bin/python -c` in the target Showco checkout.
+
+Do not use `showco go` as a test command: it can rewrite local history, publish
+repositories, reset target checkouts, clear Recs settings, restart services,
+change networking, or provision the operating system.
 
 ## Secrets
 
-Do not commit real secrets to a pushable branch.
-
-Do not publish:
-
-- real login passwords
-- private SSH keys
-- Twitch stream keys
-- Twitch OAuth tokens
-- real Wi-Fi passwords, unless the repository is private and the risk is
-  accepted deliberately
-
-Use placeholders on shared branches. Keep real values only on the local machine,
-in a private ignored overlay file, or on a private/unpushable branch used for
-local builds.
-
-## Validation
-
-Before relying on script changes:
-
-```bash
-python -m py_compile showco/provision/provision.py showco/twitcho/auth.py
-```
-
-Do not run `showco go` as a routine verification step.
-They mutate a real Raspberry Pi when provisioning is needed.
-
-## Open decisions
-
-The provisioning flow still needs these final values before it can become a
-complete show-box installer:
-
-- final Twitcho config contents
-- mixer probe port and protocol
+Never commit or publish login passwords, private SSH keys, Wi-Fi passwords,
+Twitch stream keys, OAuth tokens, or client secrets. Provisioning shell
+arguments necessarily carry resolved secrets to the target process, but the
+generated files are mode `0600` and temporary network files are removed after
+use.
