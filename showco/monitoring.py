@@ -227,6 +227,6 @@ def metric_errors(
         errors["cpu"] = system.cpu_error
     if system.memory_error and system.memory_error != "sampling":
         errors["memory"] = system.memory_error
-    if snapshot.disk_error or snapshot.error:
-        errors["disk"] = snapshot.disk_error or snapshot.error or "disk unavailable"
+    if snapshot.error:
+        errors["disk"] = snapshot.error
     return errors

@@ -46,7 +46,8 @@ results rather than preventing the HTTP service from starting.
 
 The server composes status from independent adapters:
 
-- `RecsClient` reads the Recs daemon status and uses its two control protocols.
+- `RecsClient` reads status and sends one-request controls through Recs' public
+  Reccy RPC endpoint.
 - `TwitchoClient` uses Reccy RPC when Twitcho is enabled.
 - `MixerMonitor` probes the configured X18 endpoint, caching results briefly to
   avoid probing per browser request.
@@ -80,17 +81,22 @@ sampler thread stops and joins when the HTTP server closes.
 
 ## Recs Integration
 
-Showco intentionally uses two distinct Recs interfaces.
+Showco uses Recs' public Reccy RPC control endpoint for status, calibration,
+track editing, recording actions, mutable configuration, waveform subscription,
+and shutdown. A shared client serializes these one-request connections because
+Recs permits only one outstanding control request. Showco validates each
+command's documented result at the adapter boundary.
 
-- Recs GUI IPC is its internal typed protocol. Showco uses it for calibration,
-  track names, recording actions, and shutdown.
-- Recs external Reccy RPC is used for mutable configuration. Showco requests the
-  available addresses, fetches each value, and sends `set_cfg` when an operator
-  changes a field.
+The cached `status_snapshot` response is the web service's runtime source for
+recording state, rows, errors, disk use, MIDI inputs, and OSC recorders. A later
+transport failure retains the last snapshot but marks it stale; an invalid
+response marks it erroneous. Provisioning separately checks that Recs'
+atomically-written status file advances, but the web adapter does not read that
+file.
 
-Recs status is read from its atomically-written status file. A missing, invalid,
-or stale file is reported as an unhealthy Recs service rather than interpreted
-as a live recording state.
+Waveform data arrives through Recs' public event endpoint after Showco enables
+it with `subscribe_waveforms`. Showco disables it with
+`unsubscribe_waveforms` when the server closes.
 
 ## X18 Integration
 

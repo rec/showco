@@ -2,23 +2,25 @@ from __future__ import annotations
 
 import threading
 import time
-from pathlib import Path
 
-from pydantic import BaseModel, Field
-from reccy.protocol import rpc
-from recs.daemon import paths
+from pydantic import BaseModel, Field, ValidationError
 from typing_extensions import TypeIs
 
 from . import models
+from .recs_control import RecsControlClient
 
 STATUS_SNAPSHOT_CACHE_SECONDS = 1.0
 STATUS_SNAPSHOT_TIMEOUT_SECONDS = 0.25
 
 
 class SnapshotStatus(BaseModel, frozen=True):
+    service_state: str = "offline"
     error: str | None = None
+    has_snapshot: bool = False
+    paused: bool = False
+    rows: list[dict[str, object]] = Field(default_factory=list)
+    errors: list[models.ErrorRecord] = Field(default_factory=list)
     disk: models.RecordingDiskStatus | None = None
-    disk_error: str | None = None
     osc: list[models.RecorderStatus] = Field(default_factory=list)
     midi: list[models.MidiStatus] = Field(default_factory=list)
 
@@ -26,12 +28,12 @@ class SnapshotStatus(BaseModel, frozen=True):
 class RecsSnapshotClient:
     def __init__(
         self,
+        control: RecsControlClient,
         *,
-        control_endpoint: Path | str | None = None,
         cache_seconds: float = STATUS_SNAPSHOT_CACHE_SECONDS,
         timeout_seconds: float = STATUS_SNAPSHOT_TIMEOUT_SECONDS,
     ) -> None:
-        self.control_endpoint = control_endpoint or paths.external_control_endpoint()
+        self.control = control
         self.cache_seconds = cache_seconds
         self.timeout_seconds = timeout_seconds
         self.lock = threading.Lock()
@@ -45,27 +47,71 @@ class RecsSnapshotClient:
                 return self.current
             self.checked_at = now
             try:
-                response = rpc.Client(
-                    self.control_endpoint,
-                    role="showco",
-                    timeout=self.timeout_seconds,
-                ).call("status_snapshot")
-            except (ConnectionError, OSError, TimeoutError, ValueError) as error:
-                return self._failure(f"recs status_snapshot failed: {error}")
-            if not object_dict(response):
-                return self._failure("recs status snapshot is not an object")
-            disk, disk_error = recording_disk_status(response.get("disk"))
-            self.current = SnapshotStatus(
-                disk=disk or self.current.disk,
-                disk_error=disk_error,
-                osc=osc_status(response),
-                midi=midi_status(response),
-            )
+                response = self.control.call(
+                    "status_snapshot", timeout=self.timeout_seconds
+                )
+            except TimeoutError as error:
+                return self._transport_failure(
+                    f"recs status_snapshot timed out: {error}"
+                )
+            except (ConnectionError, OSError) as error:
+                return self._transport_failure(f"recs status_snapshot failed: {error}")
+            except (ValidationError, ValueError) as error:
+                return self._invalid(f"recs status_snapshot failed: {error}")
+
+            if isinstance(parsed := snapshot_status(response), str):
+                return self._invalid(parsed)
+            self.current = parsed
             return self.current
 
-    def _failure(self, error: str) -> SnapshotStatus:
-        self.current = self.current.model_copy(update={"error": error})
+    def _transport_failure(self, error: str) -> SnapshotStatus:
+        state = "stale" if self.current.has_snapshot else "offline"
+        self.current = self.current.model_copy(
+            update={"service_state": state, "error": error}
+        )
         return self.current
+
+    def _invalid(self, error: str) -> SnapshotStatus:
+        self.current = self.current.model_copy(
+            update={"service_state": "error", "error": error}
+        )
+        return self.current
+
+
+def snapshot_status(value: object) -> SnapshotStatus | str:
+    if not object_dict(value):
+        return "recs status snapshot is not an object"
+    if value.get("type") != "status_snapshot_result":
+        return "recs status snapshot has invalid type"
+    if not isinstance(rows := value.get("rows"), list) or not all(
+        object_dict(r) for r in rows
+    ):
+        return "recs status snapshot has invalid rows"
+    if isinstance(errors := error_records(value.get("errors")), str):
+        return errors
+    recording = value.get("recording")
+    if not object_dict(recording) or not isinstance(
+        paused := recording.get("paused"), bool
+    ):
+        return "recs status snapshot has invalid recording state"
+    if isinstance(disk := recording_disk_status(value.get("disk")), str):
+        return disk
+    osc = osc_status(value)
+    if not isinstance(nodes := value.get("osc"), list) or len(osc) != len(nodes):
+        return "recs status snapshot has invalid OSC status"
+    midi = midi_status(value)
+    if not isinstance(inputs := value.get("midi"), list) or len(midi) != len(inputs):
+        return "recs status snapshot has invalid MIDI status"
+    return SnapshotStatus(
+        service_state="connected",
+        has_snapshot=True,
+        paused=paused,
+        rows=rows,
+        errors=errors,
+        disk=disk,
+        osc=osc,
+        midi=midi,
+    )
 
 
 def object_dict(value: object) -> TypeIs[dict[str, object]]:
@@ -80,18 +126,29 @@ def osc_status(value: object) -> list[models.RecorderStatus]:
         return []
     statuses = []
     for node in nodes:
-        if not object_dict(node):
+        if not object_dict(node) or not (name := _string(node.get("name"))):
             continue
-        name = _string(node.get("name"))
-        if name is None:
+        state = node.get("state", "running")
+        path = node.get("path")
+        size = node.get("size")
+        error = node.get("last_error")
+        if (
+            not isinstance(state, str)
+            or path is not None
+            and not isinstance(path, str)
+            or size is not None
+            and _int(size) is None
+            or error is not None
+            and not isinstance(error, str)
+        ):
             continue
         statuses.append(
             models.RecorderStatus(
                 name=name,
-                state=_string(node.get("state")) or "running",
-                log_path=_string(node.get("path")),
-                log_size=_int(node.get("size")),
-                last_error=_string(node.get("last_error")),
+                state=state,
+                log_path=path,
+                log_size=size,
+                last_error=error,
             )
         )
     return statuses
@@ -112,11 +169,24 @@ def midi_status(value: object) -> list[models.MidiStatus]:
     ]
 
 
-def recording_disk_status(
-    value: object,
-) -> tuple[models.RecordingDiskStatus | None, str | None]:
+def error_records(value: object) -> list[models.ErrorRecord] | str:
+    if not isinstance(value, list):
+        return "recs status snapshot has invalid errors"
+    errors = []
+    for item in value:
+        if (
+            not object_dict(item)
+            or (timestamp := _string(item.get("timestamp"))) is None
+            or (message := _string(item.get("message"))) is None
+        ):
+            return "recs status snapshot has invalid errors"
+        errors.append(models.ErrorRecord(timestamp=timestamp, message=message))
+    return errors
+
+
+def recording_disk_status(value: object) -> models.RecordingDiskStatus | str:
     if not object_dict(value):
-        return None, "recs disk status is not an object"
+        return "recs disk status is not an object"
     path = _string(value.get("path"))
     used = _int(value.get("used_bytes"))
     free = _int(value.get("free_bytes"))
@@ -140,19 +210,16 @@ def recording_disk_status(
         or not isinstance(alert, bool)
         or not isinstance(paused, bool)
     ):
-        return None, "recs disk status is invalid"
-    return (
-        models.RecordingDiskStatus(
-            path=path,
-            used_bytes=used,
-            free_bytes=free,
-            total_bytes=total,
-            estimated_seconds_remaining=remaining,
-            alert_threshold=threshold,
-            alert_active=alert,
-            paused_for_disk_space=paused,
-        ),
-        None,
+        return "recs disk status is invalid"
+    return models.RecordingDiskStatus(
+        path=path,
+        used_bytes=used,
+        free_bytes=free,
+        total_bytes=total,
+        estimated_seconds_remaining=remaining,
+        alert_threshold=threshold,
+        alert_active=alert,
+        paused_for_disk_space=paused,
     )
 
 

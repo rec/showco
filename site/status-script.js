@@ -7,7 +7,9 @@
   function recordingText(recs) {
     if (!recs.recording) return "stopped";
     const seconds = recs.elapsed_seconds;
-    if (seconds === null) return "recording for unknown time, ? files";
+    if (seconds === null) return recs.paused
+      ? "paused after unknown time, ? files"
+      : "recording for unknown time, ? files";
     const minutes = Math.floor(seconds / 60);
     const hours = Math.floor(minutes / 60);
     const duration = hours
@@ -15,7 +17,9 @@
           Math.floor(seconds % 60),
         ).padStart(2, "0")}`
       : `${minutes}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
-    return `recording for ${duration}, ${recs.file_count ?? "?"} files`;
+    return `${recs.paused ? "paused after" : "recording for"} ${duration}, ${
+      recs.file_count ?? "?"
+    } files`;
   }
 
   function streamingText(twitcho) {
