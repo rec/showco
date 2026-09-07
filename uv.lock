@@ -742,7 +742,7 @@ dependencies = [
 [[package]]
 name = "recs"
 version = "0.12.5"
-source = { git = "https://github.com/rec/recs.git?branch=main#48b5cf83d3ee6dc0efa03abb9e25fd2bbf22458f" }
+source = { git = "https://github.com/rec/recs.git?branch=main#2764d7a7c11ff0f3f6520b8ac6c9768ac8c40a87" }
 dependencies = [
     { name = "humanfriendly" },
     { name = "mido", extra = ["ports-rtmidi"] },
