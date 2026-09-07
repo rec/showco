@@ -66,9 +66,9 @@ def resolved_config(options: GoOptions) -> config.Config:
 
 def run(options: GoOptions, *, provision_config: config.Config | None = None) -> int:
     provision_config = provision_config or resolved_config(options)
-    from .. import update
+    from .. import local_update, update
 
-    if not update.prepare_local_repositories(
+    if not local_update.prepare_local_repositories(
         update.REPOSITORY_NAMES,
         local_checkout_directory(),
         update.run_command_with_timeout,
@@ -77,7 +77,7 @@ def run(options: GoOptions, *, provision_config: config.Config | None = None) ->
         sys.exit(
             "ERROR: local repositories are not ready for Raspberry Pi provisioning"
         )
-    if not update.refresh_local_dependencies(
+    if not local_update.refresh_local_dependencies(
         update.REPOSITORY_NAMES,
         local_checkout_directory(),
         update.run_command_with_timeout,

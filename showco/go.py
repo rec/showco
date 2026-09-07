@@ -4,7 +4,7 @@ import sys
 
 import tyro
 
-from . import machine_role, update
+from . import local_update, machine_role, update
 from .provision import provision, remote, script, state
 
 
@@ -51,7 +51,7 @@ def run(options: provision.GoOptions) -> int:
         sys.exit("ERROR: --remote cannot be combined with --push or --sync")
     if options.push or options.sync:
         local_root = provision.local_checkout_directory()
-        if not update.prepare_local_repositories(
+        if not local_update.prepare_local_repositories(
             selected,
             local_root,
             update.run_command_with_timeout,
@@ -59,7 +59,7 @@ def run(options: provision.GoOptions) -> int:
             autosquash=options.autosquash if options.autosquash is not None else 50,
         ):
             return 1
-        if options.sync and not update.refresh_local_dependencies(
+        if options.sync and not local_update.refresh_local_dependencies(
             selected,
             local_root,
             update.run_command_with_timeout,
@@ -78,7 +78,7 @@ def run(options: provision.GoOptions) -> int:
             clear_settings=options.clear_settings,
         )
     if update_requested:
-        return update.update_from_provisioning_machine(
+        return local_update.update_from_provisioning_machine(
             selected,
             host=options.host,
             root=options.root,
@@ -106,7 +106,7 @@ def run(options: provision.GoOptions) -> int:
         return provision.run(options, provision_config=provision_config)
 
     print(f"Configuration matches: updating {provision_config.ssh_target}...")
-    return update.update_from_provisioning_machine(
+    return local_update.update_from_provisioning_machine(
         update.REPOSITORY_NAMES,
         host=options.host,
         root=options.root,
