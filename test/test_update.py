@@ -10,7 +10,7 @@ from unittest import mock
 
 from reccy.services.models import Platform, StatusResult
 
-from showco import update
+from showco import local_update, update
 
 
 class UpdateTests(unittest.TestCase):
@@ -20,9 +20,9 @@ class UpdateTests(unittest.TestCase):
         )
         ensure_log.start()
         self.addCleanup(ensure_log.stop)
-        self.read_locked_sources = update.locked_dependency_sources
+        self.read_locked_sources = local_update.locked_dependency_sources
         locked_sources = mock.patch(
-            "showco.update.locked_dependency_sources", return_value={}
+            "showco.local_update.locked_dependency_sources", return_value={}
         )
         self.locked_sources = locked_sources.start()
         self.addCleanup(locked_sources.stop)
@@ -577,7 +577,7 @@ class UpdateTests(unittest.TestCase):
                 ),
             ) as remote_update,
         ):
-            result = update.update_from_provisioning_machine(
+            result = local_update.update_from_provisioning_machine(
                 ["showco", "reccy"],
                 root=Path("/code"),
                 local_root=Path("/code"),
@@ -633,7 +633,7 @@ class UpdateTests(unittest.TestCase):
             ),
             mock.patch("showco.update.run_remote_step") as remote_update,
         ):
-            result = update.update_from_provisioning_machine(
+            result = local_update.update_from_provisioning_machine(
                 ["recs", "showco"],
                 root=Path("/code"),
                 local_root=Path("/code"),
@@ -692,7 +692,7 @@ class UpdateTests(unittest.TestCase):
                 ),
             ),
         ):
-            result = update.update_from_provisioning_machine(
+            result = local_update.update_from_provisioning_machine(
                 ["recs"],
                 root=Path("/code"),
                 local_root=Path("/code"),
@@ -745,7 +745,7 @@ class UpdateTests(unittest.TestCase):
                 ),
             ),
         ):
-            result = update.update_from_provisioning_machine(
+            result = local_update.update_from_provisioning_machine(
                 ["recs"],
                 root=Path("/code"),
                 local_root=Path("/code"),
@@ -770,7 +770,7 @@ class UpdateTests(unittest.TestCase):
                 "",
             )
 
-        result = update.autosquash_program(program, 50, run_command)
+        result = local_update.autosquash_program(program, 50, run_command)
 
         self.assertIsNotNone(result)
         assert result is not None
@@ -797,7 +797,7 @@ class UpdateTests(unittest.TestCase):
                 return subprocess.CompletedProcess(command, 0, "parent\n", "")
             return subprocess.CompletedProcess(command, 0, "", "")
 
-        result = update.autosquash_program(program, 50, run_command)
+        result = local_update.autosquash_program(program, 50, run_command)
 
         self.assertIsNotNone(result)
         self.assertTrue(result.ok if result else False)
@@ -858,8 +858,8 @@ class UpdateTests(unittest.TestCase):
             return subprocess.CompletedProcess(command, 0, "forced\n", "")
 
         output = StringIO()
-        result = update.push_program(
-            update.PublicationState(
+        result = local_update.push_program(
+            local_update.PublicationState(
                 program=update.Program(
                     name="recs", directory=Path("/code/recs"), service_names=[]
                 ),
@@ -896,7 +896,7 @@ class UpdateTests(unittest.TestCase):
         program = update.Program(
             name="recs", directory=Path("/code/recs"), service_names=[]
         )
-        state = update.PublicationState(
+        state = local_update.PublicationState(
             program=program,
             remote="origin",
             branch="main",
@@ -908,7 +908,7 @@ class UpdateTests(unittest.TestCase):
             commands.append(list(command))
             return subprocess.CompletedProcess(command, 0, "same-commit\n", "")
 
-        result = update.push_program(state, run_command)
+        result = local_update.push_program(state, run_command)
 
         self.assertTrue(result.ok)
         self.assertEqual(result.output, "already published")
@@ -922,7 +922,7 @@ class UpdateTests(unittest.TestCase):
         program = update.Program(
             name="recs", directory=Path("/code/recs"), service_names=[]
         )
-        state = update.PublicationState(
+        state = local_update.PublicationState(
             program=program,
             remote="origin",
             branch="main",
@@ -936,7 +936,7 @@ class UpdateTests(unittest.TestCase):
                 return subprocess.CompletedProcess(command, 0, "local\n", "")
             return subprocess.CompletedProcess(command, 1, "", "rejected\n")
 
-        result = update.push_program(state, run_command)
+        result = local_update.push_program(state, run_command)
 
         self.assertFalse(result.ok)
         self.assertEqual(
@@ -972,7 +972,7 @@ class UpdateTests(unittest.TestCase):
                 return subprocess.CompletedProcess(command, 1, "", "rejected\n")
             return subprocess.CompletedProcess(command, 0, "", "")
 
-        result = update.prepare_local_repositories(
+        result = local_update.prepare_local_repositories(
             ["recs"], Path("/code"), run_command, StringIO()
         )
 
@@ -1011,11 +1011,11 @@ class UpdateTests(unittest.TestCase):
             commands.append(list(command))
             return subprocess.CompletedProcess(command, 0, "", "")
 
-        result = update.refresh_program_dependencies(
+        result = local_update.refresh_program_dependencies(
             program, ["reccy"], run_command, StringIO()
         )
 
-        self.assertEqual(result, update.DependencyRefresh.UNCHANGED)
+        self.assertEqual(result, local_update.DependencyRefresh.UNCHANGED)
         self.assertIn(
             [
                 "git",
@@ -1051,11 +1051,11 @@ class UpdateTests(unittest.TestCase):
                 return subprocess.CompletedProcess(command, 0, "upstream-sha\n", "")
             return subprocess.CompletedProcess(command, 0, "", "")
 
-        result = update.refresh_program_dependencies(
+        result = local_update.refresh_program_dependencies(
             program, ["reccy"], run_command, StringIO()
         )
 
-        self.assertEqual(result, update.DependencyRefresh.UPDATED)
+        self.assertEqual(result, local_update.DependencyRefresh.UPDATED)
         self.assertEqual(
             commands[0],
             [
@@ -1112,11 +1112,11 @@ class UpdateTests(unittest.TestCase):
             return subprocess.CompletedProcess(command, 0, "", "")
 
         output = StringIO()
-        result = update.refresh_program_dependencies(
+        result = local_update.refresh_program_dependencies(
             program, ["reccy"], run_command, output
         )
 
-        self.assertEqual(result, update.DependencyRefresh.FAILED)
+        self.assertEqual(result, local_update.DependencyRefresh.FAILED)
         self.assertIn("unexpected paths", output.getvalue())
         self.assertIn(
             [
@@ -1147,11 +1147,11 @@ class UpdateTests(unittest.TestCase):
                 return subprocess.CompletedProcess(command, 1, "", "invalid lock\n")
             return subprocess.CompletedProcess(command, 0, "", "")
 
-        result = update.refresh_program_dependencies(
+        result = local_update.refresh_program_dependencies(
             program, ["reccy"], run_command, StringIO()
         )
 
-        self.assertEqual(result, update.DependencyRefresh.FAILED)
+        self.assertEqual(result, local_update.DependencyRefresh.FAILED)
         self.assertFalse(any(c[:3] == ["uv", "run", "--locked"] for c in commands))
         self.assertFalse(any("commit" in c for c in commands))
 
@@ -1175,7 +1175,7 @@ class UpdateTests(unittest.TestCase):
             return subprocess.CompletedProcess(command, 0, "", "")
 
         output = StringIO()
-        result = update.refresh_local_dependencies(
+        result = local_update.refresh_local_dependencies(
             ["recs", "showco"], Path("/code"), run_command, output
         )
 
@@ -1200,7 +1200,7 @@ class UpdateTests(unittest.TestCase):
     def test_refresh_reports_unchanged_and_skipped_repositories(self) -> None:
         output = StringIO()
 
-        result = update.refresh_local_dependencies(
+        result = local_update.refresh_local_dependencies(
             ["reccy", "recs"],
             Path("/code"),
             lambda command: subprocess.CompletedProcess(command, 0, "", ""),
@@ -1236,8 +1236,12 @@ class UpdateTests(unittest.TestCase):
                 "showco.update.provisioning_config",
                 return_value=make_config(),
             ),
-            mock.patch("showco.update.prepare_local_repositories", return_value=True),
-            mock.patch("showco.update.refresh_local_dependencies", return_value=True),
+            mock.patch(
+                "showco.local_update.prepare_local_repositories", return_value=True
+            ),
+            mock.patch(
+                "showco.local_update.refresh_local_dependencies", return_value=True
+            ),
             mock.patch(
                 "showco.update.run_remote_step",
                 return_value=update.StepResult(
@@ -1249,7 +1253,7 @@ class UpdateTests(unittest.TestCase):
                 ),
             ) as remote_update,
         ):
-            result = update.update_from_provisioning_machine(["recs"])
+            result = local_update.update_from_provisioning_machine(["recs"])
 
         self.assertEqual(result, 0)
         self.assertIn("tom@bertrand.local", remote_update.call_args.args[2])
@@ -1260,8 +1264,12 @@ class UpdateTests(unittest.TestCase):
                 "showco.update.provisioning_config",
                 return_value=make_config(),
             ),
-            mock.patch("showco.update.prepare_local_repositories", return_value=True),
-            mock.patch("showco.update.refresh_local_dependencies", return_value=True),
+            mock.patch(
+                "showco.local_update.prepare_local_repositories", return_value=True
+            ),
+            mock.patch(
+                "showco.local_update.refresh_local_dependencies", return_value=True
+            ),
             mock.patch(
                 "showco.update.run_remote_step",
                 return_value=update.StepResult(
@@ -1273,7 +1281,7 @@ class UpdateTests(unittest.TestCase):
                 ),
             ) as remote_update,
         ):
-            result = update.update_from_provisioning_machine(
+            result = local_update.update_from_provisioning_machine(
                 ["recs"], host="other.local"
             )
 
@@ -1295,7 +1303,7 @@ class UpdateTests(unittest.TestCase):
             "showco.update.provisioning_config",
             return_value=make_config(),
         ):
-            result = update.update_from_provisioning_machine(
+            result = local_update.update_from_provisioning_machine(
                 ["recs"],
                 root=Path("/code"),
                 local_root=Path("/code"),
@@ -1348,7 +1356,7 @@ class UpdateTests(unittest.TestCase):
                 ),
             ),
         ):
-            result = update.update_from_provisioning_machine(
+            result = local_update.update_from_provisioning_machine(
                 ["recs"],
                 root=Path("/code"),
                 local_root=Path("/code"),
@@ -1387,7 +1395,7 @@ class UpdateTests(unittest.TestCase):
                 ),
             ),
         ):
-            result = update.update_from_provisioning_machine(
+            result = local_update.update_from_provisioning_machine(
                 ["recs"],
                 root=Path("/code"),
                 local_root=Path("/code"),

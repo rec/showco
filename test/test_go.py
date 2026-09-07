@@ -59,7 +59,7 @@ class GoTests(unittest.TestCase):
                 return_value="fingerprint",
             ),
             mock.patch(
-                "showco.update.update_from_provisioning_machine", return_value=0
+                "showco.local_update.update_from_provisioning_machine", return_value=0
             ) as update_target,
             mock.patch("showco.provision.provision.run") as provision_target,
         ):
@@ -90,7 +90,7 @@ class GoTests(unittest.TestCase):
                 "showco.provision.provision.run", return_value=0
             ) as provision_target,
             mock.patch(
-                "showco.update.update_from_provisioning_machine"
+                "showco.local_update.update_from_provisioning_machine"
             ) as update_target,
         ):
             result = go.run(self.options())
@@ -132,7 +132,7 @@ class GoTests(unittest.TestCase):
                 return_value=provision_config,
             ),
             mock.patch(
-                "showco.update.update_from_provisioning_machine", return_value=0
+                "showco.local_update.update_from_provisioning_machine", return_value=0
             ) as update_target,
             mock.patch("showco.provision.provision.run") as provision_target,
         ):
@@ -158,9 +158,9 @@ class GoTests(unittest.TestCase):
                 return_value=Path("/code"),
             ),
             mock.patch(
-                "showco.update.prepare_local_repositories", return_value=True
+                "showco.local_update.prepare_local_repositories", return_value=True
             ) as prepare,
-            mock.patch("showco.update.refresh_local_dependencies") as refresh,
+            mock.patch("showco.local_update.refresh_local_dependencies") as refresh,
             mock.patch("showco.provision.provision.resolved_config") as resolved,
         ):
             result = go.run(options)
@@ -184,10 +184,10 @@ class GoTests(unittest.TestCase):
                 return_value=Path("/code"),
             ),
             mock.patch(
-                "showco.update.prepare_local_repositories", return_value=True
+                "showco.local_update.prepare_local_repositories", return_value=True
             ) as prepare,
             mock.patch(
-                "showco.update.refresh_local_dependencies", return_value=True
+                "showco.local_update.refresh_local_dependencies", return_value=True
             ) as refresh,
             mock.patch("showco.provision.provision.resolved_config") as resolved,
         ):
@@ -226,7 +226,7 @@ class GoTests(unittest.TestCase):
                 return_value=provision_config,
             ),
             mock.patch("showco.update.update_remote_target", return_value=0) as remote,
-            mock.patch("showco.update.update_from_provisioning_machine") as local,
+            mock.patch("showco.local_update.update_from_provisioning_machine") as local,
         ):
             result = go.run(options)
 
