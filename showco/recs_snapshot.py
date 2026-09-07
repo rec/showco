@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import threading
 import time
+from typing import TypeIs
 
 from pydantic import BaseModel, Field, ValidationError
-from typing_extensions import TypeIs
 
 from . import models
 from .recs_control import RecsControlClient

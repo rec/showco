@@ -6,9 +6,9 @@ import tomllib
 from functools import cached_property
 from ipaddress import IPv4Address, IPv4Network, ip_network
 from pathlib import Path
+from typing import TypeIs
 
 from pydantic import BaseModel, Field
-from typing_extensions import TypeIs
 
 from ..mixer import MixerSpec, MixerSpecs
 
