@@ -61,6 +61,7 @@ def run_web_ui(options: WebUiOptions) -> int:
             mixers=MixersMonitor(load_mixer_specs(options.mixers_config)),
             twitcho_enabled=options.twitcho_enabled,
             lyte_enabled=options.lyte_enabled,
+            performance_enabled=True,
         )
         print(f"showco listening on http://{options.host}:{options.port}")
     try:

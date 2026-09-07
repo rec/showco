@@ -323,6 +323,92 @@
     if (follow) requestAnimationFrame(scrollToBottom);
   }
 
+  function byteSize(value) {
+    if (value >= 1024 ** 3) return `${(value / 1024 ** 3).toFixed(1)} GiB`;
+    if (value >= 1024 ** 2) return `${(value / 1024 ** 2).toFixed(1)} MiB`;
+    return `${(value / 1024).toFixed(1)} KiB`;
+  }
+
+  function duration(seconds) {
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    return hours
+      ? `${hours}:${String(minutes % 60).padStart(2, "0")}:${String(
+          Math.floor(seconds % 60),
+        ).padStart(2, "0")}`
+      : `${minutes}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
+  }
+
+  function setPerformance(identifier, percent, text, forceCritical = false) {
+    const row = document.getElementById(`${identifier}-performance`);
+    const meter = document.getElementById(`${identifier}-meter`);
+    const value = document.getElementById(`${identifier}-value`);
+    if (!row || !meter || !value) return;
+    if (percent === null) meter.removeAttribute("value");
+    else meter.value = percent;
+    row.className = `performance-row ${
+      forceCritical || percent !== null && percent >= 95
+        ? "critical"
+        : percent !== null && percent >= 85
+          ? "warning"
+          : "normal"
+    }`;
+    value.textContent = text;
+  }
+
+  function updatePerformance(status) {
+    const system = status.system;
+    setPerformance(
+      "cpu",
+      system.cpu_percent,
+      system.cpu_percent === null
+        ? system.cpu_error || "unknown"
+        : `${system.cpu_percent.toFixed(0)}%`,
+    );
+    const memoryPercent = system.memory_used_bytes === null
+      || system.memory_total_bytes === null
+      || system.memory_total_bytes <= 0
+      ? null
+      : 100 * system.memory_used_bytes / system.memory_total_bytes;
+    setPerformance(
+      "memory",
+      memoryPercent,
+      memoryPercent === null
+        ? system.memory_error || "unknown"
+        : `${byteSize(system.memory_used_bytes)} / ${
+            byteSize(system.memory_total_bytes)
+          } (${memoryPercent.toFixed(0)}%)`,
+    );
+    const disk = status.recs.disk;
+    if (disk === null) {
+      setPerformance(
+        "disk",
+        null,
+        status.recs.disk_error
+          || status.recs.snapshot_error
+          || "recording disk unavailable",
+      );
+      return;
+    }
+    const diskPercent = 100 * disk.used_bytes / disk.total_bytes;
+    let diskText = `${disk.path}: ${byteSize(disk.free_bytes)} free / ${
+      byteSize(disk.total_bytes)
+    } (${diskPercent.toFixed(0)}% used)`;
+    if (disk.estimated_seconds_remaining !== null) {
+      diskText += `, ${duration(disk.estimated_seconds_remaining)} remaining`;
+    }
+    if (disk.paused_for_disk_space) diskText = `paused: ${diskText}`;
+    else if (disk.alert_active) diskText = `alert: ${diskText}`;
+    const stale = status.recs.disk_error || status.recs.snapshot_error;
+    if (stale) diskText += `, stale: ${stale}`;
+    setPerformance(
+      "disk",
+      diskPercent,
+      diskText,
+      disk.alert_active || disk.paused_for_disk_space,
+    );
+  }
+
   function updateStatus() {
     return fetch("/status", { cache: "no-store" })
       .then(response => {
@@ -345,6 +431,7 @@
       if (lyteHealth) lyteHealth.textContent = `lyte: ${lyteDetail(status.lyte)}`;
       updateChannels(status.recs.channels);
       updateRecsErrors(status.recs.errors);
+      updatePerformance(status);
       const temperature = document.getElementById("temperature");
       if (temperature) {
         temperature.textContent = status.system.temperature_c === null

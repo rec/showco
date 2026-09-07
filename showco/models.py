@@ -60,6 +60,17 @@ class ErrorRecord(BaseModel, frozen=True):
     message: str
 
 
+class RecordingDiskStatus(BaseModel, frozen=True):
+    path: str
+    used_bytes: int
+    free_bytes: int
+    total_bytes: int
+    estimated_seconds_remaining: float | None = None
+    alert_threshold: str | None = None
+    alert_active: bool = False
+    paused_for_disk_space: bool = False
+
+
 class RecsStatus(BaseModel, frozen=True):
     service: ServiceStatus
     recording: bool = False
@@ -71,6 +82,8 @@ class RecsStatus(BaseModel, frozen=True):
     channels: list[ChannelLevel] = Field(default_factory=list)
     errors: list[ErrorRecord] = Field(default_factory=list)
     snapshot_error: str | None = None
+    disk: RecordingDiskStatus | None = None
+    disk_error: str | None = None
     osc: list[RecorderStatus] = Field(default_factory=list)
     midi: list[MidiStatus] = Field(default_factory=list)
 
@@ -103,6 +116,11 @@ class LyteStatus(BaseModel, frozen=True):
 class SystemStatus(BaseModel, frozen=True):
     temperature_c: float | None = None
     temperature_error: str | None = None
+    cpu_percent: float | None = None
+    cpu_error: str | None = None
+    memory_used_bytes: int | None = None
+    memory_total_bytes: int | None = None
+    memory_error: str | None = None
 
 
 class MixerStatus(BaseModel, frozen=True):

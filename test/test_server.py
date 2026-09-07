@@ -265,6 +265,39 @@ class ServerTests(unittest.TestCase):
         self.assertIn("Pi temperature", html)
         self.assertIn("52.8 °C", html)
 
+    def test_health_page_shows_performance_meters(self) -> None:
+        html = health_page(
+            models.ShowStatus(
+                recs=models.RecsStatus(
+                    service=models.ServiceStatus(name="recs", state="connected"),
+                    disk=models.RecordingDiskStatus(
+                        path="/recordings",
+                        used_bytes=25 * 1024**3,
+                        free_bytes=75 * 1024**3,
+                        total_bytes=100 * 1024**3,
+                        estimated_seconds_remaining=3600,
+                    ),
+                ),
+                twitcho=models.TwitchoStatus(
+                    service=models.ServiceStatus(name="twitcho", state="disabled")
+                ),
+                system=models.SystemStatus(
+                    cpu_percent=42,
+                    memory_used_bytes=2 * 1024**3,
+                    memory_total_bytes=8 * 1024**3,
+                ),
+            )
+        )
+
+        self.assertIn("<h2>Performance</h2>", html)
+        self.assertIn('id="cpu-meter"', html)
+        self.assertIn('id="memory-meter"', html)
+        self.assertIn('id="disk-meter"', html)
+        self.assertIn("42%", html)
+        self.assertIn("2.0 GiB / 8.0 GiB (25%)", html)
+        self.assertIn("/recordings: 75.0 GiB free / 100.0 GiB (25% used)", html)
+        self.assertIn("setPerformance(", html)
+
     def test_health_page_shows_recs_snapshot_error(self) -> None:
         html = health_page(
             models.ShowStatus(

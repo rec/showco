@@ -8,6 +8,58 @@ from showco.recs_snapshot import RecsSnapshotClient, osc_status
 
 
 class RecsSnapshotTests(unittest.TestCase):
+    def test_reads_recording_disk_status(self) -> None:
+        client = RecsSnapshotClient(
+            control_endpoint=Path("/tmp/recs.sock"), cache_seconds=0
+        )
+        with mock.patch("showco.recs_snapshot.rpc.Client") as rpc_client:
+            rpc_client.return_value.call.return_value = {
+                "disk": {
+                    "path": "/recordings",
+                    "used_bytes": 25,
+                    "free_bytes": 75,
+                    "total_bytes": 100,
+                    "estimated_seconds_remaining": 3600.0,
+                    "alert_threshold": "10 GiB",
+                    "alert_active": True,
+                    "paused_for_disk_space": False,
+                }
+            }
+
+            status = client.status()
+
+        self.assertEqual(status.disk.path, "/recordings")
+        self.assertEqual(status.disk.free_bytes, 75)
+        self.assertTrue(status.disk.alert_active)
+        self.assertIsNone(status.disk_error)
+
+    def test_invalid_disk_preserves_previous_disk_and_other_snapshot_data(self) -> None:
+        client = RecsSnapshotClient(
+            control_endpoint=Path("/tmp/recs.sock"), cache_seconds=0
+        )
+        with mock.patch("showco.recs_snapshot.rpc.Client") as rpc_client:
+            rpc_client.return_value.call.side_effect = [
+                {
+                    "disk": {
+                        "path": "/recordings",
+                        "used_bytes": 25,
+                        "free_bytes": 75,
+                        "total_bytes": 100,
+                    }
+                },
+                {
+                    "disk": {"path": "/recordings"},
+                    "midi": [{"name": "FLOW 8", "state": "recording"}],
+                },
+            ]
+
+            initial = client.status()
+            invalid = client.status()
+
+        self.assertEqual(invalid.disk, initial.disk)
+        self.assertEqual(invalid.disk_error, "recs disk status is invalid")
+        self.assertEqual(invalid.midi[0].state, "recording")
+
     def test_reads_named_osc_statuses(self) -> None:
         statuses = osc_status(
             {

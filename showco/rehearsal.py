@@ -37,6 +37,13 @@ class RehearsalRecsClient(RecsClient):
             client_count=1,
             channels=rehearsal_channels(elapsed, self.rehearsal_tracks),
             errors=[],
+            disk=models.RecordingDiskStatus(
+                path="/media/showco/recordings",
+                used_bytes=48 * 1024**3,
+                free_bytes=208 * 1024**3,
+                total_bytes=256 * 1024**3,
+                estimated_seconds_remaining=18 * 3600,
+            ),
         )
 
     def calibrate(self) -> models.ActionResult:
@@ -139,7 +146,12 @@ def restart_twitcho() -> models.ActionResult:
 
 class RehearsalSystemMonitor(SystemMonitor):
     def status(self) -> models.SystemStatus:
-        return models.SystemStatus(temperature_c=48.5)
+        return models.SystemStatus(
+            temperature_c=48.5,
+            cpu_percent=18,
+            memory_used_bytes=2 * 1024**3,
+            memory_total_bytes=8 * 1024**3,
+        )
 
 
 class RehearsalMixersMonitor(MixersMonitor):
