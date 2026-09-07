@@ -755,6 +755,12 @@ class ProvisionTests(unittest.TestCase):
 
         self.assertEqual(script.REMOTE_SCRIPT, template.read_text())
 
+    def test_remote_script_installs_shared_python(self) -> None:
+        self.assertIn('phase "installing Python 3.13"', script.REMOTE_SCRIPT)
+        self.assertIn('bash -lc "uv python install 3.13"', script.REMOTE_SCRIPT)
+        self.assertNotIn("\n    python3\n", script.REMOTE_SCRIPT)
+        self.assertNotIn("\n    python3-venv\n", script.REMOTE_SCRIPT)
+
     def test_remote_script_configures_external_storage_mounts(self) -> None:
         self.assertIn("exfatprogs", script.REMOTE_SCRIPT)
         self.assertIn('phase "configuring storage mounts"', script.REMOTE_SCRIPT)
