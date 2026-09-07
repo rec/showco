@@ -24,7 +24,7 @@ cpu_percent = 100 * (total_delta - idle_delta) / total_delta
 ```
 
 The first valid sample has no preceding interval, so report CPU as `sampling`
-until the next status request. Treat a zero or negative total delta as
+until the next one-second sample. Treat a zero or negative total delta as
 unavailable rather than dividing by zero. Clamp the displayed result to
 `0..100` to tolerate counter irregularities without concealing a read or parse
 failure.
@@ -87,19 +87,26 @@ JSON model.
 
 ## Sampling
 
-Extend `SystemMonitor` directly; do not create a second monitor or worker
-thread.
+Extend `SystemMonitor` to read one instantaneous CPU, memory, and temperature
+sample. Add a `PerformanceMonitor` that owns the sampling lifecycle,
+aggregation, and persistence.
 
 - Inject the `/proc/stat` and `/proc/meminfo` paths for deterministic tests.
-- Protect CPU counters and the most recent sample with a lock because the HTTP
-  server handles requests concurrently.
-- Cache a complete system sample for approximately one second so simultaneous
-  page requests do not consume the CPU baseline or repeatedly read procfs.
 - Continue reading temperature through the existing injected path.
 - Return partial `SystemStatus` data when any individual metric fails.
+- Start one sampler thread with the web server and stop and join it during
+  `server_close()`.
+- Sample once per second using a monotonic deadline so the work performed by a
+  sample does not accumulate timing drift.
+- Have the sampler obtain recording-disk data through the existing cached Recs
+  snapshot path; do not add a second RPC implementation.
+- Protect the latest sample and current minute aggregate with one lock because
+  the HTTP server reads them concurrently.
+- Serve the latest completed sample to `/status`; request handling must never
+  trigger sampling or persistence.
 
-The monitoring code runs only when `/status` or a status page is requested. It
-must not perform network I/O or spawn commands.
+The thread is part of the Showco process, not a separate service or process. It
+must not spawn commands. Sampling continues whether or not a browser is open.
 
 ## Storage
 
@@ -110,29 +117,34 @@ Persist one combined monitoring sample per minute as JSON Lines under:
 ```
 
 Use Showco's existing state-directory convention rather than introducing a new
-config setting. Each record contains:
+config setting. Each record summarizes the one-second samples collected during
+that minute and contains:
 
-- `time`: UTC timestamp in ISO 8601 form.
-- `cpu_percent`.
-- `memory_used_bytes` and `memory_total_bytes`.
-- `disk_path`, `disk_used_bytes`, `disk_total_bytes`, and
+- `started_at` and `ended_at`: UTC timestamps in ISO 8601 form.
+- `sample_count`.
+- `cpu_average_percent` and `cpu_peak_percent`.
+- `memory_average_used_bytes`, `memory_peak_used_bytes`, and
+  `memory_total_bytes`.
+- `disk_path`, `disk_minimum_free_bytes`, `disk_total_bytes`, and the latest
   `disk_estimated_seconds_remaining`.
-- `disk_alert_active` and `disk_paused_for_space`.
-- `errors`: a mapping containing only diagnostics for unavailable metrics.
+- `disk_alert_occurred` and `disk_pause_occurred`, which are true when any
+  sample in the minute reported those states.
+- `errors`: a mapping from each unavailable metric to its latest diagnostic in
+  the minute.
 
-Missing values are JSON `null`. Record the complete sample together so CPU,
-memory, and disk observations from the same status request can be correlated.
-Do not store formatted display strings or duplicate the full Recs snapshot.
+Missing aggregates are JSON `null`. Do not treat a missing sample as zero, and
+calculate each average using only valid samples for that metric. Record all
+metrics together so observations from the same minute can be correlated. Do
+not store formatted display strings or duplicate the full Recs snapshot.
 
 Keep seven UTC calendar days, including the current day. Remove older daily
 files when the first sample of a new day is written. This makes retention
 bounded without rewriting an active log or adding a rotation dependency.
 
-Use the `SystemMonitor` lock to serialize the sampling interval check and file
-append. The one-second status cache still serves the live UI, while a separate
-last-persisted time prevents browser polling from writing more than one record
-per minute. Create the monitoring directory and current file on the first
-sample; monitoring must not need a background thread.
+The sampler thread rolls over and appends the completed aggregate when the UTC
+minute changes. Create the monitoring directory and current file on the first
+completed minute. On shutdown, write the partial current minute if it contains
+at least one sample so the final observations are not discarded.
 
 A directory creation, append, or retention failure must not invalidate the
 live status response. Report the storage problem through logging only when its
@@ -181,7 +193,8 @@ recording, or duplicate Recs' disk-space policy.
 - Log a metric failure only when its error state changes, so a missing procfs
   file cannot write once per second forever.
 - Log monitoring-storage failures only when their state changes; never fail or
-  delay `/status` because history could not be written.
+  delay `/status` because history could not be written. A storage failure must
+  not stop subsequent sampling.
 - A failed Recs snapshot may show the last valid disk figures together with the
   existing snapshot error; do not label stale disk data as current.
 - The `/status` endpoint and Health page must remain valid if all performance
@@ -195,8 +208,8 @@ Add focused tests for:
 2. The initial CPU `sampling` state and a zero-delta sample.
 3. Memory usage from `MemTotal` and `MemAvailable`.
 4. Independent missing and malformed CPU and memory inputs.
-5. Concurrent or back-to-back status calls using the short cache without
-   corrupting the CPU baseline.
+5. One-second sampling updating the latest status without any `/status`
+   requests.
 6. Parsing a complete Recs recording-disk snapshot.
 7. Invalid disk fields without losing valid OSC or MIDI snapshot data.
 8. Preserving the last valid disk sample during a temporary snapshot failure
@@ -205,14 +218,18 @@ Add focused tests for:
    units, and unavailable states.
 10. Browser refresh code updating all values, meter positions, and warning
     states while accepting zero values.
-11. One complete JSONL record being written per minute despite once-per-second
-    status requests.
-12. Missing values and metric diagnostics being represented correctly in the
-    stored record.
-13. Daily file selection and deletion of files older than seven UTC days.
-14. Storage failures leaving the live status result intact and recovering on a
-    later successful write.
-15. Existing temperature, Recs snapshot, waveform, and Health behavior remaining
+11. One JSONL aggregate being written for a completed minute of one-second
+    samples.
+12. CPU average and peak, memory average and peak, minimum disk-free space, and
+    any disk alert or pause being aggregated correctly.
+13. Missing values and metric diagnostics being represented correctly without
+    counting missing samples as zero.
+14. A partial final minute being written during clean shutdown.
+15. Daily file selection and deletion of files older than seven UTC days.
+16. Storage failures leaving live status and subsequent sampling intact, then
+    recovering on a later successful write.
+17. The sampler thread stopping and joining during server shutdown.
+18. Existing temperature, Recs snapshot, waveform, and Health behavior remaining
     unchanged.
 
 Run the full Showco test suite, Ruff, formatting, Ty, pyupgrade, lock validation,
@@ -222,21 +239,27 @@ disk behavior; validate those separately on the target after deployment.
 ## Documentation
 
 Update `doc/architecture.md` to state that Showco samples Linux CPU and memory
-on demand, displays Recs' current recording-disk capacity, and stores
-once-per-minute monitoring samples for seven days. Document the state-directory
-path, JSONL record fields, and the distinction between the one-second live
-display and the one-minute historical sample rate.
+once per second, displays Recs' current recording-disk capacity, and stores
+once-per-minute aggregate monitoring records for seven days. Document the
+state-directory path, JSONL record fields, the sampler-thread lifecycle, and
+the distinction between the one-second live display and one-minute historical
+aggregation.
 
 ## Acceptance Criteria
 
 - Health shows CPU, memory, and current recording-disk usage without a new tab.
-- Values refresh through the existing `/status` request once per second.
-- Monitoring persists one combined JSONL sample per minute for seven days.
+- Metrics are sampled once per second even when no browser is connected.
+- The Health page receives the latest sample through the existing `/status`
+  refresh.
+- Monitoring persists one combined minute aggregate for seven days, including
+  CPU and memory peaks and minimum disk-free space.
 - Monitoring adds no dependency, process, database, or configuration.
 - One failed metric does not hide or delay the other metrics.
 - A history write failure does not break live monitoring or the Health page.
 - Disk usage refers to Recs' actual recording destination.
 - CPU sampling is thread-safe and does not misinterpret the first sample.
+- The sampler stops cleanly with the web server and flushes its final partial
+  minute.
 - Recs disk alerts and pauses are visible but remain controlled by Recs.
 - Existing status and control behavior remains unchanged.
 
