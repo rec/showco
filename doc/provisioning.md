@@ -201,7 +201,7 @@ The script is intended to be rerunnable. Existing git checkouts fetch their
 tracked upstream branch and reset to it.
 
 On an already provisioned target, it skips unchanged base-package setup, locale
-and journal configuration, the Lyte Python installation, and unchanged active
+and journal configuration, the Python 3.13 installation, and unchanged active
 service definitions. It prints the duration of every phase. Use
 `showco go --system` when you specifically want to refresh APT packages;
 ordinary provisioning installs missing packages but does not perform an APT

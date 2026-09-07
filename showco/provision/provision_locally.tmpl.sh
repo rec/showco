@@ -46,10 +46,10 @@ install_uv() {
   curl -LsSf https://astral.sh/uv/install.sh | sudo -H -u "$SHOW_USER" sh
 }
 
-install_lyte_python() {
+install_python() {
   if sudo -H -u "$SHOW_USER" env PATH="/home/$SHOW_USER/.local/bin:$PATH" \
     bash -lc "uv python find 3.13 >/dev/null 2>&1"; then
-    printf 'Lyte Python is already installed.\n'
+    printf 'Python 3.13 is already installed.\n'
     return
   fi
   sudo -H -u "$SHOW_USER" env PATH="/home/$SHOW_USER/.local/bin:$PATH" \
@@ -679,8 +679,6 @@ main() {
     locales
     network-manager
     openssh-client
-    python3
-    python3-venv
     rsync
     sudo
     tmux
@@ -716,8 +714,8 @@ main() {
   sudo -H -u "$SHOW_USER" git config --global url."https://github.com/".insteadOf \
     "ssh://git@github.com/"
 
-  phase "installing Lyte Python"
-  install_lyte_python
+  phase "installing Python 3.13"
+  install_python
 
   phase "syncing repositories"
   sync_repo reccy "$RECCY_REPO" "$RECCY_REFNAME"
