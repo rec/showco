@@ -5,8 +5,8 @@
 Add lightweight CPU, memory, and recording-disk monitoring to Showco and render
 it on the existing Health page. The data must update with the existing
 once-per-second `/status` polling, remain useful when one source is unavailable,
-and add no background service, database, dependency, configuration, or new web
-page.
+retain a small recent history for diagnosis, and add no background service,
+database, dependency, configuration, or new web page.
 
 ## Metrics
 
@@ -99,8 +99,45 @@ thread.
 - Return partial `SystemStatus` data when any individual metric fails.
 
 The monitoring code runs only when `/status` or a status page is requested. It
-must not perform network I/O, spawn commands, write files, or retain historical
-samples beyond the previous CPU counters and latest short-lived result.
+must not perform network I/O or spawn commands.
+
+## Storage
+
+Persist one combined monitoring sample per minute as JSON Lines under:
+
+```text
+~/.local/state/showco/monitoring/YYYY-MM-DD.jsonl
+```
+
+Use Showco's existing state-directory convention rather than introducing a new
+config setting. Each record contains:
+
+- `time`: UTC timestamp in ISO 8601 form.
+- `cpu_percent`.
+- `memory_used_bytes` and `memory_total_bytes`.
+- `disk_path`, `disk_used_bytes`, `disk_total_bytes`, and
+  `disk_estimated_seconds_remaining`.
+- `disk_alert_active` and `disk_paused_for_space`.
+- `errors`: a mapping containing only diagnostics for unavailable metrics.
+
+Missing values are JSON `null`. Record the complete sample together so CPU,
+memory, and disk observations from the same status request can be correlated.
+Do not store formatted display strings or duplicate the full Recs snapshot.
+
+Keep seven UTC calendar days, including the current day. Remove older daily
+files when the first sample of a new day is written. This makes retention
+bounded without rewriting an active log or adding a rotation dependency.
+
+Use the `SystemMonitor` lock to serialize the sampling interval check and file
+append. The one-second status cache still serves the live UI, while a separate
+last-persisted time prevents browser polling from writing more than one record
+per minute. Create the monitoring directory and current file on the first
+sample; monitoring must not need a background thread.
+
+A directory creation, append, or retention failure must not invalidate the
+live status response. Report the storage problem through logging only when its
+error state changes, and try again when the next minute's sample is due. Clear
+the logged error state after a successful write.
 
 ## Health Page
 
@@ -143,6 +180,8 @@ recording, or duplicate Recs' disk-space policy.
   action history.
 - Log a metric failure only when its error state changes, so a missing procfs
   file cannot write once per second forever.
+- Log monitoring-storage failures only when their state changes; never fail or
+  delay `/status` because history could not be written.
 - A failed Recs snapshot may show the last valid disk figures together with the
   existing snapshot error; do not label stale disk data as current.
 - The `/status` endpoint and Health page must remain valid if all performance
@@ -166,7 +205,14 @@ Add focused tests for:
    units, and unavailable states.
 10. Browser refresh code updating all values, meter positions, and warning
     states while accepting zero values.
-11. Existing temperature, Recs snapshot, waveform, and Health behavior remaining
+11. One complete JSONL record being written per minute despite once-per-second
+    status requests.
+12. Missing values and metric diagnostics being represented correctly in the
+    stored record.
+13. Daily file selection and deletion of files older than seven UTC days.
+14. Storage failures leaving the live status result intact and recovering on a
+    later successful write.
+15. Existing temperature, Recs snapshot, waveform, and Health behavior remaining
     unchanged.
 
 Run the full Showco test suite, Ruff, formatting, Ty, pyupgrade, lock validation,
@@ -176,15 +222,19 @@ disk behavior; validate those separately on the target after deployment.
 ## Documentation
 
 Update `doc/architecture.md` to state that Showco samples Linux CPU and memory
-on demand and displays Recs' current recording-disk capacity. Document that the
-metrics are short-lived operational status, not historical telemetry.
+on demand, displays Recs' current recording-disk capacity, and stores
+once-per-minute monitoring samples for seven days. Document the state-directory
+path, JSONL record fields, and the distinction between the one-second live
+display and the one-minute historical sample rate.
 
 ## Acceptance Criteria
 
 - Health shows CPU, memory, and current recording-disk usage without a new tab.
 - Values refresh through the existing `/status` request once per second.
-- Monitoring adds no dependency, process, persistent data, or configuration.
+- Monitoring persists one combined JSONL sample per minute for seven days.
+- Monitoring adds no dependency, process, database, or configuration.
 - One failed metric does not hide or delay the other metrics.
+- A history write failure does not break live monitoring or the Health page.
 - Disk usage refers to Recs' actual recording destination.
 - CPU sampling is thread-safe and does not misinterpret the first sample.
 - Recs disk alerts and pauses are visible but remain controlled by Recs.
