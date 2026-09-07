@@ -7,11 +7,10 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, TypeIs
 
 import tyro
 from pydantic import BaseModel
-from typing_extensions import TypeIs
 
 from . import machine_role
 from .provision import config
