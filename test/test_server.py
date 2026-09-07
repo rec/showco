@@ -265,6 +265,24 @@ class ServerTests(unittest.TestCase):
         self.assertIn("Pi temperature", html)
         self.assertIn("52.8 °C", html)
 
+    def test_health_page_labels_paused_recording(self) -> None:
+        html = health_page(
+            models.ShowStatus(
+                recs=models.RecsStatus(
+                    service=models.ServiceStatus(name="recs", state="connected"),
+                    recording=True,
+                    paused=True,
+                    elapsed_seconds=65,
+                    file_count=3,
+                ),
+                twitcho=models.TwitchoStatus(
+                    service=models.ServiceStatus(name="twitcho", state="disabled")
+                ),
+            )
+        )
+
+        self.assertIn("paused after 1:05, 3 files", html)
+
     def test_health_page_shows_performance_meters(self) -> None:
         html = health_page(
             models.ShowStatus(

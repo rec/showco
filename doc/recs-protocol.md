@@ -1,46 +1,55 @@
 # Recs protocol used by Showco
 
-Showco uses Recs protocol version 2 over the daemon GUI endpoint. Version 2 is
-not compatible with the former version-1 command envelope.
+Showco uses Recs' public Reccy RPC endpoints. The complete public contract is
+documented in Recs at `doc/recs_protocol.md`; this document records the subset
+and integration rules used by Showco.
 
-Each connection begins with:
+## Control
 
-```json
-{"type":"hello","role":"gui","version":2}
-```
+`RecsControlClient` opens one `reccy.protocol.rpc.Client` connection per
+request, using Recs' external control endpoint and the role `showco`. It
+serializes all calls because Recs accepts only one outstanding control request.
+Status requests use a 250 ms timeout; operator actions use the protocol's
+six-second default.
 
-Recs responds with daemon hello at version 2. Showco then sends one typed
-request and reads its direct typed response before making another request on
-that connection. The protocol has no request IDs and no generic reply message.
+Showco uses these data-returning commands and validates the response `type`:
 
-Showco uses these requests:
+| Command | Response type |
+| --- | --- |
+| `capabilities` | `capabilities_result` |
+| `status_snapshot` | `status_snapshot_result` |
+| `disk_status` | `disk_status_result` |
+| `list_devices` | `devices` |
+| `mutable_attributes` | `mutable_attributes_result` |
+| `get_cfg` | `cfg_value` |
+| `get_track_names` | `track_names` |
+| `calibrate` | `calibrated` |
+| `card_replace` | `card_replace_started` |
+| `subscribe_waveforms` | `waveform_subscription` |
+| `unsubscribe_waveforms` | `waveform_subscription` |
 
-```json
-{"type":"calibrate"}
-{"type":"get_track_names"}
-{"type":"set_track_names","track_names":{"Mic":{"Lead Vocal":1}}}
-{"type":"set_noise_floor","source":"Mic","noise_floor":42.5}
-{"type":"mark","label":"guitar solo"}
-{"type":"set_key_label","key":"g","label":"guitar solo"}
-{"type":"pause_recording"}
-{"type":"resume_recording"}
-{"type":"capabilities"}
-{"type":"disk_status"}
-{"type":"list_devices"}
-{"type":"reload_profiles"}
-{"type":"status_snapshot"}
-```
+The mutation-only commands `set_cfg`, `set_track_names`, `set_tracks`,
+`set_noise_floor`, `set_key_label`, `mark`, `pause_recording`,
+`resume_recording`, `reload_profiles`, and `shutdown` must return the JSON
+string `"ok"`.
 
-Examples of corresponding response types are `calibrated`, `track_names`,
-`noise_floor_set`, `marked`, `key_label_set`, `recording_state`,
-`capabilities_result`, `disk_status_result`, `devices`, `profiles_reloaded`,
-and `status_snapshot_result`. Failures use `{"type":"error","message":"..."}`.
+The cached `status_snapshot` is the sole runtime source for the web UI's Recs
+status. It supplies recording pause state, display rows, errors, recording-disk
+status, MIDI inputs, and OSC recorders. If a request fails after a valid
+snapshot, Showco retains the data but marks the service stale and displays the
+new diagnostic. Invalid responses are errors rather than healthy empty data.
 
-`shutdown` remains its own message. Recs broadcasts it to listeners and closes
-their connections:
+Provisioning still reads `~/.local/state/recs/status.json` remotely to verify
+that the daemon's status publisher advances. That deployment check is separate
+from the web adapter.
 
-```json
-{"type":"shutdown"}
-```
+## Waveforms
 
-The full protocol definition is in Recs at `doc/recs_protocol.md`.
+Showco starts a public `rpc.EventClient` on Recs' external event endpoint before
+calling `subscribe_waveforms`. It consumes `waveform_layout` and `waveform`
+events, retaining bounded history for browser SSE clients. On shutdown it calls
+`unsubscribe_waveforms` and closes the event client.
+
+Showco does not use Recs' private GUI socket, daemon metadata, GUI handshake, or
+private request models. It also does not execute the `recs control` command as a
+subprocess; that CLI and Showco call the same public RPC protocol directly.

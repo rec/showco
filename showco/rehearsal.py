@@ -27,14 +27,12 @@ class RehearsalRecsClient(RecsClient):
             service=models.ServiceStatus(
                 name="recs",
                 state="connected",
-                updated_at=time.time(),
             ),
             recording=True,
             elapsed_seconds=elapsed,
             recorded_seconds=max(0.0, elapsed - 0.2),
             file_size=elapsed * 9_000_000,
             file_count=18,
-            client_count=1,
             channels=rehearsal_channels(elapsed, self.rehearsal_tracks),
             errors=[],
             disk=models.RecordingDiskStatus(

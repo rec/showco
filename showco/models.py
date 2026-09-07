@@ -21,7 +21,6 @@ class ServiceStatus(BaseModel, frozen=True):
     name: str
     state: str
     last_error: str | None = None
-    updated_at: float | None = None
 
     @property
     def fresh(self) -> bool:
@@ -74,11 +73,11 @@ class RecordingDiskStatus(BaseModel, frozen=True):
 class RecsStatus(BaseModel, frozen=True):
     service: ServiceStatus
     recording: bool = False
+    paused: bool = False
     elapsed_seconds: float | None = None
     recorded_seconds: float | None = None
     file_size: float | None = None
     file_count: int | None = None
-    client_count: int = 0
     channels: list[ChannelLevel] = Field(default_factory=list)
     errors: list[ErrorRecord] = Field(default_factory=list)
     snapshot_error: str | None = None

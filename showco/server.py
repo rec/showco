@@ -410,7 +410,11 @@ def make_server(
 ) -> ThreadingHTTPServer:
     handler = type("ConfiguredShowcoHandler", (ShowcoHandler,), {})
     recs_client = recs or RecsClient()
-    waveforms = WaveformBridge() if isinstance(recs_client, RecsClient) else None
+    waveforms = (
+        WaveformBridge(control=recs_client.control)
+        if type(recs_client) is RecsClient
+        else None
+    )
     if waveforms is not None:
         waveforms.start()
     system_monitor = system or SystemMonitor()
@@ -823,6 +827,8 @@ def _recording_text(status: models.ShowStatus) -> str:
         return "stopped"
     elapsed = _duration(status.recs.elapsed_seconds)
     files = status.recs.file_count if status.recs.file_count is not None else "?"
+    if status.recs.paused:
+        return f"paused after {elapsed}, {files} files"
     return f"recording for {elapsed}, {files} files"
 
 
