@@ -19,11 +19,10 @@ from recs.base.waveform import (
 )
 from recs.daemon import gui_protocol
 
-from showco import models, recs
+from showco import models, recs, recs_snapshot
 from showco.recs import (
     RecsClient,
     WaveformBridge,
-    _osc_status,
     channel_levels,
     level_state,
     replace_track_name,
@@ -209,25 +208,6 @@ class RecsTests(unittest.TestCase):
         self.assertTrue(events.closed)
         self.assertFalse(bridge.thread.is_alive())
 
-    def test_reads_named_osc_statuses(self) -> None:
-        statuses = _osc_status(
-            {
-                "osc": [
-                    {
-                        "name": "X18",
-                        "state": "running",
-                        "path": "X18.jsonl",
-                        "size": 12,
-                    }
-                ]
-            }
-        )
-
-        self.assertEqual(statuses[0].name, "X18")
-        self.assertEqual(statuses[0].state, "running")
-        self.assertEqual(statuses[0].log_path, "X18.jsonl")
-        self.assertEqual(statuses[0].log_size, 12)
-
     def test_status_changes_command_checks_successive_updated_at_values(self) -> None:
         command = recs.status_changes_command()
 
@@ -315,7 +295,7 @@ class RecsTests(unittest.TestCase):
                 )
             )
             client = RecsClient(status_path=path)
-            with mock.patch("showco.recs.rpc.Client") as rpc_client:
+            with mock.patch("showco.recs_snapshot.rpc.Client") as rpc_client:
                 rpc_client.return_value.call.side_effect = TimeoutError("slow")
                 status = client.status()
 
@@ -324,7 +304,7 @@ class RecsTests(unittest.TestCase):
         rpc_client.assert_called_once_with(
             recs.paths.external_control_endpoint(),
             role="showco",
-            timeout=recs.STATUS_SNAPSHOT_TIMEOUT_SECONDS,
+            timeout=recs_snapshot.STATUS_SNAPSHOT_TIMEOUT_SECONDS,
         )
 
     def test_status_snapshot_uses_short_lived_cache(self) -> None:
@@ -339,7 +319,7 @@ class RecsTests(unittest.TestCase):
                 )
             )
             client = RecsClient(status_path=path)
-            with mock.patch("showco.recs.rpc.Client") as rpc_client:
+            with mock.patch("showco.recs_snapshot.rpc.Client") as rpc_client:
                 rpc_client.return_value.call.return_value = {"midi": []}
                 client.status()
                 client.status()
