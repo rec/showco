@@ -644,6 +644,7 @@ def actions_page(
           {button("recs-calibrate", "Calibrate noise floor")}
           {noise_floor}
           {button("recs-reload-profiles", "Reload Recs profiles")}
+          {"".join(marker_button(label) for label in SHOW_MARKERS)}
           {field_action("recs-marker", "Create Recs marker", ["label"])}
           {field_action("recs-key-label", "Set Recs key label", ["key", "label"])}
           {button("recs-pause-recording", "Pause recording")}
@@ -821,6 +822,16 @@ def button(action: str, label: str, *, confirm: bool = False) -> str:
     return f"""
     <form method="post"{confirmation}>
       <input type="hidden" name="action" value="{html.escape(action)}">
+      <button>{html.escape(label)}</button>
+    </form>
+    """
+
+
+def marker_button(label: str) -> str:
+    return f"""
+    <form method="post">
+      <input type="hidden" name="action" value="recs-marker">
+      <input type="hidden" name="label" value="{html.escape(label)}">
       <button>{html.escape(label)}</button>
     </form>
     """
@@ -1116,6 +1127,8 @@ RECS_ACTIONS = {
     "recs-set-noise-floor": "set_noise_floor",
     "recs-status-snapshot": "status_snapshot",
 }
+
+SHOW_MARKERS = ["Show start", "Song start", "Interval", "Show end"]
 
 TWITCHO_ACTIONS = {
     "twitcho-mute": "mute",
