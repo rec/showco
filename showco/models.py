@@ -152,6 +152,12 @@ class RecordingProgress(BaseModel, frozen=True):
     message: str = "unknown"
 
 
+class InputCheck(BaseModel, frozen=True):
+    name: str
+    ok: bool
+    message: str
+
+
 class ShowStatus(BaseModel, frozen=True):
     recs: RecsStatus
     twitcho: TwitchoStatus
@@ -165,5 +171,6 @@ class ShowStatus(BaseModel, frozen=True):
     readiness: ReadinessStatus = Field(default_factory=ReadinessStatus)
     incidents: list[Incident] = Field(default_factory=list)
     recording_progress: RecordingProgress = Field(default_factory=RecordingProgress)
+    input_checks: list[InputCheck] = Field(default_factory=list)
     revision: str | None = None
     run_started_at: float = 0.0

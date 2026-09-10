@@ -489,6 +489,23 @@
     container.replaceChildren(list);
   }
 
+  function updateInputChecks(checks) {
+    const container = document.getElementById("input-checks");
+    if (!container) return;
+    if (!checks.length) {
+      container.textContent = "No recording inputs.";
+      return;
+    }
+    const list = document.createElement("ul");
+    for (const check of checks) {
+      const item = document.createElement("li");
+      item.className = check.ok ? "ok" : "failed";
+      item.textContent = `${check.name}: ${check.message}`;
+      list.append(item);
+    }
+    container.replaceChildren(list);
+  }
+
   function updateStatus() {
     return fetch("/status", { cache: "no-store" })
       .then(response => {
@@ -519,6 +536,7 @@
       updatePerformance(status);
       updateReadiness(status.readiness);
       updateIncidents(status.incidents);
+      updateInputChecks(status.input_checks);
       const temperature = document.getElementById("temperature");
       if (temperature) {
         temperature.textContent = status.system.temperature_c === null
