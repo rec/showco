@@ -554,6 +554,16 @@ def valid_data_response(command: str, value: object) -> bool:
             isinstance(value.get(k), str) and bool(value.get(k))
             for k in ("deadline", "old_mount", "old_uuid")
         )
+    if command == "new_session":
+        return all(
+            isinstance(value.get(k), str) and bool(value.get(k))
+            for k in (
+                "session_id",
+                "session_directory",
+                "previous_record_path",
+                "record_path",
+            )
+        )
     if command == "disk_status":
         disk = {k: v for k, v in value.items() if k != "type"}
         return not isinstance(recs_snapshot.recording_disk_status(disk), str)
@@ -714,6 +724,7 @@ ACTION_COMMANDS = {
     "disk_status",
     "list_devices",
     "mark",
+    "new_session",
     "pause_recording",
     "reload_profiles",
     "resume_recording",
@@ -727,5 +738,6 @@ DATA_RESPONSE_TYPES = {
     "card_replace": "card_replace_started",
     "disk_status": "disk_status_result",
     "list_devices": "devices",
+    "new_session": "new_session_started",
     "status_snapshot": "status_snapshot_result",
 }

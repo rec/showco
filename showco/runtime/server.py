@@ -663,6 +663,7 @@ def actions_page(
           {"".join(marker_button(label) for label in SHOW_MARKERS)}
           {field_action("recs-marker", "Create Recs marker", ["label"])}
           {field_action("recs-key-label", "Set Recs key label", ["key", "label"])}
+          {button("recs-new-session", "Start new recording session", confirm=True)}
           {button("recs-pause-recording", "Pause recording")}
           {button("recs-resume-recording", "Resume recording")}
           {button("recs-status-snapshot", "Recs status snapshot")}
@@ -1137,6 +1138,7 @@ RECS_ACTIONS = {
     "recs-key-label": "set_key_label",
     "recs-list-devices": "list_devices",
     "recs-marker": "mark",
+    "recs-new-session": "new_session",
     "recs-pause-recording": "pause_recording",
     "recs-reload-profiles": "reload_profiles",
     "recs-resume-recording": "resume_recording",

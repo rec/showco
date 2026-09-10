@@ -211,6 +211,16 @@ class RecsTests(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertEqual(result.message, "recs sent invalid capabilities response")
 
+    def test_new_session_reports_the_new_session(self) -> None:
+        control = mock.Mock(spec=RecsControlClient)
+        control.call.return_value = action_response("new_session")
+
+        result = RecsClient(control=control).action("new_session")
+
+        self.assertTrue(result.ok)
+        self.assertIn('"session_id": "session-2"', result.message)
+        control.call.assert_called_once_with("new_session")
+
     def test_transport_failure_names_command(self) -> None:
         control = mock.Mock(spec=RecsControlClient)
         control.call.side_effect = ConnectionError("refused")
@@ -481,6 +491,14 @@ def action_response(command: str) -> object:
                     "online": True,
                 }
             ],
+        }
+    if command == "new_session":
+        return {
+            "type": "new_session_started",
+            "session_id": "session-2",
+            "session_directory": "/recordings/session-2",
+            "previous_record_path": "/recordings/session-1/session-record.jsonl",
+            "record_path": "/recordings/session-2/session-record.jsonl",
         }
     if command == "status_snapshot":
         return status_snapshot()
