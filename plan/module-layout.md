@@ -32,6 +32,7 @@ Move the target-machine web service and all of its direct adapters here:
 - `models.py`
 - `recs.py`, `recs_control.py`, `recs_snapshot.py`
 - `mixer.py`, `lyte.py`, `system.py`, `monitoring.py`
+- `services.py`
 - `rehearsal.py`
 - `readiness.py`, `incidents.py`, `input_check.py`, `recording_progress.py`
 - `revision.py`
