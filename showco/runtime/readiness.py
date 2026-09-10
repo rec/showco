@@ -20,7 +20,7 @@ def status(value: models.ShowStatus) -> models.ReadinessStatus:
         _disk_check(value.recs),
         *[_mixer_check(mixer) for mixer in value.mixers],
         _optional_service_check("Lyte", value.lyte.service),
-        _optional_service_check("Twitcho", value.twitcho.service),
+        _optional_service_check("Streamo", value.streamo.service),
     ]
     return models.ReadinessStatus(
         checks=checks,

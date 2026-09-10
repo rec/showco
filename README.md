@@ -2,11 +2,11 @@
 
 Showco is the browser-facing control and status service for a self-contained
 live-show system. It coordinates recording through Recs, optional lighting
-through Lyte, optional Twitch streaming through Twitcho, mixer reachability,
+through Lyte, optional Twitch streaming through Streamo, mixer reachability,
 and Raspberry Pi health without taking ownership of those services' core work.
 
 Showco requires Python 3.13. The deployed system uses five sibling repositories:
-`reccy`, `recs`, `twitcho`, `lyte`, and `showco`.
+`reccy`, `recs`, `streamo`, `lyte`, and `showco`.
 
 ## Web interface
 
@@ -17,7 +17,7 @@ The target runs a standard-library `ThreadingHTTPServer`. Its pages are:
 - **Health**: service state, CPU, memory, recording-disk use, temperature,
   mixers, MIDI, OSC recorders, and recent Recs errors.
 - **Attributes**: mutable Recs configuration.
-- **Actions**: Recs, Lyte, and optional Twitcho commands with recent results.
+- **Actions**: Recs, Lyte, and optional Streamo commands with recent results.
 - **Errors**: Recs errors from the current Showco run.
 
 The root URL is the Channels page. `GET /status` provides the current JSON
@@ -41,7 +41,7 @@ showco prepare-card            # prepare and eject an Imager-written SD card
 ```
 
 Internal target commands live under `showco run`. For local UI development,
-`showco run --rehearsal` starts the web server with simulated Recs, Twitcho,
+`showco run --rehearsal` starts the web server with simulated Recs, Streamo,
 system, and mixer data. It does not simulate waveform events or Lyte.
 
 ## Documentation

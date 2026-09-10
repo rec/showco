@@ -14,20 +14,20 @@ from .provision import network
 from .runtime import rehearsal, services
 from .runtime.mixer import MixersMonitor, load_mixer_specs
 from .runtime.server import make_server
-from .twitcho import auth, client
+from .streamo import auth, client, config
 
 
 class WebUiOptions(BaseModel, frozen=True):
     host: str = "127.0.0.1"
     port: int = 17_352
     mixers_config: Path = Path()
-    twitcho_enabled: bool = False
+    streamo_enabled: bool = False
     lyte_enabled: bool = False
     rehearsal_mode: Annotated[
         bool,
         tyro.conf.arg(
             name="rehearsal",
-            help="run with simulated recs and twitcho services",
+            help="run with simulated recs and streamo services",
         ),
     ] = False
 
@@ -40,11 +40,11 @@ def run_web_ui(options: WebUiOptions) -> int:
             options.host,
             options.port,
             recs=rehearsal.RehearsalRecsClient(),
-            twitcho=rehearsal.RehearsalTwitchoClient(),
+            streamo=rehearsal.RehearsalStreamoClient(),
             system=rehearsal.RehearsalSystemMonitor(),
             mixers=rehearsal.RehearsalMixersMonitor(),
-            twitcho_restart=rehearsal.restart_twitcho,
-            twitcho_enabled=True,
+            streamo_restart=rehearsal.restart_streamo,
+            streamo_enabled=True,
         )
         print(f"showco rehearsal listening on http://{options.host}:{options.port}")
     else:
@@ -52,7 +52,7 @@ def run_web_ui(options: WebUiOptions) -> int:
             options.host,
             options.port,
             mixers=MixersMonitor(load_mixer_specs(options.mixers_config)),
-            twitcho_enabled=options.twitcho_enabled,
+            streamo_enabled=options.streamo_enabled,
             lyte_enabled=options.lyte_enabled,
             performance_enabled=True,
         )
@@ -79,7 +79,7 @@ def main(argv: list[str] | None = None) -> int:
             "go": go.main,
             "logs": logs.main,
             "python": python.main,
-            "twitcho": twitcho_command,
+            "streamo": streamo_command,
         },
         arguments,
         prog="showco",
@@ -93,8 +93,10 @@ def run_command(arguments: list[str]) -> int:
         return services.install_main(arguments[1:])
     if arguments[:1] == ["service-status"]:
         return services.status_main(arguments[1:])
-    if arguments[:1] == ["twitcho-health"]:
+    if arguments[:1] == ["streamo-health"]:
         return client.health_main(arguments[1:])
+    if arguments[:1] == ["streamo-config"]:
+        return config.main(arguments[1:])
     options = tyro.cli(
         WebUiOptions,
         args=arguments,
@@ -103,6 +105,6 @@ def run_command(arguments: list[str]) -> int:
     return run_web_ui(options)
 
 
-def twitcho_command(arguments: list[str]) -> int:
-    machine_role.require_target_machine("showco twitcho")
+def streamo_command(arguments: list[str]) -> int:
+    machine_role.require_target_machine("showco streamo")
     return auth.main(arguments)

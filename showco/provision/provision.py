@@ -26,7 +26,7 @@ class GoOptions(BaseModel, frozen=True):
     root: Path | None = None
     reccy_repo: str | None = None
     recs_repo: str | None = None
-    twitcho_repo: str | None = None
+    streamo_repo: str | None = None
     showco_repo: str | None = None
     lyte_repo: str | None = None
     lyte_enabled: bool | None = None
@@ -54,7 +54,7 @@ def resolved_config(options: GoOptions) -> config.Config:
         root=options.root,
         reccy_repo=options.reccy_repo,
         recs_repo=options.recs_repo,
-        twitcho_repo=options.twitcho_repo,
+        streamo_repo=options.streamo_repo,
         showco_repo=options.showco_repo,
         lyte_repo=options.lyte_repo,
         lyte_enabled=options.lyte_enabled,

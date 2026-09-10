@@ -9,15 +9,15 @@ from contextlib import contextmanager
 from http.server import ThreadingHTTPServer
 from urllib import parse, request
 
-from showco.runtime.rehearsal import RehearsalRecsClient, RehearsalTwitchoClient
+from showco.runtime.rehearsal import RehearsalRecsClient, RehearsalStreamoClient
 from showco.runtime.server import make_server
 
 
 class SmokeTests(unittest.TestCase):
     def test_rehearsal_server_serves_status_pages_and_accepts_actions(self) -> None:
         recs = RehearsalRecsClient()
-        twitcho = RehearsalTwitchoClient()
-        with running_rehearsal_server(recs, twitcho) as url:
+        streamo = RehearsalStreamoClient()
+        with running_rehearsal_server(recs, streamo) as url:
             channels = read_url(f"{url}/channels")
             self.assertIn("Recording channels", channels)
             health = read_url(f"{url}/health")
@@ -25,19 +25,19 @@ class SmokeTests(unittest.TestCase):
 
             status = read_json(f"{url}/status")
             self.assertEqual(status["recs"]["service"]["state"], "connected")
-            self.assertEqual(status["twitcho"]["service"]["state"], "connected")
+            self.assertEqual(status["streamo"]["service"]["state"], "connected")
 
-            response = post_form(f"{url}/actions", {"action": "twitcho-mute"})
+            response = post_form(f"{url}/actions", {"action": "streamo-mute"})
             self.assertEqual(response.status, 200)
-            self.assertTrue(twitcho.status().muted)
+            self.assertTrue(streamo.status().muted)
 
             actions = response.read().decode()
-            self.assertIn("rehearsal twitcho mute succeeded", actions)
+            self.assertIn("rehearsal streamo mute succeeded", actions)
 
     def test_rehearsal_server_exercises_recs_calibration(self) -> None:
         recs = RehearsalRecsClient()
-        twitcho = RehearsalTwitchoClient()
-        with running_rehearsal_server(recs, twitcho) as url:
+        streamo = RehearsalStreamoClient()
+        with running_rehearsal_server(recs, streamo) as url:
             response = post_form(f"{url}/actions", {"action": "recs-calibrate"})
 
             self.assertEqual(response.status, 200)
@@ -46,8 +46,8 @@ class SmokeTests(unittest.TestCase):
 
     def test_rehearsal_server_returns_track_name_result_as_json(self) -> None:
         recs = RehearsalRecsClient()
-        twitcho = RehearsalTwitchoClient()
-        with running_rehearsal_server(recs, twitcho) as url:
+        streamo = RehearsalStreamoClient()
+        with running_rehearsal_server(recs, streamo) as url:
             response = post_json_form(
                 f"{url}/actions",
                 {
@@ -70,14 +70,14 @@ class SmokeTests(unittest.TestCase):
 
 @contextmanager
 def running_rehearsal_server(
-    recs: RehearsalRecsClient, twitcho: RehearsalTwitchoClient
+    recs: RehearsalRecsClient, streamo: RehearsalStreamoClient
 ) -> Iterator[str]:
     server = make_server(
         "127.0.0.1",
         unused_port(),
         recs=recs,
-        twitcho=twitcho,
-        twitcho_enabled=True,
+        streamo=streamo,
+        streamo_enabled=True,
     )
     thread = threading.Thread(target=server.serve_forever)
     thread.start()

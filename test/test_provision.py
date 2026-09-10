@@ -152,7 +152,7 @@ class ProvisionTests(unittest.TestCase):
 
         self.assertEqual(parsed.git.reccy.url, "https://github.com/rec/reccy.git")
         self.assertEqual(parsed.git.recs.url, "https://github.com/rec/recs.git")
-        self.assertEqual(parsed.git.twitcho.url, "https://github.com/rec/twitcho.git")
+        self.assertEqual(parsed.git.streamo.url, "https://github.com/rec/streamo.git")
         self.assertEqual(parsed.git.showco.url, "https://github.com/rec/showco.git")
         self.assertEqual(parsed.git.lyte.url, "https://github.com/rec/lyte.git")
 
@@ -355,7 +355,7 @@ class ProvisionTests(unittest.TestCase):
             ),
             self.assertRaisesRegex(SystemExit, "no unconnected Wi-Fi interface"),
         ):
-            remote.preflight_network_config(config)
+            remote.preflight_network(config)
 
     def test_network_preflight_preserves_connected_external_wifi(self) -> None:
         config = make_config(values(networks=networks(x18=False)))
@@ -363,7 +363,7 @@ class ProvisionTests(unittest.TestCase):
             "showco.provision.ssh.capture_ssh",
             return_value="wlan0:wifi:disconnected\nwlan1:wifi:connected\n",
         ) as capture_ssh:
-            topology = remote.preflight_network_config(config)
+            topology = remote.preflight_network(config)
 
         capture_ssh.assert_called_once_with(
             config,
@@ -379,7 +379,7 @@ class ProvisionTests(unittest.TestCase):
                 "wlan0:wifi:connected:Livebox\nwlan1:wifi:connected:showco-private\n"
             ),
         ):
-            topology = remote.preflight_network_config(config)
+            topology = remote.preflight_network(config)
 
         self.assertEqual(topology, network_config.NetworkTopology.PRIVATE)
 
@@ -394,7 +394,7 @@ class ProvisionTests(unittest.TestCase):
             ) as run_ssh,
             mock.patch("showco.provision.ssh.wait_for_ssh"),
             mock.patch(
-                "showco.provision.remote.preflight_network_config",
+                "showco.provision.remote.preflight_network",
                 return_value=network_config.NetworkTopology.PRIVATE,
             ),
             mock.patch("showco.provision.remote.validate_remote_worktrees"),
@@ -425,7 +425,7 @@ class ProvisionTests(unittest.TestCase):
         calls: list[str] = []
         config = make_config(values(networks=networks(x18=False)))
 
-        def preflight_network_config(config: config.Config) -> None:
+        def preflight_network(config: config.Config) -> None:
             calls.append("preflight")
 
         def validate_remote_worktrees(config: config.Config) -> None:
@@ -437,8 +437,8 @@ class ProvisionTests(unittest.TestCase):
         with (
             mock.patch("showco.provision.ssh.run_ssh"),
             mock.patch(
-                "showco.provision.remote.preflight_network_config",
-                side_effect=preflight_network_config,
+                "showco.provision.remote.preflight_network",
+                side_effect=preflight_network,
             ),
             mock.patch(
                 "showco.provision.remote.validate_remote_worktrees",
@@ -472,7 +472,7 @@ class ProvisionTests(unittest.TestCase):
             mock.patch("showco.provision.ssh.wait_for_ssh"),
             mock.patch("showco.provision.remote.validate_remote_worktrees"),
             mock.patch(
-                "showco.provision.remote.preflight_network_config",
+                "showco.provision.remote.preflight_network",
                 return_value=network_config.NetworkTopology.PRIVATE,
             ),
             mock.patch("showco.provision.ssh.run_scp"),
@@ -515,7 +515,7 @@ class ProvisionTests(unittest.TestCase):
         with (
             mock.patch("showco.provision.ssh.run_ssh"),
             mock.patch(
-                "showco.provision.remote.preflight_network_config",
+                "showco.provision.remote.preflight_network",
                 return_value=network_config.NetworkTopology.PRIVATE,
             ),
             mock.patch("showco.provision.remote.validate_remote_worktrees"),
@@ -554,7 +554,7 @@ class ProvisionTests(unittest.TestCase):
         with (
             mock.patch("showco.provision.ssh.run_ssh"),
             mock.patch(
-                "showco.provision.remote.preflight_network_config",
+                "showco.provision.remote.preflight_network",
                 return_value=network_config.NetworkTopology.PRIVATE,
             ),
             mock.patch("showco.provision.remote.validate_remote_worktrees"),
@@ -586,7 +586,7 @@ class ProvisionTests(unittest.TestCase):
         with (
             mock.patch("showco.provision.ssh.run_ssh"),
             mock.patch(
-                "showco.provision.remote.preflight_network_config",
+                "showco.provision.remote.preflight_network",
                 return_value=network_config.NetworkTopology.PRIVATE,
             ),
             mock.patch("showco.provision.remote.validate_remote_worktrees"),
@@ -635,11 +635,11 @@ class ProvisionTests(unittest.TestCase):
     def test_lyte_service_is_a_startup_check(self) -> None:
         self.assertIn("Lyte service", verify.STARTUP_CHECK_NAMES)
 
-    def test_twitcho_health_command_uses_target_showco(self) -> None:
-        command = verify.showco_twitcho_health_command(Path("/code"))
+    def test_streamo_health_command_uses_target_showco(self) -> None:
+        command = verify.showco_streamo_health_command(Path("/code"))
 
         self.assertIn("cd /code/showco", command)
-        self.assertIn("uv run --locked showco run twitcho-health", command)
+        self.assertIn("uv run --locked showco run streamo-health", command)
 
     def test_initial_wait_for_ssh_retries_until_connected(self) -> None:
         config = make_config(values(networks=networks(x18=False)))
@@ -838,7 +838,7 @@ class ProvisionTests(unittest.TestCase):
     def test_remote_script_uses_locked_uv_run(self) -> None:
         self.assertIn("uv run --locked showco run network-config", script.REMOTE_SCRIPT)
         self.assertIn("uv run --locked recs daemon install", script.REMOTE_SCRIPT)
-        self.assertIn("uv run --locked twitcho daemon install", script.REMOTE_SCRIPT)
+        self.assertIn("uv run --locked streamo daemon install", script.REMOTE_SCRIPT)
         self.assertIn("uv run --locked lyte daemon install", script.REMOTE_SCRIPT)
         self.assertIn(
             "uv run --locked showco run install-service", script.REMOTE_SCRIPT
@@ -852,8 +852,8 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn("iw dev", script.REMOTE_SCRIPT)
         self.assertIn("Lyte:", script.REMOTE_SCRIPT)
         self.assertIn("lyte service:", script.REMOTE_SCRIPT)
-        self.assertIn("Twitcho:", script.REMOTE_SCRIPT)
-        self.assertIn("twitcho service:", script.REMOTE_SCRIPT)
+        self.assertIn("Streamo:", script.REMOTE_SCRIPT)
+        self.assertIn("streamo service:", script.REMOTE_SCRIPT)
         self.assertIn("PROVISIONING-REPORT.txt", script.REMOTE_SCRIPT)
 
     def test_remote_script_marks_target_machine(self) -> None:
@@ -882,7 +882,7 @@ class ProvisionTests(unittest.TestCase):
     def test_remote_script_restarts_changed_services(self) -> None:
         self.assertIn("user_systemctl restart recs.service", script.REMOTE_SCRIPT)
         self.assertIn("user_systemctl restart showco.service", script.REMOTE_SCRIPT)
-        self.assertIn("user_systemctl restart twitcho.service", script.REMOTE_SCRIPT)
+        self.assertIn("user_systemctl restart streamo.service", script.REMOTE_SCRIPT)
         self.assertIn("user_systemctl restart lyte.service", script.REMOTE_SCRIPT)
 
     def test_remote_script_reboots_only_when_the_system_requires_it(self) -> None:
@@ -1030,7 +1030,7 @@ class ProvisionTests(unittest.TestCase):
             remote.remote_worktree_command(Path("/srv/show-projects"))
         )[2]
 
-        self.assertIn("for name in showco reccy recs twitcho lyte", command)
+        self.assertIn("for name in showco reccy recs streamo lyte", command)
         self.assertIn('git -C "$path" status --short --untracked-files=no', command)
         self.assertNotIn("sed -E '/^.. (.*\\/)?uv\\.lock$/d'", command)
         self.assertIn('printf \'%s:\\n%s\\n\' "$name" "$status"', command)
@@ -1074,7 +1074,7 @@ class ProvisionTests(unittest.TestCase):
 
         command = script.remote_command(config, "/tmp/provision.sh")
 
-        self.assertIn("TWITCHO_ENABLED=true", command)
+        self.assertIn("STREAMO_ENABLED=true", command)
 
     def test_wait_for_rebooted_ssh_waits_for_disconnect_then_connect(self) -> None:
         config = make_config(values(networks=networks(x18=False)))
@@ -1232,7 +1232,7 @@ def values(**overrides: object) -> dict[str, object]:
         "git": {
             "reccy": {"url": "https://github.com/rec/reccy.git"},
             "recs": {"url": "https://github.com/rec/recs.git"},
-            "twitcho": {"url": "https://github.com/rec/twitcho.git"},
+            "streamo": {"url": "https://github.com/rec/streamo.git"},
             "lyte": {"url": "https://github.com/rec/lyte.git"},
             "showco": {"url": "https://github.com/rec/showco.git"},
         },

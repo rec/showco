@@ -27,7 +27,7 @@ showco logs showco recs --lines 100
 
 Replace `USER@HOST` with the target SSH login.
 
-Add `lyte` or `twitcho` to the service and log commands when enabled.
+Add `lyte` or `streamo` to the service and log commands when enabled.
 
 ## 2. Storage
 
@@ -137,13 +137,13 @@ Pass criteria:
   permits another automatic test.
 - A failed test appears in Recent actions and both service logs.
 
-## 8. Twitcho and Twitch
+## 8. Streamo and Twitch
 
 Only required when Twitch is enabled.
 
 Pass criteria:
 
-- Twitcho starts as a user service and Showco reports it connected.
+- Streamo starts as a user service and Showco reports it connected.
 - Audio time and bitrate advance while streaming.
 - Mute and unmute affect the stream path.
 - Restart creates a fresh streaming attempt and stop terminates cleanly.
@@ -189,6 +189,6 @@ Pass criteria:
 - Showco remains responsive on the tablet.
 - Waveforms remain smooth and recover after reconnecting the browser.
 - Lyte continues sending frames when enabled.
-- Twitcho remains connected or reports recovery failures clearly.
+- Streamo remains connected or reports recovery failures clearly.
 - The final recordings remain readable after all services stop and the disk is
   remounted.

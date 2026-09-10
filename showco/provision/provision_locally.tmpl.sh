@@ -352,7 +352,7 @@ write_network_config_files() {
     printf '\n[networks.external.wifi.external]\n'
     write_toml_network_values "$EXTERNAL_WIFI_SSID" "" ""
     printf '\n[twitch]\n'
-    printf 'enabled = %s\n' "$TWITCHO_ENABLED"
+    printf 'enabled = %s\n' "$STREAMO_ENABLED"
     printf '\n[lyte]\n'
     printf 'enabled = %s\n' "$LYTE_ENABLED"
     write_toml_string daemon_config "$LYTE_DAEMON_CONFIG"
@@ -362,9 +362,9 @@ write_network_config_files() {
     printf '\n[git.recs]\n'
     write_toml_string url "$RECS_REPO"
     write_toml_string refname "$RECS_REFNAME"
-    printf '\n[git.twitcho]\n'
-    write_toml_string url "$TWITCHO_REPO"
-    write_toml_string refname "$TWITCHO_REFNAME"
+    printf '\n[git.streamo]\n'
+    write_toml_string url "$STREAMO_REPO"
+    write_toml_string refname "$STREAMO_REFNAME"
     printf '\n[git.lyte]\n'
     write_toml_string url "$LYTE_REPO"
     write_toml_string refname "$LYTE_REFNAME"
@@ -404,7 +404,7 @@ configure_network() {
   configuration_hash=$(printf '%s\0' \
     "$NETWORK_TOPOLOGY" "$X18" "$SWAP_WIFI" "$SHOWCO_PI_X18_SUBNET" \
     "$SHOWCO_X18_HOST" "$PRIVATE_WIFI_SSID" "$PRIVATE_WIFI_PASSWORD" \
-    "$EXTERNAL_WIFI_SSID" "$EXTERNAL_WIFI_PASSWORD" "$TWITCHO_ENABLED" \
+    "$EXTERNAL_WIFI_SSID" "$EXTERNAL_WIFI_PASSWORD" "$STREAMO_ENABLED" \
     | sha256sum | awk '{print $1}')
   if [[ -f "$state_file" && "$(cat "$state_file")" == "$configuration_hash" ]]; then
     printf 'Network configuration is unchanged.\n'
@@ -432,8 +432,8 @@ showco_args() {
     --port "$SHOWCO_PORT"
   )
   args+=(--mixers-config "/home/$SHOW_USER/.config/showco/mixers.toml")
-  if [[ "$TWITCHO_ENABLED" == true ]]; then
-    args+=(--twitcho-enabled)
+  if [[ "$STREAMO_ENABLED" == true ]]; then
+    args+=(--streamo-enabled)
   fi
   if [[ "$LYTE_ENABLED" == true ]]; then
     args+=(--lyte-enabled)
@@ -517,7 +517,7 @@ install_showco_service() {
   uid=$(id -u "$SHOW_USER")
   input=$(service_input "$(git -C "$ROOT/showco" rev-parse HEAD)
 $SHOWCO_PORT
-$TWITCHO_ENABLED
+$STREAMO_ENABLED
 $LYTE_ENABLED
 $SHOWCO_MIXERS_TOML")
   if service_is_current showco "$input"; then
@@ -532,34 +532,62 @@ $SHOWCO_MIXERS_TOML")
   record_service_state showco "$input"
 }
 
-install_twitcho_service() {
+migrate_streamo_configuration() {
+  local source="/home/$SHOW_USER/.config/twitcho/config.json"
+  local target="/home/$SHOW_USER/.config/streamo/config.toml"
+  local quoted_source
+  local quoted_target
+  local uid
+  if [[ "$STREAMO_ENABLED" != true || -f "$target" || ! -f "$source" ]]; then
+    return
+  fi
+  quoted_source=$(printf '%q' "$source")
+  quoted_target=$(printf '%q' "$target")
+  uid=$(id -u "$SHOW_USER")
+  sudo -H -u "$SHOW_USER" \
+    env XDG_RUNTIME_DIR="/run/user/$uid" \
+    PATH="$ROOT/showco/.venv/bin:/home/$SHOW_USER/.local/bin:$PATH" \
+    bash -lc "cd '$ROOT/showco' && uv run --locked showco run streamo-config --source $quoted_source --target $quoted_target"
+  printf 'Converted Twitcho configuration to Streamo TOML.\n'
+}
+
+uninstall_twitcho_service() {
+  local command="$ROOT/twitcho/.venv/bin/twitcho"
+  if [[ ! -x "$command" ]]; then
+    return
+  fi
+  "$command" daemon stop >/dev/null 2>&1 || true
+  "$command" daemon uninstall >/dev/null 2>&1 || true
+}
+
+install_streamo_service() {
   local config_path
   local quoted_config
   local uid
   local input
-  if [[ "$TWITCHO_ENABLED" != true ]]; then
-    printf 'Twitcho service is disabled.\n'
+  if [[ "$STREAMO_ENABLED" != true ]]; then
+    printf 'Streamo service is disabled.\n'
     return
   fi
-  config_path="/home/$SHOW_USER/.config/twitcho/config.json"
+  config_path="/home/$SHOW_USER/.config/streamo/config.toml"
   if [[ ! -f "$config_path" ]]; then
-    printf 'ERROR: Twitcho configuration does not exist: %s\n' "$config_path" >&2
+    printf 'ERROR: Streamo configuration does not exist: %s\n' "$config_path" >&2
     return 1
   fi
   quoted_config=$(printf '%q' "$config_path")
   uid=$(id -u "$SHOW_USER")
-  input=$(service_input "$(git -C "$ROOT/twitcho" rev-parse HEAD)
+  input=$(service_input "$(git -C "$ROOT/streamo" rev-parse HEAD)
 $(sha256sum "$config_path" | awk '{print $1}')")
-  if service_is_current twitcho "$input"; then
-    printf 'Twitcho service is already installed.\n'
+  if service_is_current streamo "$input"; then
+    printf 'Streamo service is already installed.\n'
     return
   fi
   sudo -H -u "$SHOW_USER" \
     env XDG_RUNTIME_DIR="/run/user/$uid" \
-    PATH="$ROOT/twitcho/.venv/bin:/home/$SHOW_USER/.local/bin:$PATH" \
-    bash -lc "cd '$ROOT/twitcho' && uv run --locked twitcho daemon install --config $quoted_config"
-  user_systemctl restart twitcho.service
-  record_service_state twitcho "$input"
+    PATH="$ROOT/streamo/.venv/bin:/home/$SHOW_USER/.local/bin:$PATH" \
+    bash -lc "cd '$ROOT/streamo' && uv run --locked streamo daemon install --config $quoted_config"
+  user_systemctl restart streamo.service
+  record_service_state streamo "$input"
 }
 
 install_lyte_service() {
@@ -628,13 +656,13 @@ write_provisioning_report() {
     else
       printf 'lyte service: disabled\n'
     fi
-    printf '\nTwitcho:\n'
-    printf 'enabled: %s\n' "$TWITCHO_ENABLED"
-    if [[ "$TWITCHO_ENABLED" == true ]]; then
-      printf 'twitcho service: '
-      user_systemctl is-active twitcho.service || true
+    printf '\nStreamo:\n'
+    printf 'enabled: %s\n' "$STREAMO_ENABLED"
+    if [[ "$STREAMO_ENABLED" == true ]]; then
+      printf 'streamo service: '
+      user_systemctl is-active streamo.service || true
     else
-      printf 'twitcho service: disabled\n'
+      printf 'streamo service: disabled\n'
     fi
   } | tee "$report"
   sudo install -o "$SHOW_USER" -g "$SHOW_USER" -m 0644 \
@@ -694,11 +722,11 @@ main() {
   sudo -H -u "$SHOW_USER" mkdir -p \
     "/home/$SHOW_USER/.config/recs" \
     "/home/$SHOW_USER/.config/showco" \
-    "/home/$SHOW_USER/.config/twitcho" \
+    "/home/$SHOW_USER/.config/streamo" \
     "/home/$SHOW_USER/.config/lyte" \
     "/home/$SHOW_USER/.local/state/recs" \
     "/home/$SHOW_USER/.local/state/showco" \
-    "/home/$SHOW_USER/.local/state/twitcho" \
+    "/home/$SHOW_USER/.local/state/streamo" \
     "/home/$SHOW_USER/.local/state/lyte" \
     "/home/$SHOW_USER/recordings"
   printf 'target\n' | sudo -H -u "$SHOW_USER" tee \
@@ -720,9 +748,13 @@ main() {
   phase "syncing repositories"
   sync_repo reccy "$RECCY_REPO" "$RECCY_REFNAME"
   sync_repo recs "$RECS_REPO" "$RECS_REFNAME"
-  sync_repo twitcho "$TWITCHO_REPO" "$TWITCHO_REFNAME"
+  sync_repo streamo "$STREAMO_REPO" "$STREAMO_REFNAME"
   sync_repo lyte "$LYTE_REPO" "$LYTE_REFNAME"
   sync_repo showco "$SHOWCO_REPO" "$SHOWCO_REFNAME"
+
+  phase "migrating Twitcho service"
+  uninstall_twitcho_service
+  migrate_streamo_configuration
 
   phase "enabling user service autostart"
   sudo loginctl enable-linger "$SHOW_USER"
@@ -730,8 +762,8 @@ main() {
   phase "installing recs service"
   install_recs_service
 
-  phase "installing Twitcho service"
-  install_twitcho_service
+  phase "installing Streamo service"
+  install_streamo_service
 
   phase "installing showco service"
   install_showco_service
@@ -748,7 +780,7 @@ Provisioning completed.
 
 Next manual steps:
 
-1. Fill final twitcho config values if Twitch streaming is required.
+1. Fill final streamo config values if Twitch streaming is required.
 2. Configure and enable Lyte if lighting control is required.
 3. Fill Wi-Fi password values and rerun provisioning if network configuration was skipped.
 4. Confirm the X18 USB device name.

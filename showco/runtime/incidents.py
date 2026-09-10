@@ -51,6 +51,6 @@ def states(status: models.ShowStatus) -> dict[str, str]:
         "Recording": recording,
         "Recording disk": disk_state,
         "Lyte": status.lyte.service.state,
-        "Twitcho": status.twitcho.service.state,
+        "Streamo": status.streamo.service.state,
         **{mixer.name: mixer.state for mixer in status.mixers},
     }

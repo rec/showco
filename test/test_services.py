@@ -14,7 +14,7 @@ from showco.runtime import services
 class ServicesTests(unittest.TestCase):
     def test_registry_includes_managed_services(self) -> None:
         self.assertEqual(services.SERVICES["lyte"], services.LYTE_SERVICE)
-        self.assertEqual(services.SERVICES["twitcho"].name, "twitcho")
+        self.assertEqual(services.SERVICES["streamo"].name, "streamo")
 
     def test_showco_args_include_optional_services(self) -> None:
         self.assertEqual(
@@ -32,7 +32,7 @@ class ServicesTests(unittest.TestCase):
                 "17352",
                 "--mixers-config",
                 "/home/tom/.config/showco/mixers.toml",
-                "--twitcho-enabled",
+                "--streamo-enabled",
                 "--lyte-enabled",
             ],
         )
@@ -107,7 +107,7 @@ class ServicesTests(unittest.TestCase):
             },
         )
 
-    def test_showco_args_omit_twitcho_when_disabled(self) -> None:
+    def test_showco_args_omit_streamo_when_disabled(self) -> None:
         arguments = services.showco_args(
             "0.0.0.0",
             17_352,
@@ -116,10 +116,10 @@ class ServicesTests(unittest.TestCase):
             False,
         )
 
-        self.assertNotIn("--twitcho-enabled", arguments)
+        self.assertNotIn("--streamo-enabled", arguments)
         self.assertNotIn("--lyte-enabled", arguments)
 
-    def test_restart_twitcho_service_uses_service_registry(self) -> None:
+    def test_restart_streamo_service_uses_service_registry(self) -> None:
         registry = mock.Mock()
         registry.controller.return_value.restart.return_value = StatusResult(
             installed=True,
@@ -128,11 +128,11 @@ class ServicesTests(unittest.TestCase):
         with mock.patch(
             "showco.runtime.services.service_registry", return_value=registry
         ):
-            result = services.restart_twitcho_service()
+            result = services.restart_streamo_service()
 
         self.assertTrue(result.ok)
-        self.assertEqual(result.message, "twitcho restart requested")
-        registry.controller.assert_called_once_with("twitcho")
+        self.assertEqual(result.message, "streamo restart requested")
+        registry.controller.assert_called_once_with("streamo")
 
     def test_report_service_status_fails_inactive_service(self) -> None:
         registry = mock.Mock()

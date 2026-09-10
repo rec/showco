@@ -78,7 +78,7 @@ class UpdateTests(unittest.TestCase):
         self.assertIn('git reset --hard "$remote/$branch"', command)
         self.assertIn(
             "for directory in '/srv/show projects/reccy' '/srv/show projects/recs' "
-            "'/srv/show projects/twitcho' '/srv/show projects/lyte'; do ",
+            "'/srv/show projects/streamo' '/srv/show projects/lyte'; do ",
             command,
         )
         self.assertEqual(command.count('git reset --hard "$remote/$branch"'), 2)
@@ -372,7 +372,7 @@ class UpdateTests(unittest.TestCase):
             ) as refresh,
         ):
             result = update.update_target(
-                ["reccy", "recs", "showco", "twitcho"],
+                ["reccy", "recs", "showco", "streamo"],
                 root=Path("/code"),
                 run_command=run_command,
                 output=StringIO(),
@@ -385,7 +385,7 @@ class UpdateTests(unittest.TestCase):
                 ["git", "-C", "/code/reccy", "branch", "--show-current"],
                 ["git", "-C", "/code/recs", "branch", "--show-current"],
                 ["git", "-C", "/code/showco", "branch", "--show-current"],
-                ["git", "-C", "/code/twitcho", "branch", "--show-current"],
+                ["git", "-C", "/code/streamo", "branch", "--show-current"],
             ],
         )
         self.assertEqual(commands[-2][:2], ["sh", "-c"])
@@ -406,7 +406,7 @@ class UpdateTests(unittest.TestCase):
         )
         self.assertLess(
             commands.index(["git", "-C", "/code/showco", "pull", "--ff-only"]),
-            commands.index(["git", "-C", "/code/twitcho", "pull", "--ff-only"]),
+            commands.index(["git", "-C", "/code/streamo", "pull", "--ff-only"]),
         )
         self.assertIn(["systemctl", "--user", "stop", "recs.service"], commands)
         self.assertEqual(refresh.call_count, 1)
@@ -497,14 +497,14 @@ class UpdateTests(unittest.TestCase):
         )
         self.assertEqual(refresh.call_count, 1)
 
-    def test_twitcho_install_uses_twitcho_environment(self) -> None:
+    def test_streamo_install_uses_streamo_environment(self) -> None:
         commands: list[list[str]] = []
 
         def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
             commands.append(list(command))
             return subprocess.CompletedProcess(command, 0, "", "")
 
-        result = update.install_twitcho_service(Path("/code"), "tom", run_command)
+        result = update.install_streamo_service(Path("/code"), "tom", run_command)
 
         self.assertTrue(result.ok)
         self.assertEqual(
@@ -513,8 +513,8 @@ class UpdateTests(unittest.TestCase):
                 [
                     "sh",
                     "-c",
-                    "cd /code/twitcho && uv run --locked twitcho daemon install "
-                    "--config /home/tom/.config/twitcho/config.json",
+                    "cd /code/streamo && uv run --locked streamo daemon install "
+                    "--config /home/tom/.config/streamo/config.toml",
                 ]
             ],
         )
@@ -613,7 +613,7 @@ class UpdateTests(unittest.TestCase):
         self.assertTrue(
             remote_command.endswith(
                 "uv run --locked showco go --target-machine --root /code "
-                "reccy recs twitcho lyte showco"
+                "reccy recs streamo lyte showco"
             )
         )
         push_indexes = [i for i, c in enumerate(commands) if "push" in c]
@@ -622,7 +622,7 @@ class UpdateTests(unittest.TestCase):
         self.assertIn("ConnectTimeout=2", remote_update.call_args.args[2])
         self.assertEqual(
             output.getvalue(),
-            "Dependency synchronization: unchanged recs, twitcho, lyte, showco; "
+            "Dependency synchronization: unchanged recs, streamo, lyte, showco; "
             "no internal dependencies reccy.\n",
         )
 
@@ -1514,18 +1514,18 @@ class UpdateTests(unittest.TestCase):
     def test_reccy_selection_includes_all_consumers_in_dependency_order(self) -> None:
         self.assertEqual(
             update.selected_repositories(["reccy"]),
-            ["reccy", "recs", "twitcho", "lyte", "showco"],
+            ["reccy", "recs", "streamo", "lyte", "showco"],
         )
 
     def test_recs_selection_includes_showco(self) -> None:
         self.assertEqual(update.selected_repositories(["recs"]), ["recs", "showco"])
 
-    def test_disabled_twitcho_has_no_service_to_restart(self) -> None:
+    def test_disabled_streamo_has_no_service_to_restart(self) -> None:
         programs = update.programs_for_repositories(
-            ["reccy", "twitcho"], Path("/code"), twitcho_enabled=False
+            ["reccy", "streamo"], Path("/code"), streamo_enabled=False
         )
 
-        self.assertNotIn("twitcho", programs[0].service_names)
+        self.assertNotIn("streamo", programs[0].service_names)
         self.assertEqual(programs[1].service_names, [])
 
     def test_disabled_lyte_has_no_service_to_restart(self) -> None:

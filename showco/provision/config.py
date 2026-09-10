@@ -51,7 +51,6 @@ class Twitch(BaseModel, frozen=True):
     client_id: str = ""
     redirect_uri: str = ""
     scopes: str = ""
-    config_dir: str = ""
     state: str = ""
     stream_key: str = ""
     client_secret: str = ""
@@ -67,7 +66,7 @@ class Lyte(BaseModel, frozen=True):
 class Git(BaseModel, frozen=True):
     reccy: GitRepo
     recs: GitRepo
-    twitcho: GitRepo
+    streamo: GitRepo
     showco: GitRepo
     lyte: GitRepo
 
@@ -96,7 +95,7 @@ def config_from_values(
     root: Path | None = None,
     reccy_repo: str | None = None,
     recs_repo: str | None = None,
-    twitcho_repo: str | None = None,
+    streamo_repo: str | None = None,
     showco_repo: str | None = None,
     lyte_repo: str | None = None,
     lyte_enabled: bool | None = None,
@@ -143,10 +142,10 @@ def config_from_values(
         git=Git(
             reccy=git_repo("reccy", table_value(git, "reccy"), override=reccy_repo),
             recs=git_repo("recs", table_value(git, "recs"), override=recs_repo),
-            twitcho=git_repo(
-                "twitcho",
-                table_value(git, "twitcho"),
-                override=twitcho_repo,
+            streamo=git_repo(
+                "streamo",
+                table_value(git, "streamo"),
+                override=streamo_repo,
             ),
             showco=git_repo(
                 "showco",
@@ -350,7 +349,6 @@ def twitch_value(values: dict[str, object]) -> Twitch:
         client_id=string_value(values, "client_id"),
         redirect_uri=string_value(values, "redirect_uri"),
         scopes=string_value(values, "scopes"),
-        config_dir=string_value(values, "config_dir"),
         state=string_value(values, "state"),
         stream_key=string_value(values, "stream_key"),
         client_secret=string_value(values, "client_secret"),

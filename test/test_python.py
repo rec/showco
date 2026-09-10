@@ -25,7 +25,10 @@ class PythonTests(unittest.TestCase):
         ) as require:
             result = python.run_python(
                 python.PythonOptions(
-                    code="from showco.runtime.recs import RecsClient; print(RecsClient())"
+                    code=(
+                        "from showco.runtime.recs import RecsClient; "
+                        "print(RecsClient())"
+                    )
                 ),
                 target_config=target_config(),
                 run_command=run_command,
@@ -79,7 +82,7 @@ def target_config() -> config.Config:
             "git": {
                 "reccy": {"url": "git@github.com:rec/reccy"},
                 "recs": {"url": "git@github.com:rec/recs"},
-                "twitcho": {"url": "git@github.com:rec/twitcho"},
+                "streamo": {"url": "git@github.com:rec/streamo"},
                 "showco": {"url": "git@github.com:rec/showco"},
                 "lyte": {"url": "git@github.com:rec/lyte"},
             },
