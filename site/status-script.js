@@ -503,6 +503,11 @@
       if (recsSnapshot) {
         recsSnapshot.textContent = `recs snapshot: ${status.recs.snapshot_error || "connected"}`;
       }
+      const recordingProgress = document.getElementById("recording-progress");
+      if (recordingProgress) {
+        recordingProgress.className = status.recording_progress.ok ? "ok" : "failed";
+        recordingProgress.textContent = `recording progress: ${status.recording_progress.message}`;
+      }
       updateService(
         "streaming", status.twitcho.service, streamingText(status.twitcho),
         "twitcho-health",
