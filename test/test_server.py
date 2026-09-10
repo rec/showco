@@ -711,6 +711,12 @@ class ServerTests(unittest.TestCase):
         html = actions_page([])
 
         self.assertIn('value="recs-disk-status"', html)
+
+    def test_actions_page_has_show_markers(self) -> None:
+        html = actions_page([])
+
+        for label in ["Show start", "Song start", "Interval", "Show end"]:
+            self.assertIn(f'name="label" value="{label}"', html)
         self.assertIn('value="recs-list-devices"', html)
         self.assertIn('value="recs-pause-recording"', html)
         self.assertIn('value="recs-resume-recording"', html)
