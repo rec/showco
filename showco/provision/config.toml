@@ -35,7 +35,7 @@ name = "Flow 8"
 audio_device_names = ["FLOW 8"]
 midi_input_names = ["FLOW 8"]
 
-[twitch]
+[stream]
 enabled = false
 account = "loopopenloop"
 stream_title = "openLoop, broadcasting live from Rouen"
@@ -61,7 +61,7 @@ oauth_token_scopes = [
 client_id = "qyqv064pencm797xuhee5biy0yxahh"
 redirect_uri = "http://localhost:17563/callback"
 scopes = "channel:manage:broadcast chat:edit chat:read moderator:manage:announcements clips:edit moderation:read"
-config_dir = "$HOME/.config/twitcho"
+config_dir = "$HOME/.config/streamo"
 state = "SaqhIYFnE124j25yv7OJm8FQ9yLIceEh"
 
 [lyte]

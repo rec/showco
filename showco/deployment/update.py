@@ -95,7 +95,7 @@ def update_target(
     programs = programs_for_repositories(
         selected,
         root,
-        provision_config.twitch.enabled,
+        provision_config.stream.enabled,
         provision_config.lyte.enabled,
     )
     if not check_main_branches(programs, run_command, output):

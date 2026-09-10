@@ -3,7 +3,7 @@
 ## Project Overview
 
 Showco is a small Python 3.13 show-control web UI for coordinating local
-recording with `recs`, Twitch streaming with `twitcho`, mixer reachability, and
+recording with `recs`, streaming with `streamo`, mixer reachability, and
 Raspberry Pi health checks.
 
 The runtime entry point is `showco.cli:main`, exposed as the `showco` script.
@@ -20,7 +20,7 @@ client-side tooling unless the user explicitly asks for that direction.
   explicit.
 - `showco/recs_control.py`, `showco/recs_snapshot.py`, and `showco/recs.py`:
   public Recs RPC, cached status, actions, and waveform integration.
-- `showco/twitcho/`: Twitcho RPC and Twitch authentication adapters.
+- `showco/streamo/`: Streamo RPC and Stream authentication adapters.
 - `showco/lyte.py`: Lyte status and light-test RPC adapter.
 - `showco/mixer.py`: TCP/UDP mixer reachability probes.
 - `showco/system.py` and `showco/monitoring.py`: Raspberry Pi health sampling
@@ -29,17 +29,17 @@ client-side tooling unless the user explicitly asks for that direction.
 - `showco/provision/`: configuration, card preparation, remote provisioning,
   verification, and the generated target script.
 - `showco/update.py` and `showco/local_update.py`: target deployment and local
-  publication for reccy, recs, twitcho, lyte, and showco.
+  publication for reccy, recs, streamo, lyte, and showco.
 
 ## Coding Conventions
 
 - Prefer the standard library and existing dependencies. Showco imports Reccy
-  and Recs directly and manages Reccy, Recs, Twitcho, and Lyte as sibling target
+  and Recs directly and manages Reccy, Recs, Streamo, and Lyte as sibling target
   checkouts.
 - Keep implementations direct. This codebase uses small classes, Pydantic
   models, plain functions, dependency injection for tests, and explicit status
   objects.
-- Preserve the current adapter boundaries: Recs, Twitcho, mixer, system, and
+- Preserve the current adapter boundaries: Recs, Streamo, mixer, system, and
   Lyte behavior should remain independently testable.
 - Keep user-visible strings stable unless changing the UI behavior is the point
   of the task. Tests often assert visible HTML and action messages.
@@ -59,7 +59,7 @@ Focused tests:
 
 ```bash
 uv run pytest test/test_server.py
-uv run pytest test/test_twitcho.py
+uv run pytest test/test_streamo.py
 uv run pytest test/test_recs.py
 uv run pytest test/test_provision.py
 uv run pytest test/test_update.py
@@ -69,15 +69,15 @@ uv run pytest test/test_update.py
 
 ## Runtime And Hardware Boundaries
 
-- Do not launch `uv run showco`, rehearsal mode, system services, Twitch flows,
+- Do not launch `uv run showco`, rehearsal mode, system services, Streamo flows,
   or hardware-facing checks unless the user explicitly asks.
 - Do not run `showco go` as a verification step. It pushes or pulls sibling
   repos and stops/restarts user services.
-- Reccy, Recs, Twitcho, and Lyte are sibling projects. Changes that belong in
+- Reccy, Recs, Streamo, and Lyte are sibling projects. Changes that belong in
   those projects should be made there only when the user scopes the task that
   way.
-- Hardware/Twitch acceptance details live in `doc/`. Automated tests do not prove
-  Raspberry Pi networking, X18 audio, external storage, Twitch credentials, or
+- Hardware/streaming acceptance details live in `doc/`. Automated tests do not prove
+  Raspberry Pi networking, X18 audio, external storage, stream credentials, or
   venue behavior.
 
 ## Git And Scope

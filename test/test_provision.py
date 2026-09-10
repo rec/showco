@@ -941,12 +941,12 @@ class ProvisionTests(unittest.TestCase):
     def test_read_toml_preserves_string_lists(self) -> None:
         with TemporaryDirectory() as directory:
             path = Path(directory) / "config.toml"
-            path.write_text('[twitch]\ntags = ["Live Music", "Music"]\n')
+            path.write_text('[stream]\ntags = ["Live Music", "Music"]\n')
 
             values = config.read_toml(path)
 
         self.assertEqual(
-            config.table_value(values, "twitch")["tags"],
+            config.table_value(values, "stream")["tags"],
             ["Live Music", "Music"],
         )
 
@@ -1064,11 +1064,11 @@ class ProvisionTests(unittest.TestCase):
 
         self.assertIn("RECS_REFNAME=my-branch", command)
 
-    def test_remote_command_passes_enabled_from_twitch_table(self) -> None:
+    def test_remote_command_passes_enabled_from_stream_table(self) -> None:
         config = make_config(
             values(
                 networks=networks(x18=False),
-                twitch={"enabled": True},
+                stream={"enabled": True},
             ),
         )
 

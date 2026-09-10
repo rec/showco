@@ -201,7 +201,7 @@ def verify_lyte_service(provision_config: config.Config) -> VerificationResult:
 
 
 def verify_streamo_service(provision_config: config.Config) -> VerificationResult:
-    if not provision_config.twitch.enabled:
+    if not provision_config.stream.enabled:
         return VerificationResult(name="Streamo service", error="", note="disabled")
     return verify_remote_command(
         provision_config,

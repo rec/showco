@@ -77,7 +77,7 @@ resubscribe_period = 10
 enabled = false
 daemon_config = "patches/wearable-daemon.toml"
 
-[twitch]
+[stream]
 enabled = false
 ```
 
@@ -93,7 +93,7 @@ password = "..."
 
 ## Streamo migration
 
-When Twitch streaming is enabled, provisioning replaces the Twitcho service
+When Streamo streaming is enabled, provisioning replaces the Twitcho service
 with Streamo. If the target has no
 `~/.config/streamo/config.toml` but still has Twitcho's
 `~/.config/twitcho/config.json`, it converts the old JSON configuration to the
@@ -142,7 +142,7 @@ back to the selected non-secret config file after local preflight succeeds.
   Wi-Fi joins the external network.
 
 When the value is empty, Showco chooses from external-network configuration,
-second-interface availability, and whether Twitch is enabled. `swap_wifi`
+second-interface availability, and whether Stream is enabled. `swap_wifi`
 reverses the first two detected Wi-Fi interfaces.
 
 Provisioning generates temporary config and secret files on the target and
@@ -262,7 +262,7 @@ change networking, or provision the operating system.
 ## Secrets
 
 Never commit or publish login passwords, private SSH keys, Wi-Fi passwords,
-Twitch stream keys, OAuth tokens, or client secrets. Provisioning shell
+Stream stream keys, OAuth tokens, or client secrets. Provisioning shell
 arguments necessarily carry resolved secrets to the target process, but the
 generated files are mode `0600` and temporary network files are removed after
 use.

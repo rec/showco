@@ -531,7 +531,7 @@ def health_page(status: models.ShowStatus) -> str:
           </p>
           <p id="lyte-health">lyte: {_lyte_detail(status.lyte)}</p>
           <p>Pi temperature: <span id="temperature">{_temperature(status)}</span></p>
-          <p>Twitch bitrate: <span id="bitrate">{_bitrate(status)}</span></p>
+          <p>Stream bitrate: <span id="bitrate">{_bitrate(status)}</span></p>
           <div id="mixers">{_mixers(status)}</div>
           <div id="osc-recorders">{_osc_recorders(status.recs.osc)}</div>
         </section>
@@ -684,10 +684,10 @@ def actions_page(
 
 def _streamo_actions(title_fields: list[str]) -> str:
     return f"""
-          {button("streamo-restart", "Restart Twitch")}
-          {button("streamo-mute", "Mute Twitch")}
-          {button("streamo-unmute", "Unmute Twitch")}
-          {button("streamo-stop", "Stop Twitch", confirm=True)}
+          {button("streamo-restart", "Restart Stream")}
+          {button("streamo-mute", "Mute Stream")}
+          {button("streamo-unmute", "Unmute Stream")}
+          {button("streamo-stop", "Stop Stream", confirm=True)}
           {field_action("streamo-title", "Update stream info", title_fields)}
           {field_action("streamo-chat", "Send chat message", ["message"])}
           {field_action("streamo-announce", "Send announcement", ["message"])}
