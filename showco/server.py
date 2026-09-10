@@ -16,7 +16,7 @@ from urllib import parse
 from pydantic import ValidationError
 from reccy.runtime import logging
 
-from . import models, services
+from . import models, readiness, services
 from .lyte import LyteClient
 from .mixer import MixersMonitor
 from .monitoring import PerformanceMonitor
@@ -75,7 +75,7 @@ class ShowcoApp:
             update={"errors": errors_since(recs.errors, self.run_started_at)}
         )
         lyte = self._lyte_status()
-        return models.ShowStatus(
+        status = models.ShowStatus(
             recs=recs,
             twitcho=twitcho,
             lyte=lyte,
@@ -87,6 +87,7 @@ class ShowcoApp:
             revision=self.revision,
             run_started_at=self.run_started_at,
         )
+        return status.model_copy(update={"readiness": readiness.status(status)})
 
     def _lyte_status(self) -> models.LyteStatus:
         if self.lyte is None:
@@ -493,6 +494,7 @@ def health_page(status: models.ShowStatus) -> str:
     return page(
         "Health",
         f"""
+        {readiness_section(status.readiness)}
         <section class="cards">
           {service_card("recording", "Recording", recs.state, _recording_text(status))}
           {
@@ -528,6 +530,28 @@ def health_page(status: models.ShowStatus) -> str:
         </section>
         """,
         script=site_file("status-script.js"),
+    )
+
+
+def readiness_section(status: models.ReadinessStatus) -> str:
+    state = "ready" if status.ready else "not ready"
+    css_class = "healthy" if status.ready else "error"
+    return f"""
+        <section class="readiness {css_class}">
+          <h2>Ready to perform</h2>
+          <p class="state" id="readiness-state">{state}</p>
+          <ul id="readiness-checks">
+            {"".join(readiness_check(check) for check in status.checks)}
+          </ul>
+        </section>
+    """
+
+
+def readiness_check(check: models.ReadinessCheck) -> str:
+    state = "ok" if check.ok else "failed"
+    return (
+        f'<li class="{state}"><b>{html.escape(check.name)}</b>: '
+        f"{html.escape(check.message)}</li>"
     )
 
 

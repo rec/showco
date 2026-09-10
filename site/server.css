@@ -148,6 +148,8 @@ button:active, button[aria-busy="true"] {
 button[aria-busy="true"] { cursor: wait; }
 .ok { color: #14853d; }
 .failed { color: #b3261e; }
+.readiness .state { text-transform: uppercase; }
+.readiness ul { margin-bottom: 0; }
 .performance {
   display: grid;
   gap: 0.75rem;

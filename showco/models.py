@@ -131,6 +131,17 @@ class MixerStatus(BaseModel, frozen=True):
     error: str | None = None
 
 
+class ReadinessCheck(BaseModel, frozen=True):
+    name: str
+    ok: bool
+    message: str
+
+
+class ReadinessStatus(BaseModel, frozen=True):
+    checks: list[ReadinessCheck] = Field(default_factory=list)
+    ready: bool = False
+
+
 class ShowStatus(BaseModel, frozen=True):
     recs: RecsStatus
     twitcho: TwitchoStatus
@@ -141,5 +152,6 @@ class ShowStatus(BaseModel, frozen=True):
     )
     system: SystemStatus = Field(default_factory=SystemStatus)
     mixers: list[MixerStatus] = Field(default_factory=list)
+    readiness: ReadinessStatus = Field(default_factory=ReadinessStatus)
     revision: str | None = None
     run_started_at: float = 0.0
