@@ -142,6 +142,11 @@ class ReadinessStatus(BaseModel, frozen=True):
     ready: bool = False
 
 
+class Incident(BaseModel, frozen=True):
+    timestamp: datetime
+    message: str
+
+
 class ShowStatus(BaseModel, frozen=True):
     recs: RecsStatus
     twitcho: TwitchoStatus
@@ -153,5 +158,6 @@ class ShowStatus(BaseModel, frozen=True):
     system: SystemStatus = Field(default_factory=SystemStatus)
     mixers: list[MixerStatus] = Field(default_factory=list)
     readiness: ReadinessStatus = Field(default_factory=ReadinessStatus)
+    incidents: list[Incident] = Field(default_factory=list)
     revision: str | None = None
     run_started_at: float = 0.0
