@@ -473,6 +473,22 @@
     }));
   }
 
+  function updateIncidents(incidents) {
+    const container = document.getElementById("incidents");
+    if (!container) return;
+    if (!incidents.length) {
+      container.textContent = "No incidents.";
+      return;
+    }
+    const list = document.createElement("ul");
+    for (const incident of incidents) {
+      const item = document.createElement("li");
+      item.textContent = `${new Date(incident.timestamp).toLocaleTimeString()} ${incident.message}`;
+      list.append(item);
+    }
+    container.replaceChildren(list);
+  }
+
   function updateStatus() {
     return fetch("/status", { cache: "no-store" })
       .then(response => {
@@ -497,6 +513,7 @@
       updateRecsErrors(status.recs.errors);
       updatePerformance(status);
       updateReadiness(status.readiness);
+      updateIncidents(status.incidents);
       const temperature = document.getElementById("temperature");
       if (temperature) {
         temperature.textContent = status.system.temperature_c === null

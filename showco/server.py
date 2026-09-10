@@ -16,7 +16,7 @@ from urllib import parse
 from pydantic import ValidationError
 from reccy.runtime import logging
 
-from . import models, readiness, services
+from . import incidents, models, readiness, services
 from .lyte import LyteClient
 from .mixer import MixersMonitor
 from .monitoring import PerformanceMonitor
@@ -62,6 +62,7 @@ class ShowcoApp:
         self.action_log_lock = threading.Lock()
         self.lyte_status_lock = threading.Lock()
         self.lyte_connected = False
+        self.incidents = incidents.IncidentTimeline()
 
     def status(self) -> models.ShowStatus:
         if self.twitcho is None:
@@ -87,7 +88,8 @@ class ShowcoApp:
             revision=self.revision,
             run_started_at=self.run_started_at,
         )
-        return status.model_copy(update={"readiness": readiness.status(status)})
+        status = status.model_copy(update={"readiness": readiness.status(status)})
+        return status.model_copy(update={"incidents": self.incidents.observe(status)})
 
     def _lyte_status(self) -> models.LyteStatus:
         if self.lyte is None:
@@ -528,6 +530,10 @@ def health_page(status: models.ShowStatus) -> str:
             {_recs_errors(status.recs.errors[-ERROR_PAGE_LIMIT:])}
           </div>
         </section>
+        <section>
+          <h2>Incidents this run</h2>
+          <div id="incidents">{incident_list(status.incidents)}</div>
+        </section>
         """,
         script=site_file("status-script.js"),
     )
@@ -552,6 +558,19 @@ def readiness_check(check: models.ReadinessCheck) -> str:
     return (
         f'<li class="{state}"><b>{html.escape(check.name)}</b>: '
         f"{html.escape(check.message)}</li>"
+    )
+
+
+def incident_list(incidents: list[models.Incident]) -> str:
+    if not incidents:
+        return "<p>No incidents.</p>"
+    return "<ul>" + "".join(incident(value) for value in incidents) + "</ul>"
+
+
+def incident(value: models.Incident) -> str:
+    return (
+        f"<li><time>{value.timestamp.strftime('%H:%M:%S')}</time> "
+        f"{html.escape(value.message)}</li>"
     )
 
 

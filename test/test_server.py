@@ -368,6 +368,27 @@ class ServerTests(unittest.TestCase):
         self.assertIn('id="readiness-state">not ready', html)
         self.assertIn("Recs</b>: offline", html)
 
+    def test_health_page_shows_incidents(self) -> None:
+        html = health_page(
+            models.ShowStatus(
+                recs=models.RecsStatus(
+                    service=models.ServiceStatus(name="recs", state="connected")
+                ),
+                twitcho=models.TwitchoStatus(
+                    service=models.ServiceStatus(name="twitcho", state="disabled")
+                ),
+                incidents=[
+                    models.Incident(
+                        timestamp=datetime(2026, 9, 10, 12, 0, 0),
+                        message="Recording: recording to paused",
+                    )
+                ],
+            )
+        )
+
+        self.assertIn("Incidents this run", html)
+        self.assertIn("Recording: recording to paused", html)
+
     def test_health_page_shows_lyte_output_error(self) -> None:
         html = health_page(
             models.ShowStatus(
