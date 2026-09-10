@@ -563,7 +563,7 @@ def log_commits(output: str) -> list[tuple[str, str]]:
 
 INTERNAL_DEPENDENCIES = {
     "recs": ["reccy"],
-    "twitcho": ["reccy"],
+    "streamo": ["reccy"],
     "lyte": ["reccy"],
     "showco": ["reccy", "recs"],
 }

@@ -7,7 +7,7 @@ development machine and displays remote progress and failures directly.
 ## Prerequisites
 
 - Python 3.13 and `uv` on the provisioning machine.
-- Local sibling checkouts of `reccy`, `recs`, `twitcho`, `lyte`, and `showco`.
+- Local sibling checkouts of `reccy`, `recs`, `streamo`, `lyte`, and `showco`.
 - Raspberry Pi OS Lite with the intended hostname and user configured.
 - Key-based SSH access to the target.
 - Passwordless `sudo` on the target user.
@@ -90,6 +90,22 @@ password = "..."
 [networks.external.wifi]
 password = "..."
 ```
+
+## Streamo migration
+
+When Twitch streaming is enabled, provisioning replaces the Twitcho service
+with Streamo. If the target has no
+`~/.config/streamo/config.toml` but still has Twitcho's
+`~/.config/twitcho/config.json`, it converts the old JSON configuration to the
+explicit Streamo TOML profile and leaves the old configuration in place. It
+then installs `streamo.service`; the old `twitcho.service` is stopped and
+uninstalled.
+
+The generated Streamo configuration retains the former device, channel,
+overlay, ingest, credentials, and encoding settings. It uses explicit AAC,
+H.264, FLV, stereo, and two-second keyframe settings to reproduce Twitcho's
+defaults. New Streamo installations require
+`~/.config/streamo/config.toml` before streaming can be enabled.
 
 Important configuration rules:
 
@@ -226,7 +242,7 @@ showco logs
 showco logs recs showco --lines 500
 ```
 
-Known services are `showco`, `recs`, `twitcho`, and `lyte`. Their files are
+Known services are `showco`, `recs`, `streamo`, and `lyte`. Their files are
 `~/.local/state/SERVICE/SERVICE.log` on the target. A missing service log is
 reported by `tail`; it is not silently ignored.
 

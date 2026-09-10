@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from ..provision import config, ssh
 from . import machine_role, update
 
-SERVICE_NAMES = ("showco", "recs", "twitcho", "lyte")
+SERVICE_NAMES = ("showco", "recs", "streamo", "lyte")
 
 RunCommand = Callable[[Sequence[str]], CompletedProcess[str]]
 

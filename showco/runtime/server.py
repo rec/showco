@@ -16,7 +16,7 @@ from urllib import parse
 from pydantic import ValidationError
 from reccy.runtime import logging
 
-from ..twitcho.client import TwitchoClient
+from ..streamo.client import StreamoClient
 from . import incidents, input_check, models, readiness, recording_progress, services
 from .lyte import LyteClient
 from .mixer import MixersMonitor
@@ -41,18 +41,18 @@ class ShowcoApp:
     def __init__(
         self,
         recs: RecsClient,
-        twitcho: TwitchoClient | None,
+        streamo: StreamoClient | None,
         system: SystemMonitor | PerformanceMonitor,
         mixers: MixersMonitor,
-        twitcho_restart: Callable[[], models.ActionResult] | None = None,
+        streamo_restart: Callable[[], models.ActionResult] | None = None,
         waveforms: WaveformBridge | None = None,
         lyte: LyteClient | None = None,
     ) -> None:
         self.recs = recs
-        self.twitcho = twitcho
+        self.streamo = streamo
         self.system = system
         self.mixers = mixers
-        self.twitcho_restart = twitcho_restart or services.restart_twitcho_service
+        self.streamo_restart = streamo_restart or services.restart_streamo_service
         self.waveforms = waveforms
         self.lyte = lyte
         self.revision = source_revision()
@@ -66,12 +66,12 @@ class ShowcoApp:
         self.recording_progress = recording_progress.ProgressMonitor()
 
     def status(self) -> models.ShowStatus:
-        if self.twitcho is None:
-            twitcho = models.TwitchoStatus(
-                service=models.ServiceStatus(name="twitcho", state="disabled")
+        if self.streamo is None:
+            streamo = models.StreamoStatus(
+                service=models.ServiceStatus(name="streamo", state="disabled")
             )
         else:
-            twitcho = self.twitcho.status()
+            streamo = self.streamo.status()
         recs = self.recs.status()
         recs = recs.model_copy(
             update={"errors": errors_since(recs.errors, self.run_started_at)}
@@ -79,7 +79,7 @@ class ShowcoApp:
         lyte = self._lyte_status()
         status = models.ShowStatus(
             recs=recs,
-            twitcho=twitcho,
+            streamo=streamo,
             lyte=lyte,
             system=self.system.status(),
             mixers=self.mixers.status(
@@ -166,20 +166,20 @@ class ShowcoApp:
             return models.ActionResult(ok=True, message="recs shutdown canceled")
         if action in RECS_ACTIONS:
             return self.recs.action(RECS_ACTIONS[action], **_recs_fields(form))
-        if action == "twitcho-restart" and self.twitcho is None:
-            return models.ActionResult(ok=False, message="twitcho is disabled")
-        if action == "twitcho-restart":
-            return self.twitcho_restart()
+        if action == "streamo-restart" and self.streamo is None:
+            return models.ActionResult(ok=False, message="streamo is disabled")
+        if action == "streamo-restart":
+            return self.streamo_restart()
         if action == "lyte-test":
             return (
                 self.lyte.test()
                 if self.lyte is not None
                 else models.ActionResult(ok=False, message="lyte is disabled")
             )
-        if action in TWITCHO_ACTIONS:
-            if self.twitcho is None:
-                return models.ActionResult(ok=False, message="twitcho is disabled")
-            return self.twitcho.action(TWITCHO_ACTIONS[action], **_twitcho_fields(form))
+        if action in STREAMO_ACTIONS:
+            if self.streamo is None:
+                return models.ActionResult(ok=False, message="streamo is disabled")
+            return self.streamo.action(STREAMO_ACTIONS[action], **_streamo_fields(form))
         return models.ActionResult(ok=False, message=f"unknown action {action}")
 
     def recent_actions(self) -> list[models.ActionLogEntry]:
@@ -227,7 +227,7 @@ class ShowcoHandler(BaseHTTPRequestHandler):
             self._html(
                 actions_page(
                     self.app.recent_actions(),
-                    twitcho_enabled=self.app.twitcho is not None,
+                    streamo_enabled=self.app.streamo is not None,
                     lyte_enabled=self.app.lyte is not None and self.app.lyte.enabled,
                 )
             )
@@ -414,11 +414,11 @@ def make_server(
     port: int,
     *,
     recs: RecsClient | None = None,
-    twitcho: TwitchoClient | None = None,
+    streamo: StreamoClient | None = None,
     system: SystemMonitor | None = None,
     mixers: MixersMonitor | None = None,
-    twitcho_restart: Callable[[], models.ActionResult] | None = None,
-    twitcho_enabled: bool = False,
+    streamo_restart: Callable[[], models.ActionResult] | None = None,
+    streamo_enabled: bool = False,
     lyte_enabled: bool = False,
     performance_enabled: bool = False,
 ) -> ThreadingHTTPServer:
@@ -439,10 +439,10 @@ def make_server(
     )
     app = ShowcoApp(
         recs_client,
-        (twitcho or TwitchoClient()) if twitcho_enabled else None,
+        (streamo or StreamoClient()) if streamo_enabled else None,
         performance or system_monitor,
         mixers or MixersMonitor([]),
-        twitcho_restart if twitcho_enabled else None,
+        streamo_restart if streamo_enabled else None,
         waveforms,
         LyteClient(enabled=lyte_enabled),
     )
@@ -481,7 +481,7 @@ def channels_page(status: models.ShowStatus) -> str:
 
 def health_page(status: models.ShowStatus) -> str:
     recs = status.recs.service
-    twitcho = status.twitcho.service
+    streamo = status.streamo.service
     progress_class = "ok" if status.recording_progress.ok else "failed"
     disk_critical = status.recs.disk is not None and (
         status.recs.disk.alert_active or status.recs.disk.paused_for_disk_space
@@ -509,7 +509,7 @@ def health_page(status: models.ShowStatus) -> str:
           {service_card("recording", "Recording", recs.state, _recording_text(status))}
           {
             service_card(
-                "streaming", "Streaming", twitcho.state, _streaming_text(status)
+                "streaming", "Streaming", streamo.state, _streaming_text(status)
             )
         }
         </section>
@@ -526,8 +526,8 @@ def health_page(status: models.ShowStatus) -> str:
           <p id="recording-progress" class="{progress_class}">
             recording progress: {html.escape(status.recording_progress.message)}
           </p>
-          <p id="twitcho-health">
-            twitcho: {_service_detail(twitcho.state, twitcho.last_error)}
+          <p id="streamo-health">
+            streamo: {_service_detail(streamo.state, streamo.last_error)}
           </p>
           <p id="lyte-health">lyte: {_lyte_detail(status.lyte)}</p>
           <p>Pi temperature: <span id="temperature">{_temperature(status)}</span></p>
@@ -644,7 +644,7 @@ def error_timestamp(value: str) -> float | None:
 def actions_page(
     action_log: list[models.ActionLogEntry],
     *,
-    twitcho_enabled: bool = True,
+    streamo_enabled: bool = True,
     lyte_enabled: bool = True,
 ) -> str:
     title_fields = ["title", "category", "tags"]
@@ -671,7 +671,7 @@ def actions_page(
           {button("recs-capabilities", "Recs capabilities")}
           {shutdown_action()}
           {button("lyte-test", "Test lights") if lyte_enabled else ""}
-          {_twitcho_actions(title_fields) if twitcho_enabled else ""}
+          {_streamo_actions(title_fields) if streamo_enabled else ""}
         </section>
         <section>
           <h2>Recent actions</h2>
@@ -681,17 +681,17 @@ def actions_page(
     )
 
 
-def _twitcho_actions(title_fields: list[str]) -> str:
+def _streamo_actions(title_fields: list[str]) -> str:
     return f"""
-          {button("twitcho-restart", "Restart Twitch")}
-          {button("twitcho-mute", "Mute Twitch")}
-          {button("twitcho-unmute", "Unmute Twitch")}
-          {button("twitcho-stop", "Stop Twitch", confirm=True)}
-          {field_action("twitcho-title", "Update stream info", title_fields)}
-          {field_action("twitcho-chat", "Send chat message", ["message"])}
-          {field_action("twitcho-announce", "Send announcement", ["message"])}
-          {button("twitcho-clip", "Create clip")}
-          {field_action("twitcho-marker", "Create stream marker", ["description"])}
+          {button("streamo-restart", "Restart Twitch")}
+          {button("streamo-mute", "Mute Twitch")}
+          {button("streamo-unmute", "Unmute Twitch")}
+          {button("streamo-stop", "Stop Twitch", confirm=True)}
+          {field_action("streamo-title", "Update stream info", title_fields)}
+          {field_action("streamo-chat", "Send chat message", ["message"])}
+          {field_action("streamo-announce", "Send announcement", ["message"])}
+          {button("streamo-clip", "Create clip")}
+          {field_action("streamo-marker", "Create stream marker", ["description"])}
     """
 
 
@@ -918,8 +918,8 @@ def _recording_text(status: models.ShowStatus) -> str:
 
 
 def _streaming_text(status: models.ShowStatus) -> str:
-    state = status.twitcho.stream_state
-    muted = ", muted" if status.twitcho.muted else ""
+    state = status.streamo.stream_state
+    muted = ", muted" if status.streamo.muted else ""
     return f"{state}{muted}"
 
 
@@ -1028,9 +1028,9 @@ def _bytes(value: int) -> str:
 
 
 def _bitrate(status: models.ShowStatus) -> str:
-    if status.twitcho.output_bitrate_kbps is None:
+    if status.streamo.output_bitrate_kbps is None:
         return "unknown"
-    return f"{status.twitcho.output_bitrate_kbps:.0f} kbps"
+    return f"{status.streamo.output_bitrate_kbps:.0f} kbps"
 
 
 def _lyte_detail(status: models.LyteStatus) -> str:
@@ -1112,7 +1112,7 @@ def _duration(seconds: float | None) -> str:
     return f"{minutes}:{secs:02}"
 
 
-def _twitcho_fields(form: dict[str, str]) -> dict[str, object]:
+def _streamo_fields(form: dict[str, str]) -> dict[str, object]:
     return {k: v for k, v in form.items() if k != "action" and v}
 
 
@@ -1146,13 +1146,13 @@ RECS_ACTIONS = {
 
 SHOW_MARKERS = ["Show start", "Song start", "Interval", "Show end"]
 
-TWITCHO_ACTIONS = {
-    "twitcho-mute": "mute",
-    "twitcho-unmute": "unmute",
-    "twitcho-stop": "stop",
-    "twitcho-title": "update_stream_info",
-    "twitcho-chat": "chat",
-    "twitcho-announce": "announce",
-    "twitcho-clip": "clip",
-    "twitcho-marker": "marker",
+STREAMO_ACTIONS = {
+    "streamo-mute": "mute",
+    "streamo-unmute": "unmute",
+    "streamo-stop": "stop",
+    "streamo-title": "update_stream_info",
+    "streamo-chat": "chat",
+    "streamo-announce": "announce",
+    "streamo-clip": "clip",
+    "streamo-marker": "marker",
 }

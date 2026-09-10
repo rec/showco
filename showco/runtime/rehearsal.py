@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 import time
 
-from ..twitcho.client import TwitchoClient
+from ..streamo.client import StreamoClient
 from . import models
 from .mixer import MixersMonitor
 from .recs import RecsClient, stereo_tracks
@@ -109,16 +109,16 @@ class RehearsalRecsClient(RecsClient):
         return models.ActionResult(ok=True, message="rehearsal recs shutdown requested")
 
 
-class RehearsalTwitchoClient(TwitchoClient):
+class RehearsalStreamoClient(StreamoClient):
     def __init__(self) -> None:
         self.started_at = time.time()
         self.muted = False
         self.stopped = False
         self.actions: list[tuple[str, dict[str, object]]] = []
 
-    def status(self) -> models.TwitchoStatus:
-        return models.TwitchoStatus(
-            service=models.ServiceStatus(name="twitcho", state="connected"),
+    def status(self) -> models.StreamoStatus:
+        return models.StreamoStatus(
+            service=models.ServiceStatus(name="streamo", state="connected"),
             stream_state="stopped" if self.stopped else "streaming",
             muted=self.muted,
             ffmpeg_alive=not self.stopped,
@@ -136,12 +136,12 @@ class RehearsalTwitchoClient(TwitchoClient):
         elif command == "stop":
             self.stopped = True
         return models.ActionResult(
-            ok=True, message=f"rehearsal twitcho {command} succeeded"
+            ok=True, message=f"rehearsal streamo {command} succeeded"
         )
 
 
-def restart_twitcho() -> models.ActionResult:
-    return models.ActionResult(ok=True, message="rehearsal twitcho restart requested")
+def restart_streamo() -> models.ActionResult:
+    return models.ActionResult(ok=True, message="rehearsal streamo restart requested")
 
 
 class RehearsalSystemMonitor(SystemMonitor):

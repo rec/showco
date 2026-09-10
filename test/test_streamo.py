@@ -5,18 +5,18 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from showco.twitcho.client import TwitchoClient
+from showco.streamo.client import StreamoClient
 
 
-class TwitchoTests(unittest.TestCase):
-    def test_control_endpoint_uses_twitcho_service_socket(self) -> None:
+class StreamoTests(unittest.TestCase):
+    def test_control_endpoint_uses_streamo_service_socket(self) -> None:
         self.assertEqual(
-            TwitchoClient().control_endpoint,
-            Path.home() / ".local/state/twitcho/gui.sock",
+            StreamoClient().control_endpoint,
+            Path.home() / ".local/state/streamo/gui.sock",
         )
 
     def test_status_maps_successful_reply(self) -> None:
-        client = FakeTwitchoClient(
+        client = FakeStreamoClient(
             {
                 "state": "streaming",
                 "muted": True,
@@ -37,7 +37,7 @@ class TwitchoTests(unittest.TestCase):
         self.assertEqual(status.output_bitrate_kbps, 312.5)
 
     def test_status_reports_failed_command(self) -> None:
-        client = FakeTwitchoClient(ConnectionError("not running"))
+        client = FakeStreamoClient(ConnectionError("not running"))
 
         status = client.status()
 
@@ -45,7 +45,7 @@ class TwitchoTests(unittest.TestCase):
         self.assertEqual(status.service.last_error, "not running")
 
     def test_status_reports_stream_failure(self) -> None:
-        client = FakeTwitchoClient({"state": "failed", "last_error": "encoder exited"})
+        client = FakeStreamoClient({"state": "failed", "last_error": "encoder exited"})
 
         status = client.status()
 
@@ -53,7 +53,7 @@ class TwitchoTests(unittest.TestCase):
         self.assertEqual(status.service.last_error, "encoder exited")
 
     def test_status_reports_missing_encoder(self) -> None:
-        client = FakeTwitchoClient(
+        client = FakeStreamoClient(
             {
                 "state": "streaming",
                 "ffmpeg_alive": False,
@@ -64,11 +64,11 @@ class TwitchoTests(unittest.TestCase):
         status = client.status()
 
         self.assertEqual(status.service.state, "error")
-        self.assertEqual(status.service.last_error, "Twitcho encoder is not running")
+        self.assertEqual(status.service.last_error, "Streamo encoder is not running")
 
-    @mock.patch("showco.twitcho.client.time.time", return_value=106.0)
+    @mock.patch("showco.streamo.client.time.time", return_value=106.0)
     def test_status_reports_stalled_audio(self, current_time: mock.Mock) -> None:
-        client = FakeTwitchoClient(
+        client = FakeStreamoClient(
             {
                 "state": "streaming",
                 "ffmpeg_alive": True,
@@ -81,30 +81,30 @@ class TwitchoTests(unittest.TestCase):
         self.assertEqual(status.service.state, "error")
         self.assertEqual(
             status.service.last_error,
-            "Twitcho audio has not advanced for 6.0 seconds",
+            "Streamo audio has not advanced for 6.0 seconds",
         )
         current_time.assert_called_once_with()
 
     def test_local_action_requires_ok_reply(self) -> None:
-        result = FakeTwitchoClient({"queued": True}).action("mute")
+        result = FakeStreamoClient({"queued": True}).action("mute")
 
         self.assertFalse(result.ok)
-        self.assertEqual(result.message, "twitcho sent an invalid mute response")
+        self.assertEqual(result.message, "streamo sent an invalid mute response")
 
     def test_twitch_api_action_accepts_object_reply(self) -> None:
-        result = FakeTwitchoClient({"data": []}).action("clip")
+        result = FakeStreamoClient({"data": []}).action("clip")
 
         self.assertTrue(result.ok)
-        self.assertEqual(result.message, "twitcho clip succeeded")
+        self.assertEqual(result.message, "streamo clip succeeded")
 
     def test_twitch_api_action_rejects_string_reply(self) -> None:
-        result = FakeTwitchoClient("ok").action("clip")
+        result = FakeStreamoClient("ok").action("clip")
 
         self.assertFalse(result.ok)
-        self.assertEqual(result.message, "twitcho sent an invalid clip response")
+        self.assertEqual(result.message, "streamo sent an invalid clip response")
 
 
-class FakeTwitchoClient(TwitchoClient):
+class FakeStreamoClient(StreamoClient):
     def __init__(self, reply: str | dict[str, object] | ConnectionError) -> None:
         self.reply = reply
 

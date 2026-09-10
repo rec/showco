@@ -87,9 +87,13 @@ class RecsStatus(BaseModel, frozen=True):
     midi: list[MidiStatus] = Field(default_factory=list)
 
 
-class TwitchoStatus(BaseModel, frozen=True):
+class StreamoStatus(BaseModel, frozen=True):
     service: ServiceStatus
     stream_state: str = "unknown"
+    streaming_service: str | None = None
+    endpoint_host: str | None = None
+    capabilities: list[str] = Field(default_factory=list)
+    remote_health: dict[str, object] | None = None
     muted: bool = False
     ffmpeg_alive: bool = False
     audio_seconds: float | None = None
@@ -160,7 +164,7 @@ class InputCheck(BaseModel, frozen=True):
 
 class ShowStatus(BaseModel, frozen=True):
     recs: RecsStatus
-    twitcho: TwitchoStatus
+    streamo: StreamoStatus
     lyte: LyteStatus = Field(
         default_factory=lambda: LyteStatus(
             service=ServiceStatus(name="lyte", state="disabled")

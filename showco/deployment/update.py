@@ -341,7 +341,7 @@ def expand_repository_selection(selected: list[str]) -> list[str]:
 def programs_for_repositories(
     selected: list[str],
     root: Path,
-    twitcho_enabled: bool = True,
+    streamo_enabled: bool = True,
     lyte_enabled: bool = True,
 ) -> list[Program]:
     return [
@@ -351,7 +351,7 @@ def programs_for_repositories(
             service_names=[
                 s
                 for s in SERVICES_BY_REPOSITORY[n]
-                if (twitcho_enabled or s != "twitcho") and (lyte_enabled or s != "lyte")
+                if (streamo_enabled or s != "streamo") and (lyte_enabled or s != "lyte")
             ],
         )
         for n in selected
@@ -459,7 +459,7 @@ def remote_update_command(
     arguments = shlex.join([*arguments_list, *selected])
     showco_directory = shlex.quote(str(root / "showco"))
     dependency_directories = shlex.join(
-        [str(root / name) for name in ["reccy", "recs", "twitcho", "lyte"]]
+        [str(root / name) for name in ["reccy", "recs", "streamo", "lyte"]]
     )
     worktree_check = ""
     if not skip_worktree_check:
@@ -564,8 +564,8 @@ def start_or_refresh_service_step(
             return install_lyte_service(
                 root, provision_config.lyte.daemon_config, run_command
             )
-        if service_name == "twitcho":
-            return install_twitcho_service(
+        if service_name == "streamo":
+            return install_streamo_service(
                 root, provision_config.network.user, run_command
             )
     return run_service_step(
@@ -614,17 +614,17 @@ def install_recs_service(
     return run_step("recs", "install service", ["sh", "-c", command], run_command)
 
 
-def install_twitcho_service(
+def install_streamo_service(
     root: Path, user: str, run_command: RunCommand
 ) -> StepResult:
-    directory = root / "twitcho"
-    config_path = Path("/home") / user / ".config/twitcho/config.json"
+    directory = root / "streamo"
+    config_path = Path("/home") / user / ".config/streamo/config.toml"
     command = (
         f"cd {shlex.quote(str(directory))} && "
-        "uv run --locked twitcho daemon install "
+        "uv run --locked streamo daemon install "
         f"--config {shlex.quote(str(config_path))}"
     )
-    return run_step("twitcho", "install service", ["sh", "-c", command], run_command)
+    return run_step("streamo", "install service", ["sh", "-c", command], run_command)
 
 
 def run_step(
@@ -768,16 +768,16 @@ def report_failure(result: StepResult, output: TextIO) -> None:
 
 REPOSITORY_NAMES = repositories.REPOSITORY_NAMES
 DOWNSTREAM_REPOSITORIES = {
-    "reccy": ["reccy", "recs", "twitcho", "lyte", "showco"],
+    "reccy": ["reccy", "recs", "streamo", "lyte", "showco"],
     "recs": ["recs", "showco"],
-    "twitcho": ["twitcho"],
+    "streamo": ["streamo"],
     "lyte": ["lyte"],
     "showco": ["showco"],
 }
 SERVICES_BY_REPOSITORY = {
-    "reccy": ["recs", "showco", "twitcho", "lyte"],
+    "reccy": ["recs", "showco", "streamo", "lyte"],
     "recs": ["recs"],
     "showco": ["showco"],
-    "twitcho": ["twitcho"],
+    "streamo": ["streamo"],
     "lyte": ["lyte"],
 }

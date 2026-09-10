@@ -20,7 +20,7 @@ STARTUP_CHECK_NAMES = [
     "recs status is advancing",
     "showco service is active",
     "showco web UI revision",
-    "Twitcho service",
+    "Streamo service",
     "X18 bridge has the configured address",
     "private Wi-Fi hotspot is active",
 ]
@@ -113,7 +113,7 @@ def verify_provisioning(
         ),
         *private_wifi_verification,
         verify_lyte_service(provision_config),
-        verify_twitcho_service(provision_config),
+        verify_streamo_service(provision_config),
         *verify_mixer_devices(provision_config),
     ]
 
@@ -140,7 +140,7 @@ def project_status_command(project: str, root: Path) -> str:
 def project_statuses_command(root: Path) -> str:
     root_value = shlex.quote(str(root))
     return (
-        "for project in reccy recs twitcho lyte showco; do "
+        "for project in reccy recs streamo lyte showco; do "
         f"status=$(git -C {root_value}/$project status --short) || exit $?; "
         'if [ -n "$status" ]; then '
         'printf \'%s:\\n%s\\n\' "$project" "$status"; fi; '
@@ -159,11 +159,11 @@ def showco_service_status_command(service: str, root: Path) -> str:
     )
 
 
-def showco_twitcho_health_command(root: Path) -> str:
+def showco_streamo_health_command(root: Path) -> str:
     showco_directory = shlex.quote(str(root / "showco"))
     return user_session_command(
         f'cd {showco_directory} && PATH="$HOME/.local/bin:$PATH" '
-        "uv run --locked showco run twitcho-health"
+        "uv run --locked showco run streamo-health"
     )
 
 
@@ -200,13 +200,13 @@ def verify_lyte_service(provision_config: config.Config) -> VerificationResult:
     return active
 
 
-def verify_twitcho_service(provision_config: config.Config) -> VerificationResult:
+def verify_streamo_service(provision_config: config.Config) -> VerificationResult:
     if not provision_config.twitch.enabled:
-        return VerificationResult(name="Twitcho service", error="", note="disabled")
+        return VerificationResult(name="Streamo service", error="", note="disabled")
     return verify_remote_command(
         provision_config,
-        "Twitcho service",
-        showco_twitcho_health_command(provision_config.paths.root),
+        "Streamo service",
+        showco_streamo_health_command(provision_config.paths.root),
     )
 
 

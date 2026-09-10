@@ -26,7 +26,7 @@ class ServerTests(unittest.TestCase):
     def test_status_includes_server_revision(self, source_revision: mock.Mock) -> None:
         app = ShowcoApp(
             rehearsal.RehearsalRecsClient(),
-            rehearsal.RehearsalTwitchoClient(),
+            rehearsal.RehearsalStreamoClient(),
             rehearsal.RehearsalSystemMonitor(),
             rehearsal.RehearsalMixersMonitor(),
         )
@@ -215,8 +215,8 @@ class ServerTests(unittest.TestCase):
                 recs=models.RecsStatus(
                     service=models.ServiceStatus(name="recs", state="connected")
                 ),
-                twitcho=models.TwitchoStatus(
-                    service=models.ServiceStatus(name="twitcho", state="offline")
+                streamo=models.StreamoStatus(
+                    service=models.ServiceStatus(name="streamo", state="offline")
                 ),
             )
         )
@@ -234,8 +234,8 @@ class ServerTests(unittest.TestCase):
                 recs=models.RecsStatus(
                     service=models.ServiceStatus(name="recs", state="connected")
                 ),
-                twitcho=models.TwitchoStatus(
-                    service=models.ServiceStatus(name="twitcho", state="disabled")
+                streamo=models.StreamoStatus(
+                    service=models.ServiceStatus(name="streamo", state="disabled")
                 ),
             )
         )
@@ -255,8 +255,8 @@ class ServerTests(unittest.TestCase):
                 recs=models.RecsStatus(
                     service=models.ServiceStatus(name="recs", state="connected")
                 ),
-                twitcho=models.TwitchoStatus(
-                    service=models.ServiceStatus(name="twitcho", state="connected")
+                streamo=models.StreamoStatus(
+                    service=models.ServiceStatus(name="streamo", state="connected")
                 ),
                 system=models.SystemStatus(temperature_c=52.75),
             )
@@ -275,8 +275,8 @@ class ServerTests(unittest.TestCase):
                     elapsed_seconds=65,
                     file_count=3,
                 ),
-                twitcho=models.TwitchoStatus(
-                    service=models.ServiceStatus(name="twitcho", state="disabled")
+                streamo=models.StreamoStatus(
+                    service=models.ServiceStatus(name="streamo", state="disabled")
                 ),
             )
         )
@@ -296,8 +296,8 @@ class ServerTests(unittest.TestCase):
                         estimated_seconds_remaining=3600,
                     ),
                 ),
-                twitcho=models.TwitchoStatus(
-                    service=models.ServiceStatus(name="twitcho", state="disabled")
+                streamo=models.StreamoStatus(
+                    service=models.ServiceStatus(name="streamo", state="disabled")
                 ),
                 system=models.SystemStatus(
                     cpu_percent=42,
@@ -323,8 +323,8 @@ class ServerTests(unittest.TestCase):
                     service=models.ServiceStatus(name="recs", state="connected"),
                     snapshot_error="recs status_snapshot failed: slow",
                 ),
-                twitcho=models.TwitchoStatus(
-                    service=models.ServiceStatus(name="twitcho", state="disabled")
+                streamo=models.StreamoStatus(
+                    service=models.ServiceStatus(name="streamo", state="disabled")
                 ),
             )
         )
@@ -338,8 +338,8 @@ class ServerTests(unittest.TestCase):
                 recs=models.RecsStatus(
                     service=models.ServiceStatus(name="recs", state="connected")
                 ),
-                twitcho=models.TwitchoStatus(
-                    service=models.ServiceStatus(name="twitcho", state="disabled")
+                streamo=models.StreamoStatus(
+                    service=models.ServiceStatus(name="streamo", state="disabled")
                 ),
             )
         )
@@ -353,8 +353,8 @@ class ServerTests(unittest.TestCase):
                 recs=models.RecsStatus(
                     service=models.ServiceStatus(name="recs", state="connected")
                 ),
-                twitcho=models.TwitchoStatus(
-                    service=models.ServiceStatus(name="twitcho", state="disabled")
+                streamo=models.StreamoStatus(
+                    service=models.ServiceStatus(name="streamo", state="disabled")
                 ),
                 readiness=models.ReadinessStatus(
                     checks=[
@@ -374,8 +374,8 @@ class ServerTests(unittest.TestCase):
                 recs=models.RecsStatus(
                     service=models.ServiceStatus(name="recs", state="connected")
                 ),
-                twitcho=models.TwitchoStatus(
-                    service=models.ServiceStatus(name="twitcho", state="disabled")
+                streamo=models.StreamoStatus(
+                    service=models.ServiceStatus(name="streamo", state="disabled")
                 ),
                 incidents=[
                     models.Incident(
@@ -395,8 +395,8 @@ class ServerTests(unittest.TestCase):
                 recs=models.RecsStatus(
                     service=models.ServiceStatus(name="recs", state="connected")
                 ),
-                twitcho=models.TwitchoStatus(
-                    service=models.ServiceStatus(name="twitcho", state="disabled")
+                streamo=models.StreamoStatus(
+                    service=models.ServiceStatus(name="streamo", state="disabled")
                 ),
                 lyte=models.LyteStatus(
                     service=models.ServiceStatus(
@@ -419,8 +419,8 @@ class ServerTests(unittest.TestCase):
                 recs=models.RecsStatus(
                     service=models.ServiceStatus(name="recs", state="connected")
                 ),
-                twitcho=models.TwitchoStatus(
-                    service=models.ServiceStatus(name="twitcho", state="connected"),
+                streamo=models.StreamoStatus(
+                    service=models.ServiceStatus(name="streamo", state="connected"),
                     output_bitrate_kbps=312.5,
                 ),
                 mixers=[
@@ -453,8 +453,8 @@ class ServerTests(unittest.TestCase):
                         ),
                     ],
                 ),
-                twitcho=models.TwitchoStatus(
-                    service=models.ServiceStatus(name="twitcho", state="disabled")
+                streamo=models.StreamoStatus(
+                    service=models.ServiceStatus(name="streamo", state="disabled")
                 ),
             )
         )
@@ -468,8 +468,8 @@ class ServerTests(unittest.TestCase):
                 recs=models.RecsStatus(
                     service=models.ServiceStatus(name="recs", state="connected")
                 ),
-                twitcho=models.TwitchoStatus(
-                    service=models.ServiceStatus(name="twitcho", state="connected")
+                streamo=models.StreamoStatus(
+                    service=models.ServiceStatus(name="streamo", state="connected")
                 ),
                 mixers=[
                     models.MixerStatus(
@@ -536,8 +536,8 @@ class ServerTests(unittest.TestCase):
                         ),
                     ],
                 ),
-                twitcho=models.TwitchoStatus(
-                    service=models.ServiceStatus(name="twitcho", state="connected")
+                streamo=models.StreamoStatus(
+                    service=models.ServiceStatus(name="streamo", state="connected")
                 ),
             )
         )
@@ -570,7 +570,7 @@ class ServerTests(unittest.TestCase):
         recs.calibrate.return_value = models.ActionResult(ok=True, message="calibrated")
         app = ShowcoApp(
             recs,
-            rehearsal.RehearsalTwitchoClient(),
+            rehearsal.RehearsalStreamoClient(),
             rehearsal.RehearsalSystemMonitor(),
             rehearsal.RehearsalMixersMonitor(),
         )
@@ -595,8 +595,8 @@ class ServerTests(unittest.TestCase):
                         )
                     ],
                 ),
-                twitcho=models.TwitchoStatus(
-                    service=models.ServiceStatus(name="twitcho", state="connected")
+                streamo=models.StreamoStatus(
+                    service=models.ServiceStatus(name="streamo", state="connected")
                 ),
             )
         )
@@ -620,8 +620,8 @@ class ServerTests(unittest.TestCase):
                         )
                     ],
                 ),
-                twitcho=models.TwitchoStatus(
-                    service=models.ServiceStatus(name="twitcho", state="connected")
+                streamo=models.StreamoStatus(
+                    service=models.ServiceStatus(name="streamo", state="connected")
                 ),
             )
         )
@@ -640,8 +640,8 @@ class ServerTests(unittest.TestCase):
                         models.ChannelLevel(name="1", state="healthy", device="Mic"),
                     ],
                 ),
-                twitcho=models.TwitchoStatus(
-                    service=models.ServiceStatus(name="twitcho", state="connected")
+                streamo=models.StreamoStatus(
+                    service=models.ServiceStatus(name="streamo", state="connected")
                 ),
             )
         )
@@ -674,15 +674,15 @@ class ServerTests(unittest.TestCase):
         html = actions_page([])
 
         self.assertIn("Restart Twitch", html)
-        self.assertIn('value="twitcho-restart"', html)
+        self.assertIn('value="streamo-restart"', html)
 
     def test_actions_page_hides_twitch_controls_when_disabled(self) -> None:
-        html = actions_page([], twitcho_enabled=False)
+        html = actions_page([], streamo_enabled=False)
 
         self.assertNotIn("Restart Twitch", html)
-        self.assertNotIn('value="twitcho-mute"', html)
+        self.assertNotIn('value="streamo-mute"', html)
 
-    def test_disabled_twitcho_does_not_request_status(self) -> None:
+    def test_disabled_streamo_does_not_request_status(self) -> None:
         app = ShowcoApp(
             rehearsal.RehearsalRecsClient(),
             None,
@@ -692,9 +692,9 @@ class ServerTests(unittest.TestCase):
 
         status = app.status()
 
-        self.assertEqual(status.twitcho.service.state, "disabled")
+        self.assertEqual(status.streamo.service.state, "disabled")
 
-    def test_disabled_twitcho_rejects_actions(self) -> None:
+    def test_disabled_streamo_rejects_actions(self) -> None:
         app = ShowcoApp(
             rehearsal.RehearsalRecsClient(),
             None,
@@ -702,10 +702,10 @@ class ServerTests(unittest.TestCase):
             rehearsal.RehearsalMixersMonitor(),
         )
 
-        result = app.run_action({"action": "twitcho-mute"})
+        result = app.run_action({"action": "streamo-mute"})
 
         self.assertFalse(result.ok)
-        self.assertEqual(result.message, "twitcho is disabled")
+        self.assertEqual(result.message, "streamo is disabled")
 
     def test_actions_page_has_recs_protocol_controls(self) -> None:
         html = actions_page([])
@@ -754,7 +754,7 @@ class ServerTests(unittest.TestCase):
     def test_lyte_light_test_uses_lyte_client(self) -> None:
         app = ShowcoApp(
             rehearsal.RehearsalRecsClient(),
-            rehearsal.RehearsalTwitchoClient(),
+            rehearsal.RehearsalStreamoClient(),
             rehearsal.RehearsalSystemMonitor(),
             rehearsal.RehearsalMixersMonitor(),
         )
@@ -782,7 +782,7 @@ class ServerTests(unittest.TestCase):
         )
         app = ShowcoApp(
             rehearsal.RehearsalRecsClient(),
-            rehearsal.RehearsalTwitchoClient(),
+            rehearsal.RehearsalStreamoClient(),
             rehearsal.RehearsalSystemMonitor(),
             rehearsal.RehearsalMixersMonitor(),
             lyte=lyte,
@@ -797,18 +797,18 @@ class ServerTests(unittest.TestCase):
         restart = mock.Mock(
             return_value=models.ActionResult(
                 ok=True,
-                message="twitcho restart requested",
+                message="streamo restart requested",
             )
         )
         app = ShowcoApp(
             rehearsal.RehearsalRecsClient(),
-            rehearsal.RehearsalTwitchoClient(),
+            rehearsal.RehearsalStreamoClient(),
             rehearsal.RehearsalSystemMonitor(),
             rehearsal.RehearsalMixersMonitor(),
             restart,
         )
 
-        result = app.run_action({"action": "twitcho-restart"})
+        result = app.run_action({"action": "streamo-restart"})
 
         self.assertTrue(result.ok)
         restart.assert_called_once_with()
@@ -817,7 +817,7 @@ class ServerTests(unittest.TestCase):
         recs = rehearsal.RehearsalRecsClient()
         app = ShowcoApp(
             recs,
-            rehearsal.RehearsalTwitchoClient(),
+            rehearsal.RehearsalStreamoClient(),
             rehearsal.RehearsalSystemMonitor(),
             rehearsal.RehearsalMixersMonitor(),
         )
@@ -838,7 +838,7 @@ class ServerTests(unittest.TestCase):
         recs = rehearsal.RehearsalRecsClient()
         app = ShowcoApp(
             recs,
-            rehearsal.RehearsalTwitchoClient(),
+            rehearsal.RehearsalStreamoClient(),
             rehearsal.RehearsalSystemMonitor(),
             rehearsal.RehearsalMixersMonitor(),
         )
@@ -858,7 +858,7 @@ class ServerTests(unittest.TestCase):
         recs = rehearsal.RehearsalRecsClient()
         app = ShowcoApp(
             recs,
-            rehearsal.RehearsalTwitchoClient(),
+            rehearsal.RehearsalStreamoClient(),
             rehearsal.RehearsalSystemMonitor(),
             rehearsal.RehearsalMixersMonitor(),
         )
@@ -874,7 +874,7 @@ class ServerTests(unittest.TestCase):
         recs = rehearsal.RehearsalRecsClient()
         app = ShowcoApp(
             recs,
-            rehearsal.RehearsalTwitchoClient(),
+            rehearsal.RehearsalStreamoClient(),
             rehearsal.RehearsalSystemMonitor(),
             rehearsal.RehearsalMixersMonitor(),
         )
@@ -894,7 +894,7 @@ class ServerTests(unittest.TestCase):
     def test_recs_action_reports_invalid_noise_floor(self) -> None:
         app = ShowcoApp(
             rehearsal.RehearsalRecsClient(),
-            rehearsal.RehearsalTwitchoClient(),
+            rehearsal.RehearsalStreamoClient(),
             rehearsal.RehearsalSystemMonitor(),
             rehearsal.RehearsalMixersMonitor(),
         )
@@ -914,7 +914,7 @@ class ServerTests(unittest.TestCase):
     def test_shutdown_action_defaults_to_cancel(self) -> None:
         app = ShowcoApp(
             rehearsal.RehearsalRecsClient(),
-            rehearsal.RehearsalTwitchoClient(),
+            rehearsal.RehearsalStreamoClient(),
             rehearsal.RehearsalSystemMonitor(),
             rehearsal.RehearsalMixersMonitor(),
         )
@@ -927,7 +927,7 @@ class ServerTests(unittest.TestCase):
     def test_action_log_keeps_ten_most_recent_results(self) -> None:
         app = ShowcoApp(
             rehearsal.RehearsalRecsClient(),
-            rehearsal.RehearsalTwitchoClient(),
+            rehearsal.RehearsalStreamoClient(),
             rehearsal.RehearsalSystemMonitor(),
             rehearsal.RehearsalMixersMonitor(),
         )
@@ -945,7 +945,7 @@ class ServerTests(unittest.TestCase):
         recs.calibrate.side_effect = OSError("recs socket unavailable")
         app = ShowcoApp(
             recs,
-            rehearsal.RehearsalTwitchoClient(),
+            rehearsal.RehearsalStreamoClient(),
             rehearsal.RehearsalSystemMonitor(),
             rehearsal.RehearsalMixersMonitor(),
         )
@@ -978,7 +978,7 @@ class ServerTests(unittest.TestCase):
         recs.calibrate.side_effect = calibrate
         app = ShowcoApp(
             recs,
-            rehearsal.RehearsalTwitchoClient(),
+            rehearsal.RehearsalStreamoClient(),
             rehearsal.RehearsalSystemMonitor(),
             rehearsal.RehearsalMixersMonitor(),
         )

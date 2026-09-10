@@ -65,7 +65,7 @@ def exchange_code_command(
     secrets: Path = DEFAULT_SECRETS_PATH,
 ) -> int:
     options = auth_options(config_path, secrets)
-    return exchange_code(config.load_values(options.config, options.secrets))
+    return exchange_code(options.config, options.secrets)
 
 
 def validate_token_command(
@@ -73,7 +73,7 @@ def validate_token_command(
     secrets: Path = DEFAULT_SECRETS_PATH,
 ) -> int:
     options = auth_options(config_path, secrets)
-    return validate_token(config.read_toml(options.config))
+    return validate_token(config.load_values(options.config, options.secrets))
 
 
 def authorize_url(config_path: Path, values: dict[str, object]) -> int:
@@ -100,13 +100,14 @@ def authorize_url(config_path: Path, values: dict[str, object]) -> int:
     return 0
 
 
-def exchange_code(env: dict[str, object]) -> int:
+def exchange_code(config_path: Path, secrets_path: Path) -> int:
+    env = config.load_values(config_path, secrets_path)
     twitch = config.table_value(env, "twitch")
     client_id = require_value(twitch, "client_id")
     client_secret = require_value(twitch, "client_secret")
     redirect_uri = require_value(twitch, "redirect_uri")
     callback = require_value(twitch, "callback_url_or_code")
-    config_dir = Path(require_value(twitch, "config_dir")).expanduser()
+    config_dir = Path.home() / ".config/streamo"
     config_dir.mkdir(parents=True, exist_ok=True)
     response_file = config_dir / "oauth-response.json"
     data = parse.urlencode(
@@ -145,7 +146,11 @@ def exchange_code(env: dict[str, object]) -> int:
         print(json.dumps(response, indent=2))
         return 1
 
-    (config_dir / "oauth-token").write_text(response["access_token"] + "\n")
+    access_token = response["access_token"]
+    if not isinstance(access_token, str):
+        raise ValueError("Twitch returned an invalid access token")
+    write_toml_value(secrets_path, "twitch", "oath_token", access_token)
+    (config_dir / "oauth-token").write_text(access_token + "\n")
     if refresh_token := response.get("refresh_token"):
         (config_dir / "refresh-token").write_text(refresh_token + "\n")
 
@@ -154,20 +159,13 @@ def exchange_code(env: dict[str, object]) -> int:
     if response.get("refresh_token"):
         print(f"Saved refresh token to {config_dir / 'refresh-token'}")
     print()
-    print("Run showco twitcho validate-token next.")
+    print("Run showco streamo validate-token next.")
     return 0
 
 
 def validate_token(values: dict[str, object]) -> int:
     twitch = config.table_value(values, "twitch")
-    config_dir = Path(require_value(twitch, "config_dir")).expanduser()
-    token_file = config_dir / "oauth-token"
-    if not token_file.exists():
-        message = (
-            f"No access token at {token_file}. Run showco twitcho exchange-code first."
-        )
-        sys.exit(message)
-    token = token_file.read_text().strip()
+    token = require_value(twitch, "oath_token")
     http_request = request.Request(
         TWITCH_VALIDATE_URL,
         headers={"Authorization": f"OAuth {token}"},

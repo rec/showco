@@ -46,7 +46,7 @@ class NetworkConfigTests(unittest.TestCase):
             network_config.NetworkTopology.MIXED,
         )
 
-    def test_default_topology_without_second_wifi_and_twitcho_is_private(self) -> None:
+    def test_default_topology_without_second_wifi_and_streamo_is_private(self) -> None:
         config = make_network_config(external_wifi_name="Venue")
 
         self.assertEqual(
@@ -54,7 +54,7 @@ class NetworkConfigTests(unittest.TestCase):
             network_config.NetworkTopology.PRIVATE,
         )
 
-    def test_default_topology_with_twitcho_and_one_wifi_is_public(self) -> None:
+    def test_default_topology_with_streamo_and_one_wifi_is_public(self) -> None:
         config = make_network_config(external_wifi_name="Venue", twitch_enabled=True)
 
         self.assertEqual(
@@ -62,7 +62,7 @@ class NetworkConfigTests(unittest.TestCase):
             network_config.NetworkTopology.PUBLIC,
         )
 
-    def test_twitcho_without_external_network_is_error(self) -> None:
+    def test_streamo_without_external_network_is_error(self) -> None:
         config = make_network_config(external_wifi_name="", twitch_enabled=True)
 
         with self.assertRaises(SystemExit):
@@ -448,7 +448,7 @@ class NetworkConfigTests(unittest.TestCase):
                 "git": {
                     "reccy": {"url": "https://github.com/rec/reccy.git"},
                     "recs": {"url": "https://github.com/rec/recs.git"},
-                    "twitcho": {"url": "https://github.com/rec/twitcho.git"},
+                    "streamo": {"url": "https://github.com/rec/streamo.git"},
                     "lyte": {"url": "https://github.com/rec/lyte.git"},
                     "showco": {"url": "https://github.com/rec/showco.git"},
                 },
@@ -510,7 +510,7 @@ def make_network_config(
             "git": {
                 "reccy": {"url": "https://github.com/rec/reccy.git"},
                 "recs": {"url": "https://github.com/rec/recs.git"},
-                "twitcho": {"url": "https://github.com/rec/twitcho.git"},
+                "streamo": {"url": "https://github.com/rec/streamo.git"},
                 "lyte": {"url": "https://github.com/rec/lyte.git"},
                 "showco": {"url": "https://github.com/rec/showco.git"},
             },

@@ -12,7 +12,7 @@ class ReadinessTests(unittest.TestCase):
         self.assertTrue(value.ready)
         self.assertEqual(
             [check.name for check in value.checks],
-            ["Recs", "Recording", "Recording disk", "Lyte", "Twitcho"],
+            ["Recs", "Recording", "Recording disk", "Lyte", "Streamo"],
         )
 
     def test_paused_recording_blocks_readiness(self) -> None:
@@ -62,8 +62,8 @@ def show_status(
                 path="/recordings", used_bytes=1, free_bytes=2, total_bytes=3
             ),
         ),
-        twitcho=models.TwitchoStatus(
-            service=models.ServiceStatus(name="twitcho", state="disabled")
+        streamo=models.StreamoStatus(
+            service=models.ServiceStatus(name="streamo", state="disabled")
         ),
         lyte=(
             lyte

@@ -16,13 +16,13 @@ class RehearsalTests(unittest.TestCase):
         self.assertEqual(len(status.channels), 18)
         self.assertIn("healthy", {c.state for c in status.channels})
 
-    def test_rehearsal_twitcho_actions_change_status(self) -> None:
-        twitcho = rehearsal.RehearsalTwitchoClient()
+    def test_rehearsal_streamo_actions_change_status(self) -> None:
+        streamo = rehearsal.RehearsalStreamoClient()
 
-        mute = twitcho.action("mute")
-        muted = twitcho.status()
-        stop = twitcho.action("stop")
-        stopped = twitcho.status()
+        mute = streamo.action("mute")
+        muted = streamo.status()
+        stop = streamo.action("stop")
+        stopped = streamo.status()
 
         self.assertTrue(mute.ok)
         self.assertTrue(stop.ok)

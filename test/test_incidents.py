@@ -22,7 +22,7 @@ def status(*, paused: bool = False) -> models.ShowStatus:
             recording=True,
             paused=paused,
         ),
-        twitcho=models.TwitchoStatus(
-            service=models.ServiceStatus(name="twitcho", state="disabled")
+        streamo=models.StreamoStatus(
+            service=models.ServiceStatus(name="streamo", state="disabled")
         ),
     )

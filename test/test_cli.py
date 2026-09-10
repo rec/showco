@@ -56,14 +56,14 @@ class CliTests(unittest.TestCase):
 
         prepare_card.assert_called_once_with(["--boot", "/Volumes/bootfs"])
 
-    def test_dispatches_twitcho_subcommand(self) -> None:
+    def test_dispatches_streamo_subcommand(self) -> None:
         with (
             patch.object(cli.machine_role, "require_target_machine"),
-            patch.object(cli.auth, "main", return_value=7) as twitcho,
+            patch.object(cli.auth, "main", return_value=7) as streamo,
         ):
-            self.assertEqual(cli.main(["twitcho", "--help"]), 7)
+            self.assertEqual(cli.main(["streamo", "--help"]), 7)
 
-        twitcho.assert_called_once_with(["--help"])
+        streamo.assert_called_once_with(["--help"])
 
     def test_dispatches_logs_subcommand(self) -> None:
         with patch.object(cli.logs, "main", return_value=7) as logs:

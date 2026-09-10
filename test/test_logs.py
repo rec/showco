@@ -20,7 +20,7 @@ class LogsTests(unittest.TestCase):
         output = StringIO()
 
         result = logs.fetch_logs(
-            logs.LogsOptions(services=["recs", "twitcho"], lines=25),
+            logs.LogsOptions(services=["recs", "streamo"], lines=25),
             target_config=target_config(),
             run_command=run_command,
             output=output,
@@ -43,14 +43,14 @@ class LogsTests(unittest.TestCase):
                     "22",
                     "tom@bertrand.local",
                     'tail --lines=25 "$HOME/.local/state/recs/recs.log" '
-                    '"$HOME/.local/state/twitcho/twitcho.log"',
+                    '"$HOME/.local/state/streamo/streamo.log"',
                 ]
             ],
         )
 
     def test_defaults_to_all_service_logs(self) -> None:
         self.assertEqual(
-            logs.selected_services([]), ["showco", "recs", "twitcho", "lyte"]
+            logs.selected_services([]), ["showco", "recs", "streamo", "lyte"]
         )
 
     def test_rejects_unknown_services(self) -> None:
@@ -80,7 +80,7 @@ def target_config() -> config.Config:
             "git": {
                 "reccy": {"url": "git@github.com:rec/reccy"},
                 "recs": {"url": "git@github.com:rec/recs"},
-                "twitcho": {"url": "git@github.com:rec/twitcho"},
+                "streamo": {"url": "git@github.com:rec/streamo"},
                 "showco": {"url": "git@github.com:rec/showco"},
                 "lyte": {"url": "git@github.com:rec/lyte"},
             },

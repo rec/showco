@@ -13,7 +13,7 @@ There are two machine roles:
 - The target Raspberry Pi runs the show services and exposes Showco to the show
   network.
 
-The target keeps `reccy`, `recs`, `twitcho`, `lyte`, and `showco` as sibling Git
+The target keeps `reccy`, `recs`, `streamo`, `lyte`, and `showco` as sibling Git
 checkouts under `[paths].root`. Each project has its own locked `uv` environment.
 They share one uv-managed Python 3.13 installation and package cache.
 
@@ -24,7 +24,7 @@ The target uses user-level systemd services with user lingering enabled:
 | `recs.service` | Record audio, MIDI, and configured OSC nodes. | Status, control, configuration, and waveforms over public Reccy RPC endpoints. |
 | `showco.service` | Serve the web UI and monitoring sampler. | Browser-facing service. |
 | `lyte.service` | Render and transmit lighting output. | Status and light tests over Reccy RPC when enabled. |
-| `twitcho.service` | Stream to Twitch and expose stream controls. | Status and operator actions over Reccy RPC when enabled. |
+| `streamo.service` | Stream to Twitch and expose stream controls. | Status and operator actions over Reccy RPC when enabled. |
 
 Unavailable optional services are represented as disabled or offline. Recs,
 mixer, MIDI, OSC, and monitoring failures are reported without preventing the
@@ -47,7 +47,7 @@ The routes are:
 | `GET /errors` | Up to 25 Recs errors from the current Showco run. |
 | `GET /status` | Current status as JSON for browser polling and deployment checks. |
 | `GET /waveforms` | Server-sent Recs waveform events. |
-| `POST /actions` | Serialized Recs, Lyte, or Twitcho action dispatch. |
+| `POST /actions` | Serialized Recs, Lyte, or Streamo action dispatch. |
 
 Ordinary form posts redirect to the Actions page. Requests with
 `Accept: application/json` receive the action result directly. Ordinary request
@@ -102,16 +102,16 @@ topologies, NetworkManager bridges the private Wi-Fi access point and Ethernet
 so the tablet and mixer share the internal subnet. In public topology, Ethernet
 is configured directly on that subnet.
 
-## Lyte and Twitcho
+## Lyte and Streamo
 
 When Lyte is enabled, Showco polls its Reccy RPC status and exposes a one-second,
 30-percent light test. The first transition to connected during a Showco run
 automatically queues the same test. A later disconnect permits another test
 when Lyte reconnects.
 
-When Twitcho is enabled, Showco polls its Reccy RPC status and exposes restart,
+When Streamo is enabled, Showco polls its Reccy RPC status and exposes restart,
 mute, unmute, stop, stream-information, chat, announcement, clip, and marker
-actions. Disabled Lyte and Twitcho services do not produce their action controls.
+actions. Disabled Lyte and Streamo services do not produce their action controls.
 
 ## Performance monitoring
 

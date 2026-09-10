@@ -59,7 +59,7 @@ def bundle_path(source: Path, state_directory: Path, config_directory: Path) -> 
 def sources(state_directory: Path, config_directory: Path) -> list[Path]:
     result = [
         path
-        for service in ["showco", "recs", "lyte", "twitcho"]
+        for service in ["showco", "recs", "lyte", "streamo"]
         if (path := state_directory / service / f"{service}.log").is_file()
     ]
     result.extend(sorted((state_directory / "showco/monitoring").glob("*.jsonl")))
