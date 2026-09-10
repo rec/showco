@@ -16,7 +16,7 @@ from urllib import parse
 from pydantic import ValidationError
 from reccy.runtime import logging
 
-from . import incidents, models, readiness, services
+from . import incidents, models, readiness, recording_progress, services
 from .lyte import LyteClient
 from .mixer import MixersMonitor
 from .monitoring import PerformanceMonitor
@@ -63,6 +63,7 @@ class ShowcoApp:
         self.lyte_status_lock = threading.Lock()
         self.lyte_connected = False
         self.incidents = incidents.IncidentTimeline()
+        self.recording_progress = recording_progress.ProgressMonitor()
 
     def status(self) -> models.ShowStatus:
         if self.twitcho is None:
@@ -89,7 +90,12 @@ class ShowcoApp:
             run_started_at=self.run_started_at,
         )
         status = status.model_copy(update={"readiness": readiness.status(status)})
-        return status.model_copy(update={"incidents": self.incidents.observe(status)})
+        return status.model_copy(
+            update={
+                "incidents": self.incidents.observe(status),
+                "recording_progress": self.recording_progress.observe(recs),
+            }
+        )
 
     def _lyte_status(self) -> models.LyteStatus:
         if self.lyte is None:
@@ -475,6 +481,7 @@ def channels_page(status: models.ShowStatus) -> str:
 def health_page(status: models.ShowStatus) -> str:
     recs = status.recs.service
     twitcho = status.twitcho.service
+    progress_class = "ok" if status.recording_progress.ok else "failed"
     disk_critical = status.recs.disk is not None and (
         status.recs.disk.alert_active or status.recs.disk.paused_for_disk_space
     )
@@ -515,6 +522,9 @@ def health_page(status: models.ShowStatus) -> str:
           <h2>Health</h2>
           <p id="recs-health">recs: {_service_detail(recs.state, recs.last_error)}</p>
           <p id="recs-snapshot">recs snapshot: {_snapshot_detail(status.recs)}</p>
+          <p id="recording-progress" class="{progress_class}">
+            recording progress: {html.escape(status.recording_progress.message)}
+          </p>
           <p id="twitcho-health">
             twitcho: {_service_detail(twitcho.state, twitcho.last_error)}
           </p>
