@@ -85,6 +85,19 @@ class RecsTests(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertEqual(result.message, "recs did not send calibrated response")
 
+    def test_calibrate_channel_uses_public_control(self) -> None:
+        control = mock.Mock(spec=RecsControlClient)
+        control.call.return_value = {
+            "type": "calibrated",
+            "measurements": {},
+            "noise_floors": {},
+        }
+
+        result = RecsClient(control=control).calibrate("Mic", [1, 2])
+
+        self.assertTrue(result.ok)
+        control.call.assert_called_once_with("calibrate", {"channels": {"Mic": [1, 2]}})
+
     def test_set_track_name_uses_atomic_public_read_modify_write(self) -> None:
         control = mock.Mock(spec=RecsControlClient)
         control.call.side_effect = [

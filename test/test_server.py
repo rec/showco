@@ -518,6 +518,27 @@ class ServerTests(unittest.TestCase):
         self.assertIn(
             '<label class="stereo"><input type="checkbox">Stereo</label>', html
         )
+        self.assertIn(
+            '<button class="calibrate-channel" type="button">Calibrate</button>',
+            html,
+        )
+
+    def test_channel_calibration_passes_device_and_channels(self) -> None:
+        recs = mock.Mock()
+        recs.calibrate.return_value = models.ActionResult(ok=True, message="calibrated")
+        app = ShowcoApp(
+            recs,
+            rehearsal.RehearsalTwitchoClient(),
+            rehearsal.RehearsalSystemMonitor(),
+            rehearsal.RehearsalMixersMonitor(),
+        )
+
+        result = app.run_action(
+            {"action": "recs-calibrate", "device": "Mic", "channels": "1,2"}
+        )
+
+        self.assertTrue(result.ok)
+        recs.calibrate.assert_called_once_with("Mic", [1, 2])
 
     def test_channels_page_disables_mono_stereo_control_without_right_channel(
         self,

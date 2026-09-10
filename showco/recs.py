@@ -209,8 +209,22 @@ class RecsClient:
             midi=snapshot.midi,
         )
 
-    def calibrate(self) -> models.ActionResult:
-        response = self._control_command("calibrate")
+    def calibrate(
+        self, device: str = "", channels: list[int] | None = None
+    ) -> models.ActionResult:
+        if device or channels is not None:
+            if not device:
+                return models.ActionResult(
+                    ok=False, message="recs calibration device is missing"
+                )
+            if not channels:
+                return models.ActionResult(
+                    ok=False, message="recs calibration channels are missing"
+                )
+            parameters: dict[str, object] | None = {"channels": {device: channels}}
+        else:
+            parameters = None
+        response = self._control_command("calibrate", parameters)
         if isinstance(response, models.ActionResult):
             return response
         if calibrated_response(response):

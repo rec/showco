@@ -126,6 +126,10 @@ class ShowcoApp:
         self, action: str, form: dict[str, str]
     ) -> models.ActionResult:
         if action == "recs-calibrate":
+            device = form.get("device", "")
+            channels = _channel_numbers(form.get("channels", ""))
+            if device or channels:
+                return self.recs.calibrate(device, channels)
             return self.recs.calibrate()
         if action == "recs-track-name":
             return self.recs.set_track_name(
@@ -683,6 +687,7 @@ def level(channel: models.ChannelLevel, channels: list[models.ChannelLevel]) -> 
       </label>
       <label class="stereo"><input type="checkbox"{checked}{disabled}>Stereo</label>
       <canvas class="waveform" aria-label="Live waveform"></canvas>
+      <button class="calibrate-channel" type="button">Calibrate</button>
     </div>
     """
 
