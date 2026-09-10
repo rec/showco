@@ -10,6 +10,7 @@ from reccy import cli
 from reccy.runtime import logging
 
 from . import (
+    bundle,
     card,
     go,
     logs,
@@ -81,6 +82,7 @@ def main(argv: list[str] | None = None) -> int:
     return cli.route_command(
         {
             "run": run_command,
+            "bundle": bundle.main,
             "prepare-card": card.main,
             "go": go.main,
             "logs": logs.main,
