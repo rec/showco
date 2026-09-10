@@ -718,6 +718,7 @@ class ServerTests(unittest.TestCase):
         for label in ["Show start", "Song start", "Interval", "Show end"]:
             self.assertIn(f'name="label" value="{label}"', html)
         self.assertIn('value="recs-list-devices"', html)
+        self.assertIn('value="recs-new-session"', html)
         self.assertIn('value="recs-pause-recording"', html)
         self.assertIn('value="recs-resume-recording"', html)
         self.assertNotIn('value="recs-stop-recording"', html)
