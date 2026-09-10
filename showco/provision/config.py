@@ -38,7 +38,7 @@ class Paths(BaseModel, frozen=True):
     root: Path
 
 
-class Twitch(BaseModel, frozen=True):
+class Stream(BaseModel, frozen=True):
     enabled: bool = False
     account: str = ""
     stream_title: str = ""
@@ -76,7 +76,7 @@ class Config(BaseModel, frozen=True):
     paths: Paths
     networks: dict[str, dict[str, dict[str, Network]]]
     mixers: list[MixerSpec] = Field(default_factory=list)
-    twitch: Twitch
+    stream: Stream
     lyte: Lyte
     git: Git
     accept_changed_host_key: bool = True
@@ -133,7 +133,7 @@ def config_from_values(
         ),
         networks=networks_value(network_values, mixers),
         mixers=mixers,
-        twitch=twitch_value(table_value(values, "twitch")),
+        stream=stream_value(table_value(values, "stream")),
         lyte=lyte_value(
             table_value(values, "lyte"),
             enabled=lyte_enabled,
@@ -333,8 +333,8 @@ def string_or_default(value: str, default: str) -> str:
     return default
 
 
-def twitch_value(values: dict[str, object]) -> Twitch:
-    return Twitch(
+def stream_value(values: dict[str, object]) -> Stream:
+    return Stream(
         enabled=bool_value(values, "enabled", default=False),
         account=string_value(values, "account"),
         stream_title=string_value(values, "stream_title"),

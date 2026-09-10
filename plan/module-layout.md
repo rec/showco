@@ -14,13 +14,13 @@ showco/
   __main__.py
   cli.py
   provision/
-  twitcho/
+  streamo/
   runtime/
   deployment/
 ```
 
 `cli.py` remains at the root because it is the application entry point. The
-existing `provision/` and `twitcho/` packages stay in place.
+existing `provision/` and `streamo/` packages stay in place.
 
 ## Target Packages
 
@@ -39,7 +39,7 @@ Move the target-machine web service and all of its direct adapters here:
 
 This package owns current show state, the HTTP UI, service adapters, health,
 waveforms, and local rehearsal fakes. Its modules may import from
-`showco.twitcho`, but deployment and provisioning code must not import runtime
+`showco.streamo`, but deployment and provisioning code must not import runtime
 server modules.
 
 ### `deployment/`

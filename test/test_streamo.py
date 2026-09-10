@@ -91,13 +91,13 @@ class StreamoTests(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertEqual(result.message, "streamo sent an invalid mute response")
 
-    def test_twitch_api_action_accepts_object_reply(self) -> None:
+    def test_stream_api_action_accepts_object_reply(self) -> None:
         result = FakeStreamoClient({"data": []}).action("clip")
 
         self.assertTrue(result.ok)
         self.assertEqual(result.message, "streamo clip succeeded")
 
-    def test_twitch_api_action_rejects_string_reply(self) -> None:
+    def test_stream_api_action_rejects_string_reply(self) -> None:
         result = FakeStreamoClient("ok").action("clip")
 
         self.assertFalse(result.ok)

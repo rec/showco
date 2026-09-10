@@ -55,7 +55,7 @@ class NetworkConfigTests(unittest.TestCase):
         )
 
     def test_default_topology_with_streamo_and_one_wifi_is_public(self) -> None:
-        config = make_network_config(external_wifi_name="Venue", twitch_enabled=True)
+        config = make_network_config(external_wifi_name="Venue", stream_enabled=True)
 
         self.assertEqual(
             network_config.select_topology(config, False),
@@ -63,7 +63,7 @@ class NetworkConfigTests(unittest.TestCase):
         )
 
     def test_streamo_without_external_network_is_error(self) -> None:
-        config = make_network_config(external_wifi_name="", twitch_enabled=True)
+        config = make_network_config(external_wifi_name="", stream_enabled=True)
 
         with self.assertRaises(SystemExit):
             network_config.select_topology(config, False)
@@ -434,7 +434,7 @@ class NetworkConfigTests(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, "usable address"):
             make_network_config(private_wifi_ip_address=0)
 
-    def test_config_reads_enabled_from_twitch_table(self) -> None:
+    def test_config_reads_enabled_from_stream_table(self) -> None:
         config = config_from_values(
             {
                 "network": {"host": "recs-stage.local", "user": "tom"},
@@ -444,7 +444,7 @@ class NetworkConfigTests(unittest.TestCase):
                         "wifi": {"name": "showbox", "ip_address": 1},
                     },
                 },
-                "twitch": {"enabled": True},
+                "stream": {"enabled": True},
                 "git": {
                     "reccy": {"url": "https://github.com/rec/reccy.git"},
                     "recs": {"url": "https://github.com/rec/recs.git"},
@@ -455,7 +455,7 @@ class NetworkConfigTests(unittest.TestCase):
             }
         )
 
-        self.assertTrue(config.twitch.enabled)
+        self.assertTrue(config.stream.enabled)
 
 
 def make_network_config(
@@ -463,7 +463,7 @@ def make_network_config(
     x18: bool = True,
     swap_wifi: bool = False,
     topology: network_config.NetworkTopology | None = None,
-    twitch_enabled: bool = False,
+    stream_enabled: bool = False,
     private_wifi_name: str = "showbox",
     private_wifi_ip_address: int = 1,
     private_wifi_password: str = "",
@@ -506,7 +506,7 @@ def make_network_config(
                 },
             },
             "mixers": mixers,
-            "twitch": {"enabled": twitch_enabled},
+            "stream": {"enabled": stream_enabled},
             "git": {
                 "reccy": {"url": "https://github.com/rec/reccy.git"},
                 "recs": {"url": "https://github.com/rec/recs.git"},

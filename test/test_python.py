@@ -77,7 +77,7 @@ def target_config() -> config.Config:
                 "external": {"wifi": {}},
             },
             "usb": {},
-            "twitch": {},
+            "stream": {},
             "lyte": {},
             "git": {
                 "reccy": {"url": "git@github.com:rec/reccy"},

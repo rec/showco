@@ -46,7 +46,7 @@ def remote_command(
         "X18": shell_bool(x18_network is not None),
         "SWAP_WIFI": shell_bool(provision_config.network.swap_wifi),
         "NETWORK_TOPOLOGY": provision_config.network.topology,
-        "STREAMO_ENABLED": shell_bool(provision_config.twitch.enabled),
+        "STREAMO_ENABLED": shell_bool(provision_config.stream.enabled),
         "LYTE_ENABLED": shell_bool(provision_config.lyte.enabled),
         "LYTE_DAEMON_CONFIG": str(provision_config.lyte.daemon_config),
         "PRIVATE_WIFI_SSID": config.string_or_default(private.name, "showbox"),

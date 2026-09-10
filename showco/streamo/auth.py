@@ -17,9 +17,9 @@ from ..provision import config
 PROVISION_DIR = Path(__file__).resolve().parent.parent / "provision"
 DEFAULT_CONFIG_PATH = PROVISION_DIR / "config.toml"
 DEFAULT_SECRETS_PATH = PROVISION_DIR / "secrets.toml"
-TWITCH_AUTHORIZE_URL = "https://id.twitch.tv/oauth2/authorize"
-TWITCH_TOKEN_URL = "https://id.twitch.tv/oauth2/token"
-TWITCH_VALIDATE_URL = "https://id.twitch.tv/oauth2/validate"
+STREAM_AUTHORIZE_URL = "https://id.twitch.tv/oauth2/authorize"
+STREAM_TOKEN_URL = "https://id.twitch.tv/oauth2/token"
+STREAM_VALIDATE_URL = "https://id.twitch.tv/oauth2/validate"
 
 
 class HttpResponse(BaseModel, frozen=True):
@@ -40,7 +40,7 @@ def main(argv: list[str] | None = None) -> int:
             "validate-token": validate_token_command,
         },
         args=argv,
-        description="Manage Showco Twitch OAuth tokens",
+        description="Manage Showco stream OAuth tokens",
         sort_subcommands=True,
     )
 
@@ -77,12 +77,12 @@ def validate_token_command(
 
 
 def authorize_url(config_path: Path, values: dict[str, object]) -> int:
-    twitch = config.table_value(values, "twitch")
-    client_id = require_value(twitch, "client_id", config_path)
-    redirect_uri = require_value(twitch, "redirect_uri", config_path)
-    scopes = require_value(twitch, "scopes", config_path)
+    stream = config.table_value(values, "stream")
+    client_id = require_value(stream, "client_id", config_path)
+    redirect_uri = require_value(stream, "redirect_uri", config_path)
+    scopes = require_value(stream, "scopes", config_path)
     state = secrets.token_urlsafe(24)
-    write_toml_value(config_path, "twitch", "state", state)
+    write_toml_value(config_path, "stream", "state", state)
     params = {
         "response_type": "code",
         "client_id": client_id,
@@ -91,22 +91,22 @@ def authorize_url(config_path: Path, values: dict[str, object]) -> int:
         "state": state,
         "force_verify": "true",
     }
-    url = TWITCH_AUTHORIZE_URL + "?" + parse.urlencode(params)
+    url = STREAM_AUTHORIZE_URL + "?" + parse.urlencode(params)
     webbrowser.open(url)
     print(
         "After approving it, copy the full localhost callback URL from the browser\n"
-        "address bar and paste it into twitch.callback_url_or_code in secrets.toml."
+        "address bar and paste it into stream.callback_url_or_code in secrets.toml."
     )
     return 0
 
 
 def exchange_code(config_path: Path, secrets_path: Path) -> int:
     env = config.load_values(config_path, secrets_path)
-    twitch = config.table_value(env, "twitch")
-    client_id = require_value(twitch, "client_id")
-    client_secret = require_value(twitch, "client_secret")
-    redirect_uri = require_value(twitch, "redirect_uri")
-    callback = require_value(twitch, "callback_url_or_code")
+    stream = config.table_value(env, "stream")
+    client_id = require_value(stream, "client_id")
+    client_secret = require_value(stream, "client_secret")
+    redirect_uri = require_value(stream, "redirect_uri")
+    callback = require_value(stream, "callback_url_or_code")
     config_dir = Path.home() / ".config/streamo"
     config_dir.mkdir(parents=True, exist_ok=True)
     response_file = config_dir / "oauth-response.json"
@@ -119,20 +119,20 @@ def exchange_code(config_path: Path, secrets_path: Path) -> int:
             "redirect_uri": redirect_uri,
         }
     ).encode()
-    http_request = request.Request(TWITCH_TOKEN_URL, data=data, method="POST")
+    http_request = request.Request(STREAM_TOKEN_URL, data=data, method="POST")
     http_response = request_http(http_request)
     response_file.write_text(http_response.text + "\n")
     try:
         response = json.loads(http_response.text)
     except json.JSONDecodeError:
         print(
-            "Twitch returned non-JSON token response. "
+            "Stream returned non-JSON token response. "
             f"Response saved to {response_file}"
         )
         return 1
     if http_response.status < 200 or http_response.status >= 300:
         print(
-            f"Twitch token request failed with HTTP {http_response.status}. "
+            f"Stream token request failed with HTTP {http_response.status}. "
             f"Response saved to {response_file}"
         )
         print(json.dumps(response, indent=2))
@@ -140,7 +140,7 @@ def exchange_code(config_path: Path, secrets_path: Path) -> int:
 
     if "access_token" not in response:
         message = (
-            f"Twitch did not return an access token. Response saved to {response_file}"
+            f"Stream did not return an access token. Response saved to {response_file}"
         )
         print(message)
         print(json.dumps(response, indent=2))
@@ -148,8 +148,8 @@ def exchange_code(config_path: Path, secrets_path: Path) -> int:
 
     access_token = response["access_token"]
     if not isinstance(access_token, str):
-        raise ValueError("Twitch returned an invalid access token")
-    write_toml_value(secrets_path, "twitch", "oath_token", access_token)
+        raise ValueError("Stream returned an invalid access token")
+    write_toml_value(secrets_path, "stream", "oath_token", access_token)
     (config_dir / "oauth-token").write_text(access_token + "\n")
     if refresh_token := response.get("refresh_token"):
         (config_dir / "refresh-token").write_text(refresh_token + "\n")
@@ -164,19 +164,19 @@ def exchange_code(config_path: Path, secrets_path: Path) -> int:
 
 
 def validate_token(values: dict[str, object]) -> int:
-    twitch = config.table_value(values, "twitch")
-    token = require_value(twitch, "oath_token")
+    stream = config.table_value(values, "stream")
+    token = require_value(stream, "oath_token")
     http_request = request.Request(
-        TWITCH_VALIDATE_URL,
+        STREAM_VALIDATE_URL,
         headers={"Authorization": f"OAuth {token}"},
     )
     http_response = request_http(http_request)
     if http_response.status < 200 or http_response.status >= 300:
-        sys.exit(f"Twitch token validation failed with HTTP {http_response.status}.")
+        sys.exit(f"Stream token validation failed with HTTP {http_response.status}.")
     try:
         response = json.loads(http_response.text)
     except json.JSONDecodeError:
-        sys.exit("Twitch returned non-JSON token validation response.")
+        sys.exit("Stream returned non-JSON token validation response.")
     print(json.dumps(response, indent=4))
     return 0
 

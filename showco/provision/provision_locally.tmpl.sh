@@ -351,7 +351,7 @@ write_network_config_files() {
     write_toml_network_values "$PRIVATE_WIFI_SSID" "" ""
     printf '\n[networks.external.wifi.external]\n'
     write_toml_network_values "$EXTERNAL_WIFI_SSID" "" ""
-    printf '\n[twitch]\n'
+    printf '\n[stream]\n'
     printf 'enabled = %s\n' "$STREAMO_ENABLED"
     printf '\n[lyte]\n'
     printf 'enabled = %s\n' "$LYTE_ENABLED"
@@ -780,7 +780,7 @@ Provisioning completed.
 
 Next manual steps:
 
-1. Fill final streamo config values if Twitch streaming is required.
+1. Fill final streamo config values if Stream streaming is required.
 2. Configure and enable Lyte if lighting control is required.
 3. Fill Wi-Fi password values and rerun provisioning if network configuration was skipped.
 4. Confirm the X18 USB device name.

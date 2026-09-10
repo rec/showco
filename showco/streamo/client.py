@@ -16,7 +16,7 @@ from ..runtime.models import ActionResult, ServiceStatus, StreamoStatus
 AUDIO_STALE_SECONDS = 5.0
 ACTIVE_STREAM_STATES = {"streaming", "muted"}
 LOCAL_ACTIONS = {"mute", "unmute", "stop"}
-TWITCH_API_ACTIONS = {"update_stream_info", "chat", "announce", "clip", "marker"}
+STREAM_API_ACTIONS = {"update_stream_info", "chat", "announce", "clip", "marker"}
 
 
 class StreamoHealthOptions(BaseModel, frozen=True):
@@ -97,7 +97,7 @@ class StreamoClient:
             )
         if command in LOCAL_ACTIONS and result == "ok":
             return ActionResult(ok=True, message=f"streamo {command} succeeded")
-        if command in TWITCH_API_ACTIONS and isinstance(result, dict):
+        if command in STREAM_API_ACTIONS and isinstance(result, dict):
             return ActionResult(ok=True, message=f"streamo {command} succeeded")
         return ActionResult(
             ok=False,

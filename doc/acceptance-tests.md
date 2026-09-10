@@ -104,7 +104,7 @@ Pass criteria:
   log with useful details.
 - Calibration, marker, profile reload, pause, resume, and status actions return
   the expected result.
-- Recs shutdown and Twitch stop require deliberate confirmation.
+- Recs shutdown and Stream stop require deliberate confirmation.
 
 ## 6. Monitoring retention
 
@@ -137,9 +137,9 @@ Pass criteria:
   permits another automatic test.
 - A failed test appears in Recent actions and both service logs.
 
-## 8. Streamo and Twitch
+## 8. Streamo
 
-Only required when Twitch is enabled.
+Only required when streaming is enabled.
 
 Pass criteria:
 
@@ -148,7 +148,7 @@ Pass criteria:
 - Mute and unmute affect the stream path.
 - Restart creates a fresh streaming attempt and stop terminates cleanly.
 - Updating stream information, chat, announcement, clip, and marker actions
-  either succeed or display Twitch's rejection clearly.
+  either succeed or display the streaming service's rejection clearly.
 - Loss of internet does not stop Recs recording.
 
 ## 9. Network and late devices

@@ -429,7 +429,7 @@ class ServerTests(unittest.TestCase):
             )
         )
 
-        self.assertIn("Twitch bitrate", html)
+        self.assertIn("Stream bitrate", html)
         self.assertIn("312 kbps", html)
         self.assertIn("X18: connected: 4.2 ms", html)
         self.assertIn("4.2 ms", html)
@@ -670,16 +670,16 @@ class ServerTests(unittest.TestCase):
         self.assertIn('type="checkbox" data-value-type="boolean"', html)
         self.assertIn("saveMutableAttribute", html)
 
-    def test_actions_page_has_twitch_restart_button(self) -> None:
+    def test_actions_page_has_stream_restart_button(self) -> None:
         html = actions_page([])
 
-        self.assertIn("Restart Twitch", html)
+        self.assertIn("Restart Stream", html)
         self.assertIn('value="streamo-restart"', html)
 
-    def test_actions_page_hides_twitch_controls_when_disabled(self) -> None:
+    def test_actions_page_hides_stream_controls_when_disabled(self) -> None:
         html = actions_page([], streamo_enabled=False)
 
-        self.assertNotIn("Restart Twitch", html)
+        self.assertNotIn("Restart Stream", html)
         self.assertNotIn('value="streamo-mute"', html)
 
     def test_disabled_streamo_does_not_request_status(self) -> None:
@@ -794,7 +794,7 @@ class ServerTests(unittest.TestCase):
 
         self.assertEqual(lyte.test.call_count, 2)
 
-    def test_twitch_restart_action_uses_service_restart(self) -> None:
+    def test_stream_restart_action_uses_service_restart(self) -> None:
         restart = mock.Mock(
             return_value=models.ActionResult(
                 ok=True,

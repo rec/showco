@@ -2,7 +2,7 @@
 
 Showco is the browser-facing control and status service for a self-contained
 live-show system. It coordinates recording through Recs, optional lighting
-through Lyte, optional Twitch streaming through Streamo, mixer reachability,
+through Lyte, optional streaming through Streamo, mixer reachability,
 and Raspberry Pi health without taking ownership of those services' core work.
 
 Showco requires Python 3.13. The deployed system uses five sibling repositories:
@@ -62,5 +62,5 @@ uv run ty check showco
 ```
 
 Automated tests do not establish that audio was recorded, a mixer is reachable,
-lighting frames were displayed, or Twitch accepted an operation. Use the
+lighting frames were displayed, or the streaming service accepted an operation. Use the
 hardware acceptance tests before relying on a deployed system.

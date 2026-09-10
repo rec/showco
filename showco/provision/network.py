@@ -163,15 +163,15 @@ def select_topology(
     if topology is not None:
         return topology
     if not config.external_wifi(provision_config).name:
-        if provision_config.twitch.enabled:
+        if provision_config.stream.enabled:
             sys.exit(
                 "ERROR: networks.external.wifi.external.name is required "
-                "when twitch.enabled is true"
+                "when stream.enabled is true"
             )
         return NetworkTopology.PRIVATE
     if has_second_wifi:
         return NetworkTopology.MIXED
-    if provision_config.twitch.enabled:
+    if provision_config.stream.enabled:
         return NetworkTopology.PUBLIC
     return NetworkTopology.PRIVATE
 

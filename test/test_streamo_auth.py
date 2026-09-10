@@ -62,37 +62,37 @@ class StreamoAuthTests(unittest.TestCase):
     def test_read_toml_preserves_string_lists(self) -> None:
         with TemporaryDirectory() as directory:
             path = Path(directory) / "config.toml"
-            path.write_text('[twitch]\ntags = ["Live Music", "Music"]\n')
+            path.write_text('[stream]\ntags = ["Live Music", "Music"]\n')
 
             values = config.read_toml(path)
 
         self.assertEqual(
-            config.table_value(values, "twitch")["tags"],
+            config.table_value(values, "stream")["tags"],
             ["Live Music", "Music"],
         )
 
     def test_write_toml_value_updates_section_value(self) -> None:
         with TemporaryDirectory() as directory:
             path = Path(directory) / "config.toml"
-            path.write_text('[twitch]\nstate = "old"\n')
+            path.write_text('[stream]\nstate = "old"\n')
 
-            auth.write_toml_value(path, "twitch", "state", "new")
+            auth.write_toml_value(path, "stream", "state", "new")
 
             values = config.read_toml(path)
 
-        self.assertEqual(config.table_value(values, "twitch")["state"], "new")
+        self.assertEqual(config.table_value(values, "stream")["state"], "new")
 
 
 def config_paths(directory: Path) -> tuple[Path, Path]:
     config_path = directory / "config.toml"
     secrets_path = directory / "secrets.toml"
     config_path.write_text(
-        "[twitch]\n"
+        "[stream]\n"
         'client_id = "client-id"\n'
         'redirect_uri = "http://localhost/callback"\n'
     )
     secrets_path.write_text(
-        '[twitch]\nclient_secret = "client-secret"\ncallback_url_or_code = "code"\n'
+        '[stream]\nclient_secret = "client-secret"\ncallback_url_or_code = "code"\n'
     )
     return config_path, secrets_path
 

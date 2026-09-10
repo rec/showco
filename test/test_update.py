@@ -1552,10 +1552,10 @@ def make_config(lyte_enabled: bool = False) -> object:
         network = Network()
         mixers = []
 
-        class Twitch:
+        class Stream:
             enabled = False
 
-        twitch = Twitch()
+        stream = Stream()
 
         class Lyte:
             enabled = lyte_enabled
