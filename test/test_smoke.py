@@ -9,8 +9,8 @@ from contextlib import contextmanager
 from http.server import ThreadingHTTPServer
 from urllib import parse, request
 
-from showco.rehearsal import RehearsalRecsClient, RehearsalTwitchoClient
-from showco.server import make_server
+from showco.runtime.rehearsal import RehearsalRecsClient, RehearsalTwitchoClient
+from showco.runtime.server import make_server
 
 
 class SmokeTests(unittest.TestCase):

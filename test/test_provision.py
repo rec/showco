@@ -10,8 +10,9 @@ from unittest import mock
 
 import tyro
 
-from showco import network_config, update
+from showco.deployment import update
 from showco.provision import config, provision, remote, script, ssh, state, verify
+from showco.provision import network as network_config
 
 
 class ProvisionTests(unittest.TestCase):
@@ -71,10 +72,12 @@ class ProvisionTests(unittest.TestCase):
                 "showco.provision.provision.validate_config",
             ),
             mock.patch(
-                "showco.local_update.prepare_local_repositories", return_value=True
+                "showco.deployment.local_update.prepare_local_repositories",
+                return_value=True,
             ),
             mock.patch(
-                "showco.local_update.refresh_local_dependencies", return_value=True
+                "showco.deployment.local_update.refresh_local_dependencies",
+                return_value=True,
             ),
             mock.patch(
                 "showco.provision.remote.provision_remote",
@@ -95,10 +98,12 @@ class ProvisionTests(unittest.TestCase):
             ),
             mock.patch("showco.provision.provision.validate_config"),
             mock.patch(
-                "showco.local_update.prepare_local_repositories", return_value=True
+                "showco.deployment.local_update.prepare_local_repositories",
+                return_value=True,
             ) as prepare,
             mock.patch(
-                "showco.local_update.refresh_local_dependencies", return_value=True
+                "showco.deployment.local_update.refresh_local_dependencies",
+                return_value=True,
             ) as refresh,
             mock.patch("showco.provision.remote.provision_remote"),
         ):
@@ -118,10 +123,12 @@ class ProvisionTests(unittest.TestCase):
             ),
             mock.patch("showco.provision.provision.validate_config"),
             mock.patch(
-                "showco.local_update.prepare_local_repositories", return_value=True
+                "showco.deployment.local_update.prepare_local_repositories",
+                return_value=True,
             ),
             mock.patch(
-                "showco.local_update.refresh_local_dependencies", return_value=True
+                "showco.deployment.local_update.refresh_local_dependencies",
+                return_value=True,
             ),
             mock.patch("showco.provision.remote.provision_remote") as provision_remote,
         ):

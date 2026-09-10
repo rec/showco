@@ -9,8 +9,8 @@ from typing import Annotated, TextIO
 import tyro
 from pydantic import BaseModel, Field
 
+from ..provision import config, ssh
 from . import machine_role, update
-from .provision import config, ssh
 
 SERVICE_NAMES = ("showco", "recs", "twitcho", "lyte")
 

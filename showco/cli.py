@@ -9,19 +9,11 @@ from pydantic import BaseModel
 from reccy import cli
 from reccy.runtime import logging
 
-from . import (
-    bundle,
-    card,
-    go,
-    logs,
-    machine_role,
-    network_config,
-    python,
-    rehearsal,
-    services,
-)
-from .mixer import MixersMonitor, load_mixer_specs
-from .server import make_server
+from .deployment import bundle, card, go, logs, machine_role, python
+from .provision import network
+from .runtime import rehearsal, services
+from .runtime.mixer import MixersMonitor, load_mixer_specs
+from .runtime.server import make_server
 from .twitcho import auth, client
 
 
@@ -96,7 +88,7 @@ def main(argv: list[str] | None = None) -> int:
 
 def run_command(arguments: list[str]) -> int:
     if arguments[:1] == ["network-config"]:
-        return network_config.main(arguments[1:])
+        return network.main(arguments[1:])
     if arguments[:1] == ["install-service"]:
         return services.install_main(arguments[1:])
     if arguments[:1] == ["service-status"]:

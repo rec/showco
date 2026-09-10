@@ -3,11 +3,11 @@ from __future__ import annotations
 import math
 import time
 
+from ..twitcho.client import TwitchoClient
 from . import models
 from .mixer import MixersMonitor
 from .recs import RecsClient, stereo_tracks
 from .system import SystemMonitor
-from .twitcho.client import TwitchoClient
 
 
 class RehearsalRecsClient(RecsClient):

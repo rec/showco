@@ -10,8 +10,8 @@ from subprocess import TimeoutExpired
 from pydantic import BaseModel
 from reccy.runtime import subprocess
 
-from .. import network_config, recs, revision
-from . import config, ssh
+from ..runtime import recs, revision
+from . import config, network, ssh
 
 POST_REBOOT_READY_WAIT_SECONDS = 60
 STARTUP_CHECK_NAMES = [
@@ -34,18 +34,18 @@ class VerificationResult(BaseModel, frozen=True):
 
 def verify_provisioning(
     provision_config: config.Config,
-    topology: network_config.NetworkTopology | None = None,
+    topology: network.NetworkTopology | None = None,
 ) -> list[VerificationResult]:
     private_wifi_verification = []
-    if topology is not None and topology != network_config.NetworkTopology.PUBLIC:
+    if topology is not None and topology != network.NetworkTopology.PUBLIC:
         if config.x18(provision_config) is not None:
-            bridge_address = network_config.x18_bridge_address(provision_config)
+            bridge_address = network.x18_bridge_address(provision_config)
             private_wifi_verification.append(
                 verify_remote_command(
                     provision_config,
                     "X18 bridge has the configured address",
                     "ip -4 -o address show dev "
-                    f"{network_config.X18_BRIDGE_INTERFACE} "
+                    f"{network.X18_BRIDGE_INTERFACE} "
                     f"| grep -F {shlex.quote(bridge_address)}",
                 )
             )
@@ -55,7 +55,7 @@ def verify_provisioning(
                 "private Wi-Fi hotspot is active",
                 "nmcli -t -f TYPE,STATE,CONNECTION device status "
                 f"| grep -F -x "
-                f"'wifi:connected:{network_config.PRIVATE_WIFI_CONNECTION}'",
+                f"'wifi:connected:{network.PRIVATE_WIFI_CONNECTION}'",
             )
         )
     return [
@@ -120,7 +120,7 @@ def verify_provisioning(
 
 def wait_for_provisioning_ready(
     provision_config: config.Config,
-    topology: network_config.NetworkTopology,
+    topology: network.NetworkTopology,
 ) -> list[VerificationResult]:
     deadline = time.monotonic() + POST_REBOOT_READY_WAIT_SECONDS
     while True:

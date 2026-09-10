@@ -10,7 +10,7 @@ from unittest import mock
 
 from reccy.services.models import Platform, StatusResult
 
-from showco import local_update, update
+from showco.deployment import local_update, update
 
 
 class UpdateTests(unittest.TestCase):
@@ -22,7 +22,7 @@ class UpdateTests(unittest.TestCase):
         self.addCleanup(ensure_log.stop)
         self.read_locked_sources = local_update.locked_dependency_sources
         locked_sources = mock.patch(
-            "showco.local_update.locked_dependency_sources", return_value={}
+            "showco.deployment.local_update.locked_dependency_sources", return_value={}
         )
         self.locked_sources = locked_sources.start()
         self.addCleanup(locked_sources.stop)
@@ -45,7 +45,7 @@ class UpdateTests(unittest.TestCase):
     def test_remote_update_reports_target_before_ssh(self) -> None:
         output = StringIO()
         with mock.patch(
-            "showco.update.run_remote_step",
+            "showco.deployment.update.run_remote_step",
             return_value=update.StepResult(
                 program="target",
                 step="update",
@@ -135,7 +135,9 @@ class UpdateTests(unittest.TestCase):
             commands.append(list(command))
             return subprocess.CompletedProcess(command, 0, "", "")
 
-        with mock.patch("showco.update.programs_for_repositories", return_value=[]):
+        with mock.patch(
+            "showco.deployment.update.programs_for_repositories", return_value=[]
+        ):
             result = update.update_target(
                 ["lyte"],
                 root=Path("/code"),
@@ -167,7 +169,8 @@ class UpdateTests(unittest.TestCase):
             return subprocess.CompletedProcess(command, 0, "", "")
 
         with mock.patch(
-            "showco.services.controller.current_platform", return_value=Platform.linux
+            "showco.runtime.services.controller.current_platform",
+            return_value=Platform.linux,
         ):
             result = update.update_target(
                 ["recs"],
@@ -211,7 +214,8 @@ class UpdateTests(unittest.TestCase):
 
         output = StringIO()
         with mock.patch(
-            "showco.services.controller.current_platform", return_value=Platform.linux
+            "showco.runtime.services.controller.current_platform",
+            return_value=Platform.linux,
         ):
             result = update.update_target(
                 ["recs"],
@@ -243,7 +247,8 @@ class UpdateTests(unittest.TestCase):
             return subprocess.CompletedProcess(command, 0, "", "")
 
         with mock.patch(
-            "showco.services.controller.current_platform", return_value=Platform.linux
+            "showco.runtime.services.controller.current_platform",
+            return_value=Platform.linux,
         ):
             result = update.update_target(
                 ["recs"],
@@ -273,7 +278,8 @@ class UpdateTests(unittest.TestCase):
             return subprocess.CompletedProcess(command, 0, "", "")
 
         with mock.patch(
-            "showco.services.controller.current_platform", return_value=Platform.linux
+            "showco.runtime.services.controller.current_platform",
+            return_value=Platform.linux,
         ):
             result = update.update_target(
                 ["showco"],
@@ -321,7 +327,8 @@ class UpdateTests(unittest.TestCase):
             return subprocess.CompletedProcess(command, 0, "", "")
 
         with mock.patch(
-            "showco.services.controller.current_platform", return_value=Platform.linux
+            "showco.runtime.services.controller.current_platform",
+            return_value=Platform.linux,
         ):
             result = update.update_target(
                 ["showco"],
@@ -356,11 +363,11 @@ class UpdateTests(unittest.TestCase):
 
         with (
             mock.patch(
-                "showco.services.controller.current_platform",
+                "showco.runtime.services.controller.current_platform",
                 return_value=Platform.linux,
             ),
             mock.patch(
-                "showco.services.refresh_service_definition",
+                "showco.runtime.services.refresh_service_definition",
                 return_value=StatusResult(installed=True, running=True),
             ) as refresh,
         ):
@@ -419,11 +426,11 @@ class UpdateTests(unittest.TestCase):
 
         with (
             mock.patch(
-                "showco.services.controller.current_platform",
+                "showco.runtime.services.controller.current_platform",
                 return_value=Platform.linux,
             ),
             mock.patch(
-                "showco.services.refresh_service_definition",
+                "showco.runtime.services.refresh_service_definition",
                 return_value=StatusResult(installed=True, running=True),
             ) as refresh,
         ):
@@ -455,14 +462,15 @@ class UpdateTests(unittest.TestCase):
 
         with (
             mock.patch(
-                "showco.services.controller.current_platform",
+                "showco.runtime.services.controller.current_platform",
                 return_value=Platform.linux,
             ),
             mock.patch(
-                "showco.update.provisioning_config", return_value=make_config(True)
+                "showco.deployment.update.provisioning_config",
+                return_value=make_config(True),
             ),
             mock.patch(
-                "showco.services.refresh_service_definition",
+                "showco.runtime.services.refresh_service_definition",
                 return_value=StatusResult(installed=True, running=True),
             ) as refresh,
         ):
@@ -526,11 +534,12 @@ class UpdateTests(unittest.TestCase):
 
         with (
             mock.patch(
-                "showco.services.controller.current_platform",
+                "showco.runtime.services.controller.current_platform",
                 return_value=Platform.linux,
             ),
             mock.patch(
-                "showco.update.provisioning_config", return_value=make_config(True)
+                "showco.deployment.update.provisioning_config",
+                return_value=make_config(True),
             ),
         ):
             result = update.update_target(
@@ -563,11 +572,11 @@ class UpdateTests(unittest.TestCase):
         output = StringIO()
         with (
             mock.patch(
-                "showco.update.provisioning_config",
+                "showco.deployment.update.provisioning_config",
                 return_value=make_config(),
             ),
             mock.patch(
-                "showco.update.run_remote_step",
+                "showco.deployment.update.run_remote_step",
                 return_value=update.StepResult(
                     program="target",
                     step="update",
@@ -628,10 +637,10 @@ class UpdateTests(unittest.TestCase):
         output = StringIO()
         with (
             mock.patch(
-                "showco.update.provisioning_config",
+                "showco.deployment.update.provisioning_config",
                 return_value=make_config(),
             ),
-            mock.patch("showco.update.run_remote_step") as remote_update,
+            mock.patch("showco.deployment.update.run_remote_step") as remote_update,
         ):
             result = local_update.update_from_provisioning_machine(
                 ["recs", "showco"],
@@ -678,11 +687,11 @@ class UpdateTests(unittest.TestCase):
 
         with (
             mock.patch(
-                "showco.update.provisioning_config",
+                "showco.deployment.update.provisioning_config",
                 return_value=make_config(),
             ),
             mock.patch(
-                "showco.update.run_remote_step",
+                "showco.deployment.update.run_remote_step",
                 return_value=update.StepResult(
                     program="target",
                     step="update",
@@ -731,11 +740,11 @@ class UpdateTests(unittest.TestCase):
 
         with (
             mock.patch(
-                "showco.update.provisioning_config",
+                "showco.deployment.update.provisioning_config",
                 return_value=make_config(),
             ),
             mock.patch(
-                "showco.update.run_remote_step",
+                "showco.deployment.update.run_remote_step",
                 return_value=update.StepResult(
                     program="target",
                     step="update",
@@ -815,7 +824,7 @@ class UpdateTests(unittest.TestCase):
     def test_run_command_uses_noninteractive_editor_for_rebase(self) -> None:
         command = ["git", "-C", "/code/recs", "rebase", "--interactive"]
         with mock.patch(
-            "showco.update.subprocess.run",
+            "showco.deployment.update.subprocess.run",
             return_value=subprocess.CompletedProcess(command, 0, "", ""),
         ) as run:
             update.run_command_with_timeout(command)
@@ -1217,7 +1226,7 @@ class UpdateTests(unittest.TestCase):
     def test_remote_step_reports_remote_output(self) -> None:
         command = ["ssh", "tom@bertrand.local", "showco go"]
         with mock.patch(
-            "showco.update.subprocess.run",
+            "showco.deployment.update.subprocess.run",
             return_value=subprocess.CompletedProcess(
                 command,
                 1,
@@ -1233,17 +1242,19 @@ class UpdateTests(unittest.TestCase):
     def test_provisioning_update_defaults_to_saved_host(self) -> None:
         with (
             mock.patch(
-                "showco.update.provisioning_config",
+                "showco.deployment.update.provisioning_config",
                 return_value=make_config(),
             ),
             mock.patch(
-                "showco.local_update.prepare_local_repositories", return_value=True
+                "showco.deployment.local_update.prepare_local_repositories",
+                return_value=True,
             ),
             mock.patch(
-                "showco.local_update.refresh_local_dependencies", return_value=True
+                "showco.deployment.local_update.refresh_local_dependencies",
+                return_value=True,
             ),
             mock.patch(
-                "showco.update.run_remote_step",
+                "showco.deployment.update.run_remote_step",
                 return_value=update.StepResult(
                     program="target",
                     step="update",
@@ -1261,17 +1272,19 @@ class UpdateTests(unittest.TestCase):
     def test_provisioning_update_uses_host_override(self) -> None:
         with (
             mock.patch(
-                "showco.update.provisioning_config",
+                "showco.deployment.update.provisioning_config",
                 return_value=make_config(),
             ),
             mock.patch(
-                "showco.local_update.prepare_local_repositories", return_value=True
+                "showco.deployment.local_update.prepare_local_repositories",
+                return_value=True,
             ),
             mock.patch(
-                "showco.local_update.refresh_local_dependencies", return_value=True
+                "showco.deployment.local_update.refresh_local_dependencies",
+                return_value=True,
             ),
             mock.patch(
-                "showco.update.run_remote_step",
+                "showco.deployment.update.run_remote_step",
                 return_value=update.StepResult(
                     program="target",
                     step="update",
@@ -1300,7 +1313,7 @@ class UpdateTests(unittest.TestCase):
             return subprocess.CompletedProcess(command, 0, "", "")
 
         with mock.patch(
-            "showco.update.provisioning_config",
+            "showco.deployment.update.provisioning_config",
             return_value=make_config(),
         ):
             result = local_update.update_from_provisioning_machine(
@@ -1342,11 +1355,11 @@ class UpdateTests(unittest.TestCase):
 
         with (
             mock.patch(
-                "showco.update.provisioning_config",
+                "showco.deployment.update.provisioning_config",
                 return_value=make_config(),
             ),
             mock.patch(
-                "showco.update.run_remote_step",
+                "showco.deployment.update.run_remote_step",
                 return_value=update.StepResult(
                     program="target",
                     step="update",
@@ -1381,11 +1394,11 @@ class UpdateTests(unittest.TestCase):
 
         with (
             mock.patch(
-                "showco.update.provisioning_config",
+                "showco.deployment.update.provisioning_config",
                 return_value=make_config(),
             ),
             mock.patch(
-                "showco.update.run_remote_step",
+                "showco.deployment.update.run_remote_step",
                 return_value=update.StepResult(
                     program="target",
                     step="update",
@@ -1417,7 +1430,8 @@ class UpdateTests(unittest.TestCase):
             return subprocess.CompletedProcess(command, 0, "", "")
 
         with mock.patch(
-            "showco.services.controller.current_platform", return_value=Platform.linux
+            "showco.runtime.services.controller.current_platform",
+            return_value=Platform.linux,
         ):
             result = update.update_target(
                 ["recs"],
@@ -1457,7 +1471,8 @@ class UpdateTests(unittest.TestCase):
             return subprocess.CompletedProcess(command, 0, "", "")
 
         with mock.patch(
-            "showco.services.controller.current_platform", return_value=Platform.linux
+            "showco.runtime.services.controller.current_platform",
+            return_value=Platform.linux,
         ):
             result = update.update_target(
                 ["recs"],

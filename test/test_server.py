@@ -6,9 +6,9 @@ from io import BytesIO
 from threading import BoundedSemaphore, Event, Lock, Thread
 from unittest import mock
 
-from showco import models, rehearsal
-from showco.lyte import LyteClient
-from showco.server import (
+from showco.runtime import models, rehearsal
+from showco.runtime.lyte import LyteClient
+from showco.runtime.server import (
     ERROR_PAGE_LIMIT,
     MAX_WAVEFORM_CONNECTIONS,
     ShowcoApp,
@@ -22,7 +22,7 @@ from showco.server import (
 
 
 class ServerTests(unittest.TestCase):
-    @mock.patch("showco.server.source_revision", return_value="revision")
+    @mock.patch("showco.runtime.server.source_revision", return_value="revision")
     def test_status_includes_server_revision(self, source_revision: mock.Mock) -> None:
         app = ShowcoApp(
             rehearsal.RehearsalRecsClient(),
@@ -1009,7 +1009,7 @@ class ServerTests(unittest.TestCase):
         handler = ShowcoHandler.__new__(ShowcoHandler)
         handler.client_address = ("127.0.0.1", 12345)
 
-        with self.assertLogs("showco.server", level="ERROR") as logs:
+        with self.assertLogs("showco.runtime.server", level="ERROR") as logs:
             handler._log_action(
                 "recs-calibrate",
                 models.ActionResult(ok=False, message="I/O operation on closed file."),

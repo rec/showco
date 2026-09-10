@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from showco import rehearsal
+from showco.runtime import rehearsal
 
 
 class RehearsalTests(unittest.TestCase):

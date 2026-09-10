@@ -9,8 +9,8 @@ from typing import TextIO
 from pydantic import BaseModel
 from tqdm import tqdm
 
+from ..provision import config, provision, ssh
 from . import update
-from .provision import config, provision, ssh
 
 
 class PublicationState(BaseModel, frozen=True):

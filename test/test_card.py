@@ -7,7 +7,7 @@ from unittest import mock
 
 import tyro
 
-from showco import card
+from showco.deployment import card
 from showco.provision import config
 
 
@@ -62,7 +62,7 @@ class PrepareCardTests(unittest.TestCase):
 
     def test_prepare_card_selects_single_small_external_card(self) -> None:
         with mock.patch(
-            "showco.card.disk_values",
+            "showco.deployment.card.disk_values",
             return_value=[{"DeviceIdentifier": "disk4", "Size": 128 * 1024**3}],
         ):
             self.assertEqual(card.select_card(None), Path("/dev/disk4"))
@@ -70,7 +70,7 @@ class PrepareCardTests(unittest.TestCase):
     def test_prepare_card_rejects_multiple_small_external_cards(self) -> None:
         with (
             mock.patch(
-                "showco.card.disk_values",
+                "showco.deployment.card.disk_values",
                 return_value=[
                     {"DeviceIdentifier": "disk4", "Size": 128 * 1024**3},
                     {"DeviceIdentifier": "disk5", "Size": 64 * 1024**3},
@@ -81,13 +81,13 @@ class PrepareCardTests(unittest.TestCase):
             card.select_card(None)
 
     def test_prepare_card_displays_selected_card(self) -> None:
-        with mock.patch("showco.card.subprocess.run") as run:
+        with mock.patch("showco.deployment.card.subprocess.run") as run:
             card.show_card(Path("/dev/disk4"))
 
         run.assert_called_once_with(["diskutil", "list", "/dev/disk4"], check=True)
 
     def test_prepare_card_ejects_selected_card(self) -> None:
-        with mock.patch("showco.card.subprocess.run") as run:
+        with mock.patch("showco.deployment.card.subprocess.run") as run:
             card.eject_card(Path("/dev/disk4"))
 
         run.assert_called_once_with(["diskutil", "eject", "/dev/disk4"], check=True)
@@ -97,7 +97,7 @@ class PrepareCardTests(unittest.TestCase):
             path = Path(directory) / "user-data"
             path.write_text("#cloud-config\n")
             with mock.patch(
-                "showco.card.disk_values",
+                "showco.deployment.card.disk_values",
                 return_value=[
                     {
                         "DeviceIdentifier": "disk4",

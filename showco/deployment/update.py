@@ -12,8 +12,9 @@ from pydantic import BaseModel
 from reccy.runtime import subprocess
 from tqdm import tqdm
 
-from . import recs, repositories, revision, services
-from .provision import config, provision, script, ssh
+from ..provision import config, provision, script, ssh
+from ..runtime import recs, revision, services
+from . import repositories
 
 RunCommand = Callable[
     [Sequence[str]],

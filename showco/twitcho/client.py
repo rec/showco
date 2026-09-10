@@ -8,8 +8,8 @@ import tyro
 from pydantic import BaseModel
 from reccy.protocol import rpc
 
-from .. import machine_role
-from ..models import ActionResult, ServiceStatus, TwitchoStatus
+from ..deployment import machine_role
+from ..runtime.models import ActionResult, ServiceStatus, TwitchoStatus
 
 CONTROL_ENDPOINT = Path.home() / ".local/state/twitcho/gui.sock"
 AUDIO_STALE_SECONDS = 5.0

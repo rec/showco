@@ -7,7 +7,7 @@ from io import StringIO
 from pathlib import Path
 from unittest import mock
 
-from showco import python
+from showco.deployment import python
 from showco.provision import config
 
 
@@ -21,11 +21,11 @@ class PythonTests(unittest.TestCase):
 
         output = StringIO()
         with mock.patch(
-            "showco.python.machine_role.require_provisioning_machine"
+            "showco.deployment.python.machine_role.require_provisioning_machine"
         ) as require:
             result = python.run_python(
                 python.PythonOptions(
-                    code="from showco.recs import RecsClient; print(RecsClient())"
+                    code="from showco.runtime.recs import RecsClient; print(RecsClient())"
                 ),
                 target_config=target_config(),
                 run_command=run_command,
@@ -50,7 +50,7 @@ class PythonTests(unittest.TestCase):
                     "22",
                     "tom@bertrand.local",
                     "cd /srv/show-projects/showco && .venv/bin/python -c "
-                    "'from showco.recs import RecsClient; print(RecsClient())'",
+                    "'from showco.runtime.recs import RecsClient; print(RecsClient())'",
                 ]
             ],
         )

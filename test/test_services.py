@@ -8,7 +8,7 @@ from unittest import mock
 
 from reccy.services.models import Platform, ServicePaths, StatusResult
 
-from showco import services
+from showco.runtime import services
 
 
 class ServicesTests(unittest.TestCase):
@@ -50,15 +50,15 @@ class ServicesTests(unittest.TestCase):
             controller.install.return_value = StatusResult(installed=True, running=True)
             with (
                 mock.patch(
-                    "showco.services.controller.current_platform",
+                    "showco.runtime.services.controller.current_platform",
                     return_value=Platform.linux,
                 ),
                 mock.patch(
-                    "showco.services.controller.service_paths",
+                    "showco.runtime.services.controller.service_paths",
                     return_value=paths,
                 ),
                 mock.patch(
-                    "showco.services.controller.ServiceController",
+                    "showco.runtime.services.controller.ServiceController",
                     return_value=controller,
                 ),
             ):
@@ -89,7 +89,9 @@ class ServicesTests(unittest.TestCase):
             }
         )
         controller.install.return_value = StatusResult(installed=True, running=True)
-        with mock.patch("showco.services.service_controller", return_value=controller):
+        with mock.patch(
+            "showco.runtime.services.service_controller", return_value=controller
+        ):
             result = services.refresh_service_definition("recs")
 
         self.assertTrue(result.running)
@@ -123,7 +125,9 @@ class ServicesTests(unittest.TestCase):
             installed=True,
             running=True,
         )
-        with mock.patch("showco.services.service_registry", return_value=registry):
+        with mock.patch(
+            "showco.runtime.services.service_registry", return_value=registry
+        ):
             result = services.restart_twitcho_service()
 
         self.assertTrue(result.ok)
@@ -133,14 +137,17 @@ class ServicesTests(unittest.TestCase):
     def test_report_service_status_fails_inactive_service(self) -> None:
         registry = mock.Mock()
         registry.report_status.return_value = 1
-        with mock.patch("showco.services.service_registry", return_value=registry):
+        with mock.patch(
+            "showco.runtime.services.service_registry", return_value=registry
+        ):
             self.assertEqual(services.report_service_status(["showco"]), 1)
 
         registry.report_status.assert_called_once_with(["showco"])
 
     def test_recs_service_controller_uses_gui_ipc_error_status(self) -> None:
         with mock.patch(
-            "showco.services.paths.current_platform", return_value=Platform.linux
+            "showco.runtime.services.paths.current_platform",
+            return_value=Platform.linux,
         ):
             controller = services.service_controller(services.RECS_SERVICE)
 

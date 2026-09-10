@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from showco.bundle import create_bundle
+from showco.deployment.bundle import create_bundle
 
 
 class BundleTests(unittest.TestCase):

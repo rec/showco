@@ -16,20 +16,20 @@ from urllib import parse
 from pydantic import ValidationError
 from reccy.runtime import logging
 
+from ..twitcho.client import TwitchoClient
 from . import incidents, input_check, models, readiness, recording_progress, services
 from .lyte import LyteClient
 from .mixer import MixersMonitor
 from .monitoring import PerformanceMonitor
 from .recs import RecsClient, WaveformBridge
 from .system import SystemMonitor
-from .twitcho.client import TwitchoClient
 
 MAX_ACTION_BYTES = 65_536
 MAX_CONCURRENT_REQUESTS = 8
 MAX_WAVEFORM_CONNECTIONS = 4
 ERROR_PAGE_LIMIT = 25
 LOGGER = logging.get_logger(__name__)
-SITE_DIRECTORY = Path(__file__).parent.parent / "site"
+SITE_DIRECTORY = Path(__file__).parent.parent.parent / "site"
 
 
 @cache

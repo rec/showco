@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from showco import incidents, models
+from showco.runtime import incidents, models
 
 
 class IncidentTimelineTests(unittest.TestCase):

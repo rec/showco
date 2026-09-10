@@ -7,7 +7,7 @@ from io import StringIO
 
 import tyro
 
-from showco import network_config
+from showco.provision import network as network_config
 from showco.provision.config import Config, config_from_values
 
 

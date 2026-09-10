@@ -6,7 +6,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import mock
 
-from showco import machine_role
+from showco.deployment import machine_role
 
 
 class MachineRoleTests(unittest.TestCase):

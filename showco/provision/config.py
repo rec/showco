@@ -10,7 +10,7 @@ from typing import TypeIs
 
 from pydantic import BaseModel, Field
 
-from ..mixer import MixerSpec, MixerSpecs
+from ..runtime.mixer import MixerSpec, MixerSpecs
 
 
 class GitRepo(BaseModel, frozen=True):

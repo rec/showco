@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from showco.system import SystemMonitor
+from showco.runtime.system import SystemMonitor
 
 
 class SystemTests(unittest.TestCase):

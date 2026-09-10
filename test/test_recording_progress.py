@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from showco import models, recording_progress
+from showco.runtime import models, recording_progress
 
 
 class RecordingProgressTests(unittest.TestCase):
