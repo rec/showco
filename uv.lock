@@ -7,7 +7,7 @@ resolution-markers = [
 ]
 
 [options]
-exclude-newer = "2026-09-03T11:08:53.841098Z"
+exclude-newer = "2026-09-03T11:29:00.978217Z"
 exclude-newer-span = "P1W"
 
 [[package]]
@@ -506,15 +506,6 @@ wheels = [
 ]
 
 [[package]]
-name = "overrides"
-version = "7.7.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/36/86/b585f53236dec60aba864e050778b25045f857e17f6e5ea0ae95fe80edd2/overrides-7.7.0.tar.gz", hash = "sha256:55158fa3d93b98cc75299b1e67078ad9003ca27945c76162c1c0766d6f91820a", size = 22812, upload-time = "2024-01-27T21:01:33.423Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/2c/ab/fc8290c6a4c722e5514d80f62b2dc4c4df1a68a41d1364e625c35990fcf3/overrides-7.7.0-py3-none-any.whl", hash = "sha256:c7ed9d062f78b8e4c1a7b70bd8796b35ead4d9f510227ef9c5dc7626c60d7e49", size = 17832, upload-time = "2024-01-27T21:01:31.393Z" },
-]
-
-[[package]]
 name = "packaging"
 version = "26.3"
 source = { registry = "https://pypi.org/simple" }
@@ -834,23 +825,21 @@ dependencies = [
 [[package]]
 name = "recs"
 version = "0.12.5"
-source = { git = "https://github.com/rec/recs.git?branch=main#2764d7a7c11ff0f3f6520b8ac6c9768ac8c40a87" }
+source = { git = "https://github.com/rec/recs.git?branch=main#7cbf68d8a817b9a9e6cd7c8912b52cd349723e75" }
 dependencies = [
     { name = "humanfriendly" },
     { name = "mido", extra = ["ports-rtmidi"] },
     { name = "numpy" },
-    { name = "overrides" },
     { name = "pydantic" },
     { name = "pyside6" },
     { name = "reccy" },
     { name = "rich" },
     { name = "sounddevice" },
     { name = "soundfile" },
-    { name = "strenum" },
     { name = "threa" },
-    { name = "tomli" },
     { name = "tomlkit" },
     { name = "tyro" },
+    { name = "ufor" },
 ]
 
 [[package]]
@@ -1181,6 +1170,22 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/12/78/a5749a6c1ee9abc2999e294f339f8f72476d1a60bb95fc0e86156aafed3b/tyro-1.0.15.tar.gz", hash = "sha256:3f1d60887723eecb9c489f195d11f079c4a1f33df74b723552ad31ec57c667bb", size = 593822, upload-time = "2026-06-20T08:48:28.364Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/5d/28/d607636187cf6c18eb72efb5d65c1d1b9e451db03d84676f835dd488fdbd/tyro-1.0.15-py3-none-any.whl", hash = "sha256:982da1d566005f1b2a6b56f6be6c6929c96f0e5fab9d61bc6097573ddfaf8d13", size = 215045, upload-time = "2026-06-20T08:48:27.104Z" },
+]
+
+[[package]]
+name = "ufor"
+version = "0.1.0"
+source = { url = "https://github.com/rec/ufor/archive/44ac375645132c6adfc80baa6a061f97896161a7.tar.gz" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "tomlkit" },
+]
+sdist = { hash = "sha256:f56b22374b5df1ee32334c6979fb3dbbf080bbc34e6ffccf62bfb87b258a6111" }
+
+[package.metadata]
+requires-dist = [
+    { name = "pydantic", specifier = ">=2.13.4" },
+    { name = "tomlkit", specifier = ">=0.15.1" },
 ]
 
 [[package]]
