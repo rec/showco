@@ -16,7 +16,7 @@ from urllib import parse
 from pydantic import ValidationError
 from reccy.runtime import logging
 
-from . import incidents, models, readiness, recording_progress, services
+from . import incidents, input_check, models, readiness, recording_progress, services
 from .lyte import LyteClient
 from .mixer import MixersMonitor
 from .monitoring import PerformanceMonitor
@@ -94,6 +94,7 @@ class ShowcoApp:
             update={
                 "incidents": self.incidents.observe(status),
                 "recording_progress": self.recording_progress.observe(recs),
+                "input_checks": input_check.checks(recs.channels),
             }
         )
 
@@ -535,6 +536,10 @@ def health_page(status: models.ShowStatus) -> str:
           <div id="osc-recorders">{_osc_recorders(status.recs.osc)}</div>
         </section>
         <section>
+          <h2>Recording inputs</h2>
+          <div id="input-checks">{input_checks(status.input_checks)}</div>
+        </section>
+        <section>
           <h2>Recs errors</h2>
           <div id="recs-errors" data-limit="{ERROR_PAGE_LIMIT}">
             {_recs_errors(status.recs.errors[-ERROR_PAGE_LIMIT:])}
@@ -582,6 +587,17 @@ def incident(value: models.Incident) -> str:
         f"<li><time>{value.timestamp.strftime('%H:%M:%S')}</time> "
         f"{html.escape(value.message)}</li>"
     )
+
+
+def input_checks(checks: list[models.InputCheck]) -> str:
+    if not checks:
+        return "<p>No recording inputs.</p>"
+    return "<ul>" + "".join(input_check_item(check) for check in checks) + "</ul>"
+
+
+def input_check_item(check: models.InputCheck) -> str:
+    state = "ok" if check.ok else "failed"
+    return f'<li class="{state}"><b>{html.escape(check.name)}</b>: {check.message}</li>'
 
 
 def attributes_page(
