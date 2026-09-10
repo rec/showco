@@ -157,6 +157,46 @@
       });
   }
 
+  function calibrateChannel(event) {
+    const button = event.currentTarget;
+    const form = button.closest(".level");
+    button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+    button.textContent = "Calibrating...";
+    button.title = "";
+    fetch("/actions", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        action: "recs-calibrate",
+        device: form.dataset.device,
+        channels: form.dataset.channels,
+      }),
+    })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`calibration request failed: ${response.status}`);
+        }
+        return response.json();
+      })
+      .then(result => {
+        if (!result.ok) throw new Error(result.message);
+        button.textContent = "Calibrated";
+        return updateStatus();
+      })
+      .catch(error => {
+        button.textContent = "Calibration failed";
+        button.title = error.message;
+      })
+      .finally(() => {
+        button.disabled = false;
+        button.removeAttribute("aria-busy");
+      });
+  }
+
   function revertTrackNames() {
     for (const form of channelForms()) revertTrackName(form);
   }
@@ -247,7 +287,12 @@
     const waveform = document.createElement("canvas");
     waveform.className = "waveform";
     waveform.setAttribute("aria-label", "Live waveform");
-    form.append(label, stereo, waveform);
+    const calibrate = document.createElement("button");
+    calibrate.className = "calibrate-channel";
+    calibrate.type = "button";
+    calibrate.textContent = "Calibrate";
+    calibrate.addEventListener("click", calibrateChannel);
+    form.append(label, stereo, waveform, calibrate);
     return form;
   }
 
@@ -488,6 +533,9 @@
   }
   for (const input of document.querySelectorAll("#mutable-attributes input")) {
     input.addEventListener("blur", saveMutableAttribute);
+  }
+  for (const button of document.querySelectorAll(".calibrate-channel")) {
+    button.addEventListener("click", calibrateChannel);
   }
 
   if (document.getElementById("recs-errors")) {

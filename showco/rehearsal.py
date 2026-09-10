@@ -44,7 +44,9 @@ class RehearsalRecsClient(RecsClient):
             ),
         )
 
-    def calibrate(self) -> models.ActionResult:
+    def calibrate(
+        self, device: str = "", channels: list[int] | None = None
+    ) -> models.ActionResult:
         self.calibration_count += 1
         return models.ActionResult(
             ok=True,
