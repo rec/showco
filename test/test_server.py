@@ -347,6 +347,27 @@ class ServerTests(unittest.TestCase):
         self.assertIn('<div id="recs-errors"', html)
         self.assertIn("No errors", html)
 
+    def test_health_page_shows_readiness(self) -> None:
+        html = health_page(
+            models.ShowStatus(
+                recs=models.RecsStatus(
+                    service=models.ServiceStatus(name="recs", state="connected")
+                ),
+                twitcho=models.TwitchoStatus(
+                    service=models.ServiceStatus(name="twitcho", state="disabled")
+                ),
+                readiness=models.ReadinessStatus(
+                    checks=[
+                        models.ReadinessCheck(name="Recs", ok=False, message="offline")
+                    ]
+                ),
+            )
+        )
+
+        self.assertIn("Ready to perform", html)
+        self.assertIn('id="readiness-state">not ready', html)
+        self.assertIn("Recs</b>: offline", html)
+
     def test_health_page_shows_lyte_output_error(self) -> None:
         html = health_page(
             models.ShowStatus(

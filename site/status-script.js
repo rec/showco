@@ -458,6 +458,21 @@
     );
   }
 
+  function updateReadiness(readiness) {
+    const state = document.getElementById("readiness-state");
+    const checks = document.getElementById("readiness-checks");
+    if (!state || !checks) return;
+    state.textContent = readiness.ready ? "ready" : "not ready";
+    checks.replaceChildren(...readiness.checks.map(check => {
+      const item = document.createElement("li");
+      item.className = check.ok ? "ok" : "failed";
+      const name = document.createElement("b");
+      name.textContent = check.name;
+      item.append(name, `: ${check.message}`);
+      return item;
+    }));
+  }
+
   function updateStatus() {
     return fetch("/status", { cache: "no-store" })
       .then(response => {
@@ -481,6 +496,7 @@
       updateChannels(status.recs.channels);
       updateRecsErrors(status.recs.errors);
       updatePerformance(status);
+      updateReadiness(status.readiness);
       const temperature = document.getElementById("temperature");
       if (temperature) {
         temperature.textContent = status.system.temperature_c === null
