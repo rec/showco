@@ -5,7 +5,7 @@ import unittest
 from collections.abc import Sequence
 from io import StringIO
 
-from showco import logs
+from showco.deployment import logs
 from showco.provision import config
 
 

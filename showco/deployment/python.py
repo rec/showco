@@ -10,8 +10,8 @@ from typing import Annotated, TextIO
 import tyro
 from pydantic import BaseModel
 
+from ..provision import config, ssh
 from . import machine_role, update
-from .provision import config, ssh
 
 RunCommand = Callable[[Sequence[str]], CompletedProcess[str]]
 

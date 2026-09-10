@@ -8,8 +8,8 @@ from subprocess import CalledProcessError, TimeoutExpired
 
 from reccy.runtime import subprocess
 
-from .. import network_config, repositories
-from . import config, script, ssh, verify
+from ..deployment import repositories
+from . import config, network, script, ssh, verify
 
 SSH_CLEANUP_TIMEOUT_SECONDS = 15
 REMOTE_PROVISION_TIMEOUT_SECONDS = 1_800
@@ -38,7 +38,7 @@ def provision_remote(
     ssh.wait_for_ssh(provision_config)
     require_passwordless_sudo(provision_config)
     validate_remote_worktrees(provision_config)
-    topology = preflight_network_config(provision_config)
+    topology = preflight_network(provision_config)
     print(f"Checking {provision_config.ssh_target}...")
     ssh.run_ssh(
         provision_config,
@@ -88,19 +88,17 @@ def provision_remote(
                 )
 
 
-def preflight_network_config(
+def preflight_network(
     provision_config: config.Config,
-) -> network_config.NetworkTopology:
+) -> network.NetworkTopology:
     print(f"Checking Wi-Fi interfaces on {provision_config.ssh_target}...")
     status = ssh.capture_ssh(provision_config, WIFI_STATUS_COMMAND)
-    interfaces = network_config.wifi_interfaces_from_status(status)
-    assignment = network_config.assign_wifi(
-        interfaces, provision_config.network.swap_wifi
-    )
-    topology = network_config.select_topology(
+    interfaces = network.wifi_interfaces_from_status(status)
+    assignment = network.assign_wifi(interfaces, provision_config.network.swap_wifi)
+    topology = network.select_topology(
         provision_config, assignment.secondary is not None
     )
-    network_config.network_commands(provision_config, assignment, topology)
+    network.network_commands(provision_config, assignment, topology)
     return topology
 
 

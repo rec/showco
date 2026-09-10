@@ -12,8 +12,8 @@ from typing import Annotated, TypeIs
 import tyro
 from pydantic import BaseModel
 
+from ..provision import config
 from . import machine_role
-from .provision import config
 
 PROVISION_DIR = Path(__file__).resolve().parent / "provision"
 MAX_CARD_SIZE = 256 * 1024**3

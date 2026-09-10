@@ -13,10 +13,11 @@ from reccy import reccy
 from reccy.services import controller, paths, spec
 from reccy.services.models import DaemonMetadata, ServiceSpec, StatusResult
 
-from . import machine_role, models
+from ..deployment import machine_role
+from . import models
 
-PROJECT_ROOT = Path(__file__).parent.parent
-SHOWCO_SERVICE = spec.load(Path(__file__).with_name("service.toml"))
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+SHOWCO_SERVICE = spec.load(PROJECT_ROOT / "showco/service.toml")
 RECS_SERVICE = spec.load(PROJECT_ROOT.parent / "recs/recs/daemon/service.toml")
 LYTE_SERVICE = spec.load(PROJECT_ROOT.parent / "lyte/lyte/service.toml")
 TWITCHO_SERVICE = spec.load(PROJECT_ROOT.parent / "twitcho/twitcho/service.toml")

@@ -13,8 +13,8 @@ from recs.base.waveform import (
     WaveformTrackLayout,
 )
 
-from showco import models, recs
-from showco.recs import (
+from showco.runtime import models, recs
+from showco.runtime.recs import (
     RecsClient,
     WaveformBridge,
     channel_levels,
@@ -22,7 +22,7 @@ from showco.recs import (
     replace_track_name,
     stereo_tracks,
 )
-from showco.recs_control import RecsControlClient
+from showco.runtime.recs_control import RecsControlClient
 
 
 class RecsTests(unittest.TestCase):

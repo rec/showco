@@ -7,8 +7,8 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from unittest import mock
 
-from showco.mixer import MixerMonitor, MixerProbeSpec, MixersMonitor, MixerSpec
-from showco.models import MixerStatus
+from showco.runtime.mixer import MixerMonitor, MixerProbeSpec, MixersMonitor, MixerSpec
+from showco.runtime.models import MixerStatus
 
 
 class MixerTests(unittest.TestCase):

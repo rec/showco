@@ -6,7 +6,7 @@ from unittest import mock
 
 import tyro
 
-from showco import go, update
+from showco.deployment import go, update
 from showco.provision import provision
 
 
@@ -22,8 +22,8 @@ class GoTests(unittest.TestCase):
     def test_main_prints_completion_after_success(self) -> None:
         options = self.options()
         with (
-            mock.patch("showco.go.tyro.cli", return_value=options),
-            mock.patch("showco.go.run", return_value=0),
+            mock.patch("showco.deployment.go.tyro.cli", return_value=options),
+            mock.patch("showco.deployment.go.run", return_value=0),
             mock.patch("builtins.print") as print_message,
         ):
             result = go.main([])
@@ -34,8 +34,8 @@ class GoTests(unittest.TestCase):
     def test_main_does_not_print_completion_after_failure(self) -> None:
         options = self.options()
         with (
-            mock.patch("showco.go.tyro.cli", return_value=options),
-            mock.patch("showco.go.run", return_value=1),
+            mock.patch("showco.deployment.go.tyro.cli", return_value=options),
+            mock.patch("showco.deployment.go.run", return_value=1),
             mock.patch("builtins.print") as print_message,
         ):
             result = go.main([])
@@ -59,7 +59,8 @@ class GoTests(unittest.TestCase):
                 return_value="fingerprint",
             ),
             mock.patch(
-                "showco.local_update.update_from_provisioning_machine", return_value=0
+                "showco.deployment.local_update.update_from_provisioning_machine",
+                return_value=0,
             ) as update_target,
             mock.patch("showco.provision.provision.run") as provision_target,
         ):
@@ -90,7 +91,7 @@ class GoTests(unittest.TestCase):
                 "showco.provision.provision.run", return_value=0
             ) as provision_target,
             mock.patch(
-                "showco.local_update.update_from_provisioning_machine"
+                "showco.deployment.local_update.update_from_provisioning_machine"
             ) as update_target,
         ):
             result = go.run(self.options())
@@ -132,7 +133,8 @@ class GoTests(unittest.TestCase):
                 return_value=provision_config,
             ),
             mock.patch(
-                "showco.local_update.update_from_provisioning_machine", return_value=0
+                "showco.deployment.local_update.update_from_provisioning_machine",
+                return_value=0,
             ) as update_target,
             mock.patch("showco.provision.provision.run") as provision_target,
         ):
@@ -158,9 +160,12 @@ class GoTests(unittest.TestCase):
                 return_value=Path("/code"),
             ),
             mock.patch(
-                "showco.local_update.prepare_local_repositories", return_value=True
+                "showco.deployment.local_update.prepare_local_repositories",
+                return_value=True,
             ) as prepare,
-            mock.patch("showco.local_update.refresh_local_dependencies") as refresh,
+            mock.patch(
+                "showco.deployment.local_update.refresh_local_dependencies"
+            ) as refresh,
             mock.patch("showco.provision.provision.resolved_config") as resolved,
         ):
             result = go.run(options)
@@ -184,10 +189,12 @@ class GoTests(unittest.TestCase):
                 return_value=Path("/code"),
             ),
             mock.patch(
-                "showco.local_update.prepare_local_repositories", return_value=True
+                "showco.deployment.local_update.prepare_local_repositories",
+                return_value=True,
             ) as prepare,
             mock.patch(
-                "showco.local_update.refresh_local_dependencies", return_value=True
+                "showco.deployment.local_update.refresh_local_dependencies",
+                return_value=True,
             ) as refresh,
             mock.patch("showco.provision.provision.resolved_config") as resolved,
         ):
@@ -225,8 +232,12 @@ class GoTests(unittest.TestCase):
                 "showco.provision.provision.resolved_config",
                 return_value=provision_config,
             ),
-            mock.patch("showco.update.update_remote_target", return_value=0) as remote,
-            mock.patch("showco.local_update.update_from_provisioning_machine") as local,
+            mock.patch(
+                "showco.deployment.update.update_remote_target", return_value=0
+            ) as remote,
+            mock.patch(
+                "showco.deployment.local_update.update_from_provisioning_machine"
+            ) as local,
         ):
             result = go.run(options)
 
@@ -242,7 +253,9 @@ class GoTests(unittest.TestCase):
         local.assert_not_called()
 
     def test_target_machine_updates_selected_repositories(self) -> None:
-        with mock.patch("showco.update.update_target", return_value=0) as update_target:
+        with mock.patch(
+            "showco.deployment.update.update_target", return_value=0
+        ) as update_target:
             result = go.run(self.options(target_machine=True, repositories=["recs"]))
 
         self.assertEqual(result, 0)
@@ -251,7 +264,9 @@ class GoTests(unittest.TestCase):
         )
 
     def test_clear_settings_option_is_forwarded_to_target_update(self) -> None:
-        with mock.patch("showco.update.update_target", return_value=0) as update_target:
+        with mock.patch(
+            "showco.deployment.update.update_target", return_value=0
+        ) as update_target:
             result = go.run(
                 self.options(
                     target_machine=True,

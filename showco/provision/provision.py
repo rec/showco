@@ -66,7 +66,7 @@ def resolved_config(options: GoOptions) -> config.Config:
 
 def run(options: GoOptions, *, provision_config: config.Config | None = None) -> int:
     provision_config = provision_config or resolved_config(options)
-    from .. import local_update, update
+    from ..deployment import local_update, update
 
     if not local_update.prepare_local_repositories(
         update.REPOSITORY_NAMES,

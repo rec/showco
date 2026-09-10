@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from showco import input_check, models
+from showco.runtime import input_check, models
 
 
 class InputCheckTests(unittest.TestCase):

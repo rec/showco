@@ -3,8 +3,8 @@ from __future__ import annotations
 import unittest
 from unittest import mock
 
-from showco.recs_control import RecsControlClient
-from showco.recs_snapshot import RecsSnapshotClient, osc_status
+from showco.runtime.recs_control import RecsControlClient
+from showco.runtime.recs_snapshot import RecsSnapshotClient, osc_status
 
 
 class RecsSnapshotTests(unittest.TestCase):

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from showco import models, readiness
+from showco.runtime import models, readiness
 
 
 class ReadinessTests(unittest.TestCase):

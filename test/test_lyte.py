@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from showco.lyte import LyteClient
+from showco.runtime.lyte import LyteClient
 
 
 class LyteClientTests(unittest.TestCase):
@@ -28,7 +28,7 @@ class LyteClientTests(unittest.TestCase):
             "active_test": {"level": 50},
             "output_error": "controller unreachable",
         }
-        with mock.patch("showco.lyte.rpc.Client", return_value=client):
+        with mock.patch("showco.runtime.lyte.rpc.Client", return_value=client):
             status = LyteClient(
                 enabled=True, control_endpoint=Path("/tmp/lyte.sock")
             ).status()
@@ -43,7 +43,7 @@ class LyteClientTests(unittest.TestCase):
     def test_test_returns_queued_result(self) -> None:
         client = mock.Mock()
         client.call.return_value = {"state": "queued"}
-        with mock.patch("showco.lyte.rpc.Client", return_value=client):
+        with mock.patch("showco.runtime.lyte.rpc.Client", return_value=client):
             result = LyteClient(enabled=True).test()
 
         self.assertTrue(result.ok)
@@ -53,7 +53,7 @@ class LyteClientTests(unittest.TestCase):
     def test_invalid_test_reply_is_an_error(self) -> None:
         client = mock.Mock()
         client.call.return_value = {"state": "running"}
-        with mock.patch("showco.lyte.rpc.Client", return_value=client):
+        with mock.patch("showco.runtime.lyte.rpc.Client", return_value=client):
             result = LyteClient(enabled=True).test()
 
         self.assertFalse(result.ok)

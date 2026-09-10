@@ -5,12 +5,12 @@ import time
 import unittest
 from unittest import mock
 
-from showco import recs_control
+from showco.runtime import recs_control
 
 
 class RecsControlTests(unittest.TestCase):
     def test_call_uses_public_endpoint_role_timeout_and_parameters(self) -> None:
-        with mock.patch("showco.recs_control.rpc.Client") as rpc_client:
+        with mock.patch("showco.runtime.recs_control.rpc.Client") as rpc_client:
             rpc_client.return_value.call.return_value = "ok"
             client = recs_control.RecsControlClient("/tmp/recs-control")
 
@@ -41,7 +41,7 @@ class RecsControlTests(unittest.TestCase):
                 active -= 1
             return "ok"
 
-        with mock.patch("showco.recs_control.rpc.Client") as rpc_client:
+        with mock.patch("showco.runtime.recs_control.rpc.Client") as rpc_client:
             rpc_client.return_value.call.side_effect = call
             client = recs_control.RecsControlClient("/tmp/recs-control")
             first = threading.Thread(target=client.call, args=("first",))

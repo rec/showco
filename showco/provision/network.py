@@ -13,8 +13,8 @@ import tyro
 from pydantic import BaseModel
 from reccy.runtime import subprocess
 
-from . import machine_role
-from .provision import config
+from ..deployment import machine_role
+from . import config
 
 RunCommand = Callable[[Sequence[str]], CompletedProcess[str]]
 PROVISION_DIR = Path(__file__).resolve().parent / "provision"

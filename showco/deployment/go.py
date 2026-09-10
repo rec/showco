@@ -4,8 +4,8 @@ import sys
 
 import tyro
 
+from ..provision import provision, remote, script, state
 from . import local_update, machine_role, update
-from .provision import provision, remote, script, state
 
 
 def main(argv: list[str] | None = None) -> int:
