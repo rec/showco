@@ -38,6 +38,16 @@ install_base_packages() {
   printf '%s\n' "$desired_hash" | sudo tee "$state_file" >/dev/null
 }
 
+install_argon_one() {
+  if sudo test -f /etc/argon/argononed.py \
+    && sudo systemctl is-enabled --quiet argononed.service; then
+    printf 'Argon ONE software is already installed.\n'
+    return
+  fi
+  curl --fail --location --silent --show-error https://download.argon40.com/argon1.sh \
+    | bash
+}
+
 install_uv() {
   if sudo -H -u "$SHOW_USER" env PATH="/home/$SHOW_USER/.local/bin:$PATH" \
     bash -lc "uv --version >/dev/null 2>&1"; then
@@ -715,6 +725,9 @@ main() {
   printf 'Installing packages:\n'
   printf '  %s\n' "${packages[@]}"
   install_base_packages "${packages[@]}"
+
+  phase "installing Argon ONE software"
+  install_argon_one
 
   phase "creating directories"
   sudo mkdir -p "$ROOT"

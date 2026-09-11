@@ -768,6 +768,12 @@ class ProvisionTests(unittest.TestCase):
         self.assertNotIn("\n    python3\n", script.REMOTE_SCRIPT)
         self.assertNotIn("\n    python3-venv\n", script.REMOTE_SCRIPT)
 
+    def test_remote_script_installs_argon_one_software(self) -> None:
+        self.assertIn("install_argon_one()", script.REMOTE_SCRIPT)
+        self.assertIn('phase "installing Argon ONE software"', script.REMOTE_SCRIPT)
+        self.assertIn("https://download.argon40.com/argon1.sh", script.REMOTE_SCRIPT)
+        self.assertIn("Argon ONE software is already installed.", script.REMOTE_SCRIPT)
+
     def test_remote_script_configures_external_storage_mounts(self) -> None:
         self.assertIn("exfatprogs", script.REMOTE_SCRIPT)
         self.assertIn('phase "configuring storage mounts"', script.REMOTE_SCRIPT)
