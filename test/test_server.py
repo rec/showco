@@ -18,6 +18,7 @@ from showco.runtime.server import (
     channels_page,
     errors_page,
     health_page,
+    playback_page,
 )
 
 
@@ -711,6 +712,34 @@ class ServerTests(unittest.TestCase):
         html = actions_page([])
 
         self.assertIn('value="recs-disk-status"', html)
+
+    def test_playback_page_has_transport_controls(self) -> None:
+        html = playback_page(models.PlaybackStatus())
+
+        self.assertIn('href="/playback"', html)
+        self.assertIn('value="recs-playback-play"', html)
+        self.assertIn('value="recs-playback-stop"', html)
+        self.assertIn('value="recs-playback-pause"', html)
+        self.assertIn('name="seconds" value="-10"', html)
+        self.assertIn('name="seconds" value="10"', html)
+        self.assertIn('name="offset" value="-1"', html)
+        self.assertIn('name="offset" value="1"', html)
+        self.assertIn("script", html)
+
+    def test_playback_actions_send_typed_recs_parameters(self) -> None:
+        recs = mock.Mock()
+        recs.action.return_value = models.ActionResult(ok=True, message="jumped")
+        app = ShowcoApp(
+            recs,
+            None,
+            rehearsal.RehearsalSystemMonitor(),
+            rehearsal.RehearsalMixersMonitor(),
+        )
+
+        result = app.run_action({"action": "recs-playback-jump", "seconds": "-10"})
+
+        self.assertTrue(result.ok)
+        recs.action.assert_called_once_with("jump_playback", seconds=-10.0)
 
     def test_actions_page_has_show_markers(self) -> None:
         html = actions_page([])

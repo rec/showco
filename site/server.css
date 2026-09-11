@@ -28,6 +28,12 @@ main {
   gap: 0.75rem;
   grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
 }
+.transport {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+.transport button { margin: 0; }
 .levels {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
@@ -178,6 +184,7 @@ button[aria-busy="true"] { cursor: wait; }
   font-weight: 700;
 }
 @media (max-width: 42rem) {
+  .transport { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .performance-row {
     grid-template-columns: 7rem minmax(0, 1fr);
   }

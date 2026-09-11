@@ -70,6 +70,17 @@ class RecordingDiskStatus(BaseModel, frozen=True):
     paused_for_disk_space: bool = False
 
 
+class PlaybackStatus(BaseModel, frozen=True):
+    state: str = "waiting"
+    session: int | None = None
+    path: str | None = None
+    source: str | None = None
+    channel: str | None = None
+    output_channel: str | None = None
+    position_seconds: float | None = None
+    duration_seconds: float | None = None
+
+
 class RecsStatus(BaseModel, frozen=True):
     service: ServiceStatus
     recording: bool = False
@@ -83,6 +94,7 @@ class RecsStatus(BaseModel, frozen=True):
     snapshot_error: str | None = None
     disk: RecordingDiskStatus | None = None
     disk_error: str | None = None
+    playback: PlaybackStatus = Field(default_factory=PlaybackStatus)
     osc: list[RecorderStatus] = Field(default_factory=list)
     midi: list[MidiStatus] = Field(default_factory=list)
 

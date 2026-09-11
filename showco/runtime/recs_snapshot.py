@@ -21,6 +21,7 @@ class SnapshotStatus(BaseModel, frozen=True):
     rows: list[dict[str, object]] = Field(default_factory=list)
     errors: list[models.ErrorRecord] = Field(default_factory=list)
     disk: models.RecordingDiskStatus | None = None
+    playback: models.PlaybackStatus = Field(default_factory=models.PlaybackStatus)
     osc: list[models.RecorderStatus] = Field(default_factory=list)
     midi: list[models.MidiStatus] = Field(default_factory=list)
 
@@ -64,6 +65,10 @@ class RecsSnapshotClient:
             self.current = parsed
             return self.current
 
+    def invalidate(self) -> None:
+        with self.lock:
+            self.checked_at = 0.0
+
     def _transport_failure(self, error: str) -> SnapshotStatus:
         state = "stale" if self.current.has_snapshot else "offline"
         self.current = self.current.model_copy(
@@ -96,6 +101,8 @@ def snapshot_status(value: object) -> SnapshotStatus | str:
         return "recs status snapshot has invalid recording state"
     if isinstance(disk := recording_disk_status(value.get("disk")), str):
         return disk
+    if isinstance(playback := playback_status(value.get("playback")), str):
+        return playback
     osc = osc_status(value)
     if not isinstance(nodes := value.get("osc"), list) or len(osc) != len(nodes):
         return "recs status snapshot has invalid OSC status"
@@ -109,6 +116,7 @@ def snapshot_status(value: object) -> SnapshotStatus | str:
         rows=rows,
         errors=errors,
         disk=disk,
+        playback=playback,
         osc=osc,
         midi=midi,
     )
@@ -220,6 +228,49 @@ def recording_disk_status(value: object) -> models.RecordingDiskStatus | str:
         alert_threshold=threshold,
         alert_active=alert,
         paused_for_disk_space=paused,
+    )
+
+
+def playback_status(value: object) -> models.PlaybackStatus | str:
+    if not object_dict(value):
+        return "recs playback state is not an object"
+    state = value.get("state")
+    if not isinstance(state, str) or state not in {"waiting", "playing", "paused"}:
+        return "recs playback state is invalid"
+    session = value.get("session")
+    path = value.get("path")
+    source = value.get("source")
+    channel = value.get("channel")
+    output_channel = value.get("output_channel")
+    position = value.get("position_seconds")
+    duration = value.get("duration_seconds")
+    fields = (session, path, source, channel, output_channel, position, duration)
+    if state == "waiting":
+        if any(field is not None for field in fields):
+            return "recs waiting playback state has a selection"
+    elif (
+        not isinstance(session, int)
+        or isinstance(session, bool)
+        or session >= 0
+        or not all(
+            isinstance(field, str) for field in (path, source, channel, output_channel)
+        )
+        or (position_seconds := _number(position)) is None
+        or (duration_seconds := _number(duration)) is None
+        or position_seconds > duration_seconds
+    ):
+        return "recs playback state is invalid"
+    return models.PlaybackStatus(
+        state=state,
+        session=session
+        if isinstance(session, int) and not isinstance(session, bool)
+        else None,
+        path=path if isinstance(path, str) else None,
+        source=source if isinstance(source, str) else None,
+        channel=channel if isinstance(channel, str) else None,
+        output_channel=output_channel if isinstance(output_channel, str) else None,
+        position_seconds=_number(position),
+        duration_seconds=_number(duration),
     )
 
 
