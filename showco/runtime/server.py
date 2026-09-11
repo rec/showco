@@ -164,6 +164,8 @@ class ShowcoApp:
             if form.get("confirmation") == "shutdown":
                 return self.recs.shutdown()
             return models.ActionResult(ok=True, message="recs shutdown canceled")
+        if action == "recs-playback-play":
+            return self.recs.play()
         if action in RECS_ACTIONS:
             return self.recs.action(RECS_ACTIONS[action], **_recs_fields(form))
         if action == "streamo-restart" and self.streamo is None:
@@ -216,6 +218,9 @@ class ShowcoHandler(BaseHTTPRequestHandler):
             return
         if self.path == "/health":
             self._html(health_page(self.app.status()))
+            return
+        if self.path == "/playback":
+            self._html(playback_page(self.app.status().recs.playback))
             return
         if self.path == "/attributes":
             self._html(attributes_page(self.app.recs.mutable_attributes()))
@@ -682,6 +687,74 @@ def actions_page(
     )
 
 
+def playback_page(playback: models.PlaybackStatus) -> str:
+    session_disabled = " disabled" if playback.state == "waiting" else ""
+    transport = "".join(
+        [
+            transport_button(
+                "recs-playback-jump-session",
+                "Previous session",
+                offset=-1,
+                disabled=session_disabled,
+            ),
+            transport_button(
+                "recs-playback-jump",
+                "-10 seconds",
+                seconds=-10,
+                disabled=session_disabled,
+            ),
+            transport_button("recs-playback-play", "Play"),
+            transport_button("recs-playback-pause", "Pause", disabled=session_disabled),
+            transport_button("recs-playback-stop", "Stop", disabled=session_disabled),
+            transport_button(
+                "recs-playback-jump",
+                "+10 seconds",
+                seconds=10,
+                disabled=session_disabled,
+            ),
+            transport_button(
+                "recs-playback-jump-session",
+                "Next session",
+                offset=1,
+                disabled=session_disabled,
+            ),
+        ]
+    )
+    return page(
+        "Playback",
+        f"""
+        <section>
+          <h2>Playback</h2>
+          <p id="playback-state" aria-live="polite">{html.escape(playback.state)}</p>
+          <p id="playback-selection">{html.escape(playback_selection(playback))}</p>
+          <p id="playback-position">{html.escape(playback_position(playback))}</p>
+          <p id="playback-result" aria-live="polite"></p>
+          <div class="transport" id="playback-transport">
+            {transport}
+          </div>
+        </section>
+        """,
+        script=site_file("playback-script.js"),
+    )
+
+
+def playback_selection(playback: models.PlaybackStatus) -> str:
+    if playback.state == "waiting":
+        return "No session selected"
+    return (
+        f"Session {playback.session}: {playback.source} channel {playback.channel} "
+        f"to output {playback.output_channel}"
+    )
+
+
+def playback_position(playback: models.PlaybackStatus) -> str:
+    if playback.position_seconds is None or playback.duration_seconds is None:
+        return ""
+    position = _duration(playback.position_seconds)
+    duration = _duration(playback.duration_seconds)
+    return f"{position} / {duration}"
+
+
 def _streamo_actions(title_fields: list[str]) -> str:
     return f"""
           {button("streamo-restart", "Restart Stream")}
@@ -712,6 +785,7 @@ def page(title: str, body: str, *, script: str = "") -> str:
     <nav>
       <a href="/channels">Channels</a>
       <a href="/health">Health</a>
+      <a href="/playback">Playback</a>
       <a href="/attributes">Attributes</a>
       <a href="/actions">Actions</a>
       <a href="/errors">Errors</a>
@@ -840,6 +914,28 @@ def button(action: str, label: str, *, confirm: bool = False) -> str:
     <form method="post"{confirmation}>
       <input type="hidden" name="action" value="{html.escape(action)}">
       <button>{html.escape(label)}</button>
+    </form>
+    """
+
+
+def transport_button(
+    action: str,
+    label: str,
+    *,
+    seconds: int | None = None,
+    offset: int | None = None,
+    disabled: str = "",
+) -> str:
+    fields = ""
+    if seconds is not None:
+        fields += f'<input type="hidden" name="seconds" value="{seconds}">'
+    if offset is not None:
+        fields += f'<input type="hidden" name="offset" value="{offset}">'
+    return f"""
+    <form method="post">
+      <input type="hidden" name="action" value="{html.escape(action)}">
+      {fields}
+      <button{disabled}>{html.escape(label)}</button>
     </form>
     """
 
@@ -1122,11 +1218,16 @@ def _recs_fields(form: dict[str, str]) -> dict[str, object]:
     for k, v in form.items():
         if k == "action" or not v:
             continue
-        if k == "noise_floor":
+        if k in {"noise_floor", "seconds"}:
             try:
                 fields[k] = float(v)
             except ValueError:
-                raise ValueError("noise_floor must be a number") from None
+                raise ValueError(f"{k} must be a number") from None
+        elif k in {"offset", "session"}:
+            try:
+                fields[k] = int(v)
+            except ValueError:
+                raise ValueError(f"{k} must be an integer") from None
         else:
             fields[k] = v
     return fields
@@ -1140,6 +1241,10 @@ RECS_ACTIONS = {
     "recs-marker": "mark",
     "recs-new-session": "new_session",
     "recs-pause-recording": "pause_recording",
+    "recs-playback-jump": "jump_playback",
+    "recs-playback-jump-session": "jump_session",
+    "recs-playback-pause": "pause_playback",
+    "recs-playback-stop": "stop_playback",
     "recs-reload-profiles": "reload_profiles",
     "recs-resume-recording": "resume_recording",
     "recs-set-noise-floor": "set_noise_floor",

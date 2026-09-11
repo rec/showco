@@ -45,6 +45,7 @@ class RecsTests(unittest.TestCase):
         self.assertEqual(status.disk.free_bytes, 75)
         self.assertEqual(status.osc[0].name, "X18")
         self.assertEqual(status.midi[0].name, "FLOW 8")
+        self.assertEqual(status.playback.state, "waiting")
 
     def test_status_snapshot_uses_short_lived_cache(self) -> None:
         control = mock.Mock(spec=RecsControlClient)
@@ -192,6 +193,52 @@ class RecsTests(unittest.TestCase):
 
         self.assertTrue(result.ok)
         control.call.assert_called_once_with("mark", {"label": "test"})
+
+    def test_play_starts_the_latest_session(self) -> None:
+        control = mock.Mock(spec=RecsControlClient)
+        control.call.side_effect = [status_snapshot(), playback_state("playing")]
+
+        result = RecsClient(control=control, snapshot_cache_seconds=0).play()
+
+        self.assertTrue(result.ok)
+        self.assertEqual(
+            control.call.call_args_list,
+            [
+                mock.call("status_snapshot", timeout=0.25),
+                mock.call("play_session", {"session": -1}),
+            ],
+        )
+
+    def test_play_continues_paused_playback(self) -> None:
+        control = mock.Mock(spec=RecsControlClient)
+        snapshot = status_snapshot()
+        snapshot["playback"] = playback_state("paused")
+        control.call.side_effect = [snapshot, playback_state("playing")]
+
+        result = RecsClient(control=control, snapshot_cache_seconds=0).play()
+
+        self.assertTrue(result.ok)
+        control.call.assert_has_calls(
+            [
+                mock.call("status_snapshot", timeout=0.25),
+                mock.call("continue_playback"),
+            ]
+        )
+
+    def test_playback_actions_invalidate_the_status_cache(self) -> None:
+        control = mock.Mock(spec=RecsControlClient)
+        control.call.side_effect = [
+            status_snapshot(),
+            playback_state("waiting"),
+            status_snapshot(),
+        ]
+        client = RecsClient(control=control)
+
+        client.status()
+        client.action("stop_playback")
+        client.status()
+
+        self.assertEqual(control.call.call_count, 3)
 
     def test_action_rejects_unexpected_success_response(self) -> None:
         control = mock.Mock(spec=RecsControlClient)
@@ -445,6 +492,7 @@ def status_snapshot() -> dict[str, object]:
             }
         ],
         "recording": {"paused": True},
+        "playback": playback_state("waiting"),
         "disk": disk_status(),
         "midi": [{"name": "FLOW 8", "state": "recording"}],
         "osc": [{"name": "X18", "state": "running", "path": "X18.jsonl"}],
@@ -468,7 +516,26 @@ def track_names() -> dict[str, object]:
     return {"type": "track_names", "track_names": {"Mic": {"Lead": 1}}}
 
 
+def playback_state(state: str) -> dict[str, object]:
+    result: dict[str, object] = {"type": "playback_state", "state": state}
+    if state != "waiting":
+        result.update(
+            {
+                "session": -1,
+                "path": "/recordings/session-2/recording.toml",
+                "source": "Mic",
+                "channel": "1-2",
+                "output_channel": "1-2",
+                "position_seconds": 10.0,
+                "duration_seconds": 20.0,
+            }
+        )
+    return result
+
+
 def action_response(command: str) -> object:
+    if command in recs.PLAYBACK_COMMANDS:
+        return playback_state("waiting")
     if command == "capabilities":
         return {"type": "capabilities_result", "commands": [], "version": 7}
     if command == "card_replace":

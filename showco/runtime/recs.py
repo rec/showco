@@ -205,9 +205,15 @@ class RecsClient:
             snapshot_error=snapshot.error,
             disk=snapshot.disk,
             disk_error=snapshot.error,
+            playback=snapshot.playback,
             osc=snapshot.osc,
             midi=snapshot.midi,
         )
+
+    def play(self) -> models.ActionResult:
+        if self.status().playback.state == "paused":
+            return self.action("continue_playback")
+        return self.action("play_session", session=-1)
 
     def calibrate(
         self, device: str = "", channels: list[int] | None = None
@@ -387,6 +393,8 @@ class RecsClient:
             )
         parameters = {k: v for k, v in fields.items() if v not in ("", None)}
         response = self._control_command(command, parameters or None)
+        if command in PLAYBACK_COMMANDS:
+            self.snapshot_client.invalidate()
         if isinstance(response, models.ActionResult):
             return response
         if command in DATA_RESPONSE_TYPES:
@@ -572,6 +580,9 @@ def valid_data_response(command: str, value: object) -> bool:
         return isinstance(devices, list) and all(valid_device(v) for v in devices)
     if command == "status_snapshot":
         return not isinstance(recs_snapshot.snapshot_status(value), str)
+    if command in PLAYBACK_COMMANDS:
+        playback = {k: v for k, v in value.items() if k != "type"}
+        return not isinstance(recs_snapshot.playback_status(playback), str)
     return False
 
 
@@ -726,11 +737,17 @@ ACTION_COMMANDS = {
     "mark",
     "new_session",
     "pause_recording",
+    "pause_playback",
+    "play_session",
     "reload_profiles",
     "resume_recording",
     "set_key_label",
     "set_noise_floor",
     "status_snapshot",
+    "stop_playback",
+    "continue_playback",
+    "jump_playback",
+    "jump_session",
 }
 
 DATA_RESPONSE_TYPES = {
@@ -739,5 +756,20 @@ DATA_RESPONSE_TYPES = {
     "disk_status": "disk_status_result",
     "list_devices": "devices",
     "new_session": "new_session_started",
+    "pause_playback": "playback_state",
+    "play_session": "playback_state",
     "status_snapshot": "status_snapshot_result",
+    "stop_playback": "playback_state",
+    "continue_playback": "playback_state",
+    "jump_playback": "playback_state",
+    "jump_session": "playback_state",
+}
+
+PLAYBACK_COMMANDS = {
+    "pause_playback",
+    "play_session",
+    "stop_playback",
+    "continue_playback",
+    "jump_playback",
+    "jump_session",
 }

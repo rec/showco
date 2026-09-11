@@ -104,6 +104,7 @@ def snapshot() -> dict[str, object]:
             }
         ],
         "recording": {"paused": True},
+        "playback": {"state": "waiting"},
         "disk": {
             "path": "/recordings",
             "used_bytes": 25,
