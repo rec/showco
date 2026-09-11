@@ -29,7 +29,7 @@ SERVICES = {
 }
 
 
-class ShowcoDaemon(reccy.Reccy, frozen=True):
+class ShowcoDaemon(reccy.Reccy):
     service_spec: ClassVar[ServiceSpec] = SHOWCO_SERVICE
     daemon_module: ClassVar[str] = "showco"
 
