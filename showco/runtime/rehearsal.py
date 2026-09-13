@@ -17,16 +17,16 @@ class RehearsalRecsClient(RecsClient):
         self.rehearsal_tracks = [[channel] for channel in range(1, 19)]
         self.rehearsal_track_names: dict[str, dict[str, int]] = {}
         self.rehearsal_attributes: dict[str, object] = {
-            "recording.longest_file_time": 0.0,
-            "recording.record_everything": False,
+            'recording.longest_file_time': 0.0,
+            'recording.record_everything': False,
         }
 
     def status(self) -> models.RecsStatus:
         elapsed = time.time() - self.started_at
         return models.RecsStatus(
             service=models.ServiceStatus(
-                name="recs",
-                state="connected",
+                name='recs',
+                state='connected',
             ),
             recording=True,
             elapsed_seconds=elapsed,
@@ -36,7 +36,7 @@ class RehearsalRecsClient(RecsClient):
             channels=rehearsal_channels(elapsed, self.rehearsal_tracks),
             errors=[],
             disk=models.RecordingDiskStatus(
-                path="/media/showco/recordings",
+                path='/media/showco/recordings',
                 used_bytes=48 * 1024**3,
                 free_bytes=208 * 1024**3,
                 total_bytes=256 * 1024**3,
@@ -45,12 +45,12 @@ class RehearsalRecsClient(RecsClient):
         )
 
     def calibrate(
-        self, device: str = "", channels: list[int] | None = None
+        self, device: str = '', channels: list[int] | None = None
     ) -> models.ActionResult:
         self.calibration_count += 1
         return models.ActionResult(
             ok=True,
-            message=f"rehearsal recs calibration {self.calibration_count}",
+            message=f'rehearsal recs calibration {self.calibration_count}',
         )
 
     def set_track_name(
@@ -61,9 +61,9 @@ class RehearsalRecsClient(RecsClient):
         track_name = track_name.strip()
         if not device or not channel:
             return models.ActionResult(
-                ok=False, message="rehearsal recs track name missing"
+                ok=False, message='rehearsal recs track name missing'
             )
-        channel_number = int(channel.partition("-")[0])
+        channel_number = int(channel.partition('-')[0])
         names = self.rehearsal_track_names.setdefault(device, {})
         for name, value in list(names.items()):
             if value == channel_number:
@@ -71,7 +71,7 @@ class RehearsalRecsClient(RecsClient):
         if track_name:
             names[track_name] = channel_number
         return models.ActionResult(
-            ok=True, message=f"rehearsal recs track name {track_name}"
+            ok=True, message=f'rehearsal recs track name {track_name}'
         )
 
     def set_stereo(self, device: str, channels: list[int]) -> models.ActionResult:
@@ -79,7 +79,7 @@ class RehearsalRecsClient(RecsClient):
         if isinstance(tracks, models.ActionResult):
             return tracks
         self.rehearsal_tracks = tracks
-        return models.ActionResult(ok=True, message="rehearsal recs stereo updated")
+        return models.ActionResult(ok=True, message='rehearsal recs stereo updated')
 
     def mutable_attributes(self) -> list[models.MutableAttribute]:
         return [
@@ -91,22 +91,22 @@ class RehearsalRecsClient(RecsClient):
         if address not in self.rehearsal_attributes:
             return models.ActionResult(
                 ok=False,
-                message=f"rehearsal recs unknown attribute {address}",
+                message=f'rehearsal recs unknown attribute {address}',
             )
         self.rehearsal_attributes[address] = value
-        return models.ActionResult(ok=True, message=f"rehearsal recs set {address}")
+        return models.ActionResult(ok=True, message=f'rehearsal recs set {address}')
 
     def action(self, command: str, **fields: object) -> models.ActionResult:
         if fields:
             return models.ActionResult(
-                ok=True, message=f"rehearsal recs {command} {fields} succeeded"
+                ok=True, message=f'rehearsal recs {command} {fields} succeeded'
             )
         return models.ActionResult(
-            ok=True, message=f"rehearsal recs {command} succeeded"
+            ok=True, message=f'rehearsal recs {command} succeeded'
         )
 
     def shutdown(self) -> models.ActionResult:
-        return models.ActionResult(ok=True, message="rehearsal recs shutdown requested")
+        return models.ActionResult(ok=True, message='rehearsal recs shutdown requested')
 
 
 class RehearsalStreamoClient(StreamoClient):
@@ -118,8 +118,8 @@ class RehearsalStreamoClient(StreamoClient):
 
     def status(self) -> models.StreamoStatus:
         return models.StreamoStatus(
-            service=models.ServiceStatus(name="streamo", state="connected"),
-            stream_state="stopped" if self.stopped else "streaming",
+            service=models.ServiceStatus(name='streamo', state='connected'),
+            stream_state='stopped' if self.stopped else 'streaming',
             muted=self.muted,
             ffmpeg_alive=not self.stopped,
             audio_seconds=0.0 if self.stopped else time.time() - self.started_at,
@@ -129,19 +129,19 @@ class RehearsalStreamoClient(StreamoClient):
 
     def action(self, command: str, **fields: object) -> models.ActionResult:
         self.actions.append((command, fields))
-        if command == "mute":
+        if command == 'mute':
             self.muted = True
-        elif command == "unmute":
+        elif command == 'unmute':
             self.muted = False
-        elif command == "stop":
+        elif command == 'stop':
             self.stopped = True
         return models.ActionResult(
-            ok=True, message=f"rehearsal streamo {command} succeeded"
+            ok=True, message=f'rehearsal streamo {command} succeeded'
         )
 
 
 def restart_streamo() -> models.ActionResult:
-    return models.ActionResult(ok=True, message="rehearsal streamo restart requested")
+    return models.ActionResult(ok=True, message='rehearsal streamo restart requested')
 
 
 class RehearsalSystemMonitor(SystemMonitor):
@@ -162,8 +162,8 @@ class RehearsalMixersMonitor(MixersMonitor):
         self, audio_devices: set[str], midi: dict[str, str]
     ) -> list[models.MixerStatus]:
         return [
-            models.MixerStatus(name="X18", state="connected", latency_ms=4.2),
-            models.MixerStatus(name="Flow 8", state="waiting"),
+            models.MixerStatus(name='X18', state='connected', latency_ms=4.2),
+            models.MixerStatus(name='Flow 8', state='waiting'),
         ]
 
 
@@ -176,9 +176,9 @@ def rehearsal_channels(
         signal = channel_signal(index, elapsed)
         channels.append(
             models.ChannelLevel(
-                name="-".join(str(channel) for channel in track),
+                name='-'.join(str(channel) for channel in track),
                 state=channel_state(signal),
-                device="X18/XR18",
+                device='X18/XR18',
                 channels=track,
                 signal=signal,
                 on=True,
@@ -197,9 +197,9 @@ def channel_signal(index: int, elapsed: float) -> float:
 
 def channel_state(signal: float) -> str:
     if signal < 0.001:
-        return "silent"
+        return 'silent'
     if signal < 1 / 3:
-        return "present"
+        return 'present'
     if signal < 0.9:
-        return "healthy"
-    return "clipping"
+        return 'healthy'
+    return 'clipping'

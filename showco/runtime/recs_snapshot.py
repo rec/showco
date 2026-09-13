@@ -14,7 +14,7 @@ STATUS_SNAPSHOT_TIMEOUT_SECONDS = 0.25
 
 
 class SnapshotStatus(BaseModel, frozen=True):
-    service_state: str = "offline"
+    service_state: str = 'offline'
     error: str | None = None
     has_snapshot: bool = False
     paused: bool = False
@@ -49,16 +49,16 @@ class RecsSnapshotClient:
             self.checked_at = now
             try:
                 response = self.control.call(
-                    "status_snapshot", timeout=self.timeout_seconds
+                    'status_snapshot', timeout=self.timeout_seconds
                 )
             except TimeoutError as error:
                 return self._transport_failure(
-                    f"recs status_snapshot timed out: {error}"
+                    f'recs status_snapshot timed out: {error}'
                 )
             except (ConnectionError, OSError) as error:
-                return self._transport_failure(f"recs status_snapshot failed: {error}")
+                return self._transport_failure(f'recs status_snapshot failed: {error}')
             except (ValidationError, ValueError) as error:
-                return self._invalid(f"recs status_snapshot failed: {error}")
+                return self._invalid(f'recs status_snapshot failed: {error}')
 
             if isinstance(parsed := snapshot_status(response), str):
                 return self._invalid(parsed)
@@ -70,47 +70,47 @@ class RecsSnapshotClient:
             self.checked_at = 0.0
 
     def _transport_failure(self, error: str) -> SnapshotStatus:
-        state = "stale" if self.current.has_snapshot else "offline"
+        state = 'stale' if self.current.has_snapshot else 'offline'
         self.current = self.current.model_copy(
-            update={"service_state": state, "error": error}
+            update={'service_state': state, 'error': error}
         )
         return self.current
 
     def _invalid(self, error: str) -> SnapshotStatus:
         self.current = self.current.model_copy(
-            update={"service_state": "error", "error": error}
+            update={'service_state': 'error', 'error': error}
         )
         return self.current
 
 
 def snapshot_status(value: object) -> SnapshotStatus | str:
     if not object_dict(value):
-        return "recs status snapshot is not an object"
-    if value.get("type") != "status_snapshot_result":
-        return "recs status snapshot has invalid type"
-    if not isinstance(rows := value.get("rows"), list) or not all(
+        return 'recs status snapshot is not an object'
+    if value.get('type') != 'status_snapshot_result':
+        return 'recs status snapshot has invalid type'
+    if not isinstance(rows := value.get('rows'), list) or not all(
         object_dict(r) for r in rows
     ):
-        return "recs status snapshot has invalid rows"
-    if isinstance(errors := error_records(value.get("errors")), str):
+        return 'recs status snapshot has invalid rows'
+    if isinstance(errors := error_records(value.get('errors')), str):
         return errors
-    recording = value.get("recording")
+    recording = value.get('recording')
     if not object_dict(recording) or not isinstance(
-        paused := recording.get("paused"), bool
+        paused := recording.get('paused'), bool
     ):
-        return "recs status snapshot has invalid recording state"
-    if isinstance(disk := recording_disk_status(value.get("disk")), str):
+        return 'recs status snapshot has invalid recording state'
+    if isinstance(disk := recording_disk_status(value.get('disk')), str):
         return disk
-    if isinstance(playback := playback_status(value.get("playback")), str):
+    if isinstance(playback := playback_status(value.get('playback')), str):
         return playback
     osc = osc_status(value)
-    if not isinstance(nodes := value.get("osc"), list) or len(osc) != len(nodes):
-        return "recs status snapshot has invalid OSC status"
+    if not isinstance(nodes := value.get('osc'), list) or len(osc) != len(nodes):
+        return 'recs status snapshot has invalid OSC status'
     midi = midi_status(value)
-    if not isinstance(inputs := value.get("midi"), list) or len(midi) != len(inputs):
-        return "recs status snapshot has invalid MIDI status"
+    if not isinstance(inputs := value.get('midi'), list) or len(midi) != len(inputs):
+        return 'recs status snapshot has invalid MIDI status'
     return SnapshotStatus(
-        service_state="connected",
+        service_state='connected',
         has_snapshot=True,
         paused=paused,
         rows=rows,
@@ -129,17 +129,17 @@ def object_dict(value: object) -> TypeIs[dict[str, object]]:
 def osc_status(value: object) -> list[models.RecorderStatus]:
     if not object_dict(value):
         return []
-    nodes = value.get("osc")
+    nodes = value.get('osc')
     if not isinstance(nodes, list):
         return []
     statuses = []
     for node in nodes:
-        if not object_dict(node) or not (name := _string(node.get("name"))):
+        if not object_dict(node) or not (name := _string(node.get('name'))):
             continue
-        state = node.get("state", "running")
-        path = node.get("path")
-        size = node.get("size")
-        error = node.get("last_error")
+        state = node.get('state', 'running')
+        path = node.get('path')
+        size = node.get('size')
+        error = node.get('last_error')
         if (
             not isinstance(state, str)
             or path is not None
@@ -165,46 +165,46 @@ def osc_status(value: object) -> list[models.RecorderStatus]:
 def midi_status(value: object) -> list[models.MidiStatus]:
     if not object_dict(value):
         return []
-    midi = value.get("midi")
+    midi = value.get('midi')
     if not isinstance(midi, list):
         return []
     return [
         models.MidiStatus(name=name, state=state)
         for item in midi
         if object_dict(item)
-        and (name := _string(item.get("name"))) is not None
-        and (state := _string(item.get("state"))) is not None
+        and (name := _string(item.get('name'))) is not None
+        and (state := _string(item.get('state'))) is not None
     ]
 
 
 def error_records(value: object) -> list[models.ErrorRecord] | str:
     if not isinstance(value, list):
-        return "recs status snapshot has invalid errors"
+        return 'recs status snapshot has invalid errors'
     errors = []
     for item in value:
         if (
             not object_dict(item)
-            or (timestamp := _string(item.get("timestamp"))) is None
-            or (message := _string(item.get("message"))) is None
+            or (timestamp := _string(item.get('timestamp'))) is None
+            or (message := _string(item.get('message'))) is None
         ):
-            return "recs status snapshot has invalid errors"
+            return 'recs status snapshot has invalid errors'
         errors.append(models.ErrorRecord(timestamp=timestamp, message=message))
     return errors
 
 
 def recording_disk_status(value: object) -> models.RecordingDiskStatus | str:
     if not object_dict(value):
-        return "recs disk status is not an object"
-    path = _string(value.get("path"))
-    used = _int(value.get("used_bytes"))
-    free = _int(value.get("free_bytes"))
-    total = _int(value.get("total_bytes"))
-    remaining_value = value.get("estimated_seconds_remaining")
+        return 'recs disk status is not an object'
+    path = _string(value.get('path'))
+    used = _int(value.get('used_bytes'))
+    free = _int(value.get('free_bytes'))
+    total = _int(value.get('total_bytes'))
+    remaining_value = value.get('estimated_seconds_remaining')
     remaining = _number(remaining_value)
-    threshold_value = value.get("alert_threshold")
+    threshold_value = value.get('alert_threshold')
     threshold = _string(threshold_value)
-    alert = value.get("alert_active", False)
-    paused = value.get("paused_for_disk_space", False)
+    alert = value.get('alert_active', False)
+    paused = value.get('paused_for_disk_space', False)
     if (
         not path
         or used is None
@@ -218,7 +218,7 @@ def recording_disk_status(value: object) -> models.RecordingDiskStatus | str:
         or not isinstance(alert, bool)
         or not isinstance(paused, bool)
     ):
-        return "recs disk status is invalid"
+        return 'recs disk status is invalid'
     return models.RecordingDiskStatus(
         path=path,
         used_bytes=used,
@@ -233,21 +233,21 @@ def recording_disk_status(value: object) -> models.RecordingDiskStatus | str:
 
 def playback_status(value: object) -> models.PlaybackStatus | str:
     if not object_dict(value):
-        return "recs playback state is not an object"
-    state = value.get("state")
-    if not isinstance(state, str) or state not in {"waiting", "playing", "paused"}:
-        return "recs playback state is invalid"
-    session = value.get("session")
-    path = value.get("path")
-    source = value.get("source")
-    channel = value.get("channel")
-    output_channel = value.get("output_channel")
-    position = value.get("position_seconds")
-    duration = value.get("duration_seconds")
+        return 'recs playback state is not an object'
+    state = value.get('state')
+    if not isinstance(state, str) or state not in {'waiting', 'playing', 'paused'}:
+        return 'recs playback state is invalid'
+    session = value.get('session')
+    path = value.get('path')
+    source = value.get('source')
+    channel = value.get('channel')
+    output_channel = value.get('output_channel')
+    position = value.get('position_seconds')
+    duration = value.get('duration_seconds')
     fields = (session, path, source, channel, output_channel, position, duration)
-    if state == "waiting":
+    if state == 'waiting':
         if any(field is not None for field in fields):
-            return "recs waiting playback state has a selection"
+            return 'recs waiting playback state has a selection'
     elif (
         not isinstance(session, int)
         or isinstance(session, bool)
@@ -259,7 +259,7 @@ def playback_status(value: object) -> models.PlaybackStatus | str:
         or (duration_seconds := _number(duration)) is None
         or position_seconds > duration_seconds
     ):
-        return "recs playback state is invalid"
+        return 'recs playback state is invalid'
     return models.PlaybackStatus(
         state=state,
         session=session

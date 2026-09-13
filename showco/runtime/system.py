@@ -4,9 +4,9 @@ from pathlib import Path
 
 from .models import SystemStatus
 
-RASPBERRY_PI_TEMPERATURE = Path("/sys/class/thermal/thermal_zone0/temp")
-PROC_STAT = Path("/proc/stat")
-PROC_MEMINFO = Path("/proc/meminfo")
+RASPBERRY_PI_TEMPERATURE = Path('/sys/class/thermal/thermal_zone0/temp')
+PROC_STAT = Path('/proc/stat')
+PROC_MEMINFO = Path('/proc/meminfo')
 
 
 class SystemMonitor:
@@ -38,39 +38,39 @@ class SystemMonitor:
 
     def _temperature(self) -> tuple[float | None, str | None]:
         if not self.temperature_path.exists():
-            return None, "temperature sensor unavailable"
+            return None, 'temperature sensor unavailable'
         try:
             value = int(self.temperature_path.read_text().strip())
         except ValueError:
-            return None, "temperature sensor is invalid"
+            return None, 'temperature sensor is invalid'
         except OSError as e:
-            return None, f"temperature sensor failed: {e}"
+            return None, f'temperature sensor failed: {e}'
         return value / 1000, None
 
     def _cpu(self) -> tuple[float | None, str | None]:
         try:
             fields = self.stat_path.read_text().splitlines()[0].split()
-            if not fields or fields[0] != "cpu" or len(fields) < 5:
+            if not fields or fields[0] != 'cpu' or len(fields) < 5:
                 raise ValueError
             counters = [int(v) for v in fields[1:9]]
             if any(v < 0 for v in counters):
                 raise ValueError
         except (IndexError, ValueError):
-            return None, "CPU counters are invalid"
+            return None, 'CPU counters are invalid'
         except FileNotFoundError:
-            return None, "CPU counters are unavailable"
+            return None, 'CPU counters are unavailable'
         except OSError as e:
-            return None, f"CPU counters failed: {e}"
+            return None, f'CPU counters failed: {e}'
 
         current = sum(counters), counters[3] + (counters[4] if len(counters) > 4 else 0)
         previous = self.previous_cpu
         self.previous_cpu = current
         if previous is None:
-            return None, "sampling"
+            return None, 'sampling'
         total_delta = current[0] - previous[0]
         idle_delta = current[1] - previous[1]
         if total_delta <= 0:
-            return None, "CPU counters did not advance"
+            return None, 'CPU counters did not advance'
         percent = 100 * (total_delta - idle_delta) / total_delta
         return min(100.0, max(0.0, percent)), None
 
@@ -78,20 +78,20 @@ class SystemMonitor:
         try:
             values = {}
             for line in self.meminfo_path.read_text().splitlines():
-                name, separator, value = line.partition(":")
-                if separator and name in {"MemTotal", "MemAvailable"}:
+                name, separator, value = line.partition(':')
+                if separator and name in {'MemTotal', 'MemAvailable'}:
                     fields = value.split()
-                    if len(fields) != 2 or fields[1] != "kB":
+                    if len(fields) != 2 or fields[1] != 'kB':
                         raise ValueError
                     values[name] = int(fields[0]) * 1024
-            total = values["MemTotal"]
-            available = values["MemAvailable"]
+            total = values['MemTotal']
+            available = values['MemAvailable']
             if total <= 0 or available < 0 or available > total:
                 raise ValueError
         except (KeyError, ValueError):
-            return None, None, "memory information is invalid"
+            return None, None, 'memory information is invalid'
         except FileNotFoundError:
-            return None, None, "memory information is unavailable"
+            return None, None, 'memory information is unavailable'
         except OSError as e:
-            return None, None, f"memory information failed: {e}"
+            return None, None, f'memory information failed: {e}'
         return total - available, total, None

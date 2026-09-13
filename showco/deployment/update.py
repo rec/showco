@@ -51,19 +51,19 @@ def update_remote_target(
 ) -> int:
     provision_config = target_config or provisioning_config()
     target_host = host or provision_config.network.host
-    ssh_target = f"{provision_config.network.user}@{target_host}"
+    ssh_target = f'{provision_config.network.user}@{target_host}'
     command = remote_update_command(
         selected,
         root or provision_config.paths.root,
         skip_worktree_check=True,
         clear_settings=clear_settings,
     )
-    tqdm.write(f"Updating {ssh_target} from GitHub", file=output)
+    tqdm.write(f'Updating {ssh_target} from GitHub', file=output)
     with progress_bar(1, output) as progress:
-        progress.set_description_str(f"Updating {ssh_target} from GitHub")
+        progress.set_description_str(f'Updating {ssh_target} from GitHub')
         result = run_remote_step(
-            "target",
-            "update",
+            'target',
+            'update',
             ssh.ssh_command(provision_config, ssh_target, command),
         )
         progress.update()
@@ -85,7 +85,7 @@ def update_target(
     root = root or provision_config.paths.root
     run_command = run_command or run_command_with_timeout
     if clear_settings:
-        print("Clearing saved Recs settings.", file=output)
+        print('Clearing saved Recs settings.', file=output)
         clear_settings_result = clear_recs_settings_step(
             provision_config.network.user, run_command
         )
@@ -100,9 +100,9 @@ def update_target(
     )
     if not check_main_branches(programs, run_command, output):
         return 1
-    refresh_definitions = any(p.name == "reccy" for p in programs)
+    refresh_definitions = any(p.name == 'reccy' for p in programs)
     with progress_bar(len(programs), output) as progress:
-        if "showco" in selected:
+        if 'showco' in selected:
             return update_target_with_showco(
                 programs,
                 provision_config.network.web_port,
@@ -112,9 +112,9 @@ def update_target(
                 refresh_definitions,
             )
         service_names = selected_service_names(programs)
-        results = [run_service_step(n, "stop", run_command) for n in service_names]
+        results = [run_service_step(n, 'stop', run_command) for n in service_names]
         for program in programs:
-            progress.set_description_str(f"Updating {program.name}")
+            progress.set_description_str(f'Updating {program.name}')
             results.extend(update_program_on_target(program, run_command))
             progress.update()
 
@@ -128,13 +128,13 @@ def update_target(
             )
             for n in service_names
         )
-        if "showco" in service_names:
+        if 'showco' in service_names:
             results.append(
                 showco_revision_step(
                     root, provision_config.network.web_port, run_command
                 )
             )
-        if "recs" in service_names:
+        if 'recs' in service_names:
             results.append(recs_status_changes_step(run_command))
     report_failures(results, output)
     return 0 if all(r.ok for r in results) else 1
@@ -148,16 +148,16 @@ def update_target_with_showco(
     progress: tqdm,
     refresh_definitions: bool,
 ) -> int:
-    showco = program_named(programs, "showco")
-    other_programs = [p for p in programs if p.name != "showco"]
-    results = [run_service_step("showco", "stop", run_command)]
-    progress.set_description_str(f"Updating {showco.name}")
+    showco = program_named(programs, 'showco')
+    other_programs = [p for p in programs if p.name != 'showco']
+    results = [run_service_step('showco', 'stop', run_command)]
+    progress.set_description_str(f'Updating {showco.name}')
     results.extend(update_program_on_target(showco, run_command))
     progress.update()
     for program in other_programs:
-        service_names = [n for n in program.service_names if n != "showco"]
-        results.extend(run_service_step(n, "stop", run_command) for n in service_names)
-        progress.set_description_str(f"Updating {program.name}")
+        service_names = [n for n in program.service_names if n != 'showco']
+        results.extend(run_service_step(n, 'stop', run_command) for n in service_names)
+        progress.set_description_str(f'Updating {program.name}')
         results.extend(update_program_on_target(program, run_command))
         results.extend(
             start_or_refresh_service_step(
@@ -172,7 +172,7 @@ def update_target_with_showco(
         progress.update()
     results.append(
         start_or_refresh_service_step(
-            "showco",
+            'showco',
             refresh_definitions,
             showco.directory.parent,
             provisioning_config(),
@@ -180,7 +180,7 @@ def update_target_with_showco(
         )
     )
     results.append(showco_revision_step(showco.directory.parent, web_port, run_command))
-    if "recs" in selected_service_names(programs):
+    if 'recs' in selected_service_names(programs):
         results.append(recs_status_changes_step(run_command))
     report_failures(results, output)
     return 0 if all(r.ok for r in results) else 1
@@ -196,8 +196,8 @@ def update_program_on_target(
         return results
     before = run_step(
         program.name,
-        "current commit",
-        ["git", "-C", str(program.directory), "rev-parse", "HEAD"],
+        'current commit',
+        ['git', '-C', str(program.directory), 'rev-parse', 'HEAD'],
         run_command,
     )
     results.append(before)
@@ -206,15 +206,15 @@ def update_program_on_target(
     commit = before.output.strip()
     pull = run_step(
         program.name,
-        "pull",
-        ["git", "-C", str(program.directory), "pull", "--ff-only"],
+        'pull',
+        ['git', '-C', str(program.directory), 'pull', '--ff-only'],
         run_command,
     )
     if not pull.ok:
         upstream = run_step(
             program.name,
-            "upstream commit",
-            ["git", "-C", str(program.directory), "rev-parse", "@{upstream}"],
+            'upstream commit',
+            ['git', '-C', str(program.directory), 'rev-parse', '@{upstream}'],
             run_command,
         )
         results.append(upstream)
@@ -222,13 +222,13 @@ def update_program_on_target(
         if upstream.ok and upstream_commit and upstream_commit != commit:
             reset = run_step(
                 program.name,
-                "reset to upstream",
+                'reset to upstream',
                 [
-                    "git",
-                    "-C",
+                    'git',
+                    '-C',
                     str(program.directory),
-                    "reset",
-                    "--hard",
+                    'reset',
+                    '--hard',
                     upstream_commit,
                 ],
                 run_command,
@@ -244,8 +244,8 @@ def update_program_on_target(
             results.append(
                 run_step(
                     program.name,
-                    "reset",
-                    ["git", "-C", str(program.directory), "reset", "--hard", commit],
+                    'reset',
+                    ['git', '-C', str(program.directory), 'reset', '--hard', commit],
                     run_command,
                 )
             )
@@ -254,16 +254,16 @@ def update_program_on_target(
         results.append(pull)
     after = run_step(
         program.name,
-        "new commit",
-        ["git", "-C", str(program.directory), "rev-parse", "HEAD"],
+        'new commit',
+        ['git', '-C', str(program.directory), 'rev-parse', 'HEAD'],
         run_command,
     )
     results.append(after)
     if after.ok and after.output.strip() != commit:
         dependencies = run_step(
             program.name,
-            "sync dependencies",
-            ["uv", "sync", "--locked", "--directory", str(program.directory)],
+            'sync dependencies',
+            ['uv', 'sync', '--locked', '--directory', str(program.directory)],
             run_command,
         )
         results.append(dependencies)
@@ -271,8 +271,8 @@ def update_program_on_target(
             results.append(
                 run_step(
                     program.name,
-                    "reset",
-                    ["git", "-C", str(program.directory), "reset", "--hard", commit],
+                    'reset',
+                    ['git', '-C', str(program.directory), 'reset', '--hard', commit],
                     run_command,
                 )
             )
@@ -281,23 +281,23 @@ def update_program_on_target(
 
 def recs_status_changes_step(run_command: RunCommand) -> StepResult:
     result = run_step(
-        "recs",
-        "status is advancing",
-        ["sh", "-c", recs.status_changes_command()],
+        'recs',
+        'status is advancing',
+        ['sh', '-c', recs.status_changes_command()],
         run_command,
     )
     if result.ok:
         return result
     return result.model_copy(
-        update={"output": recs.status_failure_summary(result.output)}
+        update={'output': recs.status_failure_summary(result.output)}
     )
 
 
 def clear_recs_settings_step(user: str, run_command: RunCommand) -> StepResult:
     return run_step(
-        "recs",
-        "clear saved settings",
-        ["rm", "-f", str(Path("/home") / user / ".config/recs/settings.json")],
+        'recs',
+        'clear saved settings',
+        ['rm', '-f', str(Path('/home') / user / '.config/recs/settings.json')],
         run_command,
     )
 
@@ -306,14 +306,14 @@ def showco_revision_step(
     root: Path, web_port: int, run_command: RunCommand
 ) -> StepResult:
     command = revision.showco_revision_command(root, web_port, retry=True)
-    return run_step("showco", "web UI revision", ["sh", "-c", command], run_command)
+    return run_step('showco', 'web UI revision', ['sh', '-c', command], run_command)
 
 
 def program_named(programs: list[Program], name: str) -> Program:
     for program in programs:
         if program.name == name:
             return program
-    sys.exit(f"ERROR: update target {name} is required")
+    sys.exit(f'ERROR: update target {name} is required')
 
 
 def selected_repositories(arguments: list[str]) -> list[str]:
@@ -322,9 +322,9 @@ def selected_repositories(arguments: list[str]) -> list[str]:
     invalid = [a for a in arguments if a not in REPOSITORY_NAMES]
     if invalid:
         sys.exit(
-            "ERROR: unknown update target(s): "
-            + ", ".join(invalid)
-            + f"\nExpected one of: {', '.join(REPOSITORY_NAMES)}"
+            'ERROR: unknown update target(s): '
+            + ', '.join(invalid)
+            + f'\nExpected one of: {", ".join(REPOSITORY_NAMES)}'
         )
     return expand_repository_selection(arguments)
 
@@ -351,7 +351,7 @@ def programs_for_repositories(
             service_names=[
                 s
                 for s in SERVICES_BY_REPOSITORY[n]
-                if (streamo_enabled or s != "streamo") and (lyte_enabled or s != "lyte")
+                if (streamo_enabled or s != 'streamo') and (lyte_enabled or s != 'lyte')
             ],
         )
         for n in selected
@@ -381,35 +381,35 @@ def check_main_branches(
 def main_branch_step(program: Program, run_command: RunCommand) -> StepResult:
     result = run_step(
         program.name,
-        "main branch",
-        ["git", "-C", str(program.directory), "branch", "--show-current"],
+        'main branch',
+        ['git', '-C', str(program.directory), 'branch', '--show-current'],
         run_command,
     )
     if not result.ok:
         return result
     branch = result.output.strip()
-    if branch == "main":
+    if branch == 'main':
         return StepResult(
             program=program.name,
-            step="main branch",
+            step='main branch',
             command=result.command,
             returncode=0,
-            output="",
+            output='',
         )
     return StepResult(
         program=program.name,
-        step="main branch",
+        step='main branch',
         command=result.command,
         returncode=1,
-        output=f"repository is on {branch or 'a detached HEAD'}, expected main",
+        output=f'repository is on {branch or "a detached HEAD"}, expected main',
     )
 
 
 def clean_worktree_step(program: Program, run_command: RunCommand) -> StepResult:
     result = run_step(
         program.name,
-        "clean worktree",
-        ["git", "-C", str(program.directory), "status", "--porcelain"],
+        'clean worktree',
+        ['git', '-C', str(program.directory), 'status', '--porcelain'],
         run_command,
     )
     if not result.ok:
@@ -418,30 +418,30 @@ def clean_worktree_step(program: Program, run_command: RunCommand) -> StepResult
     if not tracked_changes:
         return StepResult(
             program=program.name,
-            step="clean worktree",
+            step='clean worktree',
             command=result.command,
             returncode=0,
-            output="",
+            output='',
         )
     return StepResult(
         program=program.name,
-        step="clean worktree",
+        step='clean worktree',
         command=result.command,
         returncode=1,
-        output="repository has uncommitted changes:\n" + tracked_changes,
+        output='repository has uncommitted changes:\n' + tracked_changes,
     )
 
 
 def tracked_worktree_changes(status_output: str) -> str:
-    return "\n".join(
-        line for line in status_output.splitlines() if not line.startswith("??")
+    return '\n'.join(
+        line for line in status_output.splitlines() if not line.startswith('??')
     )
 
 
 def provisioning_config() -> config.Config:
     values = config.load_values(
-        provision.PROVISION_DIR / "config.toml",
-        provision.PROVISION_DIR / "secrets.toml",
+        provision.PROVISION_DIR / 'config.toml',
+        provision.PROVISION_DIR / 'secrets.toml',
     )
     return config.config_from_values(values)
 
@@ -453,42 +453,42 @@ def remote_update_command(
     skip_worktree_check: bool = False,
     clear_settings: bool = True,
 ) -> str:
-    arguments_list = ["--target-machine", "--root", str(root)]
+    arguments_list = ['--target-machine', '--root', str(root)]
     if not clear_settings:
-        arguments_list.append("--no-clear-settings")
+        arguments_list.append('--no-clear-settings')
     arguments = shlex.join([*arguments_list, *selected])
-    showco_directory = shlex.quote(str(root / "showco"))
+    showco_directory = shlex.quote(str(root / 'showco'))
     dependency_directories = shlex.join(
-        [str(root / name) for name in ["reccy", "recs", "streamo", "lyte"]]
+        [str(root / name) for name in ['reccy', 'recs', 'streamo', 'lyte']]
     )
-    worktree_check = ""
+    worktree_check = ''
     if not skip_worktree_check:
         worktree_check = (
-            "status=$(git status --porcelain --untracked-files=no) && "
+            'status=$(git status --porcelain --untracked-files=no) && '
             'if [ -n "$status" ]; then '
             'printf "%s\\n" "showco target worktree has tracked changes" >&2; '
             'printf "%s\\n" "$status" >&2; exit 1; fi && '
         )
     return (
-        f"cd {showco_directory} && "
-        f"{worktree_check}"
+        f'cd {showco_directory} && '
+        f'{worktree_check}'
         'upstream=$(git rev-parse --abbrev-ref --symbolic-full-name "@{upstream}") && '
-        "remote=${upstream%%/*} && branch=${upstream#*/} && "
+        'remote=${upstream%%/*} && branch=${upstream#*/} && '
         'git fetch "$remote" "+refs/heads/$branch:refs/remotes/$remote/$branch" && '
         'git reset --hard "$remote/$branch" && '
-        f"for directory in {dependency_directories}; do "
+        f'for directory in {dependency_directories}; do '
         'cd "$directory" && '
         'upstream=$(git rev-parse --abbrev-ref --symbolic-full-name "@{upstream}") && '
-        "remote=${upstream%%/*} && branch=${upstream#*/} && "
+        'remote=${upstream%%/*} && branch=${upstream#*/} && '
         'git fetch "$remote" "+refs/heads/$branch:refs/remotes/$remote/$branch" && '
         'git reset --hard "$remote/$branch" || exit 1; done && '
         'git config --global url."https://github.com/".insteadOf '
         '"ssh://git@github.com/" && '
         'PATH="$HOME/.local/bin:$PATH" uv sync --locked --directory '
-        f"{showco_directory} && "
-        f"cd {showco_directory} && "
+        f'{showco_directory} && '
+        f'cd {showco_directory} && '
         'PATH="$HOME/.local/bin:$PATH" '
-        f"uv run --locked showco go {arguments}"
+        f'uv run --locked showco go {arguments}'
     ).rstrip()
 
 
@@ -496,16 +496,16 @@ def run_service_step(
     service_name: str, step: str, run_command: RunCommand
 ) -> StepResult:
     spec = services.SERVICES[service_name]
-    command = ["systemctl", "--user", step, spec.systemd_unit]
+    command = ['systemctl', '--user', step, spec.systemd_unit]
     try:
         controller = services.service_controller(
             spec, runner=service_runner(run_command)
         )
-        if step == "stop":
+        if step == 'stop':
             result = controller.stop()
-        elif step == "start":
+        elif step == 'start':
             result = controller.start()
-        elif step == "refresh":
+        elif step == 'refresh':
             result = services.refresh_service_definition(
                 service_name, runner=service_runner(run_command)
             )
@@ -515,7 +515,7 @@ def run_service_step(
                 step=step,
                 command=command,
                 returncode=2,
-                output=f"unsupported service step {step}",
+                output=f'unsupported service step {step}',
             )
     except FileNotFoundError as e:
         return StepResult(
@@ -531,7 +531,7 @@ def run_service_step(
             step=step,
             command=list(e.cmd),
             returncode=e.returncode,
-            output=f"{e.stdout or ''}{e.stderr or ''}",
+            output=f'{e.stdout or ""}{e.stderr or ""}',
         )
     except TimeoutExpired as e:
         return StepResult(
@@ -558,73 +558,73 @@ def start_or_refresh_service_step(
     run_command: RunCommand,
 ) -> StepResult:
     if refresh_definitions:
-        if service_name == "recs":
+        if service_name == 'recs':
             return install_recs_service(root, provision_config, run_command)
-        if service_name == "lyte":
+        if service_name == 'lyte':
             return install_lyte_service(
                 root, provision_config.lyte.daemon_config, run_command
             )
-        if service_name == "streamo":
+        if service_name == 'streamo':
             return install_streamo_service(
                 root, provision_config.network.user, run_command
             )
     return run_service_step(
-        service_name, "refresh" if refresh_definitions else "start", run_command
+        service_name, 'refresh' if refresh_definitions else 'start', run_command
     )
 
 
 def install_lyte_service(
     root: Path, daemon_config: Path, run_command: RunCommand
 ) -> StepResult:
-    directory = root / "lyte"
+    directory = root / 'lyte'
     config_path = directory / daemon_config
     command = (
-        f"cd {shlex.quote(str(directory))} && "
-        "uv run --locked lyte daemon install "
-        f"--config {shlex.quote(str(config_path))}"
+        f'cd {shlex.quote(str(directory))} && '
+        'uv run --locked lyte daemon install '
+        f'--config {shlex.quote(str(config_path))}'
     )
-    return run_step("lyte", "install service", ["sh", "-c", command], run_command)
+    return run_step('lyte', 'install service', ['sh', '-c', command], run_command)
 
 
 def install_recs_service(
     root: Path, provision_config: config.Config, run_command: RunCommand
 ) -> StepResult:
-    directory = root / "recs"
-    arguments = ["uv", "run", "--locked", "recs", "daemon", "install"]
+    directory = root / 'recs'
+    arguments = ['uv', 'run', '--locked', 'recs', 'daemon', 'install']
     for name in script.unique_selectors(
         n for mixer in provision_config.mixers for n in mixer.audio_device_names
     ):
-        arguments.extend(["--include", name])
+        arguments.extend(['--include', name])
     for name in script.unique_selectors(
         n for mixer in provision_config.mixers for n in mixer.midi_input_names
     ):
-        arguments.extend(["--midi-include", name])
+        arguments.extend(['--midi-include', name])
     if any(mixer.osc for mixer in provision_config.mixers):
         arguments.extend(
             [
-                "--osc-nodes",
+                '--osc-nodes',
                 str(
-                    Path("/home")
+                    Path('/home')
                     / provision_config.network.user
-                    / ".config/recs/mixers.toml"
+                    / '.config/recs/mixers.toml'
                 ),
             ]
         )
-    command = f"cd {shlex.quote(str(directory))} && {shlex.join(arguments)}"
-    return run_step("recs", "install service", ["sh", "-c", command], run_command)
+    command = f'cd {shlex.quote(str(directory))} && {shlex.join(arguments)}'
+    return run_step('recs', 'install service', ['sh', '-c', command], run_command)
 
 
 def install_streamo_service(
     root: Path, user: str, run_command: RunCommand
 ) -> StepResult:
-    directory = root / "streamo"
-    config_path = Path("/home") / user / ".config/streamo/config.toml"
+    directory = root / 'streamo'
+    config_path = Path('/home') / user / '.config/streamo/config.toml'
     command = (
-        f"cd {shlex.quote(str(directory))} && "
-        "uv run --locked streamo daemon install "
-        f"--config {shlex.quote(str(config_path))}"
+        f'cd {shlex.quote(str(directory))} && '
+        'uv run --locked streamo daemon install '
+        f'--config {shlex.quote(str(config_path))}'
     )
-    return run_step("streamo", "install service", ["sh", "-c", command], run_command)
+    return run_step('streamo', 'install service', ['sh', '-c', command], run_command)
 
 
 def run_step(
@@ -653,7 +653,7 @@ def run_step(
         step=step,
         command=command,
         returncode=completed.returncode,
-        output=f"{completed.stdout}{completed.stderr}",
+        output=f'{completed.stdout}{completed.stderr}',
     )
 
 
@@ -687,17 +687,17 @@ def run_remote_step(program: str, step: str, command: list[str]) -> StepResult:
         step=step,
         command=command,
         returncode=completed.returncode,
-        output=f"{completed.stdout}{completed.stderr}",
+        output=f'{completed.stdout}{completed.stderr}',
     )
 
 
 def run_command_with_timeout(command: Sequence[str]) -> CompletedProcess[str]:
     env = dict(os.environ)
-    if command and command[0] == "git":
-        env["GIT_TERMINAL_PROMPT"] = "0"
-        if "rebase" in command:
-            env["GIT_SEQUENCE_EDITOR"] = ":"
-            env["GIT_EDITOR"] = ":"
+    if command and command[0] == 'git':
+        env['GIT_TERMINAL_PROMPT'] = '0'
+        if 'rebase' in command:
+            env['GIT_SEQUENCE_EDITOR'] = ':'
+            env['GIT_EDITOR'] = ':'
     return subprocess.run(
         command,
         capture_output=True,
@@ -732,22 +732,22 @@ def service_runner(
 
 
 def timeout(command: Sequence[str]) -> float:
-    if command and command[0] in ("git", "ssh", "uv"):
+    if command and command[0] in ('git', 'ssh', 'uv'):
         return 120.0
     return 30.0
 
 
 def timeout_output(error: TimeoutExpired) -> str:
-    output = error.output or ""
-    stderr = error.stderr or ""
-    return f"command timed out after {error.timeout} seconds\n{output}{stderr}"
+    output = error.output or ''
+    stderr = error.stderr or ''
+    return f'command timed out after {error.timeout} seconds\n{output}{stderr}'
 
 
 def progress_bar(total: int, output: TextIO) -> tqdm:
     return tqdm(
         total=total,
-        desc="Updating",
-        unit="repository",
+        desc='Updating',
+        unit='repository',
         file=output,
         disable=not output.isatty(),
     )
@@ -761,23 +761,23 @@ def report_failures(results: list[StepResult], output: TextIO) -> None:
 def report_failure(result: StepResult, output: TextIO) -> None:
     if result.ok:
         return
-    tqdm.write(f"{result.program} {result.step}: failed", file=output)
+    tqdm.write(f'{result.program} {result.step}: failed', file=output)
     if result.output.strip():
         tqdm.write(result.output.rstrip(), file=output)
 
 
 REPOSITORY_NAMES = repositories.REPOSITORY_NAMES
 DOWNSTREAM_REPOSITORIES = {
-    "reccy": ["reccy", "recs", "streamo", "lyte", "showco"],
-    "recs": ["recs", "showco"],
-    "streamo": ["streamo"],
-    "lyte": ["lyte"],
-    "showco": ["showco"],
+    'reccy': ['reccy', 'recs', 'streamo', 'lyte', 'showco'],
+    'recs': ['recs', 'showco'],
+    'streamo': ['streamo'],
+    'lyte': ['lyte'],
+    'showco': ['showco'],
 }
 SERVICES_BY_REPOSITORY = {
-    "reccy": ["recs", "showco", "streamo", "lyte"],
-    "recs": ["recs"],
-    "showco": ["showco"],
-    "streamo": ["streamo"],
-    "lyte": ["lyte"],
+    'reccy': ['recs', 'showco', 'streamo', 'lyte'],
+    'recs': ['recs'],
+    'showco': ['showco'],
+    'streamo': ['streamo'],
+    'lyte': ['lyte'],
 }

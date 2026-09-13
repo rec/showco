@@ -12,26 +12,26 @@ def main(argv: list[str] | None = None) -> int:
     options = tyro.cli(
         provision.GoOptions,
         args=argv,
-        description="Provision or update the show-control target",
+        description='Provision or update the show-control target',
     )
     result = run(options)
     if result == 0:
-        print("Successfully completed")
+        print('Successfully completed')
     return result
 
 
 def run(options: provision.GoOptions) -> int:
     selected = update.selected_repositories(options.repositories or [])
     if options.push and options.sync:
-        sys.exit("ERROR: --push and --sync cannot be combined")
+        sys.exit('ERROR: --push and --sync cannot be combined')
     if (
         options.target_machine
         or machine_role.machine_role() == machine_role.TARGET_ROLE
     ):
         if options.system or options.remote or options.push or options.sync:
             sys.exit(
-                "ERROR: --system, --remote, --push, and --sync are unavailable "
-                "on the target machine"
+                'ERROR: --system, --remote, --push, and --sync are unavailable '
+                'on the target machine'
             )
         return update.update_target(
             selected,
@@ -39,16 +39,16 @@ def run(options: provision.GoOptions) -> int:
             clear_settings=options.clear_settings,
         )
 
-    machine_role.require_provisioning_machine("showco go")
+    machine_role.require_provisioning_machine('showco go')
     update_requested = (
         options.repositories is not None or options.autosquash is not None
     )
     if options.system and (
         update_requested or options.remote or options.push or options.sync
     ):
-        sys.exit("ERROR: --system cannot be combined with update options")
+        sys.exit('ERROR: --system cannot be combined with update options')
     if options.remote and (options.push or options.sync):
-        sys.exit("ERROR: --remote cannot be combined with --push or --sync")
+        sys.exit('ERROR: --remote cannot be combined with --push or --sync')
     if options.push or options.sync:
         local_root = provision.local_checkout_directory()
         if not local_update.prepare_local_repositories(
@@ -88,7 +88,7 @@ def run(options: provision.GoOptions) -> int:
             clear_settings=options.clear_settings,
         )
     if options.system:
-        print(f"System update requested: provisioning {provision_config.ssh_target}...")
+        print(f'System update requested: provisioning {provision_config.ssh_target}...')
         return provision.run(options, provision_config=provision_config)
 
     fingerprint = state.provisioning_fingerprint(provision_config, script.REMOTE_SCRIPT)
@@ -96,16 +96,16 @@ def run(options: provision.GoOptions) -> int:
     if applied != fingerprint:
         if applied is None:
             print(
-                f"No applied provisioning state: provisioning "
-                f"{provision_config.ssh_target}..."
+                f'No applied provisioning state: provisioning '
+                f'{provision_config.ssh_target}...'
             )
         else:
             print(
-                f"Configuration differs: provisioning {provision_config.ssh_target}..."
+                f'Configuration differs: provisioning {provision_config.ssh_target}...'
             )
         return provision.run(options, provision_config=provision_config)
 
-    print(f"Configuration matches: updating {provision_config.ssh_target}...")
+    print(f'Configuration matches: updating {provision_config.ssh_target}...')
     return local_update.update_from_provisioning_machine(
         update.REPOSITORY_NAMES,
         host=options.host,

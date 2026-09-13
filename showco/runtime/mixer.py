@@ -19,22 +19,22 @@ MIXER_PROBE_INTERVAL_SECONDS = 5.0
 class MixerProbeSpec(BaseModel):
     host: str
     port: int
-    protocol: Literal["tcp", "udp"] = "tcp"
+    protocol: Literal['tcp', 'udp'] = 'tcp'
 
     model_config = ConfigDict(frozen=True)
 
-    @field_validator("host")
+    @field_validator('host')
     @classmethod
     def validate_host(cls, value: str) -> str:
         if not value:
-            raise ValueError("must not be empty")
+            raise ValueError('must not be empty')
         return value
 
-    @field_validator("port")
+    @field_validator('port')
     @classmethod
     def validate_port(cls, value: int) -> int:
         if not 0 < value <= 65_535:
-            raise ValueError("must be between 1 and 65535")
+            raise ValueError('must be between 1 and 65535')
         return value
 
 
@@ -46,37 +46,37 @@ class MixerOscSpec(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    @field_validator("host")
+    @field_validator('host')
     @classmethod
     def validate_host(cls, value: str) -> str:
         if not value:
-            raise ValueError("must not be empty")
+            raise ValueError('must not be empty')
         return value
 
-    @field_validator("port")
+    @field_validator('port')
     @classmethod
     def validate_port(cls, value: int) -> int:
         if not 0 < value <= 65_535:
-            raise ValueError("must be between 1 and 65535")
+            raise ValueError('must be between 1 and 65535')
         return value
 
-    @field_validator("subscription_path")
+    @field_validator('subscription_path')
     @classmethod
     def validate_path(cls, value: str) -> str:
-        if not value.startswith("/"):
-            raise ValueError("must start with /")
+        if not value.startswith('/'):
+            raise ValueError('must start with /')
         return value
 
-    @field_validator("resubscribe_period")
+    @field_validator('resubscribe_period')
     @classmethod
     def validate_period(cls, value: float) -> float:
         if value <= 0:
-            raise ValueError("must be positive")
+            raise ValueError('must be positive')
         return value
 
 
 class MixerSpec(AudioMidiDeviceSpec, frozen=True):
-    ip_address: str = ""
+    ip_address: str = ''
     port: int | None = None
     probe: MixerProbeSpec | None = None
     osc: MixerOscSpec | None = None
@@ -87,11 +87,11 @@ class MixerSpecs(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    @model_validator(mode="after")
+    @model_validator(mode='after')
     def validate_names(self) -> MixerSpecs:
         names = [mixer.name for mixer in self.mixers]
         if len(names) != len(set(names)):
-            raise ValueError("mixer names must be unique")
+            raise ValueError('mixer names must be unique')
         return self
 
 
@@ -107,7 +107,7 @@ class MixerMonitor:
         *,
         host: str | None = None,
         port: int | None = None,
-        protocol: str = "tcp",
+        protocol: str = 'tcp',
         timeout_seconds: float = MIXER_TIMEOUT_SECONDS,
         probe_interval_seconds: float = MIXER_PROBE_INTERVAL_SECONDS,
     ) -> None:
@@ -122,7 +122,7 @@ class MixerMonitor:
 
     def status(self) -> MixerStatus:
         if self.host is None or self.port is None:
-            return MixerStatus(error="mixer probe not configured")
+            return MixerStatus(error='mixer probe not configured')
         with self.lock:
             if (
                 self.last_status is not None
@@ -130,20 +130,20 @@ class MixerMonitor:
                 < self.probe_interval_seconds
             ):
                 return self.last_status
-            if self.protocol == "tcp":
+            if self.protocol == 'tcp':
                 self.last_status = self.tcp_status()
-            elif self.protocol == "udp":
+            elif self.protocol == 'udp':
                 self.last_status = self.udp_status()
             else:
                 self.last_status = MixerStatus(
-                    error=f"unknown mixer probe protocol {self.protocol}"
+                    error=f'unknown mixer probe protocol {self.protocol}'
                 )
             self.last_checked_at = time.monotonic()
             return self.last_status
 
     def tcp_status(self) -> MixerStatus:
         if self.host is None or self.port is None:
-            return MixerStatus(error="mixer probe not configured")
+            return MixerStatus(error='mixer probe not configured')
         start = time.monotonic()
         try:
             with socket.create_connection(
@@ -151,21 +151,21 @@ class MixerMonitor:
             ):
                 return MixerStatus(latency_ms=elapsed_ms(start))
         except OSError as e:
-            return MixerStatus(error=f"mixer TCP probe failed: {e}")
+            return MixerStatus(error=f'mixer TCP probe failed: {e}')
 
     def udp_status(self) -> MixerStatus:
         if self.host is None or self.port is None:
-            return MixerStatus(error="mixer probe not configured")
+            return MixerStatus(error='mixer probe not configured')
         start = time.monotonic()
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             sock.settimeout(self.timeout_seconds)
             try:
                 sock.connect((self.host, self.port))
-                sock.send(b"/xremote\0\0\0\0,\0\0\0")
+                sock.send(b'/xremote\0\0\0\0,\0\0\0')
                 sock.recv(1)
                 return MixerStatus(latency_ms=elapsed_ms(start))
             except OSError as e:
-                return MixerStatus(error=f"mixer UDP probe failed: {e}")
+                return MixerStatus(error=f'mixer UDP probe failed: {e}')
 
 
 def elapsed_ms(start: float) -> float:
@@ -208,7 +208,7 @@ class MixersMonitor:
         )
         midi_ready = (
             any(
-                name.startswith(prefix) and state == "recording"
+                name.startswith(prefix) and state == 'recording'
                 for prefix in spec.midi_input_names
                 for name, state in midi.items()
             )
@@ -216,7 +216,7 @@ class MixersMonitor:
             else None
         )
         ready = [value for value in (audio_ready, midi_ready) if value is not None]
-        state = "connected" if all(ready) else "partial" if any(ready) else "waiting"
+        state = 'connected' if all(ready) else 'partial' if any(ready) else 'waiting'
         monitor = self.monitors.get(spec.name)
         if monitor is None:
             return MixerStatus(
@@ -227,10 +227,10 @@ class MixersMonitor:
             )
         probe = monitor.status()
         if probe.error:
-            waiting = state == "waiting" or spec.name not in self.probe_seen
+            waiting = state == 'waiting' or spec.name not in self.probe_seen
             return MixerStatus(
                 name=spec.name,
-                state="waiting" if waiting else "error",
+                state='waiting' if waiting else 'error',
                 audio_ready=audio_ready,
                 midi_ready=midi_ready,
                 error=None if waiting else probe.error,

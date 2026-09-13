@@ -56,16 +56,16 @@ def update_from_provisioning_machine(
 
     with update.progress_bar(1, output) as progress:
         target_host = host or provision_config.network.host
-        ssh_target = f"{provision_config.network.user}@{target_host}"
+        ssh_target = f'{provision_config.network.user}@{target_host}'
         command = update.remote_update_command(
             selected,
             root or provision_config.paths.root,
             clear_settings=clear_settings,
         )
-        progress.set_description_str(f"Updating {ssh_target}")
+        progress.set_description_str(f'Updating {ssh_target}')
         target_result = update.run_remote_step(
-            "target",
-            "update",
+            'target',
+            'update',
             ssh.ssh_command(provision_config, ssh_target, command),
         )
         progress.update()
@@ -106,7 +106,7 @@ def prepare_local_repositories(
         states = rewritten_states
     with update.progress_bar(len(programs), output) as progress:
         for state in states:
-            progress.set_description_str(f"Pushing {state.program.name}")
+            progress.set_description_str(f'Pushing {state.program.name}')
             result = push_program(state, run_command, output)
             progress.update()
             if not result.ok:
@@ -124,7 +124,7 @@ def refresh_local_dependencies(
     skipped: list[str] = []
     with update.progress_bar(len(programs), output) as progress:
         for program in programs:
-            progress.set_description_str(f"Synchronizing {program.name}")
+            progress.set_description_str(f'Synchronizing {program.name}')
             dependencies = INTERNAL_DEPENDENCIES.get(program.name)
             if not dependencies:
                 skipped.append(program.name)
@@ -141,12 +141,12 @@ def refresh_local_dependencies(
             )
     outcomes: list[str] = []
     if updated:
-        outcomes.append(f"updated {', '.join(updated)}")
+        outcomes.append(f'updated {", ".join(updated)}')
     if unchanged:
-        outcomes.append(f"unchanged {', '.join(unchanged)}")
+        outcomes.append(f'unchanged {", ".join(unchanged)}')
     if skipped:
-        outcomes.append(f"no internal dependencies {', '.join(skipped)}")
-    tqdm.write(f"Dependency synchronization: {'; '.join(outcomes)}.", file=output)
+        outcomes.append(f'no internal dependencies {", ".join(skipped)}')
+    tqdm.write(f'Dependency synchronization: {"; ".join(outcomes)}.', file=output)
     return True
 
 
@@ -159,13 +159,13 @@ def refresh_program_dependencies(
     before_sources = locked_dependency_sources(program, dependencies)
     lock = update.run_step(
         program.name,
-        "refresh dependencies",
+        'refresh dependencies',
         [
-            "uv",
-            "lock",
-            "--directory",
+            'uv',
+            'lock',
+            '--directory',
             str(program.directory),
-            *(a for n in dependencies for a in ("--upgrade-package", n)),
+            *(a for n in dependencies for a in ('--upgrade-package', n)),
         ],
         run_command,
     )
@@ -183,18 +183,18 @@ def refresh_program_dependencies(
         return DependencyRefresh.FAILED
     verification_commands = [
         (
-            "check lockfile",
-            ["uv", "lock", "--check", "--directory", str(program.directory)],
+            'check lockfile',
+            ['uv', 'lock', '--check', '--directory', str(program.directory)],
         ),
         (
-            "test",
+            'test',
             [
-                "uv",
-                "run",
-                "--locked",
-                "--directory",
+                'uv',
+                'run',
+                '--locked',
+                '--directory',
                 str(program.directory),
-                "pytest",
+                'pytest',
             ],
         ),
     ]
@@ -213,8 +213,8 @@ def refresh_program_dependencies(
         return DependencyRefresh.UNCHANGED
     stage = update.run_step(
         program.name,
-        "stage lockfile",
-        ["git", "-C", str(program.directory), "add", "--", "uv.lock"],
+        'stage lockfile',
+        ['git', '-C', str(program.directory), 'add', '--', 'uv.lock'],
         run_command,
     )
     if not stage.ok:
@@ -223,14 +223,14 @@ def refresh_program_dependencies(
         return DependencyRefresh.FAILED
     commit = update.run_step(
         program.name,
-        "commit dependencies",
+        'commit dependencies',
         [
-            "git",
-            "-C",
+            'git',
+            '-C',
             str(program.directory),
-            "commit",
-            "-m",
-            "Update internal dependencies",
+            'commit',
+            '-m',
+            'Update internal dependencies',
         ],
         run_command,
     )
@@ -254,47 +254,47 @@ def lockfile_status_step(
 ) -> tuple[update.StepResult, bool]:
     status = update.run_step(
         program.name,
-        "dependency changed paths",
-        ["git", "-C", str(program.directory), "status", "--porcelain"],
+        'dependency changed paths',
+        ['git', '-C', str(program.directory), 'status', '--porcelain'],
         run_command,
     )
     if not status.ok:
         return status, False
-    tracked = [s for s in status.output.splitlines() if not s.startswith("??")]
-    invalid = [s for s in tracked if s[3:] != "uv.lock"]
+    tracked = [s for s in status.output.splitlines() if not s.startswith('??')]
+    invalid = [s for s in tracked if s[3:] != 'uv.lock']
     if invalid:
         return (
             update.StepResult(
                 program=program.name,
-                step="dependency changed paths",
+                step='dependency changed paths',
                 command=status.command,
                 returncode=1,
-                output="dependency refresh changed unexpected paths:\n"
-                + "\n".join(invalid),
+                output='dependency refresh changed unexpected paths:\n'
+                + '\n'.join(invalid),
             ),
             False,
         )
-    return status.model_copy(update={"output": ""}), bool(tracked)
+    return status.model_copy(update={'output': ''}), bool(tracked)
 
 
 def locked_dependency_sources(
     program: update.Program, dependencies: list[str]
 ) -> dict[str, str]:
-    data = tomllib.loads((program.directory / "uv.lock").read_text())
-    packages = data.get("package", [])
+    data = tomllib.loads((program.directory / 'uv.lock').read_text())
+    packages = data.get('package', [])
     if not isinstance(packages, list):
         return {}
     result = {}
     for package in packages:
         if not isinstance(package, dict):
             continue
-        name = package.get("name")
-        source = package.get("source")
+        name = package.get('name')
+        source = package.get('source')
         if (
             isinstance(name, str)
             and name in dependencies
             and isinstance(source, dict)
-            and isinstance(git := source.get("git"), str)
+            and isinstance(git := source.get('git'), str)
         ):
             result[name] = git
     return result
@@ -305,16 +305,16 @@ def restore_generated_lockfile(
 ) -> bool:
     result = update.run_step(
         program.name,
-        "restore generated lockfile",
+        'restore generated lockfile',
         [
-            "git",
-            "-C",
+            'git',
+            '-C',
             str(program.directory),
-            "restore",
-            "--staged",
-            "--worktree",
-            "--",
-            "uv.lock",
+            'restore',
+            '--staged',
+            '--worktree',
+            '--',
+            'uv.lock',
         ],
         run_command,
     )
@@ -328,33 +328,33 @@ def publication_state(
 ) -> PublicationState | update.StepResult:
     upstream = update.run_step(
         program.name,
-        "upstream",
+        'upstream',
         [
-            "git",
-            "-C",
+            'git',
+            '-C',
             str(program.directory),
-            "rev-parse",
-            "--abbrev-ref",
-            "--symbolic-full-name",
-            "@{upstream}",
+            'rev-parse',
+            '--abbrev-ref',
+            '--symbolic-full-name',
+            '@{upstream}',
         ],
         run_command,
     )
     if not upstream.ok:
         return upstream
-    remote, _, branch = upstream.output.strip().partition("/")
+    remote, _, branch = upstream.output.strip().partition('/')
     if not remote or not branch:
         return update.StepResult(
             program=program.name,
-            step="push",
+            step='push',
             command=[],
             returncode=2,
-            output=f"bad upstream {upstream.output.strip()}",
+            output=f'bad upstream {upstream.output.strip()}',
         )
     commit = update.run_step(
         program.name,
-        "upstream commit",
-        ["git", "-C", str(program.directory), "rev-parse", "@{upstream}"],
+        'upstream commit',
+        ['git', '-C', str(program.directory), 'rev-parse', '@{upstream}'],
         run_command,
     )
     if not commit.ok:
@@ -362,10 +362,10 @@ def publication_state(
     if not (upstream_commit := commit.output.strip()):
         return update.StepResult(
             program=program.name,
-            step="upstream commit",
+            step='upstream commit',
             command=commit.command,
             returncode=2,
-            output="upstream commit is empty",
+            output='upstream commit is empty',
         )
     return PublicationState(
         program=program,
@@ -383,8 +383,8 @@ def push_program(
     program = state.program
     local_commit = update.run_step(
         program.name,
-        "local commit",
-        ["git", "-C", str(program.directory), "rev-parse", "HEAD"],
+        'local commit',
+        ['git', '-C', str(program.directory), 'rev-parse', 'HEAD'],
         run_command,
     )
     if not local_commit.ok:
@@ -392,37 +392,37 @@ def push_program(
     if not state.rewritten and local_commit.output.strip() == state.upstream_commit:
         return update.StepResult(
             program=program.name,
-            step="push",
+            step='push',
             command=local_commit.command,
             returncode=0,
-            output="already published",
+            output='already published',
         )
     push = normal_push_step(program, state.remote, state.branch, run_command)
     if push.ok or not state.rewritten:
         return push
     if output:
-        tqdm.write(f"{program.name} regular push rejected", file=output)
+        tqdm.write(f'{program.name} regular push rejected', file=output)
         tqdm.write(
-            f"{program.name} pre-autosquash upstream commit: {state.upstream_commit}",
+            f'{program.name} pre-autosquash upstream commit: {state.upstream_commit}',
             file=output,
         )
     force_push = update.run_step(
         program.name,
-        "push --force-with-lease",
+        'push --force-with-lease',
         [
-            "git",
-            "-C",
+            'git',
+            '-C',
             str(program.directory),
-            "push",
-            f"--force-with-lease=refs/heads/{state.branch}:{state.upstream_commit}",
+            'push',
+            f'--force-with-lease=refs/heads/{state.branch}:{state.upstream_commit}',
             state.remote,
-            f"HEAD:{state.branch}",
+            f'HEAD:{state.branch}',
         ],
         run_command,
     )
     if force_push.ok:
         if output:
-            tqdm.write(f"{program.name} push --force-with-lease: ok", file=output)
+            tqdm.write(f'{program.name} push --force-with-lease: ok', file=output)
         return force_push
     return update.StepResult(
         program=program.name,
@@ -430,8 +430,8 @@ def push_program(
         command=force_push.command,
         returncode=force_push.returncode,
         output=(
-            f"regular push failed:\n{push.output.rstrip()}\n"
-            f"force push failed:\n{force_push.output.rstrip()}"
+            f'regular push failed:\n{push.output.rstrip()}\n'
+            f'force push failed:\n{force_push.output.rstrip()}'
         ),
     )
 
@@ -444,14 +444,14 @@ def normal_push_step(
 ) -> update.StepResult:
     return update.run_step(
         program.name,
-        "push",
+        'push',
         [
-            "git",
-            "-C",
+            'git',
+            '-C',
             str(program.directory),
-            "push",
+            'push',
             remote,
-            f"HEAD:{branch}",
+            f'HEAD:{branch}',
         ],
         run_command,
     )
@@ -472,7 +472,7 @@ def autosquash_publications(
         if not result.ok:
             update.report_failure(result, output)
             return None
-        result_states.append(state.model_copy(update={"rewritten": True}))
+        result_states.append(state.model_copy(update={'rewritten': True}))
     return result_states
 
 
@@ -481,16 +481,16 @@ def autosquash_program(
 ) -> update.StepResult | None:
     recent_commits = update.run_step(
         program.name,
-        "recent commits",
+        'recent commits',
         [
-            "git",
-            "-C",
+            'git',
+            '-C',
             str(program.directory),
-            "log",
-            "-n",
+            'log',
+            '-n',
             str(limit),
-            "--format=%H%x00%s%x00",
-            "HEAD",
+            '--format=%H%x00%s%x00',
+            'HEAD',
         ],
         run_command,
     )
@@ -499,35 +499,35 @@ def autosquash_program(
     if missing_targets := missing_fixup_targets(recent_commits.output):
         return update.StepResult(
             program=program.name,
-            step="validate fixup targets",
+            step='validate fixup targets',
             command=recent_commits.command,
             returncode=1,
             output=(
-                "fixup target is not in the selected autosquash history: "
-                + ", ".join(missing_targets)
-                + "\nNo rebase was started."
+                'fixup target is not in the selected autosquash history: '
+                + ', '.join(missing_targets)
+                + '\nNo rebase was started.'
             ),
         )
     if (fixup_commit := oldest_fixup_commit(recent_commits.output)) is None:
         return None
     parent = update.run_step(
         program.name,
-        "fixup parent",
-        ["git", "-C", str(program.directory), "rev-parse", f"{fixup_commit}^"],
+        'fixup parent',
+        ['git', '-C', str(program.directory), 'rev-parse', f'{fixup_commit}^'],
         run_command,
     )
     if not parent.ok:
         return parent
     return update.run_step(
         program.name,
-        "autosquash",
+        'autosquash',
         [
-            "git",
-            "-C",
+            'git',
+            '-C',
             str(program.directory),
-            "rebase",
-            "--interactive",
-            "--autosquash",
+            'rebase',
+            '--interactive',
+            '--autosquash',
             parent.output.strip(),
         ],
         run_command,
@@ -538,7 +538,7 @@ def oldest_fixup_commit(output: str) -> str | None:
     fixups = [
         commit
         for commit, subject in log_commits(output)
-        if subject.startswith("fixup! ")
+        if subject.startswith('fixup! ')
     ]
     return fixups[-1] if fixups else None
 
@@ -546,15 +546,15 @@ def oldest_fixup_commit(output: str) -> str | None:
 def missing_fixup_targets(output: str) -> list[str]:
     subjects = {subject for _, subject in log_commits(output)}
     return [
-        subject.removeprefix("fixup! ")
+        subject.removeprefix('fixup! ')
         for _, subject in log_commits(output)
-        if subject.startswith("fixup! ")
-        and subject.removeprefix("fixup! ") not in subjects
+        if subject.startswith('fixup! ')
+        and subject.removeprefix('fixup! ') not in subjects
     ]
 
 
 def log_commits(output: str) -> list[tuple[str, str]]:
-    values = output.split("\0")
+    values = output.split('\0')
     return [
         (commit.strip(), subject.strip())
         for commit, subject in zip(values[::2], values[1::2], strict=False)
@@ -562,8 +562,8 @@ def log_commits(output: str) -> list[tuple[str, str]]:
 
 
 INTERNAL_DEPENDENCIES = {
-    "recs": ["reccy"],
-    "streamo": ["reccy"],
-    "lyte": ["reccy"],
-    "showco": ["reccy", "recs"],
+    'recs': ['reccy'],
+    'streamo': ['reccy'],
+    'lyte': ['reccy'],
+    'showco': ['reccy', 'recs'],
 }

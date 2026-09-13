@@ -13,8 +13,8 @@ from showco.provision import provision
 class GoTests(unittest.TestCase):
     def options(self, *, system: bool = False, **kwargs: object) -> provision.GoOptions:
         return provision.GoOptions(
-            config_path=Path("config.toml"),
-            secrets=Path("secrets.toml"),
+            config_path=Path('config.toml'),
+            secrets=Path('secrets.toml'),
             system=system,
             **kwargs,
         )
@@ -22,21 +22,21 @@ class GoTests(unittest.TestCase):
     def test_main_prints_completion_after_success(self) -> None:
         options = self.options()
         with (
-            mock.patch("showco.deployment.go.tyro.cli", return_value=options),
-            mock.patch("showco.deployment.go.run", return_value=0),
-            mock.patch("builtins.print") as print_message,
+            mock.patch('showco.deployment.go.tyro.cli', return_value=options),
+            mock.patch('showco.deployment.go.run', return_value=0),
+            mock.patch('builtins.print') as print_message,
         ):
             result = go.main([])
 
         self.assertEqual(result, 0)
-        print_message.assert_called_once_with("Successfully completed")
+        print_message.assert_called_once_with('Successfully completed')
 
     def test_main_does_not_print_completion_after_failure(self) -> None:
         options = self.options()
         with (
-            mock.patch("showco.deployment.go.tyro.cli", return_value=options),
-            mock.patch("showco.deployment.go.run", return_value=1),
-            mock.patch("builtins.print") as print_message,
+            mock.patch('showco.deployment.go.tyro.cli', return_value=options),
+            mock.patch('showco.deployment.go.run', return_value=1),
+            mock.patch('builtins.print') as print_message,
         ):
             result = go.main([])
 
@@ -44,54 +44,54 @@ class GoTests(unittest.TestCase):
         print_message.assert_not_called()
 
     def test_matching_configuration_updates_target(self) -> None:
-        provision_config = mock.Mock(ssh_target="tom@bertrand.local")
+        provision_config = mock.Mock(ssh_target='tom@bertrand.local')
         with (
             mock.patch(
-                "showco.provision.provision.resolved_config",
+                'showco.provision.provision.resolved_config',
                 return_value=provision_config,
             ),
             mock.patch(
-                "showco.provision.state.provisioning_fingerprint",
-                return_value="fingerprint",
+                'showco.provision.state.provisioning_fingerprint',
+                return_value='fingerprint',
             ),
             mock.patch(
-                "showco.provision.remote.applied_provisioning_fingerprint",
-                return_value="fingerprint",
+                'showco.provision.remote.applied_provisioning_fingerprint',
+                return_value='fingerprint',
             ),
             mock.patch(
-                "showco.deployment.local_update.update_from_provisioning_machine",
+                'showco.deployment.local_update.update_from_provisioning_machine',
                 return_value=0,
             ) as update_target,
-            mock.patch("showco.provision.provision.run") as provision_target,
+            mock.patch('showco.provision.provision.run') as provision_target,
         ):
             result = go.run(self.options())
 
         self.assertEqual(result, 0)
         update_target.assert_called_once()
         self.assertEqual(update_target.call_args.args[0], update.REPOSITORY_NAMES)
-        self.assertIs(update_target.call_args.kwargs["target_config"], provision_config)
+        self.assertIs(update_target.call_args.kwargs['target_config'], provision_config)
         provision_target.assert_not_called()
 
     def test_missing_applied_state_provisions_target(self) -> None:
-        provision_config = mock.Mock(ssh_target="tom@bertrand.local")
+        provision_config = mock.Mock(ssh_target='tom@bertrand.local')
         with (
             mock.patch(
-                "showco.provision.provision.resolved_config",
+                'showco.provision.provision.resolved_config',
                 return_value=provision_config,
             ),
             mock.patch(
-                "showco.provision.state.provisioning_fingerprint",
-                return_value="fingerprint",
+                'showco.provision.state.provisioning_fingerprint',
+                return_value='fingerprint',
             ),
             mock.patch(
-                "showco.provision.remote.applied_provisioning_fingerprint",
+                'showco.provision.remote.applied_provisioning_fingerprint',
                 return_value=None,
             ),
             mock.patch(
-                "showco.provision.provision.run", return_value=0
+                'showco.provision.provision.run', return_value=0
             ) as provision_target,
             mock.patch(
-                "showco.deployment.local_update.update_from_provisioning_machine"
+                'showco.deployment.local_update.update_from_provisioning_machine'
             ) as update_target,
         ):
             result = go.run(self.options())
@@ -103,17 +103,17 @@ class GoTests(unittest.TestCase):
         update_target.assert_not_called()
 
     def test_system_option_forces_provisioning(self) -> None:
-        provision_config = mock.Mock(ssh_target="tom@bertrand.local")
+        provision_config = mock.Mock(ssh_target='tom@bertrand.local')
         with (
             mock.patch(
-                "showco.provision.provision.resolved_config",
+                'showco.provision.provision.resolved_config',
                 return_value=provision_config,
             ),
             mock.patch(
-                "showco.provision.remote.applied_provisioning_fingerprint"
+                'showco.provision.remote.applied_provisioning_fingerprint'
             ) as applied,
             mock.patch(
-                "showco.provision.provision.run", return_value=0
+                'showco.provision.provision.run', return_value=0
             ) as provision_target,
         ):
             result = go.run(self.options(system=True))
@@ -125,24 +125,24 @@ class GoTests(unittest.TestCase):
         )
 
     def test_selected_repositories_update_without_provisioning(self) -> None:
-        provision_config = mock.Mock(ssh_target="tom@bertrand.local")
-        options = self.options(repositories=["recs"])
+        provision_config = mock.Mock(ssh_target='tom@bertrand.local')
+        options = self.options(repositories=['recs'])
         with (
             mock.patch(
-                "showco.provision.provision.resolved_config",
+                'showco.provision.provision.resolved_config',
                 return_value=provision_config,
             ),
             mock.patch(
-                "showco.deployment.local_update.update_from_provisioning_machine",
+                'showco.deployment.local_update.update_from_provisioning_machine',
                 return_value=0,
             ) as update_target,
-            mock.patch("showco.provision.provision.run") as provision_target,
+            mock.patch('showco.provision.provision.run') as provision_target,
         ):
             result = go.run(options)
 
         self.assertEqual(result, 0)
         update_target.assert_called_once_with(
-            ["recs", "showco"],
+            ['recs', 'showco'],
             host=None,
             root=None,
             target_config=provision_config,
@@ -153,27 +153,27 @@ class GoTests(unittest.TestCase):
         provision_target.assert_not_called()
 
     def test_push_prepares_local_repositories_only(self) -> None:
-        options = self.options(push=True, repositories=["recs"])
+        options = self.options(push=True, repositories=['recs'])
         with (
             mock.patch(
-                "showco.provision.provision.local_checkout_directory",
-                return_value=Path("/code"),
+                'showco.provision.provision.local_checkout_directory',
+                return_value=Path('/code'),
             ),
             mock.patch(
-                "showco.deployment.local_update.prepare_local_repositories",
+                'showco.deployment.local_update.prepare_local_repositories',
                 return_value=True,
             ) as prepare,
             mock.patch(
-                "showco.deployment.local_update.refresh_local_dependencies"
+                'showco.deployment.local_update.refresh_local_dependencies'
             ) as refresh,
-            mock.patch("showco.provision.provision.resolved_config") as resolved,
+            mock.patch('showco.provision.provision.resolved_config') as resolved,
         ):
             result = go.run(options)
 
         self.assertEqual(result, 0)
         prepare.assert_called_once_with(
-            ["recs", "showco"],
-            Path("/code"),
+            ['recs', 'showco'],
+            Path('/code'),
             update.run_command_with_timeout,
             mock.ANY,
             autosquash=50,
@@ -182,68 +182,68 @@ class GoTests(unittest.TestCase):
         resolved.assert_not_called()
 
     def test_sync_prepares_and_refreshes_local_repositories(self) -> None:
-        options = self.options(sync=True, repositories=["recs"], autosquash=0)
+        options = self.options(sync=True, repositories=['recs'], autosquash=0)
         with (
             mock.patch(
-                "showco.provision.provision.local_checkout_directory",
-                return_value=Path("/code"),
+                'showco.provision.provision.local_checkout_directory',
+                return_value=Path('/code'),
             ),
             mock.patch(
-                "showco.deployment.local_update.prepare_local_repositories",
+                'showco.deployment.local_update.prepare_local_repositories',
                 return_value=True,
             ) as prepare,
             mock.patch(
-                "showco.deployment.local_update.refresh_local_dependencies",
+                'showco.deployment.local_update.refresh_local_dependencies',
                 return_value=True,
             ) as refresh,
-            mock.patch("showco.provision.provision.resolved_config") as resolved,
+            mock.patch('showco.provision.provision.resolved_config') as resolved,
         ):
             result = go.run(options)
 
         self.assertEqual(result, 0)
         prepare.assert_called_once_with(
-            ["recs", "showco"],
-            Path("/code"),
+            ['recs', 'showco'],
+            Path('/code'),
             update.run_command_with_timeout,
             mock.ANY,
             autosquash=0,
         )
         refresh.assert_called_once_with(
-            ["recs", "showco"],
-            Path("/code"),
+            ['recs', 'showco'],
+            Path('/code'),
             update.run_command_with_timeout,
             mock.ANY,
         )
         resolved.assert_not_called()
 
     def test_push_and_sync_cannot_be_combined(self) -> None:
-        with self.assertRaisesRegex(SystemExit, "cannot be combined"):
+        with self.assertRaisesRegex(SystemExit, 'cannot be combined'):
             go.run(self.options(push=True, sync=True))
 
     def test_remote_and_sync_cannot_be_combined(self) -> None:
-        with self.assertRaisesRegex(SystemExit, "cannot be combined"):
+        with self.assertRaisesRegex(SystemExit, 'cannot be combined'):
             go.run(self.options(remote=True, sync=True))
 
     def test_remote_update_skips_local_repositories(self) -> None:
-        provision_config = mock.Mock(ssh_target="tom@bertrand.local")
-        options = self.options(remote=True, repositories=["recs"])
+        provision_config = mock.Mock(ssh_target='tom@bertrand.local')
+        options = self.options(remote=True, repositories=['recs'])
         with (
             mock.patch(
-                "showco.provision.provision.resolved_config",
+                'showco.provision.provision.resolved_config',
                 return_value=provision_config,
             ),
             mock.patch(
-                "showco.deployment.update.update_remote_target", return_value=0
+                'showco.deployment.update.update_remote_target', return_value=0
             ) as remote,
             mock.patch(
-                "showco.deployment.local_update.update_from_provisioning_machine"
+                'showco.deployment.local_update.update_from_provisioning_machine'
             ) as local,
         ):
             result = go.run(options)
 
         self.assertEqual(result, 0)
         remote.assert_called_once_with(
-            ["recs", "showco"],
+            ['recs', 'showco'],
             host=None,
             root=None,
             target_config=provision_config,
@@ -254,41 +254,41 @@ class GoTests(unittest.TestCase):
 
     def test_target_machine_updates_selected_repositories(self) -> None:
         with mock.patch(
-            "showco.deployment.update.update_target", return_value=0
+            'showco.deployment.update.update_target', return_value=0
         ) as update_target:
-            result = go.run(self.options(target_machine=True, repositories=["recs"]))
+            result = go.run(self.options(target_machine=True, repositories=['recs']))
 
         self.assertEqual(result, 0)
         update_target.assert_called_once_with(
-            ["recs", "showco"], root=None, clear_settings=True
+            ['recs', 'showco'], root=None, clear_settings=True
         )
 
     def test_clear_settings_option_is_forwarded_to_target_update(self) -> None:
         with mock.patch(
-            "showco.deployment.update.update_target", return_value=0
+            'showco.deployment.update.update_target', return_value=0
         ) as update_target:
             result = go.run(
                 self.options(
                     target_machine=True,
-                    repositories=["recs"],
+                    repositories=['recs'],
                     clear_settings=False,
                 )
             )
 
         self.assertEqual(result, 0)
         update_target.assert_called_once_with(
-            ["recs", "showco"], root=None, clear_settings=False
+            ['recs', 'showco'], root=None, clear_settings=False
         )
 
     def test_no_clear_settings_option_preserves_recs_settings(self) -> None:
-        options = tyro.cli(provision.GoOptions, args=["--no-clear-settings"])
+        options = tyro.cli(provision.GoOptions, args=['--no-clear-settings'])
 
         self.assertFalse(options.clear_settings)
 
     def test_system_cannot_be_combined_with_update_options(self) -> None:
-        with self.assertRaisesRegex(SystemExit, "cannot be combined"):
-            go.run(self.options(system=True, repositories=["recs"]))
+        with self.assertRaisesRegex(SystemExit, 'cannot be combined'):
+            go.run(self.options(system=True, repositories=['recs']))
 
     def test_remote_is_unavailable_on_target_machine(self) -> None:
-        with self.assertRaisesRegex(SystemExit, "unavailable on the target"):
+        with self.assertRaisesRegex(SystemExit, 'unavailable on the target'):
             go.run(self.options(target_machine=True, remote=True))

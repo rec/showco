@@ -14,12 +14,12 @@ from pydantic import BaseModel
 
 from ..provision import config
 
-PROVISION_DIR = Path(__file__).resolve().parent.parent / "provision"
-DEFAULT_CONFIG_PATH = PROVISION_DIR / "config.toml"
-DEFAULT_SECRETS_PATH = PROVISION_DIR / "secrets.toml"
-STREAM_AUTHORIZE_URL = "https://id.twitch.tv/oauth2/authorize"
-STREAM_TOKEN_URL = "https://id.twitch.tv/oauth2/token"
-STREAM_VALIDATE_URL = "https://id.twitch.tv/oauth2/validate"
+PROVISION_DIR = Path(__file__).resolve().parent.parent / 'provision'
+DEFAULT_CONFIG_PATH = PROVISION_DIR / 'config.toml'
+DEFAULT_SECRETS_PATH = PROVISION_DIR / 'secrets.toml'
+STREAM_AUTHORIZE_URL = 'https://id.twitch.tv/oauth2/authorize'
+STREAM_TOKEN_URL = 'https://id.twitch.tv/oauth2/token'
+STREAM_VALIDATE_URL = 'https://id.twitch.tv/oauth2/validate'
 
 
 class HttpResponse(BaseModel, frozen=True):
@@ -35,12 +35,12 @@ class AuthOptions(BaseModel, frozen=True):
 def main(argv: list[str] | None = None) -> int:
     return tyro.extras.subcommand_cli_from_dict(
         {
-            "authorize-url": authorize_url_command,
-            "exchange-code": exchange_code_command,
-            "validate-token": validate_token_command,
+            'authorize-url': authorize_url_command,
+            'exchange-code': exchange_code_command,
+            'validate-token': validate_token_command,
         },
         args=argv,
-        description="Manage Showco stream OAuth tokens",
+        description='Manage Showco stream OAuth tokens',
         sort_subcommands=True,
     )
 
@@ -53,7 +53,7 @@ def auth_options(
 
 
 def authorize_url_command(
-    config_path: Annotated[Path, tyro.conf.arg(name="config")] = DEFAULT_CONFIG_PATH,
+    config_path: Annotated[Path, tyro.conf.arg(name='config')] = DEFAULT_CONFIG_PATH,
     secrets: Path = DEFAULT_SECRETS_PATH,
 ) -> int:
     options = auth_options(config_path, secrets)
@@ -61,7 +61,7 @@ def authorize_url_command(
 
 
 def exchange_code_command(
-    config_path: Annotated[Path, tyro.conf.arg(name="config")] = DEFAULT_CONFIG_PATH,
+    config_path: Annotated[Path, tyro.conf.arg(name='config')] = DEFAULT_CONFIG_PATH,
     secrets: Path = DEFAULT_SECRETS_PATH,
 ) -> int:
     options = auth_options(config_path, secrets)
@@ -69,7 +69,7 @@ def exchange_code_command(
 
 
 def validate_token_command(
-    config_path: Annotated[Path, tyro.conf.arg(name="config")] = DEFAULT_CONFIG_PATH,
+    config_path: Annotated[Path, tyro.conf.arg(name='config')] = DEFAULT_CONFIG_PATH,
     secrets: Path = DEFAULT_SECRETS_PATH,
 ) -> int:
     options = auth_options(config_path, secrets)
@@ -77,115 +77,115 @@ def validate_token_command(
 
 
 def authorize_url(config_path: Path, values: dict[str, object]) -> int:
-    stream = config.table_value(values, "stream")
-    client_id = require_value(stream, "client_id", config_path)
-    redirect_uri = require_value(stream, "redirect_uri", config_path)
-    scopes = require_value(stream, "scopes", config_path)
+    stream = config.table_value(values, 'stream')
+    client_id = require_value(stream, 'client_id', config_path)
+    redirect_uri = require_value(stream, 'redirect_uri', config_path)
+    scopes = require_value(stream, 'scopes', config_path)
     state = secrets.token_urlsafe(24)
-    write_toml_value(config_path, "stream", "state", state)
+    write_toml_value(config_path, 'stream', 'state', state)
     params = {
-        "response_type": "code",
-        "client_id": client_id,
-        "redirect_uri": redirect_uri,
-        "scope": scopes,
-        "state": state,
-        "force_verify": "true",
+        'response_type': 'code',
+        'client_id': client_id,
+        'redirect_uri': redirect_uri,
+        'scope': scopes,
+        'state': state,
+        'force_verify': 'true',
     }
-    url = STREAM_AUTHORIZE_URL + "?" + parse.urlencode(params)
+    url = STREAM_AUTHORIZE_URL + '?' + parse.urlencode(params)
     webbrowser.open(url)
     print(
-        "After approving it, copy the full localhost callback URL from the browser\n"
-        "address bar and paste it into stream.callback_url_or_code in secrets.toml."
+        'After approving it, copy the full localhost callback URL from the browser\n'
+        'address bar and paste it into stream.callback_url_or_code in secrets.toml.'
     )
     return 0
 
 
 def exchange_code(config_path: Path, secrets_path: Path) -> int:
     env = config.load_values(config_path, secrets_path)
-    stream = config.table_value(env, "stream")
-    client_id = require_value(stream, "client_id")
-    client_secret = require_value(stream, "client_secret")
-    redirect_uri = require_value(stream, "redirect_uri")
-    callback = require_value(stream, "callback_url_or_code")
-    config_dir = Path.home() / ".config/streamo"
+    stream = config.table_value(env, 'stream')
+    client_id = require_value(stream, 'client_id')
+    client_secret = require_value(stream, 'client_secret')
+    redirect_uri = require_value(stream, 'redirect_uri')
+    callback = require_value(stream, 'callback_url_or_code')
+    config_dir = Path.home() / '.config/streamo'
     config_dir.mkdir(parents=True, exist_ok=True)
-    response_file = config_dir / "oauth-response.json"
+    response_file = config_dir / 'oauth-response.json'
     data = parse.urlencode(
         {
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "code": callback_code(callback),
-            "grant_type": "authorization_code",
-            "redirect_uri": redirect_uri,
+            'client_id': client_id,
+            'client_secret': client_secret,
+            'code': callback_code(callback),
+            'grant_type': 'authorization_code',
+            'redirect_uri': redirect_uri,
         }
     ).encode()
-    http_request = request.Request(STREAM_TOKEN_URL, data=data, method="POST")
+    http_request = request.Request(STREAM_TOKEN_URL, data=data, method='POST')
     http_response = request_http(http_request)
-    response_file.write_text(http_response.text + "\n")
+    response_file.write_text(http_response.text + '\n')
     try:
         response = json.loads(http_response.text)
     except json.JSONDecodeError:
         print(
-            "Stream returned non-JSON token response. "
-            f"Response saved to {response_file}"
+            'Stream returned non-JSON token response. '
+            f'Response saved to {response_file}'
         )
         return 1
     if http_response.status < 200 or http_response.status >= 300:
         print(
-            f"Stream token request failed with HTTP {http_response.status}. "
-            f"Response saved to {response_file}"
+            f'Stream token request failed with HTTP {http_response.status}. '
+            f'Response saved to {response_file}'
         )
         print(json.dumps(response, indent=2))
         return 1
 
-    if "access_token" not in response:
+    if 'access_token' not in response:
         message = (
-            f"Stream did not return an access token. Response saved to {response_file}"
+            f'Stream did not return an access token. Response saved to {response_file}'
         )
         print(message)
         print(json.dumps(response, indent=2))
         return 1
 
-    access_token = response["access_token"]
+    access_token = response['access_token']
     if not isinstance(access_token, str):
-        raise ValueError("Stream returned an invalid access token")
-    write_toml_value(secrets_path, "stream", "oath_token", access_token)
-    (config_dir / "oauth-token").write_text(access_token + "\n")
-    if refresh_token := response.get("refresh_token"):
-        (config_dir / "refresh-token").write_text(refresh_token + "\n")
+        raise ValueError('Stream returned an invalid access token')
+    write_toml_value(secrets_path, 'stream', 'oath_token', access_token)
+    (config_dir / 'oauth-token').write_text(access_token + '\n')
+    if refresh_token := response.get('refresh_token'):
+        (config_dir / 'refresh-token').write_text(refresh_token + '\n')
 
-    print(f"Saved full response to {response_file}")
-    print(f"Saved access token to {config_dir / 'oauth-token'}")
-    if response.get("refresh_token"):
-        print(f"Saved refresh token to {config_dir / 'refresh-token'}")
+    print(f'Saved full response to {response_file}')
+    print(f'Saved access token to {config_dir / "oauth-token"}')
+    if response.get('refresh_token'):
+        print(f'Saved refresh token to {config_dir / "refresh-token"}')
     print()
-    print("Run showco streamo validate-token next.")
+    print('Run showco streamo validate-token next.')
     return 0
 
 
 def validate_token(values: dict[str, object]) -> int:
-    stream = config.table_value(values, "stream")
-    token = require_value(stream, "oath_token")
+    stream = config.table_value(values, 'stream')
+    token = require_value(stream, 'oath_token')
     http_request = request.Request(
         STREAM_VALIDATE_URL,
-        headers={"Authorization": f"OAuth {token}"},
+        headers={'Authorization': f'OAuth {token}'},
     )
     http_response = request_http(http_request)
     if http_response.status < 200 or http_response.status >= 300:
-        sys.exit(f"Stream token validation failed with HTTP {http_response.status}.")
+        sys.exit(f'Stream token validation failed with HTTP {http_response.status}.')
     try:
         response = json.loads(http_response.text)
     except json.JSONDecodeError:
-        sys.exit("Stream returned non-JSON token validation response.")
+        sys.exit('Stream returned non-JSON token validation response.')
     print(json.dumps(response, indent=4))
     return 0
 
 
 def callback_code(value: str) -> str:
-    if value.startswith(("http://", "https://")):
+    if value.startswith(('http://', 'https://')):
         url = parse.urlparse(value)
         params = parse.parse_qs(url.query)
-        return params["code"][0]
+        return params['code'][0]
     return value
 
 
@@ -199,8 +199,8 @@ def request_http(http_request: request.Request) -> HttpResponse:
 
 def write_toml_value(path: Path, section: str, name: str, value: str) -> None:
     lines = path.read_text().splitlines() if path.exists() else []
-    replacement = f"{name} = {json.dumps(value)}"
-    section_header = f"[{section}]"
+    replacement = f'{name} = {json.dumps(value)}'
+    section_header = f'[{section}]'
     in_section = False
     last_section_line = -1
     for i, line in enumerate(lines):
@@ -208,35 +208,35 @@ def write_toml_value(path: Path, section: str, name: str, value: str) -> None:
             in_section = True
             last_section_line = i
             continue
-        if in_section and line.startswith("["):
+        if in_section and line.startswith('['):
             lines.insert(i, replacement)
             break
-        if in_section and line.startswith(f"{name} ="):
+        if in_section and line.startswith(f'{name} ='):
             lines[i] = replacement
             break
     else:
         if last_section_line == -1:
             if lines:
-                lines.append("")
+                lines.append('')
             lines.append(section_header)
         lines.append(replacement)
-    path.write_text("\n".join(lines) + "\n")
+    path.write_text('\n'.join(lines) + '\n')
 
 
 def require_value(env: dict[str, object], name: str, path: Path | None = None) -> str:
-    value = env.get(name, "")
+    value = env.get(name, '')
     if not isinstance(value, str):
-        sys.exit(f"Set {name} to a string.")
-    if value and value != "TODO":
+        sys.exit(f'Set {name} to a string.')
+    if value and value != 'TODO':
         return value
     if path is None:
-        sys.exit(f"Set {name} first.")
-    sys.exit(f"Edit {path} and set {name} first.")
+        sys.exit(f'Set {name} first.')
+    sys.exit(f'Edit {path} and set {name} first.')
 
 
 def provision_dir() -> Path:
     return PROVISION_DIR
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     sys.exit(main())

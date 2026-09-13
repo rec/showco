@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from ..provision import config, ssh
 from . import machine_role, update
 
-SERVICE_NAMES = ("showco", "recs", "streamo", "lyte")
+SERVICE_NAMES = ('showco', 'recs', 'streamo', 'lyte')
 
 RunCommand = Callable[[Sequence[str]], CompletedProcess[str]]
 
@@ -27,7 +27,7 @@ def main(argv: list[str] | None = None) -> int:
     options = tyro.cli(
         LogsOptions,
         args=sys.argv[1:] if argv is None else argv,
-        description="Fetch user service logs from the Showco target machine",
+        description='Fetch user service logs from the Showco target machine',
     )
     return fetch_logs(options)
 
@@ -39,13 +39,13 @@ def fetch_logs(
     run_command: RunCommand | None = None,
     output: TextIO = sys.stdout,
 ) -> int:
-    machine_role.require_provisioning_machine("showco logs")
+    machine_role.require_provisioning_machine('showco logs')
     if options.lines < 1:
-        sys.exit("ERROR: --lines must be at least 1")
+        sys.exit('ERROR: --lines must be at least 1')
     services = selected_services(options.services)
     provision_config = target_config or update.provisioning_config()
     target_host = options.host or provision_config.network.host
-    ssh_target = f"{provision_config.network.user}@{target_host}"
+    ssh_target = f'{provision_config.network.user}@{target_host}'
     command = remote_logs_command(services, options.lines)
     runner = run_command or run_command_with_timeout
     completed = runner(ssh.ssh_command(provision_config, ssh_target, command))
@@ -60,9 +60,9 @@ def selected_services(arguments: list[str]) -> list[str]:
     invalid = [a for a in arguments if a not in SERVICE_NAMES]
     if invalid:
         sys.exit(
-            "ERROR: unknown log target(s): "
-            + ", ".join(invalid)
-            + f"\nExpected one of: {', '.join(SERVICE_NAMES)}"
+            'ERROR: unknown log target(s): '
+            + ', '.join(invalid)
+            + f'\nExpected one of: {", ".join(SERVICE_NAMES)}'
         )
     result: list[str] = []
     for service in arguments:
@@ -72,10 +72,10 @@ def selected_services(arguments: list[str]) -> list[str]:
 
 
 def remote_logs_command(services: list[str], lines: int) -> str:
-    paths = " ".join(
+    paths = ' '.join(
         f'"$HOME/.local/state/{service}/{service}.log"' for service in services
     )
-    return f"tail --lines={lines} {paths}"
+    return f'tail --lines={lines} {paths}'
 
 
 def run_command_with_timeout(command: Sequence[str]) -> CompletedProcess[str]:
@@ -88,5 +88,5 @@ def run_command_with_timeout(command: Sequence[str]) -> CompletedProcess[str]:
             timeout=120,
         )
     except subprocess.TimeoutExpired as e:
-        output = f"{e.output or ''}{e.stderr or ''}"
-        return CompletedProcess(command, 124, output, "command timed out after 120s\n")
+        output = f'{e.output or ""}{e.stderr or ""}'
+        return CompletedProcess(command, 124, output, 'command timed out after 120s\n')

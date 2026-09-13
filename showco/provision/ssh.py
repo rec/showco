@@ -24,15 +24,15 @@ def provisioning_reboot_required(provision_config: config.Config) -> bool:
     return (
         capture_ssh(
             provision_config,
-            "test -f /run/showco-provision-reboot-required && echo true || echo false",
+            'test -f /run/showco-provision-reboot-required && echo true || echo false',
         )
-        == "true"
+        == 'true'
     )
 
 
 def schedule_remote_reboot(provision_config: config.Config) -> None:
     run_ssh(
-        provision_config, "sudo systemd-run --on-active=2s /usr/bin/systemctl reboot"
+        provision_config, 'sudo systemd-run --on-active=2s /usr/bin/systemctl reboot'
     )
 
 
@@ -42,7 +42,7 @@ def wait_for_ssh_disconnect(provision_config: config.Config) -> None:
         if not ssh_is_reachable(provision_config):
             return
         time.sleep(1)
-    sys.exit(f"ERROR: {provision_config.ssh_target} did not drop SSH before reboot")
+    sys.exit(f'ERROR: {provision_config.ssh_target} did not drop SSH before reboot')
 
 
 def wait_for_ssh(
@@ -58,8 +58,8 @@ def wait_for_ssh(
             return
         time.sleep(1)
     sys.exit(
-        f"ERROR: {provision_config.ssh_target} did not accept SSH "
-        f"within {timeout_seconds}s"
+        f'ERROR: {provision_config.ssh_target} did not accept SSH '
+        f'within {timeout_seconds}s'
     )
 
 
@@ -68,7 +68,7 @@ def ssh_is_reachable(provision_config: config.Config) -> bool:
         ssh_command(
             provision_config,
             provision_config.ssh_target,
-            "true",
+            'true',
             connect_timeout=1,
         ),
         capture_output=True,
@@ -78,9 +78,9 @@ def ssh_is_reachable(provision_config: config.Config) -> bool:
     if has_changed_host_key(completed):
         if not provision_config.accept_changed_host_key:
             sys.exit(
-                "ERROR: SSH host key changed for "
-                f"{provision_config.ssh_target}. Verify the new key and set "
-                "accept_changed_host_key = true after reflashing."
+                'ERROR: SSH host key changed for '
+                f'{provision_config.ssh_target}. Verify the new key and set '
+                'accept_changed_host_key = true after reflashing.'
             )
         remove_known_host(provision_config)
         return False
@@ -88,16 +88,16 @@ def ssh_is_reachable(provision_config: config.Config) -> bool:
 
 
 def has_changed_host_key(completed: CompletedProcess[str]) -> bool:
-    return "REMOTE HOST IDENTIFICATION HAS CHANGED" in (
-        f"{completed.stdout}{completed.stderr}"
+    return 'REMOTE HOST IDENTIFICATION HAS CHANGED' in (
+        f'{completed.stdout}{completed.stderr}'
     )
 
 
 def remove_known_host(provision_config: config.Config) -> None:
     for host in known_host_names(provision_config):
-        print(f"Removing stale SSH host key for {host}...")
+        print(f'Removing stale SSH host key for {host}...')
         subprocess.run(
-            ["ssh-keygen", "-R", host],
+            ['ssh-keygen', '-R', host],
             capture_output=True,
             check=False,
             text=True,
@@ -108,7 +108,7 @@ def known_host_names(provision_config: config.Config) -> list[str]:
     host = provision_config.network.host
     if provision_config.network.ssh_port == 22:
         return [host]
-    return [host, f"[{host}]:{provision_config.network.ssh_port}"]
+    return [host, f'[{host}]:{provision_config.network.ssh_port}']
 
 
 def run_ssh(
@@ -138,13 +138,13 @@ def run_scp(provision_config: config.Config, source: Path, remote_path: str) -> 
     try:
         run_command(
             [
-                "scp",
-                "-o",
-                f"ConnectTimeout={SSH_CONNECT_TIMEOUT_SECONDS}",
-                "-P",
+                'scp',
+                '-o',
+                f'ConnectTimeout={SSH_CONNECT_TIMEOUT_SECONDS}',
+                '-P',
                 str(provision_config.network.ssh_port),
                 str(source),
-                f"{provision_config.ssh_target}:{remote_path}",
+                f'{provision_config.ssh_target}:{remote_path}',
             ],
             timeout_seconds=SCP_TIMEOUT_SECONDS,
         )
@@ -167,13 +167,13 @@ def capture_ssh(provision_config: config.Config, command: str) -> str:
 def ssh_error_message(
     provision_config: config.Config, error: CalledProcessError | TimeoutExpired
 ) -> str:
-    output = f"{error.stdout or ''}{error.stderr or ''}".strip()
+    output = f'{error.stdout or ""}{error.stderr or ""}'.strip()
     message = (
-        f"ERROR: SSH connection or command failed for {provision_config.ssh_target}. "
-        f"SSH connect timeout is {SSH_CONNECT_TIMEOUT_SECONDS} seconds."
+        f'ERROR: SSH connection or command failed for {provision_config.ssh_target}. '
+        f'SSH connect timeout is {SSH_CONNECT_TIMEOUT_SECONDS} seconds.'
     )
     if output:
-        message += f"\nssh said: {output}"
+        message += f'\nssh said: {output}'
     return message
 
 
@@ -185,13 +185,13 @@ def ssh_command(
     allocate_tty: bool = False,
     connect_timeout: int | None = SSH_CONNECT_TIMEOUT_SECONDS,
 ) -> list[str]:
-    result = ["ssh"]
+    result = ['ssh']
     if allocate_tty:
-        result.append("-t")
+        result.append('-t')
     if connect_timeout is not None:
-        result.extend(["-o", f"ConnectTimeout={connect_timeout}"])
-    result.extend(["-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new"])
-    result.extend(["-p", str(provision_config.network.ssh_port), target, command])
+        result.extend(['-o', f'ConnectTimeout={connect_timeout}'])
+    result.extend(['-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=accept-new'])
+    result.extend(['-p', str(provision_config.network.ssh_port), target, command])
     return result
 
 
