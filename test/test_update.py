@@ -486,8 +486,8 @@ class UpdateTests(unittest.TestCase):
             [
                 'sh',
                 '-c',
-                'cd /code/lyte && uv run --locked lyte daemon install '
-                '--config /code/lyte/patches/wearable-daemon.toml',
+                'cd /code/lyte && uv run --locked lyte installation install '
+                '/code/lyte/patches/showco-installation.toml',
             ],
             commands,
         )
@@ -1559,7 +1559,7 @@ def make_config(lyte_enabled: bool = False) -> object:
 
         class Lyte:
             enabled = lyte_enabled
-            daemon_config = Path('patches/wearable-daemon.toml')
+            installation_config = Path('patches/showco-installation.toml')
 
         lyte = Lyte()
 

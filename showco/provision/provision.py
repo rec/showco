@@ -30,7 +30,7 @@ class GoOptions(BaseModel, frozen=True):
     showco_repo: str | None = None
     lyte_repo: str | None = None
     lyte_enabled: bool | None = None
-    lyte_daemon_config: Path | None = None
+    lyte_installation_config: Path | None = None
     system: Annotated[
         bool,
         tyro.conf.arg(help='Refresh operating-system packages before provisioning'),
@@ -58,7 +58,7 @@ def resolved_config(options: GoOptions) -> config.Config:
         showco_repo=options.showco_repo,
         lyte_repo=options.lyte_repo,
         lyte_enabled=options.lyte_enabled,
-        lyte_daemon_config=options.lyte_daemon_config,
+        lyte_installation_config=options.lyte_installation_config,
     )
     validate_config(provision_config)
     return provision_config
@@ -176,11 +176,13 @@ def config_errors(provision_config: config.Config) -> list[str]:
             '- networks.internal.wifi.private.password must be 8-63 printable '
             'ASCII characters or 64 hexadecimal digits'
         )
-    daemon_config = lyte_daemon_config_path(
+    installation_config = lyte_installation_config_path(
         provision_config, local_checkout_directory()
     )
-    if provision_config.lyte.enabled and not daemon_config.is_file():
-        errors.append(f'- lyte.daemon_config does not exist: {daemon_config}')
+    if provision_config.lyte.enabled and not installation_config.is_file():
+        errors.append(
+            f'- lyte.installation_config does not exist: {installation_config}'
+        )
     return errors
 
 
@@ -190,8 +192,8 @@ def valid_wpa_password(password: str) -> bool:
     return 8 <= len(password) <= 63 and password.isascii() and password.isprintable()
 
 
-def lyte_daemon_config_path(provision_config: config.Config, root: Path) -> Path:
-    return root / 'lyte' / provision_config.lyte.daemon_config
+def lyte_installation_config_path(provision_config: config.Config, root: Path) -> Path:
+    return root / 'lyte' / provision_config.lyte.installation_config
 
 
 def local_checkout_directory() -> Path:

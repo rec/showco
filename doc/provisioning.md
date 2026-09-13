@@ -77,7 +77,7 @@ resubscribe_period = 10
 
 [lyte]
 enabled = false
-daemon_config = "patches/wearable-daemon.toml"
+installation_config = "patches/showco-installation.toml"
 
 [stream]
 enabled = false
@@ -127,8 +127,9 @@ Important configuration rules:
   Argon ONE case so provisioning skips its software installer.
 - The external Wi-Fi name and a valid 8-63 character private Wi-Fi password are
   currently required by provisioning validation.
-- `lyte.daemon_config` is relative to the Lyte checkout and must exist whenever
-  Lyte is enabled.
+- `lyte.installation_config` is relative to the Lyte checkout and must exist
+  whenever Lyte is enabled. The default controls Showco's two-string Twinkly
+  installation.
 
 Command-line `--host`, `--user`, `--port`, and `--root` override the resolved
 configuration. During provisioning, host and root overrides are also written
