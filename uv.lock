@@ -925,9 +925,11 @@ name = "showco"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "numpy" },
     { name = "pydantic" },
     { name = "reccy" },
     { name = "recs" },
+    { name = "sounddevice" },
     { name = "streamo" },
     { name = "tqdm" },
     { name = "typing-extensions" },
@@ -944,9 +946,11 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "numpy" },
     { name = "pydantic", specifier = ">=2.13.4" },
     { name = "reccy", git = "https://github.com/rec/reccy.git?branch=main" },
     { name = "recs", git = "https://github.com/rec/recs.git?branch=main" },
+    { name = "sounddevice" },
     { name = "streamo", git = "https://github.com/rec/streamo.git?branch=main" },
     { name = "tqdm", specifier = ">=4.70.0" },
     { name = "typing-extensions", specifier = ">=4.10.0" },
