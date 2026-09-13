@@ -28,8 +28,8 @@ class ProvisionTests(unittest.TestCase):
                 'https://github.com/rec/recs.git',
                 '--lyte-enabled',
                 'True',
-                '--lyte-daemon-config',
-                'patches/test-daemon.toml',
+                '--lyte-installation-config',
+                'patches/test-installation.toml',
                 '--system',
                 '--remote',
                 '--autosquash',
@@ -42,7 +42,10 @@ class ProvisionTests(unittest.TestCase):
         self.assertEqual(options.root, Path('/srv/show-projects'))
         self.assertEqual(options.recs_repo, 'https://github.com/rec/recs.git')
         self.assertTrue(options.lyte_enabled)
-        self.assertEqual(options.lyte_daemon_config, Path('patches/test-daemon.toml'))
+        self.assertEqual(
+            options.lyte_installation_config,
+            Path('patches/test-installation.toml'),
+        )
         self.assertTrue(options.system)
         self.assertTrue(options.remote)
         self.assertEqual(options.autosquash, 0)
@@ -141,7 +144,8 @@ class ProvisionTests(unittest.TestCase):
 
         self.assertFalse(parsed.lyte.enabled)
         self.assertEqual(
-            parsed.lyte.daemon_config, Path('patches/wearable-daemon.toml')
+            parsed.lyte.installation_config,
+            Path('patches/showco-installation.toml'),
         )
 
     def test_argon_one_defaults_to_enabled(self) -> None:
@@ -166,9 +170,9 @@ class ProvisionTests(unittest.TestCase):
         self.assertEqual(parsed.git.showco.url, 'https://github.com/rec/showco.git')
         self.assertEqual(parsed.git.lyte.url, 'https://github.com/rec/lyte.git')
 
-    def test_lyte_daemon_config_must_be_within_lyte_checkout(self) -> None:
+    def test_lyte_installation_config_must_be_within_lyte_checkout(self) -> None:
         with self.assertRaisesRegex(SystemExit, 'must be relative'):
-            make_config(values(lyte={'daemon_config': '/etc/lyte.toml'}))
+            make_config(values(lyte={'installation_config': '/etc/lyte.toml'}))
 
     def test_wired_x18_uses_configured_x18_host(self) -> None:
         config = make_config(
@@ -856,7 +860,7 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn('uv run --locked showco run network-config', script.REMOTE_SCRIPT)
         self.assertIn('uv run --locked recs daemon install', script.REMOTE_SCRIPT)
         self.assertIn('uv run --locked streamo daemon install', script.REMOTE_SCRIPT)
-        self.assertIn('uv run --locked lyte daemon install', script.REMOTE_SCRIPT)
+        self.assertIn('uv run --locked lyte installation install', script.REMOTE_SCRIPT)
         self.assertIn(
             'uv run --locked showco run install-service', script.REMOTE_SCRIPT
         )

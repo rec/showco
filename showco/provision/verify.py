@@ -182,7 +182,7 @@ def user_session_command(command: str) -> str:
 
 def verify_lyte_service(provision_config: config.Config) -> VerificationResult:
     if not provision_config.lyte.enabled:
-        return VerificationResult(name='Lyte MIDI service', error='', note='disabled')
+        return VerificationResult(name='Lyte service', error='', note='disabled')
     installed = verify_remote_command(
         provision_config,
         'Lyte service is installed',

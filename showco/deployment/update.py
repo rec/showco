@@ -562,7 +562,7 @@ def start_or_refresh_service_step(
             return install_recs_service(root, provision_config, run_command)
         if service_name == 'lyte':
             return install_lyte_service(
-                root, provision_config.lyte.daemon_config, run_command
+                root, provision_config.lyte.installation_config, run_command
             )
         if service_name == 'streamo':
             return install_streamo_service(
@@ -574,14 +574,14 @@ def start_or_refresh_service_step(
 
 
 def install_lyte_service(
-    root: Path, daemon_config: Path, run_command: RunCommand
+    root: Path, installation_config: Path, run_command: RunCommand
 ) -> StepResult:
     directory = root / 'lyte'
-    config_path = directory / daemon_config
+    config_path = directory / installation_config
     command = (
         f'cd {shlex.quote(str(directory))} && '
-        'uv run --locked lyte daemon install '
-        f'--config {shlex.quote(str(config_path))}'
+        'uv run --locked lyte installation install '
+        f'{shlex.quote(str(config_path))}'
     )
     return run_step('lyte', 'install service', ['sh', '-c', command], run_command)
 

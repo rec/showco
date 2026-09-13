@@ -49,7 +49,7 @@ def remote_command(
         'NETWORK_TOPOLOGY': provision_config.network.topology,
         'STREAMO_ENABLED': shell_bool(provision_config.stream.enabled),
         'LYTE_ENABLED': shell_bool(provision_config.lyte.enabled),
-        'LYTE_DAEMON_CONFIG': str(provision_config.lyte.daemon_config),
+        'LYTE_INSTALLATION_CONFIG': str(provision_config.lyte.installation_config),
         'PRIVATE_WIFI_SSID': config.string_or_default(private.name, 'showbox'),
         'PRIVATE_WIFI_PASSWORD': private.password,
         'EXTERNAL_WIFI_SSID': external.name,

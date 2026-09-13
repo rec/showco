@@ -60,7 +60,7 @@ class Stream(BaseModel, frozen=True):
 
 class Lyte(BaseModel, frozen=True):
     enabled: bool = False
-    daemon_config: Path = Path('patches/wearable-daemon.toml')
+    installation_config: Path = Path('patches/showco-installation.toml')
 
 
 class Git(BaseModel, frozen=True):
@@ -100,7 +100,7 @@ def config_from_values(
     showco_repo: str | None = None,
     lyte_repo: str | None = None,
     lyte_enabled: bool | None = None,
-    lyte_daemon_config: Path | None = None,
+    lyte_installation_config: Path | None = None,
 ) -> Config:
     network = table_value(values, 'network')
     network_config = NetworkConfig(
@@ -138,7 +138,7 @@ def config_from_values(
         lyte=lyte_value(
             table_value(values, 'lyte'),
             enabled=lyte_enabled,
-            daemon_config=lyte_daemon_config,
+            installation_config=lyte_installation_config,
         ),
         git=Git(
             reccy=git_repo('reccy', table_value(git, 'reccy'), override=reccy_repo),
@@ -360,18 +360,24 @@ def stream_value(values: dict[str, object]) -> Stream:
 
 
 def lyte_value(
-    values: dict[str, object], *, enabled: bool | None, daemon_config: Path | None
+    values: dict[str, object], *, enabled: bool | None, installation_config: Path | None
 ) -> Lyte:
-    daemon_config = daemon_config or Path(
-        string_value(values, 'daemon_config', default='patches/wearable-daemon.toml')
+    installation_config = installation_config or Path(
+        string_value(
+            values,
+            'installation_config',
+            default='patches/showco-installation.toml',
+        )
     )
-    if daemon_config.is_absolute() or '..' in daemon_config.parts:
-        sys.exit('ERROR: lyte.daemon_config must be relative to the Lyte checkout')
+    if installation_config.is_absolute() or '..' in installation_config.parts:
+        sys.exit(
+            'ERROR: lyte.installation_config must be relative to the Lyte checkout'
+        )
     return Lyte(
         enabled=bool_value(values, 'enabled', default=False)
         if enabled is None
         else enabled,
-        daemon_config=daemon_config,
+        installation_config=installation_config,
     )
 
 

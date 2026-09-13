@@ -68,4 +68,4 @@ state = "SaqhIYFnE124j25yv7OJm8FQ9yLIceEh"
 
 [lyte]
 enabled = true
-daemon_config = "patches/wearable-daemon.toml"
+installation_config = "patches/showco-installation.toml"

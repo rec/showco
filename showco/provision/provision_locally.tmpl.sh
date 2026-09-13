@@ -366,7 +366,7 @@ write_network_config_files() {
     printf 'enabled = %s\n' "$STREAMO_ENABLED"
     printf '\n[lyte]\n'
     printf 'enabled = %s\n' "$LYTE_ENABLED"
-    write_toml_string daemon_config "$LYTE_DAEMON_CONFIG"
+    write_toml_string installation_config "$LYTE_INSTALLATION_CONFIG"
     printf '\n[git.reccy]\n'
     write_toml_string url "$RECCY_REPO"
     write_toml_string refname "$RECCY_REFNAME"
@@ -607,12 +607,12 @@ install_lyte_service() {
   local uid
   local input
   if [[ "$LYTE_ENABLED" != true ]]; then
-    printf 'Lyte MIDI service is disabled.\n'
+    printf 'Lyte service is disabled.\n'
     return
   fi
-  config_path="$ROOT/lyte/$LYTE_DAEMON_CONFIG"
+  config_path="$ROOT/lyte/$LYTE_INSTALLATION_CONFIG"
   if [[ ! -f "$config_path" ]]; then
-    printf 'ERROR: Lyte daemon configuration does not exist: %s\n' "$config_path" >&2
+    printf 'ERROR: Lyte installation configuration does not exist: %s\n' "$config_path" >&2
     return 1
   fi
   quoted_config=$(printf '%q' "$config_path")
@@ -620,13 +620,13 @@ install_lyte_service() {
   input=$(service_input "$(git -C "$ROOT/lyte" rev-parse HEAD)
 $(sha256sum "$config_path" | awk '{print $1}')")
   if service_is_current lyte "$input"; then
-    printf 'Lyte MIDI service is already installed.\n'
+    printf 'Lyte service is already installed.\n'
     return
   fi
   sudo -H -u "$SHOW_USER" \
     env XDG_RUNTIME_DIR="/run/user/$uid" \
     PATH="$ROOT/lyte/.venv/bin:/home/$SHOW_USER/.local/bin:$PATH" \
-    bash -lc "cd '$ROOT/lyte' && uv run --locked lyte daemon install --config $quoted_config"
+    bash -lc "cd '$ROOT/lyte' && uv run --locked lyte installation install $quoted_config"
   user_systemctl restart lyte.service
   record_service_state lyte "$input"
 }
@@ -654,7 +654,7 @@ write_provisioning_report() {
     fi
     printf '\nLyte:\n'
     printf 'enabled: %s\n' "$LYTE_ENABLED"
-    printf 'daemon config: %s\n' "$LYTE_DAEMON_CONFIG"
+    printf 'installation config: %s\n' "$LYTE_INSTALLATION_CONFIG"
     if [[ -d "$ROOT/lyte/.git" ]]; then
       printf 'checkout: '
       git -C "$ROOT/lyte" rev-parse --short HEAD
@@ -784,7 +784,7 @@ main() {
   phase "installing showco service"
   install_showco_service
 
-  phase "installing Lyte MIDI service"
+  phase "installing Lyte service"
   install_lyte_service
 
   phase "writing provisioning report"
