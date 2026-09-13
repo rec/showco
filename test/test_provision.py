@@ -144,6 +144,16 @@ class ProvisionTests(unittest.TestCase):
             parsed.lyte.daemon_config, Path('patches/wearable-daemon.toml')
         )
 
+    def test_argon_one_defaults_to_enabled(self) -> None:
+        parsed = make_config(values())
+
+        self.assertTrue(parsed.argon_one)
+
+    def test_argon_one_can_be_disabled(self) -> None:
+        parsed = make_config(values(argon_one=False))
+
+        self.assertFalse(parsed.argon_one)
+
     def test_git_repositories_default_to_github(self) -> None:
         configuration = values()
         del configuration['git']
@@ -770,6 +780,7 @@ class ProvisionTests(unittest.TestCase):
 
     def test_remote_script_installs_argon_one_software(self) -> None:
         self.assertIn('install_argon_one()', script.REMOTE_SCRIPT)
+        self.assertIn('if [[ "$ARGON_ONE" == true ]]; then', script.REMOTE_SCRIPT)
         self.assertIn('phase "installing Argon ONE software"', script.REMOTE_SCRIPT)
         self.assertIn('https://download.argon40.com/argon1.sh', script.REMOTE_SCRIPT)
         self.assertIn('Argon ONE software is already installed.', script.REMOTE_SCRIPT)
@@ -1030,6 +1041,15 @@ class ProvisionTests(unittest.TestCase):
         )
 
         self.assertIn('SYSTEM_UPDATE=true', command)
+
+    def test_remote_command_passes_argon_one_configuration(self) -> None:
+        enabled = script.remote_command(make_config(values()), '/tmp/provision.sh')
+        disabled = script.remote_command(
+            make_config(values(argon_one=False)), '/tmp/provision.sh'
+        )
+
+        self.assertIn('ARGON_ONE=true', enabled)
+        self.assertIn('ARGON_ONE=false', disabled)
 
     def test_remote_worktree_command_reports_all_tracked_changes(self) -> None:
         command = shlex.split(

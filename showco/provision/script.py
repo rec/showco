@@ -42,6 +42,7 @@ def remote_command(
         'LYTE_REPO': provision_config.git.lyte.url,
         'LYTE_REFNAME': provision_config.git.lyte.refname,
         'SHOWCO_PORT': str(provision_config.network.web_port),
+        'ARGON_ONE': shell_bool(provision_config.argon_one),
         'SYSTEM_UPDATE': shell_bool(system),
         'X18': shell_bool(x18_network is not None),
         'SWAP_WIFI': shell_bool(provision_config.network.swap_wifi),
