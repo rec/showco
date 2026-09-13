@@ -56,6 +56,12 @@ class CliTests(unittest.TestCase):
 
         prepare_card.assert_called_once_with(['--boot', '/Volumes/bootfs'])
 
+    def test_dispatches_cable_test_subcommand(self) -> None:
+        with patch.object(cli.cable_test, 'main', return_value=7) as cable_test:
+            self.assertEqual(cli.main(['cable-test', '9-14', '1-6']), 7)
+
+        cable_test.assert_called_once_with(['9-14', '1-6'])
+
     def test_dispatches_streamo_subcommand(self) -> None:
         with (
             patch.object(cli.machine_role, 'require_target_machine'),

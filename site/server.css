@@ -154,6 +154,7 @@ button:active, button[aria-busy="true"] {
 button[aria-busy="true"] { cursor: wait; }
 .ok { color: #14853d; }
 .failed { color: #b3261e; }
+.actions + section p { white-space: pre-line; }
 .readiness .state { text-transform: uppercase; }
 .readiness ul { margin-bottom: 0; }
 .performance {

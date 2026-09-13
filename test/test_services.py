@@ -50,7 +50,7 @@ class ServicesTests(unittest.TestCase):
             controller.install.return_value = StatusResult(installed=True, running=True)
             with (
                 mock.patch(
-                    'showco.runtime.services.controller.current_platform',
+                    'showco.runtime.services.paths.current_platform',
                     return_value=Platform.linux,
                 ),
                 mock.patch(
