@@ -23,7 +23,7 @@ The target uses user-level systemd services with user lingering enabled:
 | --- | --- | --- |
 | `recs.service` | Record audio, MIDI, and configured OSC nodes. | Status, control, configuration, and waveforms over public Reccy RPC endpoints. |
 | `showco.service` | Serve the web UI and monitoring sampler. | Browser-facing service. |
-| `lyte.service` | Render and transmit lighting output. | Status and light tests over Reccy RPC when enabled. |
+| `lyte.service` | Render and transmit lighting output. | Active animation, MIDI, per-string status, and light tests over Reccy RPC when enabled. |
 | `streamo.service` | Stream to the configured service and expose stream controls. | Status and operator actions over Reccy RPC when enabled. |
 
 Unavailable optional services are represented as disabled or offline. Recs,

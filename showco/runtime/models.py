@@ -114,16 +114,28 @@ class StreamoStatus(BaseModel, frozen=True):
     output_bitrate_kbps: float | None = None
 
 
+class LyteStringStatus(BaseModel, frozen=True):
+    state: str = 'pending'
+    host: str | None = None
+    mac: str | None = None
+    led_count: int | None = None
+    frame_count: int = 0
+    failure_count: int = 0
+    last_error: str | None = None
+
+
 class LyteStatus(BaseModel, frozen=True):
     service: ServiceStatus
-    daemon_state: str = 'disabled'
-    output_state: str = 'unknown'
-    host: str | None = None
-    device_mac: str | None = None
-    planned_led_count: int | None = None
-    actual_led_count: int | None = None
-    frame_send_count: int | None = None
-    last_frame_sent_at: str | None = None
+    running: bool = False
+    active_animation: str | None = None
+    queued_animation: str | None = None
+    strings: dict[str, LyteStringStatus] = Field(default_factory=dict)
+    bindings: dict[str, str] = Field(default_factory=dict)
+    midi_connected: bool = False
+    midi_error: str | None = None
+    note: int | None = None
+    breath: int | None = None
+    pitch_bend: int | None = None
     queued_test: bool = False
     active_test: bool = False
 

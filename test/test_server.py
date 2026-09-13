@@ -390,7 +390,7 @@ class ServerTests(unittest.TestCase):
         self.assertIn('Incidents this run', html)
         self.assertIn('Recording: recording to paused', html)
 
-    def test_health_page_shows_lyte_output_error(self) -> None:
+    def test_health_page_shows_lyte_installation_status(self) -> None:
         html = health_page(
             models.ShowStatus(
                 recs=models.RecsStatus(
@@ -400,19 +400,29 @@ class ServerTests(unittest.TestCase):
                     service=models.ServiceStatus(name='streamo', state='disabled')
                 ),
                 lyte=models.LyteStatus(
-                    service=models.ServiceStatus(
-                        name='lyte',
-                        state='error',
-                        last_error='controller unreachable',
-                    ),
-                    daemon_state='streaming',
-                    output_state='failed',
+                    service=models.ServiceStatus(name='lyte', state='connected'),
+                    running=True,
+                    active_animation='tree_show',
+                    bindings={'light': 'dots + strings'},
+                    strings={
+                        'dots': models.LyteStringStatus(
+                            state='streaming',
+                            host='10.0.0.17',
+                            led_count=250,
+                            frame_count=42,
+                        )
+                    },
+                    midi_connected=True,
+                    note=64,
                 ),
             )
         )
 
         self.assertIn('id="lyte-health"', html)
-        self.assertIn('lyte: error: controller unreachable', html)
+        self.assertIn('animation tree_show', html)
+        self.assertIn('light=dots + strings', html)
+        self.assertIn('MIDI connected, note 64', html)
+        self.assertIn('dots: streaming 10.0.0.17 250 LEDs 42 frames', html)
 
     def test_health_page_shows_bitrate_and_mixer_latency(self) -> None:
         html = health_page(
