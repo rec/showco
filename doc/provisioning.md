@@ -41,6 +41,8 @@ values in `config.toml` and credentials in the ignored local `secrets.toml`.
 A representative non-secret configuration is:
 
 ```toml
+argon_one = true
+
 [network]
 host = "bertrand.local"
 web_port = 10000
@@ -121,6 +123,8 @@ Important configuration rules:
   `[git.NAME]` table only to override `url` or `refname`.
 - `accept_changed_host_key` defaults to true. Provisioning removes the old
   local `known_hosts` entry before connecting to a newly imaged target.
+- `argon_one` defaults to true. Set it to false on targets that do not use an
+  Argon ONE case so provisioning skips its software installer.
 - The external Wi-Fi name and a valid 8-63 character private Wi-Fi password are
   currently required by provisioning validation.
 - `lyte.daemon_config` is relative to the Lyte checkout and must exist whenever

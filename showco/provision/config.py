@@ -79,6 +79,7 @@ class Config(BaseModel, frozen=True):
     stream: Stream
     lyte: Lyte
     git: Git
+    argon_one: bool = True
     accept_changed_host_key: bool = True
 
     @cached_property
@@ -154,6 +155,7 @@ def config_from_values(
             ),
             lyte=git_repo('lyte', table_value(git, 'lyte'), override=lyte_repo),
         ),
+        argon_one=bool_value(values, 'argon_one', default=True),
         accept_changed_host_key=bool_value(
             values, 'accept_changed_host_key', default=True
         ),

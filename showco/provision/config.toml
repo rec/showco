@@ -1,3 +1,5 @@
+argon_one = true
+
 [network]
 host = "bertrand.local"
 web_port = 10000

@@ -3,6 +3,7 @@ set -euo pipefail
 
 PHASE_STARTED_SECONDS=0
 SYSTEM_UPDATE=${SYSTEM_UPDATE:-false}
+ARGON_ONE=${ARGON_ONE:-true}
 
 install_base_packages() {
   local state_file="/var/lib/showco/system-packages.sha256"
@@ -726,8 +727,10 @@ main() {
   printf '  %s\n' "${packages[@]}"
   install_base_packages "${packages[@]}"
 
-  phase "installing Argon ONE software"
-  install_argon_one
+  if [[ "$ARGON_ONE" == true ]]; then
+    phase "installing Argon ONE software"
+    install_argon_one
+  fi
 
   phase "creating directories"
   sudo mkdir -p "$ROOT"
