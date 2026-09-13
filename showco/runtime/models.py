@@ -24,21 +24,21 @@ class ServiceStatus(BaseModel, frozen=True):
 
     @property
     def fresh(self) -> bool:
-        return self.state == "connected"
+        return self.state == 'connected'
 
 
 class ChannelLevel(BaseModel, frozen=True):
     name: str
     state: str
-    device: str = ""
+    device: str = ''
     channels: list[int] = Field(default_factory=list)
     signal: float | None = None
     on: bool = False
 
 
 class RecorderStatus(BaseModel, frozen=True):
-    name: str = ""
-    state: str = "disabled"
+    name: str = ''
+    state: str = 'disabled'
     log_path: str | None = None
     log_size: int | None = None
     last_error: str | None = None
@@ -71,7 +71,7 @@ class RecordingDiskStatus(BaseModel, frozen=True):
 
 
 class PlaybackStatus(BaseModel, frozen=True):
-    state: str = "waiting"
+    state: str = 'waiting'
     session: int | None = None
     path: str | None = None
     source: str | None = None
@@ -101,7 +101,7 @@ class RecsStatus(BaseModel, frozen=True):
 
 class StreamoStatus(BaseModel, frozen=True):
     service: ServiceStatus
-    stream_state: str = "unknown"
+    stream_state: str = 'unknown'
     streaming_service: str | None = None
     endpoint_host: str | None = None
     capabilities: list[str] = Field(default_factory=list)
@@ -116,8 +116,8 @@ class StreamoStatus(BaseModel, frozen=True):
 
 class LyteStatus(BaseModel, frozen=True):
     service: ServiceStatus
-    daemon_state: str = "disabled"
-    output_state: str = "unknown"
+    daemon_state: str = 'disabled'
+    output_state: str = 'unknown'
     host: str | None = None
     device_mac: str | None = None
     planned_led_count: int | None = None
@@ -139,8 +139,8 @@ class SystemStatus(BaseModel, frozen=True):
 
 
 class MixerStatus(BaseModel, frozen=True):
-    name: str = ""
-    state: str = "waiting"
+    name: str = ''
+    state: str = 'waiting'
     audio_ready: bool | None = None
     midi_ready: bool | None = None
     latency_ms: float | None = None
@@ -165,7 +165,7 @@ class Incident(BaseModel, frozen=True):
 
 class RecordingProgress(BaseModel, frozen=True):
     ok: bool = False
-    message: str = "unknown"
+    message: str = 'unknown'
 
 
 class InputCheck(BaseModel, frozen=True):
@@ -179,7 +179,7 @@ class ShowStatus(BaseModel, frozen=True):
     streamo: StreamoStatus
     lyte: LyteStatus = Field(
         default_factory=lambda: LyteStatus(
-            service=ServiceStatus(name="lyte", state="disabled")
+            service=ServiceStatus(name='lyte', state='disabled')
         )
     )
     system: SystemStatus = Field(default_factory=SystemStatus)

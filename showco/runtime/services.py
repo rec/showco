@@ -17,19 +17,19 @@ from ..deployment import machine_role
 from . import models
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
-SHOWCO_SERVICE = spec.load(PROJECT_ROOT / "showco/service.toml")
-RECS_SERVICE = spec.load(PROJECT_ROOT.parent / "recs/recs/daemon/service.toml")
-LYTE_SERVICE = spec.load(PROJECT_ROOT.parent / "lyte/lyte/service.toml")
+SHOWCO_SERVICE = spec.load(PROJECT_ROOT / 'showco/service.toml')
+RECS_SERVICE = spec.load(PROJECT_ROOT.parent / 'recs/recs/daemon/service.toml')
+LYTE_SERVICE = spec.load(PROJECT_ROOT.parent / 'lyte/lyte/service.toml')
 SERVICES = {
-    "lyte": LYTE_SERVICE,
-    "recs": RECS_SERVICE,
-    "showco": SHOWCO_SERVICE,
-    "streamo": STREAMO_SERVICE,
+    'lyte': LYTE_SERVICE,
+    'recs': RECS_SERVICE,
+    'showco': SHOWCO_SERVICE,
+    'streamo': STREAMO_SERVICE,
 }
 
 
 class ShowcoDaemon(reccy.Reccy):
-    name = "showco"
+    name = 'showco'
     service_spec = SHOWCO_SERVICE
 
 
@@ -37,14 +37,14 @@ class RecsDaemonStatus(BaseModel, frozen=True):
     gui_ipc_error: str | None = None
 
 
-STATUS_MODELS = {"recs": RecsDaemonStatus}
-STATUS_ERROR_ATTRIBUTES = {"recs": "gui_ipc_error"}
-STATUS_ERROR_LABELS = {"recs": "GUI IPC error"}
+STATUS_MODELS = {'recs': RecsDaemonStatus}
+STATUS_ERROR_ATTRIBUTES = {'recs': 'gui_ipc_error'}
+STATUS_ERROR_LABELS = {'recs': 'GUI IPC error'}
 
 
 def install_showco_service(
     root: Path,
-    host: str = "0.0.0.0",
+    host: str = '0.0.0.0',
     port: int = 17_352,
     mixers_config: Path | None = None,
     streamo_enabled: bool = False,
@@ -53,7 +53,7 @@ def install_showco_service(
     daemon = ShowcoDaemon(platform=paths.current_platform())
     result = daemon.install_service(
         [
-            "run",
+            'run',
             *showco_args(
                 host,
                 port,
@@ -63,7 +63,7 @@ def install_showco_service(
             ),
         ]
     )
-    controller.print_service_status("showco", result)
+    controller.print_service_status('showco', result)
     return 0 if result.running else 1
 
 
@@ -74,21 +74,21 @@ def showco_args(
     streamo_enabled: bool,
     lyte_enabled: bool,
 ) -> list[str]:
-    result = ["--host", host, "--port", str(port)]
+    result = ['--host', host, '--port', str(port)]
     if mixers_config is not None:
-        result.extend(["--mixers-config", str(mixers_config)])
+        result.extend(['--mixers-config', str(mixers_config)])
     if streamo_enabled:
-        result.append("--streamo-enabled")
+        result.append('--streamo-enabled')
     if lyte_enabled:
-        result.append("--lyte-enabled")
+        result.append('--lyte-enabled')
     return result
 
 
 def restart_streamo_service() -> models.ActionResult:
-    result = service_registry().controller("streamo").restart()
+    result = service_registry().controller('streamo').restart()
     if result.running:
-        return models.ActionResult(ok=True, message="streamo restart requested")
-    return models.ActionResult(ok=False, message="streamo service did not start")
+        return models.ActionResult(ok=True, message='streamo restart requested')
+    return models.ActionResult(ok=False, message='streamo service did not start')
 
 
 def refresh_service_definition(
@@ -97,13 +97,13 @@ def refresh_service_definition(
 ) -> StatusResult:
     controller = service_controller(SERVICES[name], runner=runner)
     data = json.loads(controller.paths.metadata.read_text())
-    if name == "recs" and "gui_endpoint" in data:
-        data["control_endpoint"] = data.pop("gui_endpoint")
-    if "module" not in data:
+    if name == 'recs' and 'gui_endpoint' in data:
+        data['control_endpoint'] = data.pop('gui_endpoint')
+    if 'module' not in data:
         module = name
-        data["module"] = module
-        if data["argv"][:2] == ["-m", module]:
-            data["argv"] = data["argv"][2:]
+        data['module'] = module
+        if data['argv'][:2] == ['-m', module]:
+            data['argv'] = data['argv'][2:]
     metadata = DaemonMetadata.model_validate(data)
     return controller.install(metadata)
 
@@ -136,17 +136,17 @@ def service_registry(
 
 
 def install_main(argv: list[str] | None = None) -> int:
-    machine_role.require_target_machine("showco run install-service")
+    machine_role.require_target_machine('showco run install-service')
     parser = argparse.ArgumentParser(
-        prog="showco run install-service",
-        description="Install or refresh the Showco user service",
+        prog='showco run install-service',
+        description='Install or refresh the Showco user service',
     )
-    parser.add_argument("--host", default="0.0.0.0")
-    parser.add_argument("--port", default=17_352, type=int)
-    parser.add_argument("--mixers-config", type=Path)
-    parser.add_argument("--streamo-enabled", action="store_true")
-    parser.add_argument("--lyte-enabled", action="store_true")
-    parser.add_argument("--root", required=True, type=Path)
+    parser.add_argument('--host', default='0.0.0.0')
+    parser.add_argument('--port', default=17_352, type=int)
+    parser.add_argument('--mixers-config', type=Path)
+    parser.add_argument('--streamo-enabled', action='store_true')
+    parser.add_argument('--lyte-enabled', action='store_true')
+    parser.add_argument('--root', required=True, type=Path)
     args = parser.parse_args(argv)
     return install_showco_service(
         host=args.host,
@@ -159,9 +159,9 @@ def install_main(argv: list[str] | None = None) -> int:
 
 
 def status_main(argv: list[str] | None = None) -> int:
-    machine_role.require_target_machine("showco run service-status")
+    machine_role.require_target_machine('showco run service-status')
     arguments = sys.argv[1:] if argv is None else argv
-    if not arguments or arguments[:1] in (["-h"], ["--help"]):
-        print("Usage: showco run service-status {lyte,recs,showco,streamo} ...")
+    if not arguments or arguments[:1] in (['-h'], ['--help']):
+        print('Usage: showco run service-status {lyte,recs,showco,streamo} ...')
         return 0
     return report_service_status(arguments)

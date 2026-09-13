@@ -25,12 +25,12 @@ class RecsControlClient:
         deadline = time.monotonic() + timeout
         if not self.lock.acquire(timeout=timeout):
             raise TimeoutError(
-                f"Recs control request timed out after {timeout}s waiting for access"
+                f'Recs control request timed out after {timeout}s waiting for access'
             )
         try:
             return rpc.Client(
                 self.endpoint,
-                role="showco",
+                role='showco',
                 timeout=max(0.0, deadline - time.monotonic()),
             ).call(command, **(parameters or {}))
         finally:

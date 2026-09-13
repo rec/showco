@@ -23,7 +23,7 @@ from showco.runtime.server import (
 
 
 class ServerTests(unittest.TestCase):
-    @mock.patch("showco.runtime.server.source_revision", return_value="revision")
+    @mock.patch('showco.runtime.server.source_revision', return_value='revision')
     def test_status_includes_server_revision(self, source_revision: mock.Mock) -> None:
         app = ShowcoApp(
             rehearsal.RehearsalRecsClient(),
@@ -32,21 +32,21 @@ class ServerTests(unittest.TestCase):
             rehearsal.RehearsalMixersMonitor(),
         )
 
-        self.assertEqual(app.status().revision, "revision")
+        self.assertEqual(app.status().revision, 'revision')
         source_revision.assert_called_once_with()
 
     def test_status_excludes_errors_from_before_the_server_started(self) -> None:
         recs = mock.Mock()
         recs.status.return_value = models.RecsStatus(
-            service=models.ServiceStatus(name="recs", state="connected"),
+            service=models.ServiceStatus(name='recs', state='connected'),
             errors=[
                 models.ErrorRecord(
-                    timestamp="2026-09-03T18:00:00Z", message="old error"
+                    timestamp='2026-09-03T18:00:00Z', message='old error'
                 ),
                 models.ErrorRecord(
-                    timestamp="2026-09-03T18:10:00Z", message="new error"
+                    timestamp='2026-09-03T18:10:00Z', message='new error'
                 ),
-                models.ErrorRecord(timestamp="", message="startup error"),
+                models.ErrorRecord(timestamp='', message='startup error'),
             ],
         )
         app = ShowcoApp(
@@ -61,7 +61,7 @@ class ServerTests(unittest.TestCase):
 
         errors = app.status().recs.errors
 
-        self.assertEqual([e.message for e in errors], ["new error", "startup error"])
+        self.assertEqual([e.message for e in errors], ['new error', 'startup error'])
 
     def test_html_is_not_cacheable(self) -> None:
         handler = object.__new__(ShowcoHandler)
@@ -70,15 +70,15 @@ class ServerTests(unittest.TestCase):
         handler.end_headers = mock.Mock()
         handler.wfile = BytesIO()
 
-        handler._html("page")
+        handler._html('page')
 
-        handler.send_header.assert_any_call("Cache-Control", "no-store")
+        handler.send_header.assert_any_call('Cache-Control', 'no-store')
 
     def test_waveform_event_uses_server_sent_event_format(self) -> None:
         handler = object.__new__(ShowcoHandler)
         handler.wfile = BytesIO()
 
-        handler._waveform_event("waveform", {"source": "Mixer"})
+        handler._waveform_event('waveform', {'source': 'Mixer'})
 
         self.assertEqual(
             handler.wfile.getvalue(),
@@ -95,7 +95,7 @@ class ServerTests(unittest.TestCase):
 
         handler._waveforms()
 
-        handler.send_error.assert_called_once_with(503, "Too many waveform connections")
+        handler.send_error.assert_called_once_with(503, 'Too many waveform connections')
 
     def test_waveform_disconnect_releases_connection_slot(self) -> None:
         bridge = mock.Mock()
@@ -104,7 +104,7 @@ class ServerTests(unittest.TestCase):
         bridge.wait_for_change.return_value = 1
         event = mock.Mock()
         event.model_dump.return_value = {}
-        bridge.events_since.return_value = (False, [(1, "waveform", event)])
+        bridge.events_since.return_value = (False, [(1, 'waveform', event)])
         handler = object.__new__(ShowcoHandler)
         handler.app = mock.Mock(waveforms=bridge)
         handler.server = mock.Mock(
@@ -121,9 +121,9 @@ class ServerTests(unittest.TestCase):
 
     def test_missed_waveform_events_resend_the_current_snapshot(self) -> None:
         layout = mock.Mock()
-        layout.model_dump.return_value = {"source": "Mixer"}
+        layout.model_dump.return_value = {'source': 'Mixer'}
         batch = mock.Mock()
-        batch.model_dump.return_value = {"source": "Mixer"}
+        batch.model_dump.return_value = {'source': 'Mixer'}
         bridge = mock.Mock()
         bridge.stopped = Event()
         bridge.snapshot.side_effect = [([], [], 0), ([layout], [batch], 3)]
@@ -149,9 +149,9 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(
             handler._waveform_event.call_args_list,
             [
-                mock.call("waveform_resync", {}),
-                mock.call("waveform_layout", {"source": "Mixer"}),
-                mock.call("waveform", {"source": "Mixer"}),
+                mock.call('waveform_resync', {}),
+                mock.call('waveform_layout', {'source': 'Mixer'}),
+                mock.call('waveform', {'source': 'Mixer'}),
             ],
         )
 
@@ -170,54 +170,54 @@ class ServerTests(unittest.TestCase):
 
     def test_form_rejects_large_request(self) -> None:
         handler = object.__new__(ShowcoHandler)
-        handler.headers = {"Content-Length": str(65_537)}
+        handler.headers = {'Content-Length': str(65_537)}
 
-        with self.assertRaisesRegex(ValueError, "exceeds"):
+        with self.assertRaisesRegex(ValueError, 'exceeds'):
             handler._form()
 
     def test_invalid_utf8_action_request_returns_bad_request(self) -> None:
         handler = object.__new__(ShowcoHandler)
-        handler.path = "/actions"
-        handler.headers = {"Content-Length": "1"}
-        handler.rfile = BytesIO(b"\xff")
+        handler.path = '/actions'
+        handler.headers = {'Content-Length': '1'}
+        handler.rfile = BytesIO(b'\xff')
         handler.send_error = mock.Mock()
 
         handler._do_post()
 
         handler.send_error.assert_called_once_with(
-            400, "action body is not valid UTF-8"
+            400, 'action body is not valid UTF-8'
         )
 
     def test_malformed_action_request_returns_bad_request(self) -> None:
         handler = object.__new__(ShowcoHandler)
-        handler.path = "/actions"
-        handler.headers = {"Content-Length": "6"}
-        handler.rfile = BytesIO(b"action")
+        handler.path = '/actions'
+        handler.headers = {'Content-Length': '6'}
+        handler.rfile = BytesIO(b'action')
         handler.send_error = mock.Mock()
 
         handler._do_post()
 
-        handler.send_error.assert_called_once_with(400, "action body is malformed")
+        handler.send_error.assert_called_once_with(400, 'action body is malformed')
 
     def test_invalid_content_length_returns_payload_too_large(self) -> None:
         handler = object.__new__(ShowcoHandler)
-        handler.path = "/actions"
-        handler.headers = {"Content-Length": "unknown"}
+        handler.path = '/actions'
+        handler.headers = {'Content-Length': 'unknown'}
         handler.rfile = BytesIO()
         handler.send_error = mock.Mock()
 
         handler._do_post()
 
-        handler.send_error.assert_called_once_with(413, "invalid Content-Length")
+        handler.send_error.assert_called_once_with(413, 'invalid Content-Length')
 
     def test_status_pages_have_five_page_navigation(self) -> None:
         html = channels_page(
             models.ShowStatus(
                 recs=models.RecsStatus(
-                    service=models.ServiceStatus(name="recs", state="connected")
+                    service=models.ServiceStatus(name='recs', state='connected')
                 ),
                 streamo=models.StreamoStatus(
-                    service=models.ServiceStatus(name="streamo", state="offline")
+                    service=models.ServiceStatus(name='streamo', state='offline')
                 ),
             )
         )
@@ -233,20 +233,20 @@ class ServerTests(unittest.TestCase):
         html = channels_page(
             models.ShowStatus(
                 recs=models.RecsStatus(
-                    service=models.ServiceStatus(name="recs", state="connected")
+                    service=models.ServiceStatus(name='recs', state='connected')
                 ),
                 streamo=models.StreamoStatus(
-                    service=models.ServiceStatus(name="streamo", state="disabled")
+                    service=models.ServiceStatus(name='streamo', state='disabled')
                 ),
             )
         )
 
         self.assertIn('id="channels"', html)
         self.assertIn('new EventSource("/waveforms")', html)
-        self.assertIn("<script>  function serviceDetail(service)", html)
-        self.assertIn("  const WAVEFORM_SECONDS = 8", html)
+        self.assertIn('<script>  function serviceDetail(service)', html)
+        self.assertIn('  const WAVEFORM_SECONDS = 8', html)
         self.assertIn(
-            ".levels {\n  grid-template-columns: repeat(3, minmax(0, 1fr));", html
+            '.levels {\n  grid-template-columns: repeat(3, minmax(0, 1fr));', html
         )
         self.assertIn('fetch("/status"', html)
 
@@ -254,43 +254,43 @@ class ServerTests(unittest.TestCase):
         html = health_page(
             models.ShowStatus(
                 recs=models.RecsStatus(
-                    service=models.ServiceStatus(name="recs", state="connected")
+                    service=models.ServiceStatus(name='recs', state='connected')
                 ),
                 streamo=models.StreamoStatus(
-                    service=models.ServiceStatus(name="streamo", state="connected")
+                    service=models.ServiceStatus(name='streamo', state='connected')
                 ),
                 system=models.SystemStatus(temperature_c=52.75),
             )
         )
 
-        self.assertIn("Pi temperature", html)
-        self.assertIn("52.8 °C", html)
+        self.assertIn('Pi temperature', html)
+        self.assertIn('52.8 °C', html)
 
     def test_health_page_labels_paused_recording(self) -> None:
         html = health_page(
             models.ShowStatus(
                 recs=models.RecsStatus(
-                    service=models.ServiceStatus(name="recs", state="connected"),
+                    service=models.ServiceStatus(name='recs', state='connected'),
                     recording=True,
                     paused=True,
                     elapsed_seconds=65,
                     file_count=3,
                 ),
                 streamo=models.StreamoStatus(
-                    service=models.ServiceStatus(name="streamo", state="disabled")
+                    service=models.ServiceStatus(name='streamo', state='disabled')
                 ),
             )
         )
 
-        self.assertIn("paused after 1:05, 3 files", html)
+        self.assertIn('paused after 1:05, 3 files', html)
 
     def test_health_page_shows_performance_meters(self) -> None:
         html = health_page(
             models.ShowStatus(
                 recs=models.RecsStatus(
-                    service=models.ServiceStatus(name="recs", state="connected"),
+                    service=models.ServiceStatus(name='recs', state='connected'),
                     disk=models.RecordingDiskStatus(
-                        path="/recordings",
+                        path='/recordings',
                         used_bytes=25 * 1024**3,
                         free_bytes=75 * 1024**3,
                         total_bytes=100 * 1024**3,
@@ -298,7 +298,7 @@ class ServerTests(unittest.TestCase):
                     ),
                 ),
                 streamo=models.StreamoStatus(
-                    service=models.ServiceStatus(name="streamo", state="disabled")
+                    service=models.ServiceStatus(name='streamo', state='disabled')
                 ),
                 system=models.SystemStatus(
                     cpu_percent=42,
@@ -308,174 +308,174 @@ class ServerTests(unittest.TestCase):
             )
         )
 
-        self.assertIn("<h2>Performance</h2>", html)
+        self.assertIn('<h2>Performance</h2>', html)
         self.assertIn('id="cpu-meter"', html)
         self.assertIn('id="memory-meter"', html)
         self.assertIn('id="disk-meter"', html)
-        self.assertIn("42%", html)
-        self.assertIn("2.0 GiB / 8.0 GiB (25%)", html)
-        self.assertIn("/recordings: 75.0 GiB free / 100.0 GiB (25% used)", html)
-        self.assertIn("setPerformance(", html)
+        self.assertIn('42%', html)
+        self.assertIn('2.0 GiB / 8.0 GiB (25%)', html)
+        self.assertIn('/recordings: 75.0 GiB free / 100.0 GiB (25% used)', html)
+        self.assertIn('setPerformance(', html)
 
     def test_health_page_shows_recs_snapshot_error(self) -> None:
         html = health_page(
             models.ShowStatus(
                 recs=models.RecsStatus(
-                    service=models.ServiceStatus(name="recs", state="connected"),
-                    snapshot_error="recs status_snapshot failed: slow",
+                    service=models.ServiceStatus(name='recs', state='connected'),
+                    snapshot_error='recs status_snapshot failed: slow',
                 ),
                 streamo=models.StreamoStatus(
-                    service=models.ServiceStatus(name="streamo", state="disabled")
+                    service=models.ServiceStatus(name='streamo', state='disabled')
                 ),
             )
         )
 
         self.assertIn('id="recs-snapshot"', html)
-        self.assertIn("recs snapshot: recs status_snapshot failed: slow", html)
+        self.assertIn('recs snapshot: recs status_snapshot failed: slow', html)
 
     def test_health_page_shows_empty_recs_errors(self) -> None:
         html = health_page(
             models.ShowStatus(
                 recs=models.RecsStatus(
-                    service=models.ServiceStatus(name="recs", state="connected")
+                    service=models.ServiceStatus(name='recs', state='connected')
                 ),
                 streamo=models.StreamoStatus(
-                    service=models.ServiceStatus(name="streamo", state="disabled")
+                    service=models.ServiceStatus(name='streamo', state='disabled')
                 ),
             )
         )
 
         self.assertIn('<div id="recs-errors"', html)
-        self.assertIn("No errors", html)
+        self.assertIn('No errors', html)
 
     def test_health_page_shows_readiness(self) -> None:
         html = health_page(
             models.ShowStatus(
                 recs=models.RecsStatus(
-                    service=models.ServiceStatus(name="recs", state="connected")
+                    service=models.ServiceStatus(name='recs', state='connected')
                 ),
                 streamo=models.StreamoStatus(
-                    service=models.ServiceStatus(name="streamo", state="disabled")
+                    service=models.ServiceStatus(name='streamo', state='disabled')
                 ),
                 readiness=models.ReadinessStatus(
                     checks=[
-                        models.ReadinessCheck(name="Recs", ok=False, message="offline")
+                        models.ReadinessCheck(name='Recs', ok=False, message='offline')
                     ]
                 ),
             )
         )
 
-        self.assertIn("Ready to perform", html)
+        self.assertIn('Ready to perform', html)
         self.assertIn('id="readiness-state">not ready', html)
-        self.assertIn("Recs</b>: offline", html)
+        self.assertIn('Recs</b>: offline', html)
 
     def test_health_page_shows_incidents(self) -> None:
         html = health_page(
             models.ShowStatus(
                 recs=models.RecsStatus(
-                    service=models.ServiceStatus(name="recs", state="connected")
+                    service=models.ServiceStatus(name='recs', state='connected')
                 ),
                 streamo=models.StreamoStatus(
-                    service=models.ServiceStatus(name="streamo", state="disabled")
+                    service=models.ServiceStatus(name='streamo', state='disabled')
                 ),
                 incidents=[
                     models.Incident(
                         timestamp=datetime(2026, 9, 10, 12, 0, 0),
-                        message="Recording: recording to paused",
+                        message='Recording: recording to paused',
                     )
                 ],
             )
         )
 
-        self.assertIn("Incidents this run", html)
-        self.assertIn("Recording: recording to paused", html)
+        self.assertIn('Incidents this run', html)
+        self.assertIn('Recording: recording to paused', html)
 
     def test_health_page_shows_lyte_output_error(self) -> None:
         html = health_page(
             models.ShowStatus(
                 recs=models.RecsStatus(
-                    service=models.ServiceStatus(name="recs", state="connected")
+                    service=models.ServiceStatus(name='recs', state='connected')
                 ),
                 streamo=models.StreamoStatus(
-                    service=models.ServiceStatus(name="streamo", state="disabled")
+                    service=models.ServiceStatus(name='streamo', state='disabled')
                 ),
                 lyte=models.LyteStatus(
                     service=models.ServiceStatus(
-                        name="lyte",
-                        state="error",
-                        last_error="controller unreachable",
+                        name='lyte',
+                        state='error',
+                        last_error='controller unreachable',
                     ),
-                    daemon_state="streaming",
-                    output_state="failed",
+                    daemon_state='streaming',
+                    output_state='failed',
                 ),
             )
         )
 
         self.assertIn('id="lyte-health"', html)
-        self.assertIn("lyte: error: controller unreachable", html)
+        self.assertIn('lyte: error: controller unreachable', html)
 
     def test_health_page_shows_bitrate_and_mixer_latency(self) -> None:
         html = health_page(
             models.ShowStatus(
                 recs=models.RecsStatus(
-                    service=models.ServiceStatus(name="recs", state="connected")
+                    service=models.ServiceStatus(name='recs', state='connected')
                 ),
                 streamo=models.StreamoStatus(
-                    service=models.ServiceStatus(name="streamo", state="connected"),
+                    service=models.ServiceStatus(name='streamo', state='connected'),
                     output_bitrate_kbps=312.5,
                 ),
                 mixers=[
-                    models.MixerStatus(name="X18", state="connected", latency_ms=4.25)
+                    models.MixerStatus(name='X18', state='connected', latency_ms=4.25)
                 ],
             )
         )
 
-        self.assertIn("Stream bitrate", html)
-        self.assertIn("312 kbps", html)
-        self.assertIn("X18: connected: 4.2 ms", html)
-        self.assertIn("4.2 ms", html)
+        self.assertIn('Stream bitrate', html)
+        self.assertIn('312 kbps', html)
+        self.assertIn('X18: connected: 4.2 ms', html)
+        self.assertIn('4.2 ms', html)
 
     def test_health_page_shows_named_osc_recorders(self) -> None:
         html = health_page(
             models.ShowStatus(
                 recs=models.RecsStatus(
-                    service=models.ServiceStatus(name="recs", state="connected"),
+                    service=models.ServiceStatus(name='recs', state='connected'),
                     osc=[
                         models.RecorderStatus(
-                            name="X18",
-                            state="running",
-                            log_path="X18.jsonl",
+                            name='X18',
+                            state='running',
+                            log_path='X18.jsonl',
                             log_size=12,
                         ),
                         models.RecorderStatus(
-                            name="Flow 8",
-                            state="error",
-                            last_error="unreachable",
+                            name='Flow 8',
+                            state='error',
+                            last_error='unreachable',
                         ),
                     ],
                 ),
                 streamo=models.StreamoStatus(
-                    service=models.ServiceStatus(name="streamo", state="disabled")
+                    service=models.ServiceStatus(name='streamo', state='disabled')
                 ),
             )
         )
 
-        self.assertIn("X18 OSC recorder: running: X18.jsonl (12 bytes)", html)
-        self.assertIn("Flow 8 OSC recorder: error: unreachable", html)
+        self.assertIn('X18 OSC recorder: running: X18.jsonl (12 bytes)', html)
+        self.assertIn('Flow 8 OSC recorder: error: unreachable', html)
 
     def test_health_page_shows_named_mixer_input_progress(self) -> None:
         html = health_page(
             models.ShowStatus(
                 recs=models.RecsStatus(
-                    service=models.ServiceStatus(name="recs", state="connected")
+                    service=models.ServiceStatus(name='recs', state='connected')
                 ),
                 streamo=models.StreamoStatus(
-                    service=models.ServiceStatus(name="streamo", state="connected")
+                    service=models.ServiceStatus(name='streamo', state='connected')
                 ),
                 mixers=[
                     models.MixerStatus(
-                        name="Flow 8",
-                        state="waiting",
+                        name='Flow 8',
+                        state='waiting',
                         audio_ready=False,
                         midi_ready=False,
                     )
@@ -483,62 +483,62 @@ class ServerTests(unittest.TestCase):
             )
         )
 
-        self.assertIn("Flow 8: waiting for USB audio and MIDI", html)
-        self.assertIn("function mixerDetail", html)
+        self.assertIn('Flow 8: waiting for USB audio and MIDI', html)
+        self.assertIn('function mixerDetail', html)
 
     def test_errors_page_shows_recs_errors_without_controls(self) -> None:
         html = errors_page(
             [
                 models.ErrorRecord(
-                    timestamp="2026-08-13T12:34:56.789Z",
-                    message="disk almost full",
+                    timestamp='2026-08-13T12:34:56.789Z',
+                    message='disk almost full',
                 )
             ]
         )
 
-        self.assertIn("disk almost full", html)
+        self.assertIn('disk almost full', html)
         self.assertIn(f'data-limit="{ERROR_PAGE_LIMIT}"', html)
-        self.assertNotIn("Show all errors", html)
+        self.assertNotIn('Show all errors', html)
         self.assertNotIn('type="checkbox" role="switch"', html)
 
     def test_errors_page_shows_empty_recs_errors(self) -> None:
         html = errors_page([])
 
-        self.assertIn("No errors", html)
+        self.assertIn('No errors', html)
 
     def test_errors_page_limits_previous_errors(self) -> None:
         html = errors_page(
             [
                 models.ErrorRecord(
-                    timestamp=f"2026-08-13T12:34:{i:02}Z", message=str(i)
+                    timestamp=f'2026-08-13T12:34:{i:02}Z', message=str(i)
                 )
                 for i in range(ERROR_PAGE_LIMIT + 1)
             ]
         )
 
-        self.assertNotIn(">0</span>", html)
-        self.assertIn(f">{ERROR_PAGE_LIMIT}</span>", html)
+        self.assertNotIn('>0</span>', html)
+        self.assertIn(f'>{ERROR_PAGE_LIMIT}</span>', html)
 
     def test_channels_page_has_track_name_editor_for_recs_channels(self) -> None:
         html = channels_page(
             models.ShowStatus(
                 recs=models.RecsStatus(
-                    service=models.ServiceStatus(name="recs", state="connected"),
+                    service=models.ServiceStatus(name='recs', state='connected'),
                     channels=[
                         models.ChannelLevel(
-                            name="1",
-                            state="healthy",
-                            device="Mic",
+                            name='1',
+                            state='healthy',
+                            device='Mic',
                             channels=[1],
                             on=True,
                         ),
                         models.ChannelLevel(
-                            name="2", state="healthy", device="Mic", channels=[2]
+                            name='2', state='healthy', device='Mic', channels=[2]
                         ),
                     ],
                 ),
                 streamo=models.StreamoStatus(
-                    service=models.ServiceStatus(name="streamo", state="connected")
+                    service=models.ServiceStatus(name='streamo', state='connected')
                 ),
             )
         )
@@ -550,14 +550,14 @@ class ServerTests(unittest.TestCase):
         self.assertIn(
             '<canvas class="waveform" aria-label="Live waveform"></canvas>', html
         )
-        self.assertIn("<b>1</b>", html)
-        self.assertNotIn("Channel 1", html)
-        self.assertIn(">•</span>", html)
+        self.assertIn('<b>1</b>', html)
+        self.assertNotIn('Channel 1', html)
+        self.assertIn('>•</span>', html)
         self.assertEqual(html.count('id="save-track-names"'), 1)
         self.assertEqual(html.count('id="revert-track-names"'), 1)
-        self.assertEqual(html.count(">Save</button>"), 1)
-        self.assertEqual(html.count(">Revert</button>"), 1)
-        self.assertNotIn(">healthy</span>", html)
+        self.assertEqual(html.count('>Save</button>'), 1)
+        self.assertEqual(html.count('>Revert</button>'), 1)
+        self.assertNotIn('>healthy</span>', html)
         self.assertIn(
             '<label class="stereo"><input type="checkbox">Stereo</label>', html
         )
@@ -568,7 +568,7 @@ class ServerTests(unittest.TestCase):
 
     def test_channel_calibration_passes_device_and_channels(self) -> None:
         recs = mock.Mock()
-        recs.calibrate.return_value = models.ActionResult(ok=True, message="calibrated")
+        recs.calibrate.return_value = models.ActionResult(ok=True, message='calibrated')
         app = ShowcoApp(
             recs,
             rehearsal.RehearsalStreamoClient(),
@@ -577,11 +577,11 @@ class ServerTests(unittest.TestCase):
         )
 
         result = app.run_action(
-            {"action": "recs-calibrate", "device": "Mic", "channels": "1,2"}
+            {'action': 'recs-calibrate', 'device': 'Mic', 'channels': '1,2'}
         )
 
         self.assertTrue(result.ok)
-        recs.calibrate.assert_called_once_with("Mic", [1, 2])
+        recs.calibrate.assert_called_once_with('Mic', [1, 2])
 
     def test_channels_page_disables_mono_stereo_control_without_right_channel(
         self,
@@ -589,15 +589,15 @@ class ServerTests(unittest.TestCase):
         html = channels_page(
             models.ShowStatus(
                 recs=models.RecsStatus(
-                    service=models.ServiceStatus(name="recs", state="connected"),
+                    service=models.ServiceStatus(name='recs', state='connected'),
                     channels=[
                         models.ChannelLevel(
-                            name="2", state="healthy", device="Mic", channels=[2]
+                            name='2', state='healthy', device='Mic', channels=[2]
                         )
                     ],
                 ),
                 streamo=models.StreamoStatus(
-                    service=models.ServiceStatus(name="streamo", state="connected")
+                    service=models.ServiceStatus(name='streamo', state='connected')
                 ),
             )
         )
@@ -611,18 +611,18 @@ class ServerTests(unittest.TestCase):
         html = channels_page(
             models.ShowStatus(
                 recs=models.RecsStatus(
-                    service=models.ServiceStatus(name="recs", state="connected"),
+                    service=models.ServiceStatus(name='recs', state='connected'),
                     channels=[
                         models.ChannelLevel(
-                            name="1-2",
-                            state="healthy",
-                            device="Mic",
+                            name='1-2',
+                            state='healthy',
+                            device='Mic',
                             channels=[1, 2],
                         )
                     ],
                 ),
                 streamo=models.StreamoStatus(
-                    service=models.ServiceStatus(name="streamo", state="connected")
+                    service=models.ServiceStatus(name='streamo', state='connected')
                 ),
             )
         )
@@ -636,13 +636,13 @@ class ServerTests(unittest.TestCase):
         html = channels_page(
             models.ShowStatus(
                 recs=models.RecsStatus(
-                    service=models.ServiceStatus(name="recs", state="connected"),
+                    service=models.ServiceStatus(name='recs', state='connected'),
                     channels=[
-                        models.ChannelLevel(name="1", state="healthy", device="Mic"),
+                        models.ChannelLevel(name='1', state='healthy', device='Mic'),
                     ],
                 ),
                 streamo=models.StreamoStatus(
-                    service=models.ServiceStatus(name="streamo", state="connected")
+                    service=models.ServiceStatus(name='streamo', state='connected')
                 ),
             )
         )
@@ -654,33 +654,33 @@ class ServerTests(unittest.TestCase):
         html = attributes_page(
             [
                 models.MutableAttribute(
-                    address="recording.noise_floor",
+                    address='recording.noise_floor',
                     value=70.0,
                 ),
                 models.MutableAttribute(
-                    address="recording.record_everything",
+                    address='recording.record_everything',
                     value=False,
                 ),
             ],
         )
 
-        self.assertIn("Recs attributes", html)
+        self.assertIn('Recs attributes', html)
         self.assertIn('id="mutable-attributes"', html)
         self.assertIn('data-address="recording.noise_floor"', html)
         self.assertIn('type="number" data-value-type="number" value="70.0"', html)
         self.assertIn('type="checkbox" data-value-type="boolean"', html)
-        self.assertIn("saveMutableAttribute", html)
+        self.assertIn('saveMutableAttribute', html)
 
     def test_actions_page_has_stream_restart_button(self) -> None:
         html = actions_page([])
 
-        self.assertIn("Restart Stream", html)
+        self.assertIn('Restart Stream', html)
         self.assertIn('value="streamo-restart"', html)
 
     def test_actions_page_hides_stream_controls_when_disabled(self) -> None:
         html = actions_page([], streamo_enabled=False)
 
-        self.assertNotIn("Restart Stream", html)
+        self.assertNotIn('Restart Stream', html)
         self.assertNotIn('value="streamo-mute"', html)
 
     def test_disabled_streamo_does_not_request_status(self) -> None:
@@ -693,7 +693,7 @@ class ServerTests(unittest.TestCase):
 
         status = app.status()
 
-        self.assertEqual(status.streamo.service.state, "disabled")
+        self.assertEqual(status.streamo.service.state, 'disabled')
 
     def test_disabled_streamo_rejects_actions(self) -> None:
         app = ShowcoApp(
@@ -703,10 +703,10 @@ class ServerTests(unittest.TestCase):
             rehearsal.RehearsalMixersMonitor(),
         )
 
-        result = app.run_action({"action": "streamo-mute"})
+        result = app.run_action({'action': 'streamo-mute'})
 
         self.assertFalse(result.ok)
-        self.assertEqual(result.message, "streamo is disabled")
+        self.assertEqual(result.message, 'streamo is disabled')
 
     def test_actions_page_has_recs_protocol_controls(self) -> None:
         html = actions_page([])
@@ -724,11 +724,11 @@ class ServerTests(unittest.TestCase):
         self.assertIn('name="seconds" value="10"', html)
         self.assertIn('name="offset" value="-1"', html)
         self.assertIn('name="offset" value="1"', html)
-        self.assertIn("script", html)
+        self.assertIn('script', html)
 
     def test_playback_actions_send_typed_recs_parameters(self) -> None:
         recs = mock.Mock()
-        recs.action.return_value = models.ActionResult(ok=True, message="jumped")
+        recs.action.return_value = models.ActionResult(ok=True, message='jumped')
         app = ShowcoApp(
             recs,
             None,
@@ -736,15 +736,15 @@ class ServerTests(unittest.TestCase):
             rehearsal.RehearsalMixersMonitor(),
         )
 
-        result = app.run_action({"action": "recs-playback-jump", "seconds": "-10"})
+        result = app.run_action({'action': 'recs-playback-jump', 'seconds': '-10'})
 
         self.assertTrue(result.ok)
-        recs.action.assert_called_once_with("jump_playback", seconds=-10.0)
+        recs.action.assert_called_once_with('jump_playback', seconds=-10.0)
 
     def test_actions_page_has_show_markers(self) -> None:
         html = actions_page([])
 
-        for label in ["Show start", "Song start", "Interval", "Show end"]:
+        for label in ['Show start', 'Song start', 'Interval', 'Show end']:
             self.assertIn(f'name="label" value="{label}"', html)
         self.assertIn('value="recs-list-devices"', html)
         self.assertIn('value="recs-new-session"', html)
@@ -761,7 +761,7 @@ class ServerTests(unittest.TestCase):
         html = actions_page([])
 
         self.assertIn('value="lyte-test"', html)
-        self.assertIn(">Test lights</button>", html)
+        self.assertIn('>Test lights</button>', html)
         self.assertIn('button.setAttribute("aria-busy", "true")', html)
         self.assertIn('button:active, button[aria-busy="true"]', html)
 
@@ -769,16 +769,16 @@ class ServerTests(unittest.TestCase):
         html = actions_page(
             [
                 models.ActionLogEntry(
-                    service="recs",
-                    command="calibrate",
+                    service='recs',
+                    command='calibrate',
                     timestamp=datetime(2026, 9, 4, 12, 34, 56, tzinfo=timezone.utc),
-                    result=models.ActionResult(ok=False, message="socket unavailable"),
+                    result=models.ActionResult(ok=False, message='socket unavailable'),
                 )
             ]
         )
 
-        self.assertIn("12:34:56", html)
-        self.assertIn("recs calibrate: socket unavailable", html)
+        self.assertIn('12:34:56', html)
+        self.assertIn('recs calibrate: socket unavailable', html)
         self.assertIn('class="failed"', html)
 
     def test_lyte_light_test_uses_lyte_client(self) -> None:
@@ -789,11 +789,11 @@ class ServerTests(unittest.TestCase):
             rehearsal.RehearsalMixersMonitor(),
         )
         lyte = mock.Mock(spec=LyteClient)
-        expected = models.ActionResult(ok=True, message="lyte light test queued")
+        expected = models.ActionResult(ok=True, message='lyte light test queued')
         lyte.test.return_value = expected
         app.lyte = lyte
 
-        result = app.run_action({"action": "lyte-test"})
+        result = app.run_action({'action': 'lyte-test'})
 
         self.assertEqual(result, expected)
         lyte.test.assert_called_once_with()
@@ -801,14 +801,14 @@ class ServerTests(unittest.TestCase):
     def test_lyte_reconnection_queues_one_light_test(self) -> None:
         lyte = mock.Mock(spec=LyteClient)
         offline = models.LyteStatus(
-            service=models.ServiceStatus(name="lyte", state="offline")
+            service=models.ServiceStatus(name='lyte', state='offline')
         )
         online = models.LyteStatus(
-            service=models.ServiceStatus(name="lyte", state="connected")
+            service=models.ServiceStatus(name='lyte', state='connected')
         )
         lyte.status.side_effect = [offline, online, online, offline, online]
         lyte.test.return_value = models.ActionResult(
-            ok=True, message="lyte light test queued"
+            ok=True, message='lyte light test queued'
         )
         app = ShowcoApp(
             rehearsal.RehearsalRecsClient(),
@@ -827,7 +827,7 @@ class ServerTests(unittest.TestCase):
         restart = mock.Mock(
             return_value=models.ActionResult(
                 ok=True,
-                message="streamo restart requested",
+                message='streamo restart requested',
             )
         )
         app = ShowcoApp(
@@ -838,7 +838,7 @@ class ServerTests(unittest.TestCase):
             restart,
         )
 
-        result = app.run_action({"action": "streamo-restart"})
+        result = app.run_action({'action': 'streamo-restart'})
 
         self.assertTrue(result.ok)
         restart.assert_called_once_with()
@@ -854,15 +854,15 @@ class ServerTests(unittest.TestCase):
 
         result = app.run_action(
             {
-                "action": "recs-track-name",
-                "device": "X18/XR18",
-                "channel": "1",
-                "track_name": "Lead Vocal",
+                'action': 'recs-track-name',
+                'device': 'X18/XR18',
+                'channel': '1',
+                'track_name': 'Lead Vocal',
             }
         )
 
         self.assertTrue(result.ok)
-        self.assertEqual(recs.rehearsal_track_names, {"X18/XR18": {"Lead Vocal": 1}})
+        self.assertEqual(recs.rehearsal_track_names, {'X18/XR18': {'Lead Vocal': 1}})
 
     def test_set_attr_action_uses_recs_client(self) -> None:
         recs = rehearsal.RehearsalRecsClient()
@@ -875,14 +875,14 @@ class ServerTests(unittest.TestCase):
 
         result = app.run_action(
             {
-                "action": "recs-set-attr",
-                "address": "recording.record_everything",
-                "value": "true",
+                'action': 'recs-set-attr',
+                'address': 'recording.record_everything',
+                'value': 'true',
             }
         )
 
         self.assertTrue(result.ok)
-        self.assertTrue(recs.rehearsal_attributes["recording.record_everything"])
+        self.assertTrue(recs.rehearsal_attributes['recording.record_everything'])
 
     def test_set_stereo_action_uses_recs_client(self) -> None:
         recs = rehearsal.RehearsalRecsClient()
@@ -894,7 +894,7 @@ class ServerTests(unittest.TestCase):
         )
 
         result = app.run_action(
-            {"action": "recs-set-stereo", "device": "X18/XR18", "channels": "1"}
+            {'action': 'recs-set-stereo', 'device': 'X18/XR18', 'channels': '1'}
         )
 
         self.assertTrue(result.ok)
@@ -911,15 +911,15 @@ class ServerTests(unittest.TestCase):
 
         result = app.run_action(
             {
-                "action": "recs-set-noise-floor",
-                "source": "Mic",
-                "channel": "1",
-                "noise_floor": "42.5",
+                'action': 'recs-set-noise-floor',
+                'source': 'Mic',
+                'channel': '1',
+                'noise_floor': '42.5',
             }
         )
 
         self.assertTrue(result.ok)
-        self.assertIn("set_noise_floor", result.message)
+        self.assertIn('set_noise_floor', result.message)
 
     def test_recs_action_reports_invalid_noise_floor(self) -> None:
         app = ShowcoApp(
@@ -931,15 +931,15 @@ class ServerTests(unittest.TestCase):
 
         result = app.run_action(
             {
-                "action": "recs-set-noise-floor",
-                "source": "Mic",
-                "channel": "1",
-                "noise_floor": "loud",
+                'action': 'recs-set-noise-floor',
+                'source': 'Mic',
+                'channel': '1',
+                'noise_floor': 'loud',
             }
         )
 
         self.assertFalse(result.ok)
-        self.assertEqual(result.message, "noise_floor must be a number")
+        self.assertEqual(result.message, 'noise_floor must be a number')
 
     def test_shutdown_action_defaults_to_cancel(self) -> None:
         app = ShowcoApp(
@@ -949,10 +949,10 @@ class ServerTests(unittest.TestCase):
             rehearsal.RehearsalMixersMonitor(),
         )
 
-        result = app.run_action({"action": "recs-shutdown"})
+        result = app.run_action({'action': 'recs-shutdown'})
 
         self.assertTrue(result.ok)
-        self.assertEqual(result.message, "recs shutdown canceled")
+        self.assertEqual(result.message, 'recs shutdown canceled')
 
     def test_action_log_keeps_ten_most_recent_results(self) -> None:
         app = ShowcoApp(
@@ -963,16 +963,16 @@ class ServerTests(unittest.TestCase):
         )
 
         for i in range(12):
-            app.run_action({"action": f"unknown-{i}"})
+            app.run_action({'action': f'unknown-{i}'})
 
         messages = [entry.result.message for entry in app.recent_actions()]
         self.assertEqual(len(messages), 10)
-        self.assertEqual(messages[0], "unknown action unknown-11")
-        self.assertEqual(messages[-1], "unknown action unknown-2")
+        self.assertEqual(messages[0], 'unknown action unknown-11')
+        self.assertEqual(messages[-1], 'unknown action unknown-2')
 
     def test_action_transport_error_is_recorded_as_a_failure(self) -> None:
         recs = mock.Mock()
-        recs.calibrate.side_effect = OSError("recs socket unavailable")
+        recs.calibrate.side_effect = OSError('recs socket unavailable')
         app = ShowcoApp(
             recs,
             rehearsal.RehearsalStreamoClient(),
@@ -980,13 +980,13 @@ class ServerTests(unittest.TestCase):
             rehearsal.RehearsalMixersMonitor(),
         )
 
-        result = app.run_action({"action": "recs-calibrate"})
+        result = app.run_action({'action': 'recs-calibrate'})
 
         self.assertFalse(result.ok)
-        self.assertEqual(result.message, "recs socket unavailable")
+        self.assertEqual(result.message, 'recs socket unavailable')
         entry = app.recent_actions()[0]
-        self.assertEqual(entry.service, "recs")
-        self.assertEqual(entry.command, "calibrate")
+        self.assertEqual(entry.service, 'recs')
+        self.assertEqual(entry.command, 'calibrate')
         self.assertEqual(entry.result, result)
 
     def test_actions_do_not_overlap(self) -> None:
@@ -1002,7 +1002,7 @@ class ServerTests(unittest.TestCase):
                 calls += 1
             entered.set()
             release.wait(1)
-            return models.ActionResult(ok=True, message="calibrated")
+            return models.ActionResult(ok=True, message='calibrated')
 
         recs = mock.Mock()
         recs.calibrate.side_effect = calibrate
@@ -1014,10 +1014,10 @@ class ServerTests(unittest.TestCase):
         )
 
         def run_second_action() -> None:
-            app.run_action({"action": "recs-calibrate"})
+            app.run_action({'action': 'recs-calibrate'})
             second_complete.set()
 
-        first = Thread(target=app.run_action, args=({"action": "recs-calibrate"},))
+        first = Thread(target=app.run_action, args=({'action': 'recs-calibrate'},))
         second = Thread(target=run_second_action)
 
         first.start()
@@ -1037,18 +1037,18 @@ class ServerTests(unittest.TestCase):
 
     def test_failed_action_result_logs_error(self) -> None:
         handler = ShowcoHandler.__new__(ShowcoHandler)
-        handler.client_address = ("127.0.0.1", 12345)
+        handler.client_address = ('127.0.0.1', 12345)
 
-        with self.assertLogs("showco.runtime.server", level="ERROR") as logs:
+        with self.assertLogs('showco.runtime.server', level='ERROR') as logs:
             handler._log_action(
-                "recs-calibrate",
-                models.ActionResult(ok=False, message="I/O operation on closed file."),
+                'recs-calibrate',
+                models.ActionResult(ok=False, message='I/O operation on closed file.'),
             )
 
         self.assertIn("action='recs-calibrate'", logs.output[0])
-        self.assertIn("ok=False", logs.output[0])
-        self.assertIn("I/O operation on closed file.", logs.output[0])
+        self.assertIn('ok=False', logs.output[0])
+        self.assertIn('I/O operation on closed file.', logs.output[0])
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     unittest.main()

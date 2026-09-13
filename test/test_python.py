@@ -17,17 +17,17 @@ class PythonTests(unittest.TestCase):
 
         def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
             commands.append(list(command))
-            return subprocess.CompletedProcess(command, 0, "attributes\n", "")
+            return subprocess.CompletedProcess(command, 0, 'attributes\n', '')
 
         output = StringIO()
         with mock.patch(
-            "showco.deployment.python.machine_role.require_provisioning_machine"
+            'showco.deployment.python.machine_role.require_provisioning_machine'
         ) as require:
             result = python.run_python(
                 python.PythonOptions(
                     code=(
-                        "from showco.runtime.recs import RecsClient; "
-                        "print(RecsClient())"
+                        'from showco.runtime.recs import RecsClient; '
+                        'print(RecsClient())'
                     )
                 ),
                 target_config=target_config(),
@@ -36,30 +36,30 @@ class PythonTests(unittest.TestCase):
             )
 
         self.assertEqual(result, 0)
-        self.assertEqual(output.getvalue(), "attributes\n")
-        require.assert_called_once_with("showco python")
+        self.assertEqual(output.getvalue(), 'attributes\n')
+        require.assert_called_once_with('showco python')
         self.assertEqual(
             commands,
             [
                 [
-                    "ssh",
-                    "-o",
-                    "ConnectTimeout=2",
-                    "-o",
-                    "BatchMode=yes",
-                    "-o",
-                    "StrictHostKeyChecking=accept-new",
-                    "-p",
-                    "22",
-                    "tom@bertrand.local",
-                    "cd /srv/show-projects/showco && .venv/bin/python -c "
+                    'ssh',
+                    '-o',
+                    'ConnectTimeout=2',
+                    '-o',
+                    'BatchMode=yes',
+                    '-o',
+                    'StrictHostKeyChecking=accept-new',
+                    '-p',
+                    '22',
+                    'tom@bertrand.local',
+                    'cd /srv/show-projects/showco && .venv/bin/python -c '
                     "'from showco.runtime.recs import RecsClient; print(RecsClient())'",
                 ]
             ],
         )
 
     def test_remote_command_quotes_source(self) -> None:
-        command = python.remote_python_command('print("it\'s working")', Path("/code"))
+        command = python.remote_python_command('print("it\'s working")', Path('/code'))
 
         self.assertEqual(
             command,
@@ -70,21 +70,21 @@ class PythonTests(unittest.TestCase):
 def target_config() -> config.Config:
     return config.config_from_values(
         {
-            "network": {"host": "bertrand.local", "user": "tom"},
-            "paths": {"root": "/srv/show-projects"},
-            "networks": {
-                "internal": {"subnet": "10.0.0.0/24", "wifi": {}},
-                "external": {"wifi": {}},
+            'network': {'host': 'bertrand.local', 'user': 'tom'},
+            'paths': {'root': '/srv/show-projects'},
+            'networks': {
+                'internal': {'subnet': '10.0.0.0/24', 'wifi': {}},
+                'external': {'wifi': {}},
             },
-            "usb": {},
-            "stream": {},
-            "lyte": {},
-            "git": {
-                "reccy": {"url": "git@github.com:rec/reccy"},
-                "recs": {"url": "git@github.com:rec/recs"},
-                "streamo": {"url": "git@github.com:rec/streamo"},
-                "showco": {"url": "git@github.com:rec/showco"},
-                "lyte": {"url": "git@github.com:rec/lyte"},
+            'usb': {},
+            'stream': {},
+            'lyte': {},
+            'git': {
+                'reccy': {'url': 'git@github.com:rec/reccy'},
+                'recs': {'url': 'git@github.com:rec/recs'},
+                'streamo': {'url': 'git@github.com:rec/streamo'},
+                'showco': {'url': 'git@github.com:rec/showco'},
+                'lyte': {'url': 'git@github.com:rec/lyte'},
             },
         }
     )

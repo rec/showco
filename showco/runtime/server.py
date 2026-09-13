@@ -29,7 +29,7 @@ MAX_CONCURRENT_REQUESTS = 8
 MAX_WAVEFORM_CONNECTIONS = 4
 ERROR_PAGE_LIMIT = 25
 LOGGER = logging.get_logger(__name__)
-SITE_DIRECTORY = Path(__file__).parent.parent.parent / "site"
+SITE_DIRECTORY = Path(__file__).parent.parent.parent / 'site'
 
 
 @cache
@@ -68,13 +68,13 @@ class ShowcoApp:
     def status(self) -> models.ShowStatus:
         if self.streamo is None:
             streamo = models.StreamoStatus(
-                service=models.ServiceStatus(name="streamo", state="disabled")
+                service=models.ServiceStatus(name='streamo', state='disabled')
             )
         else:
             streamo = self.streamo.status()
         recs = self.recs.status()
         recs = recs.model_copy(
-            update={"errors": errors_since(recs.errors, self.run_started_at)}
+            update={'errors': errors_since(recs.errors, self.run_started_at)}
         )
         lyte = self._lyte_status()
         status = models.ShowStatus(
@@ -89,34 +89,34 @@ class ShowcoApp:
             revision=self.revision,
             run_started_at=self.run_started_at,
         )
-        status = status.model_copy(update={"readiness": readiness.status(status)})
+        status = status.model_copy(update={'readiness': readiness.status(status)})
         return status.model_copy(
             update={
-                "incidents": self.incidents.observe(status),
-                "recording_progress": self.recording_progress.observe(recs),
-                "input_checks": input_check.checks(recs.channels),
+                'incidents': self.incidents.observe(status),
+                'recording_progress': self.recording_progress.observe(recs),
+                'input_checks': input_check.checks(recs.channels),
             }
         )
 
     def _lyte_status(self) -> models.LyteStatus:
         if self.lyte is None:
             return models.LyteStatus(
-                service=models.ServiceStatus(name="lyte", state="disabled")
+                service=models.ServiceStatus(name='lyte', state='disabled')
             )
         status = self.lyte.status()
         with self.lyte_status_lock:
-            if status.service.state != "connected":
+            if status.service.state != 'connected':
                 self.lyte_connected = False
                 return status
             if self.lyte_connected:
                 return status
             self.lyte_connected = True
-        self.run_action({"action": "lyte-test"})
+        self.run_action({'action': 'lyte-test'})
         return status
 
     def run_action(self, form: dict[str, str]) -> models.ActionResult:
         with self.action_lock:
-            action = form.get("action", "")
+            action = form.get('action', '')
             try:
                 result = self._dispatch_action(action, form)
             except (
@@ -135,54 +135,54 @@ class ShowcoApp:
     def _dispatch_action(
         self, action: str, form: dict[str, str]
     ) -> models.ActionResult:
-        if action == "recs-calibrate":
-            device = form.get("device", "")
-            channels = _channel_numbers(form.get("channels", ""))
+        if action == 'recs-calibrate':
+            device = form.get('device', '')
+            channels = _channel_numbers(form.get('channels', ''))
             if device or channels:
                 return self.recs.calibrate(device, channels)
             return self.recs.calibrate()
-        if action == "recs-track-name":
+        if action == 'recs-track-name':
             return self.recs.set_track_name(
-                form.get("device", ""),
-                form.get("channel", ""),
-                form.get("track_name", ""),
+                form.get('device', ''),
+                form.get('channel', ''),
+                form.get('track_name', ''),
             )
-        if action == "recs-set-stereo":
+        if action == 'recs-set-stereo':
             return self.recs.set_stereo(
-                form.get("device", ""), _channel_numbers(form.get("channels", ""))
+                form.get('device', ''), _channel_numbers(form.get('channels', ''))
             )
-        if action == "recs-set-attr":
+        if action == 'recs-set-attr':
             try:
-                value = json.loads(form.get("value", ""))
+                value = json.loads(form.get('value', ''))
             except json.JSONDecodeError:
                 return models.ActionResult(
                     ok=False,
-                    message="recs attribute value must be valid JSON",
+                    message='recs attribute value must be valid JSON',
                 )
-            return self.recs.set_attr(form.get("address", ""), value)
-        if action == "recs-shutdown":
-            if form.get("confirmation") == "shutdown":
+            return self.recs.set_attr(form.get('address', ''), value)
+        if action == 'recs-shutdown':
+            if form.get('confirmation') == 'shutdown':
                 return self.recs.shutdown()
-            return models.ActionResult(ok=True, message="recs shutdown canceled")
-        if action == "recs-playback-play":
+            return models.ActionResult(ok=True, message='recs shutdown canceled')
+        if action == 'recs-playback-play':
             return self.recs.play()
         if action in RECS_ACTIONS:
             return self.recs.action(RECS_ACTIONS[action], **_recs_fields(form))
-        if action == "streamo-restart" and self.streamo is None:
-            return models.ActionResult(ok=False, message="streamo is disabled")
-        if action == "streamo-restart":
+        if action == 'streamo-restart' and self.streamo is None:
+            return models.ActionResult(ok=False, message='streamo is disabled')
+        if action == 'streamo-restart':
             return self.streamo_restart()
-        if action == "lyte-test":
+        if action == 'lyte-test':
             return (
                 self.lyte.test()
                 if self.lyte is not None
-                else models.ActionResult(ok=False, message="lyte is disabled")
+                else models.ActionResult(ok=False, message='lyte is disabled')
             )
         if action in STREAMO_ACTIONS:
             if self.streamo is None:
-                return models.ActionResult(ok=False, message="streamo is disabled")
+                return models.ActionResult(ok=False, message='streamo is disabled')
             return self.streamo.action(STREAMO_ACTIONS[action], **_streamo_fields(form))
-        return models.ActionResult(ok=False, message=f"unknown action {action}")
+        return models.ActionResult(ok=False, message=f'unknown action {action}')
 
     def recent_actions(self) -> list[models.ActionLogEntry]:
         with self.action_log_lock:
@@ -199,7 +199,7 @@ class ShowcoHandler(BaseHTTPRequestHandler):
     app: ClassVar[ShowcoApp]
 
     def do_GET(self) -> None:
-        if self.path == "/waveforms":
+        if self.path == '/waveforms':
             self._waveforms()
             return
         if not self._acquire_request():
@@ -210,25 +210,25 @@ class ShowcoHandler(BaseHTTPRequestHandler):
             cast(ShowcoServer, self.server).request_slots.release()
 
     def _do_get(self) -> None:
-        if self.path == "/status":
+        if self.path == '/status':
             self._json(self.app.status())
             return
-        if self.path in {"/", "/channels"}:
+        if self.path in {'/', '/channels'}:
             self._html(channels_page(self.app.status()))
             return
-        if self.path == "/health":
+        if self.path == '/health':
             self._html(health_page(self.app.status()))
             return
-        if self.path == "/playback":
+        if self.path == '/playback':
             self._html(playback_page(self.app.status().recs.playback))
             return
-        if self.path == "/attributes":
+        if self.path == '/attributes':
             self._html(attributes_page(self.app.recs.mutable_attributes()))
             return
-        if self.path == "/errors":
+        if self.path == '/errors':
             self._html(errors_page(self.app.status().recs.errors))
             return
-        if self.path == "/actions":
+        if self.path == '/actions':
             self._html(
                 actions_page(
                     self.app.recent_actions(),
@@ -247,33 +247,33 @@ class ShowcoHandler(BaseHTTPRequestHandler):
             return
         server = cast(ShowcoServer, self.server)
         if not server.waveform_slots.acquire(blocking=False):
-            self.send_error(503, "Too many waveform connections")
+            self.send_error(503, 'Too many waveform connections')
             return
         try:
             self.send_response(200)
-            self.send_header("Cache-Control", "no-store")
-            self.send_header("Content-Type", "text/event-stream; charset=utf-8")
-            self.send_header("Connection", "keep-alive")
+            self.send_header('Cache-Control', 'no-store')
+            self.send_header('Content-Type', 'text/event-stream; charset=utf-8')
+            self.send_header('Connection', 'keep-alive')
             self.end_headers()
             layouts, batches, changed = bridge.snapshot()
             for layout in layouts:
-                self._waveform_event("waveform_layout", layout.model_dump())
+                self._waveform_event('waveform_layout', layout.model_dump())
             for batch in batches:
-                self._waveform_event("waveform", batch.model_dump())
+                self._waveform_event('waveform', batch.model_dump())
             while not bridge.stopped.is_set():
                 updated = bridge.wait_for_change(changed, 15)
                 if updated == changed:
-                    self.wfile.write(b": heartbeat\n\n")
+                    self.wfile.write(b': heartbeat\n\n')
                     self.wfile.flush()
                     continue
                 missed, events = bridge.events_since(changed)
                 if missed:
-                    self._waveform_event("waveform_resync", {})
+                    self._waveform_event('waveform_resync', {})
                     layouts, batches, changed = bridge.snapshot()
                     for layout in layouts:
-                        self._waveform_event("waveform_layout", layout.model_dump())
+                        self._waveform_event('waveform_layout', layout.model_dump())
                     for batch in batches:
-                        self._waveform_event("waveform", batch.model_dump())
+                        self._waveform_event('waveform', batch.model_dump())
                     continue
                 for _, name, event in events:
                     self._waveform_event(name, event.model_dump())
@@ -284,7 +284,7 @@ class ShowcoHandler(BaseHTTPRequestHandler):
             server.waveform_slots.release()
 
     def _waveform_event(self, name: str, data: dict[str, object]) -> None:
-        message = f"event: {name}\ndata: {json.dumps(data, separators=(',', ':'))}\n\n"
+        message = f'event: {name}\ndata: {json.dumps(data, separators=(",", ":"))}\n\n'
         self.wfile.write(message.encode())
         self.wfile.flush()
 
@@ -297,7 +297,7 @@ class ShowcoHandler(BaseHTTPRequestHandler):
             cast(ShowcoServer, self.server).request_slots.release()
 
     def _do_post(self) -> None:
-        if self.path != "/actions":
+        if self.path != '/actions':
             self.send_error(404)
             return
         try:
@@ -306,12 +306,12 @@ class ShowcoHandler(BaseHTTPRequestHandler):
             self.send_error(error.status, error.message)
             return
         result = self.app.run_action(form)
-        self._log_action(form.get("action", ""), result)
-        if self.headers.get("Accept") == "application/json":
+        self._log_action(form.get('action', ''), result)
+        if self.headers.get('Accept') == 'application/json':
             self._json_action(result)
             return
         self.send_response(303)
-        self.send_header("Location", "/actions")
+        self.send_header('Location', '/actions')
         self.end_headers()
 
     def log_message(self, format: str, *args: object) -> None:
@@ -319,32 +319,32 @@ class ShowcoHandler(BaseHTTPRequestHandler):
 
     def _form(self) -> dict[str, str]:
         try:
-            length = int(self.headers.get("Content-Length", "0"))
+            length = int(self.headers.get('Content-Length', '0'))
         except ValueError:
-            raise FormError(413, "invalid Content-Length") from None
+            raise FormError(413, 'invalid Content-Length') from None
         if length < 0 or length > MAX_ACTION_BYTES:
-            raise FormError(413, f"action body exceeds {MAX_ACTION_BYTES} bytes")
+            raise FormError(413, f'action body exceeds {MAX_ACTION_BYTES} bytes')
         try:
             body = self.rfile.read(length).decode()
         except UnicodeDecodeError:
-            raise FormError(400, "action body is not valid UTF-8") from None
+            raise FormError(400, 'action body is not valid UTF-8') from None
         try:
             pairs = parse.parse_qsl(body, strict_parsing=True)
         except ValueError:
-            raise FormError(400, "action body is malformed") from None
+            raise FormError(400, 'action body is malformed') from None
         return {key: value for key, value in pairs}
 
     def _acquire_request(self) -> bool:
         if cast(ShowcoServer, self.server).request_slots.acquire(blocking=False):
             return True
-        self.send_error(503, "Showco is busy")
+        self.send_error(503, 'Showco is busy')
         return False
 
     def _log_action(self, action: str, result: models.ActionResult) -> None:
-        detail = result.message.replace("\n", " ")[:240]
+        detail = result.message.replace('\n', ' ')[:240]
         log = LOGGER.info if result.ok else LOGGER.error
         log(
-            "showco action source=%s action=%r ok=%s detail=%r",
+            'showco action source=%s action=%r ok=%s detail=%r',
             self.client_address[0],
             action,
             result.ok,
@@ -354,26 +354,26 @@ class ShowcoHandler(BaseHTTPRequestHandler):
     def _html(self, body: str) -> None:
         data = body.encode()
         self.send_response(200)
-        self.send_header("Cache-Control", "no-store")
-        self.send_header("Content-Type", "text/html; charset=utf-8")
-        self.send_header("Content-Length", str(len(data)))
+        self.send_header('Cache-Control', 'no-store')
+        self.send_header('Content-Type', 'text/html; charset=utf-8')
+        self.send_header('Content-Length', str(len(data)))
         self.end_headers()
         self.wfile.write(data)
 
     def _json(self, value: models.ShowStatus) -> None:
         data = value.model_dump_json().encode()
         self.send_response(200)
-        self.send_header("Cache-Control", "no-store")
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(data)))
+        self.send_header('Cache-Control', 'no-store')
+        self.send_header('Content-Type', 'application/json; charset=utf-8')
+        self.send_header('Content-Length', str(len(data)))
         self.end_headers()
         self.wfile.write(data)
 
     def _json_action(self, value: models.ActionResult) -> None:
         data = value.model_dump_json().encode()
         self.send_response(200)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(data)))
+        self.send_header('Content-Type', 'application/json; charset=utf-8')
+        self.send_header('Content-Length', str(len(data)))
         self.end_headers()
         self.wfile.write(data)
 
@@ -402,7 +402,7 @@ class ShowcoServer(ThreadingHTTPServer):
 def source_revision() -> str | None:
     try:
         result = subprocess.run(
-            ["git", "-C", str(Path(__file__).parent.parent), "rev-parse", "HEAD"],
+            ['git', '-C', str(Path(__file__).parent.parent), 'rev-parse', 'HEAD'],
             capture_output=True,
             check=False,
             text=True,
@@ -427,7 +427,7 @@ def make_server(
     lyte_enabled: bool = False,
     performance_enabled: bool = False,
 ) -> ThreadingHTTPServer:
-    handler = type("ConfiguredShowcoHandler", (ShowcoHandler,), {})
+    handler = type('ConfiguredShowcoHandler', (ShowcoHandler,), {})
     recs_client = recs or RecsClient()
     waveforms = (
         WaveformBridge(control=recs_client.control)
@@ -461,13 +461,13 @@ def make_server(
 
 
 def channels_page(status: models.ShowStatus) -> str:
-    channel_html = "".join(
+    channel_html = ''.join(
         level(channel, status.recs.channels) for channel in status.recs.channels
     )
     if not channel_html:
-        channel_html = "<p>No channel data from recs.</p>"
+        channel_html = '<p>No channel data from recs.</p>'
     return page(
-        "Channels",
+        'Channels',
         f"""
         <section>
           <h2>Recording channels</h2>
@@ -480,26 +480,26 @@ def channels_page(status: models.ShowStatus) -> str:
           </div>
         </section>
         """,
-        script=site_file("status-script.js") + site_file("waveform-script.js"),
+        script=site_file('status-script.js') + site_file('waveform-script.js'),
     )
 
 
 def health_page(status: models.ShowStatus) -> str:
     recs = status.recs.service
     streamo = status.streamo.service
-    progress_class = "ok" if status.recording_progress.ok else "failed"
+    progress_class = 'ok' if status.recording_progress.ok else 'failed'
     disk_critical = status.recs.disk is not None and (
         status.recs.disk.alert_active or status.recs.disk.paused_for_disk_space
     )
-    performance = "".join(
+    performance = ''.join(
         [
-            _performance_row("cpu", "CPU", _cpu_percent(status), _cpu(status)),
+            _performance_row('cpu', 'CPU', _cpu_percent(status), _cpu(status)),
             _performance_row(
-                "memory", "Memory", _memory_percent(status), _memory(status)
+                'memory', 'Memory', _memory_percent(status), _memory(status)
             ),
             _performance_row(
-                "disk",
-                "Recording disk",
+                'disk',
+                'Recording disk',
                 _disk_percent(status.recs),
                 _disk(status.recs),
                 force_critical=disk_critical,
@@ -507,14 +507,14 @@ def health_page(status: models.ShowStatus) -> str:
         ]
     )
     return page(
-        "Health",
+        'Health',
         f"""
         {readiness_section(status.readiness)}
         <section class="cards">
-          {service_card("recording", "Recording", recs.state, _recording_text(status))}
+          {service_card('recording', 'Recording', recs.state, _recording_text(status))}
           {
             service_card(
-                "streaming", "Streaming", streamo.state, _streaming_text(status)
+                'streaming', 'Streaming', streamo.state, _streaming_text(status)
             )
         }
         </section>
@@ -555,53 +555,53 @@ def health_page(status: models.ShowStatus) -> str:
           <div id="incidents">{incident_list(status.incidents)}</div>
         </section>
         """,
-        script=site_file("status-script.js"),
+        script=site_file('status-script.js'),
     )
 
 
 def readiness_section(status: models.ReadinessStatus) -> str:
-    state = "ready" if status.ready else "not ready"
-    css_class = "healthy" if status.ready else "error"
+    state = 'ready' if status.ready else 'not ready'
+    css_class = 'healthy' if status.ready else 'error'
     return f"""
         <section class="readiness {css_class}">
           <h2>Ready to perform</h2>
           <p class="state" id="readiness-state">{state}</p>
           <ul id="readiness-checks">
-            {"".join(readiness_check(check) for check in status.checks)}
+            {''.join(readiness_check(check) for check in status.checks)}
           </ul>
         </section>
     """
 
 
 def readiness_check(check: models.ReadinessCheck) -> str:
-    state = "ok" if check.ok else "failed"
+    state = 'ok' if check.ok else 'failed'
     return (
         f'<li class="{state}"><b>{html.escape(check.name)}</b>: '
-        f"{html.escape(check.message)}</li>"
+        f'{html.escape(check.message)}</li>'
     )
 
 
 def incident_list(incidents: list[models.Incident]) -> str:
     if not incidents:
-        return "<p>No incidents.</p>"
-    return "<ul>" + "".join(incident(value) for value in incidents) + "</ul>"
+        return '<p>No incidents.</p>'
+    return '<ul>' + ''.join(incident(value) for value in incidents) + '</ul>'
 
 
 def incident(value: models.Incident) -> str:
     return (
-        f"<li><time>{value.timestamp.strftime('%H:%M:%S')}</time> "
-        f"{html.escape(value.message)}</li>"
+        f'<li><time>{value.timestamp.strftime("%H:%M:%S")}</time> '
+        f'{html.escape(value.message)}</li>'
     )
 
 
 def input_checks(checks: list[models.InputCheck]) -> str:
     if not checks:
-        return "<p>No recording inputs.</p>"
-    return "<ul>" + "".join(input_check_item(check) for check in checks) + "</ul>"
+        return '<p>No recording inputs.</p>'
+    return '<ul>' + ''.join(input_check_item(check) for check in checks) + '</ul>'
 
 
 def input_check_item(check: models.InputCheck) -> str:
-    state = "ok" if check.ok else "failed"
+    state = 'ok' if check.ok else 'failed'
     return f'<li class="{state}"><b>{html.escape(check.name)}</b>: {check.message}</li>'
 
 
@@ -609,22 +609,22 @@ def attributes_page(
     mutable_attributes: list[models.MutableAttribute] | models.ActionResult | None,
 ) -> str:
     return page(
-        "Attributes",
+        'Attributes',
         mutable_attributes_section(mutable_attributes),
-        script=site_file("status-script.js"),
+        script=site_file('status-script.js'),
     )
 
 
 def errors_page(errors: list[models.ErrorRecord]) -> str:
     body = (
         f'<section id="recs-errors" data-limit="{ERROR_PAGE_LIMIT}">'
-        f"{_recs_errors(errors[-ERROR_PAGE_LIMIT:])}"
-        "</section>"
+        f'{_recs_errors(errors[-ERROR_PAGE_LIMIT:])}'
+        '</section>'
     )
     return page(
-        "Errors",
+        'Errors',
         body,
-        script=site_file("status-script.js"),
+        script=site_file('status-script.js'),
     )
 
 
@@ -641,7 +641,7 @@ def errors_since(
 
 def error_timestamp(value: str) -> float | None:
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+        return datetime.fromisoformat(value.replace('Z', '+00:00')).timestamp()
     except ValueError:
         return None
 
@@ -652,76 +652,76 @@ def actions_page(
     streamo_enabled: bool = True,
     lyte_enabled: bool = True,
 ) -> str:
-    title_fields = ["title", "category", "tags"]
+    title_fields = ['title', 'category', 'tags']
     noise_floor = field_action(
-        "recs-set-noise-floor",
-        "Set noise floor",
-        ["source", "channel", "noise_floor"],
+        'recs-set-noise-floor',
+        'Set noise floor',
+        ['source', 'channel', 'noise_floor'],
     )
     return page(
-        "Actions",
+        'Actions',
         f"""
         <section class="actions">
-          {button("recs-calibrate", "Calibrate noise floor")}
+          {button('recs-calibrate', 'Calibrate noise floor')}
           {noise_floor}
-          {button("recs-reload-profiles", "Reload Recs profiles")}
-          {"".join(marker_button(label) for label in SHOW_MARKERS)}
-          {field_action("recs-marker", "Create Recs marker", ["label"])}
-          {field_action("recs-key-label", "Set Recs key label", ["key", "label"])}
-          {button("recs-new-session", "Start new recording session", confirm=True)}
-          {button("recs-pause-recording", "Pause recording")}
-          {button("recs-resume-recording", "Resume recording")}
-          {button("recs-status-snapshot", "Recs status snapshot")}
-          {button("recs-disk-status", "Recs disk status")}
-          {button("recs-list-devices", "List Recs devices")}
-          {button("recs-capabilities", "Recs capabilities")}
+          {button('recs-reload-profiles', 'Reload Recs profiles')}
+          {''.join(marker_button(label) for label in SHOW_MARKERS)}
+          {field_action('recs-marker', 'Create Recs marker', ['label'])}
+          {field_action('recs-key-label', 'Set Recs key label', ['key', 'label'])}
+          {button('recs-new-session', 'Start new recording session', confirm=True)}
+          {button('recs-pause-recording', 'Pause recording')}
+          {button('recs-resume-recording', 'Resume recording')}
+          {button('recs-status-snapshot', 'Recs status snapshot')}
+          {button('recs-disk-status', 'Recs disk status')}
+          {button('recs-list-devices', 'List Recs devices')}
+          {button('recs-capabilities', 'Recs capabilities')}
           {shutdown_action()}
-          {button("lyte-test", "Test lights") if lyte_enabled else ""}
-          {_streamo_actions(title_fields) if streamo_enabled else ""}
+          {button('lyte-test', 'Test lights') if lyte_enabled else ''}
+          {_streamo_actions(title_fields) if streamo_enabled else ''}
         </section>
         <section>
           <h2>Recent actions</h2>
-          {"".join(action_result(r) for r in action_log) or "<p>No actions yet.</p>"}
+          {''.join(action_result(r) for r in action_log) or '<p>No actions yet.</p>'}
         </section>
         """,
     )
 
 
 def playback_page(playback: models.PlaybackStatus) -> str:
-    session_disabled = " disabled" if playback.state == "waiting" else ""
-    transport = "".join(
+    session_disabled = ' disabled' if playback.state == 'waiting' else ''
+    transport = ''.join(
         [
             transport_button(
-                "recs-playback-jump-session",
-                "Previous session",
+                'recs-playback-jump-session',
+                'Previous session',
                 offset=-1,
                 disabled=session_disabled,
             ),
             transport_button(
-                "recs-playback-jump",
-                "-10 seconds",
+                'recs-playback-jump',
+                '-10 seconds',
                 seconds=-10,
                 disabled=session_disabled,
             ),
-            transport_button("recs-playback-play", "Play"),
-            transport_button("recs-playback-pause", "Pause", disabled=session_disabled),
-            transport_button("recs-playback-stop", "Stop", disabled=session_disabled),
+            transport_button('recs-playback-play', 'Play'),
+            transport_button('recs-playback-pause', 'Pause', disabled=session_disabled),
+            transport_button('recs-playback-stop', 'Stop', disabled=session_disabled),
             transport_button(
-                "recs-playback-jump",
-                "+10 seconds",
+                'recs-playback-jump',
+                '+10 seconds',
                 seconds=10,
                 disabled=session_disabled,
             ),
             transport_button(
-                "recs-playback-jump-session",
-                "Next session",
+                'recs-playback-jump-session',
+                'Next session',
                 offset=1,
                 disabled=session_disabled,
             ),
         ]
     )
     return page(
-        "Playback",
+        'Playback',
         f"""
         <section>
           <h2>Playback</h2>
@@ -734,50 +734,50 @@ def playback_page(playback: models.PlaybackStatus) -> str:
           </div>
         </section>
         """,
-        script=site_file("playback-script.js"),
+        script=site_file('playback-script.js'),
     )
 
 
 def playback_selection(playback: models.PlaybackStatus) -> str:
-    if playback.state == "waiting":
-        return "No session selected"
+    if playback.state == 'waiting':
+        return 'No session selected'
     return (
-        f"Session {playback.session}: {playback.source} channel {playback.channel} "
-        f"to output {playback.output_channel}"
+        f'Session {playback.session}: {playback.source} channel {playback.channel} '
+        f'to output {playback.output_channel}'
     )
 
 
 def playback_position(playback: models.PlaybackStatus) -> str:
     if playback.position_seconds is None or playback.duration_seconds is None:
-        return ""
+        return ''
     position = _duration(playback.position_seconds)
     duration = _duration(playback.duration_seconds)
-    return f"{position} / {duration}"
+    return f'{position} / {duration}'
 
 
 def _streamo_actions(title_fields: list[str]) -> str:
     return f"""
-          {button("streamo-restart", "Restart Stream")}
-          {button("streamo-mute", "Mute Stream")}
-          {button("streamo-unmute", "Unmute Stream")}
-          {button("streamo-stop", "Stop Stream", confirm=True)}
-          {field_action("streamo-title", "Update stream info", title_fields)}
-          {field_action("streamo-chat", "Send chat message", ["message"])}
-          {field_action("streamo-announce", "Send announcement", ["message"])}
-          {button("streamo-clip", "Create clip")}
-          {field_action("streamo-marker", "Create stream marker", ["description"])}
+          {button('streamo-restart', 'Restart Stream')}
+          {button('streamo-mute', 'Mute Stream')}
+          {button('streamo-unmute', 'Unmute Stream')}
+          {button('streamo-stop', 'Stop Stream', confirm=True)}
+          {field_action('streamo-title', 'Update stream info', title_fields)}
+          {field_action('streamo-chat', 'Send chat message', ['message'])}
+          {field_action('streamo-announce', 'Send announcement', ['message'])}
+          {button('streamo-clip', 'Create clip')}
+          {field_action('streamo-marker', 'Create stream marker', ['description'])}
     """
 
 
-def page(title: str, body: str, *, script: str = "") -> str:
-    page_script = f"<script>{script}</script>" if script else ""
+def page(title: str, body: str, *, script: str = '') -> str:
+    page_script = f'<script>{script}</script>' if script else ''
     return f"""<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Showco {title}</title>
-  <style>{site_file("server.css")}</style>
+  <style>{site_file('server.css')}</style>
 </head>
 <body>
   <header>
@@ -792,7 +792,7 @@ def page(title: str, body: str, *, script: str = "") -> str:
     </nav>
   </header>
   <main>{body}</main>
-  <script>{site_file("shutdown-action.js")}</script>
+  <script>{site_file('shutdown-action.js')}</script>
   {page_script}
 </body>
 </html>"""
@@ -812,12 +812,12 @@ def level(channel: models.ChannelLevel, channels: list[models.ChannelLevel]) -> 
     safe_device = html.escape(channel.device)
     safe_name = html.escape(channel.name)
     safe_state = html.escape(channel.state)
-    recording_state = "recording" if channel.on else "not recording"
+    recording_state = 'recording' if channel.on else 'not recording'
     stereo = len(channel.channels) == 2
     enabled = stereo or _stereo_enabled(channel, channels)
-    checked = " checked" if stereo else ""
-    disabled = "" if enabled else " disabled"
-    numbers = ",".join(str(number) for number in channel.channels)
+    checked = ' checked' if stereo else ''
+    disabled = '' if enabled else ' disabled'
+    numbers = ','.join(str(number) for number in channel.channels)
     return f"""
     <div class="level {safe_state}" data-device="{safe_device}"
          data-channel="{safe_name}" data-channels="{numbers}"
@@ -850,28 +850,28 @@ def _stereo_enabled(
 
 def _channel_numbers(value: str) -> list[int]:
     try:
-        return [int(number) for number in value.split(",") if number]
+        return [int(number) for number in value.split(',') if number]
     except ValueError:
         return []
 
 
 def channel_indicator(on: bool) -> str:
-    return "indicator-red" if on else "indicator-green"
+    return 'indicator-red' if on else 'indicator-green'
 
 
 def mutable_attributes_section(
     attributes: list[models.MutableAttribute] | models.ActionResult | None,
 ) -> str:
     if isinstance(attributes, models.ActionResult):
-        body = f"<p>{html.escape(attributes.message)}</p>"
+        body = f'<p>{html.escape(attributes.message)}</p>'
     elif attributes:
         body = (
             '<div class="attributes" id="mutable-attributes">'
-            + "".join(mutable_attribute(a) for a in attributes)
-            + "</div>"
+            + ''.join(mutable_attribute(a) for a in attributes)
+            + '</div>'
         )
     else:
-        body = "<p>No mutable Recs attributes.</p>"
+        body = '<p>No mutable Recs attributes.</p>'
     return f"""
         <section>
           <h2>Recs attributes</h2>
@@ -882,22 +882,22 @@ def mutable_attributes_section(
 
 def mutable_attribute(attribute: models.MutableAttribute) -> str:
     value = attribute.value
-    input_type = "text"
-    value_type = "text"
+    input_type = 'text'
+    value_type = 'text'
     if isinstance(value, bool):
-        input_type = "checkbox"
-        value_type = "boolean"
-        value_html = " checked" if value else ""
+        input_type = 'checkbox'
+        value_type = 'boolean'
+        value_html = ' checked' if value else ''
     elif isinstance(value, int | float):
-        input_type = "number"
-        value_type = "number"
+        input_type = 'number'
+        value_type = 'number'
         value_html = f' value="{value}" step="any"'
     elif isinstance(value, str):
         value_html = f' value="{html.escape(value)}"'
     else:
-        value_type = "json"
+        value_type = 'json'
         value_html = f' value="{html.escape(json.dumps(value, separators=(",", ":")))}"'
-    saved_value = html.escape(json.dumps(value, separators=(",", ":")))
+    saved_value = html.escape(json.dumps(value, separators=(',', ':')))
     address = html.escape(attribute.address)
     return f"""
       <label class="mutable-attribute" data-address="{address}"
@@ -909,7 +909,7 @@ def mutable_attribute(attribute: models.MutableAttribute) -> str:
 
 
 def button(action: str, label: str, *, confirm: bool = False) -> str:
-    confirmation = ' data-confirm="true"' if confirm else ""
+    confirmation = ' data-confirm="true"' if confirm else ''
     return f"""
     <form method="post"{confirmation}>
       <input type="hidden" name="action" value="{html.escape(action)}">
@@ -924,9 +924,9 @@ def transport_button(
     *,
     seconds: int | None = None,
     offset: int | None = None,
-    disabled: str = "",
+    disabled: str = '',
 ) -> str:
-    fields = ""
+    fields = ''
     if seconds is not None:
         fields += f'<input type="hidden" name="seconds" value="{seconds}">'
     if offset is not None:
@@ -951,7 +951,7 @@ def marker_button(label: str) -> str:
 
 
 def field_action(action: str, label: str, fields: list[str]) -> str:
-    inputs = "".join(
+    inputs = ''.join(
         f'<label>{html.escape(f)}<input name="{html.escape(f)}"></label>'
         for f in fields
     )
@@ -982,9 +982,9 @@ def shutdown_action() -> str:
 
 
 def action_log_entry(action: str, result: models.ActionResult) -> models.ActionLogEntry:
-    service, separator, command = action.partition("-")
+    service, separator, command = action.partition('-')
     if not separator:
-        service, command = "showco", action or "unknown"
+        service, command = 'showco', action or 'unknown'
     return models.ActionLogEntry(
         service=service,
         command=command,
@@ -995,43 +995,43 @@ def action_log_entry(action: str, result: models.ActionResult) -> models.ActionL
 
 def action_result(entry: models.ActionLogEntry) -> str:
     result = entry.result
-    state = "ok" if result.ok else "failed"
-    timestamp = entry.timestamp.strftime("%H:%M:%S")
+    state = 'ok' if result.ok else 'failed'
+    timestamp = entry.timestamp.strftime('%H:%M:%S')
     return (
         f'<p class="{state}"><time>{timestamp}</time> '
-        f"{html.escape(entry.service)} {html.escape(entry.command)}: "
-        f"{html.escape(result.message)}</p>"
+        f'{html.escape(entry.service)} {html.escape(entry.command)}: '
+        f'{html.escape(result.message)}</p>'
     )
 
 
 def _recording_text(status: models.ShowStatus) -> str:
     if not status.recs.recording:
-        return "stopped"
+        return 'stopped'
     elapsed = _duration(status.recs.elapsed_seconds)
-    files = status.recs.file_count if status.recs.file_count is not None else "?"
+    files = status.recs.file_count if status.recs.file_count is not None else '?'
     if status.recs.paused:
-        return f"paused after {elapsed}, {files} files"
-    return f"recording for {elapsed}, {files} files"
+        return f'paused after {elapsed}, {files} files'
+    return f'recording for {elapsed}, {files} files'
 
 
 def _streaming_text(status: models.ShowStatus) -> str:
     state = status.streamo.stream_state
-    muted = ", muted" if status.streamo.muted else ""
-    return f"{state}{muted}"
+    muted = ', muted' if status.streamo.muted else ''
+    return f'{state}{muted}'
 
 
 def _service_detail(state: str, error: str | None) -> str:
-    return f"{state}: {error}" if error else state
+    return f'{state}: {error}' if error else state
 
 
 def _snapshot_detail(status: models.RecsStatus) -> str:
-    return status.snapshot_error or "connected"
+    return status.snapshot_error or 'connected'
 
 
 def _temperature(status: models.ShowStatus) -> str:
     if status.system.temperature_c is not None:
-        return f"{status.system.temperature_c:.1f} °C"
-    return status.system.temperature_error or "unknown"
+        return f'{status.system.temperature_c:.1f} °C'
+    return status.system.temperature_error or 'unknown'
 
 
 def _performance_row(
@@ -1043,7 +1043,7 @@ def _performance_row(
     force_critical: bool = False,
 ) -> str:
     state = _performance_state(percent, force_critical=force_critical)
-    value = f' value="{percent:.2f}"' if percent is not None else ""
+    value = f' value="{percent:.2f}"' if percent is not None else ''
     return f"""
       <div class="performance-row {state}" id="{identifier}-performance">
         <b>{html.escape(label)}</b>
@@ -1055,10 +1055,10 @@ def _performance_row(
 
 def _performance_state(percent: float | None, *, force_critical: bool = False) -> str:
     if force_critical or percent is not None and percent >= 95:
-        return "critical"
+        return 'critical'
     if percent is not None and percent >= 85:
-        return "warning"
-    return "normal"
+        return 'warning'
+    return 'normal'
 
 
 def _cpu_percent(status: models.ShowStatus) -> float | None:
@@ -1067,8 +1067,8 @@ def _cpu_percent(status: models.ShowStatus) -> float | None:
 
 def _cpu(status: models.ShowStatus) -> str:
     if status.system.cpu_percent is None:
-        return status.system.cpu_error or "unknown"
-    return f"{status.system.cpu_percent:.0f}%"
+        return status.system.cpu_error or 'unknown'
+    return f'{status.system.cpu_percent:.0f}%'
 
 
 def _memory_percent(status: models.ShowStatus) -> float | None:
@@ -1084,8 +1084,8 @@ def _memory(status: models.ShowStatus) -> str:
     total = status.system.memory_total_bytes
     percent = _memory_percent(status)
     if used is None or total is None or percent is None:
-        return status.system.memory_error or "unknown"
-    return f"{_bytes(used)} / {_bytes(total)} ({percent:.0f}%)"
+        return status.system.memory_error or 'unknown'
+    return f'{_bytes(used)} / {_bytes(total)} ({percent:.0f}%)'
 
 
 def _disk_percent(status: models.RecsStatus) -> float | None:
@@ -1098,168 +1098,168 @@ def _disk(status: models.RecsStatus) -> str:
     disk = status.disk
     if disk is None:
         return (
-            status.disk_error or status.snapshot_error or "recording disk unavailable"
+            status.disk_error or status.snapshot_error or 'recording disk unavailable'
         )
     percent = 100 * disk.used_bytes / disk.total_bytes
     detail = (
-        f"{disk.path}: {_bytes(disk.free_bytes)} free / {_bytes(disk.total_bytes)}"
-        f" ({percent:.0f}% used)"
+        f'{disk.path}: {_bytes(disk.free_bytes)} free / {_bytes(disk.total_bytes)}'
+        f' ({percent:.0f}% used)'
     )
     if disk.estimated_seconds_remaining is not None:
-        detail += f", {_duration(disk.estimated_seconds_remaining)} remaining"
+        detail += f', {_duration(disk.estimated_seconds_remaining)} remaining'
     if disk.paused_for_disk_space:
-        detail = f"paused: {detail}"
+        detail = f'paused: {detail}'
     elif disk.alert_active:
-        detail = f"alert: {detail}"
+        detail = f'alert: {detail}'
     if status.disk_error or status.snapshot_error:
-        detail += f", stale: {status.disk_error or status.snapshot_error}"
+        detail += f', stale: {status.disk_error or status.snapshot_error}'
     return detail
 
 
 def _bytes(value: int) -> str:
     if value >= 1024**3:
-        return f"{value / 1024**3:.1f} GiB"
+        return f'{value / 1024**3:.1f} GiB'
     if value >= 1024**2:
-        return f"{value / 1024**2:.1f} MiB"
-    return f"{value / 1024:.1f} KiB"
+        return f'{value / 1024**2:.1f} MiB'
+    return f'{value / 1024:.1f} KiB'
 
 
 def _bitrate(status: models.ShowStatus) -> str:
     if status.streamo.output_bitrate_kbps is None:
-        return "unknown"
-    return f"{status.streamo.output_bitrate_kbps:.0f} kbps"
+        return 'unknown'
+    return f'{status.streamo.output_bitrate_kbps:.0f} kbps'
 
 
 def _lyte_detail(status: models.LyteStatus) -> str:
     if status.service.last_error:
-        return f"{status.service.state}: {status.service.last_error}"
-    if status.service.state == "disabled":
-        return "disabled"
-    details = [f"{status.daemon_state}, {status.output_state}"]
+        return f'{status.service.state}: {status.service.last_error}'
+    if status.service.state == 'disabled':
+        return 'disabled'
+    details = [f'{status.daemon_state}, {status.output_state}']
     if status.host:
         details.append(status.host)
     if status.active_test:
-        details.append("test active")
+        details.append('test active')
     elif status.queued_test:
-        details.append("test queued")
+        details.append('test queued')
     if status.frame_send_count is not None:
-        details.append(f"{status.frame_send_count} frames")
-    return ", ".join(details)
+        details.append(f'{status.frame_send_count} frames')
+    return ', '.join(details)
 
 
 def _mixers(status: models.ShowStatus) -> str:
     if not status.mixers:
-        return "<p>No mixers configured.</p>"
-    return "".join(
-        f"<p>{html.escape(mixer.name)}: {html.escape(_mixer_detail(mixer))}</p>"
+        return '<p>No mixers configured.</p>'
+    return ''.join(
+        f'<p>{html.escape(mixer.name)}: {html.escape(_mixer_detail(mixer))}</p>'
         for mixer in status.mixers
     )
 
 
 def _mixer_detail(mixer: models.MixerStatus) -> str:
     if mixer.error:
-        return f"{mixer.state}: {mixer.error}"
+        return f'{mixer.state}: {mixer.error}'
     missing = []
     if mixer.audio_ready is False:
-        missing.append("USB audio")
+        missing.append('USB audio')
     if mixer.midi_ready is False:
-        missing.append("MIDI")
-    detail = f"{mixer.state} for {' and '.join(missing)}" if missing else mixer.state
+        missing.append('MIDI')
+    detail = f'{mixer.state} for {" and ".join(missing)}' if missing else mixer.state
     if mixer.latency_ms is not None:
-        return f"{detail}: {mixer.latency_ms:.1f} ms"
+        return f'{detail}: {mixer.latency_ms:.1f} ms'
     return detail
 
 
 def _osc_recorders(statuses: list[models.RecorderStatus]) -> str:
     if not statuses:
-        return "<p>No OSC recorders.</p>"
-    return "".join(
-        f"<p>{html.escape(status.name)} OSC recorder: "
-        f"{html.escape(_osc_recorder_detail(status))}</p>"
+        return '<p>No OSC recorders.</p>'
+    return ''.join(
+        f'<p>{html.escape(status.name)} OSC recorder: '
+        f'{html.escape(_osc_recorder_detail(status))}</p>'
         for status in statuses
     )
 
 
 def _osc_recorder_detail(status: models.RecorderStatus) -> str:
     if status.last_error:
-        return f"{status.state}: {status.last_error}"
+        return f'{status.state}: {status.last_error}'
     if status.log_path and status.log_size is not None:
-        return f"{status.state}: {status.log_path} ({status.log_size} bytes)"
+        return f'{status.state}: {status.log_path} ({status.log_size} bytes)'
     return status.state
 
 
 def _recs_errors(errors: list[models.ErrorRecord]) -> str:
     if not errors:
-        return "<p>No errors</p>"
-    items = "".join(
+        return '<p>No errors</p>'
+    items = ''.join(
         f'<li><time class="error-time">{html.escape(e.timestamp)}</time>'
-        f"<span>{html.escape(e.message)}</span></li>"
+        f'<span>{html.escape(e.message)}</span></li>'
         for e in errors
     )
-    return f"<ul>{items}</ul>"
+    return f'<ul>{items}</ul>'
 
 
 def _duration(seconds: float | None) -> str:
     if seconds is None:
-        return "unknown time"
+        return 'unknown time'
     minutes, secs = divmod(int(seconds), 60)
     hours, minutes = divmod(minutes, 60)
     if hours:
-        return f"{hours}:{minutes:02}:{secs:02}"
-    return f"{minutes}:{secs:02}"
+        return f'{hours}:{minutes:02}:{secs:02}'
+    return f'{minutes}:{secs:02}'
 
 
 def _streamo_fields(form: dict[str, str]) -> dict[str, object]:
-    return {k: v for k, v in form.items() if k != "action" and v}
+    return {k: v for k, v in form.items() if k != 'action' and v}
 
 
 def _recs_fields(form: dict[str, str]) -> dict[str, object]:
     fields: dict[str, object] = {}
     for k, v in form.items():
-        if k == "action" or not v:
+        if k == 'action' or not v:
             continue
-        if k in {"noise_floor", "seconds"}:
+        if k in {'noise_floor', 'seconds'}:
             try:
                 fields[k] = float(v)
             except ValueError:
-                raise ValueError(f"{k} must be a number") from None
-        elif k in {"offset", "session"}:
+                raise ValueError(f'{k} must be a number') from None
+        elif k in {'offset', 'session'}:
             try:
                 fields[k] = int(v)
             except ValueError:
-                raise ValueError(f"{k} must be an integer") from None
+                raise ValueError(f'{k} must be an integer') from None
         else:
             fields[k] = v
     return fields
 
 
 RECS_ACTIONS = {
-    "recs-capabilities": "capabilities",
-    "recs-disk-status": "disk_status",
-    "recs-key-label": "set_key_label",
-    "recs-list-devices": "list_devices",
-    "recs-marker": "mark",
-    "recs-new-session": "new_session",
-    "recs-pause-recording": "pause_recording",
-    "recs-playback-jump": "jump_playback",
-    "recs-playback-jump-session": "jump_session",
-    "recs-playback-pause": "pause_playback",
-    "recs-playback-stop": "stop_playback",
-    "recs-reload-profiles": "reload_profiles",
-    "recs-resume-recording": "resume_recording",
-    "recs-set-noise-floor": "set_noise_floor",
-    "recs-status-snapshot": "status_snapshot",
+    'recs-capabilities': 'capabilities',
+    'recs-disk-status': 'disk_status',
+    'recs-key-label': 'set_key_label',
+    'recs-list-devices': 'list_devices',
+    'recs-marker': 'mark',
+    'recs-new-session': 'new_session',
+    'recs-pause-recording': 'pause_recording',
+    'recs-playback-jump': 'jump_playback',
+    'recs-playback-jump-session': 'jump_session',
+    'recs-playback-pause': 'pause_playback',
+    'recs-playback-stop': 'stop_playback',
+    'recs-reload-profiles': 'reload_profiles',
+    'recs-resume-recording': 'resume_recording',
+    'recs-set-noise-floor': 'set_noise_floor',
+    'recs-status-snapshot': 'status_snapshot',
 }
 
-SHOW_MARKERS = ["Show start", "Song start", "Interval", "Show end"]
+SHOW_MARKERS = ['Show start', 'Song start', 'Interval', 'Show end']
 
 STREAMO_ACTIONS = {
-    "streamo-mute": "mute",
-    "streamo-unmute": "unmute",
-    "streamo-stop": "stop",
-    "streamo-title": "update_stream_info",
-    "streamo-chat": "chat",
-    "streamo-announce": "announce",
-    "streamo-clip": "clip",
-    "streamo-marker": "marker",
+    'streamo-mute': 'mute',
+    'streamo-unmute': 'unmute',
+    'streamo-stop': 'stop',
+    'streamo-title': 'update_stream_info',
+    'streamo-chat': 'chat',
+    'streamo-announce': 'announce',
+    'streamo-clip': 'clip',
+    'streamo-marker': 'marker',
 }

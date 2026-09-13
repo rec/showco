@@ -18,43 +18,43 @@ class SmokeTests(unittest.TestCase):
         recs = RehearsalRecsClient()
         streamo = RehearsalStreamoClient()
         with running_rehearsal_server(recs, streamo) as url:
-            channels = read_url(f"{url}/channels")
-            self.assertIn("Recording channels", channels)
-            health = read_url(f"{url}/health")
-            self.assertIn("Streaming", health)
+            channels = read_url(f'{url}/channels')
+            self.assertIn('Recording channels', channels)
+            health = read_url(f'{url}/health')
+            self.assertIn('Streaming', health)
 
-            status = read_json(f"{url}/status")
-            self.assertEqual(status["recs"]["service"]["state"], "connected")
-            self.assertEqual(status["streamo"]["service"]["state"], "connected")
+            status = read_json(f'{url}/status')
+            self.assertEqual(status['recs']['service']['state'], 'connected')
+            self.assertEqual(status['streamo']['service']['state'], 'connected')
 
-            response = post_form(f"{url}/actions", {"action": "streamo-mute"})
+            response = post_form(f'{url}/actions', {'action': 'streamo-mute'})
             self.assertEqual(response.status, 200)
             self.assertTrue(streamo.status().muted)
 
             actions = response.read().decode()
-            self.assertIn("rehearsal streamo mute succeeded", actions)
+            self.assertIn('rehearsal streamo mute succeeded', actions)
 
     def test_rehearsal_server_exercises_recs_calibration(self) -> None:
         recs = RehearsalRecsClient()
         streamo = RehearsalStreamoClient()
         with running_rehearsal_server(recs, streamo) as url:
-            response = post_form(f"{url}/actions", {"action": "recs-calibrate"})
+            response = post_form(f'{url}/actions', {'action': 'recs-calibrate'})
 
             self.assertEqual(response.status, 200)
             self.assertEqual(recs.calibration_count, 1)
-            self.assertIn("rehearsal recs calibration 1", response.read().decode())
+            self.assertIn('rehearsal recs calibration 1', response.read().decode())
 
     def test_rehearsal_server_returns_track_name_result_as_json(self) -> None:
         recs = RehearsalRecsClient()
         streamo = RehearsalStreamoClient()
         with running_rehearsal_server(recs, streamo) as url:
             response = post_json_form(
-                f"{url}/actions",
+                f'{url}/actions',
                 {
-                    "action": "recs-track-name",
-                    "device": "X18/XR18",
-                    "channel": "1",
-                    "track_name": "Lead Vocal",
+                    'action': 'recs-track-name',
+                    'device': 'X18/XR18',
+                    'channel': '1',
+                    'track_name': 'Lead Vocal',
                 },
             )
 
@@ -62,8 +62,8 @@ class SmokeTests(unittest.TestCase):
             self.assertEqual(
                 json.loads(response.read()),
                 {
-                    "ok": True,
-                    "message": "rehearsal recs track name Lead Vocal",
+                    'ok': True,
+                    'message': 'rehearsal recs track name Lead Vocal',
                 },
             )
 
@@ -73,7 +73,7 @@ def running_rehearsal_server(
     recs: RehearsalRecsClient, streamo: RehearsalStreamoClient
 ) -> Iterator[str]:
     server = make_server(
-        "127.0.0.1",
+        '127.0.0.1',
         unused_port(),
         recs=recs,
         streamo=streamo,
@@ -83,7 +83,7 @@ def running_rehearsal_server(
     thread.start()
     try:
         host, port = server.server_address
-        yield f"http://{host}:{port}"
+        yield f'http://{host}:{port}'
     finally:
         stop_server(server, thread)
 
@@ -107,7 +107,7 @@ def post_form(url: str, form: dict[str, str]) -> object:
 def post_json_form(url: str, form: dict[str, str]) -> object:
     data = parse.urlencode(form).encode()
     request_data = request.Request(
-        url, data=data, headers={"Accept": "application/json"}
+        url, data=data, headers={'Accept': 'application/json'}
     )
     return request.urlopen(request_data, timeout=2)
 
@@ -120,7 +120,7 @@ def stop_server(server: ThreadingHTTPServer, thread: threading.Thread) -> None:
 
 def unused_port() -> int:
     with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
+        sock.bind(('127.0.0.1', 0))
         return int(sock.getsockname()[1])
 
 
@@ -135,9 +135,9 @@ class NoRedirectHandler(request.HTTPRedirectHandler):
         newurl: str,
     ) -> request.Request | None:
         if code == 303:
-            return request.Request(newurl, method="GET")
+            return request.Request(newurl, method='GET')
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     unittest.main()

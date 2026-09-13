@@ -15,7 +15,7 @@ from .system import SystemMonitor
 
 SAMPLE_SECONDS = 1.0
 RETENTION_DAYS = 7
-MONITORING_DIRECTORY = Path.home() / ".local/state/showco/monitoring"
+MONITORING_DIRECTORY = Path.home() / '.local/state/showco/monitoring'
 LOGGER = logging.get_logger(__name__)
 
 
@@ -60,7 +60,7 @@ class PerformanceMonitor:
         self.lock = threading.Lock()
         self.stopped = threading.Event()
         self.thread: threading.Thread | None = None
-        self.latest = models.SystemStatus(cpu_error="sampling", memory_error="sampling")
+        self.latest = models.SystemStatus(cpu_error='sampling', memory_error='sampling')
         self.samples: list[MonitoringSample] = []
         self.metric_errors: dict[str, str] = {}
         self.storage_error: str | None = None
@@ -71,7 +71,7 @@ class PerformanceMonitor:
             return
         self.thread = threading.Thread(
             target=self._run,
-            name="showco-performance-monitor",
+            name='showco-performance-monitor',
             daemon=True,
         )
         self.thread.start()
@@ -127,27 +127,27 @@ class PerformanceMonitor:
     def _write(self, record: MonitoringRecord) -> None:
         try:
             self.directory.mkdir(parents=True, exist_ok=True)
-            path = self.directory / f"{record.started_at.date().isoformat()}.jsonl"
-            with path.open("a") as output:
-                output.write(record.model_dump_json() + "\n")
+            path = self.directory / f'{record.started_at.date().isoformat()}.jsonl'
+            with path.open('a') as output:
+                output.write(record.model_dump_json() + '\n')
             if self.retention_day != record.ended_at.date():
                 self._remove_old_files(record.ended_at)
                 self.retention_day = record.ended_at.date()
         except OSError as e:
             error = str(e)
             if error != self.storage_error:
-                LOGGER.warning("monitoring history update failed: %s", error)
+                LOGGER.warning('monitoring history update failed: %s', error)
             self.storage_error = error
         else:
             if self.storage_error is not None:
-                LOGGER.info("monitoring history writes recovered")
+                LOGGER.info('monitoring history writes recovered')
             self.storage_error = None
 
     def _remove_old_files(self, now: datetime) -> None:
         cutoff = now.date() - timedelta(days=RETENTION_DAYS - 1)
-        for path in self.directory.glob("????-??-??.jsonl"):
+        for path in self.directory.glob('????-??-??.jsonl'):
             try:
-                day = datetime.strptime(path.stem, "%Y-%m-%d").date()
+                day = datetime.strptime(path.stem, '%Y-%m-%d').date()
             except ValueError:
                 continue
             if day < cutoff:
@@ -160,9 +160,9 @@ class PerformanceMonitor:
             if current == previous:
                 continue
             if current is None:
-                LOGGER.info("%s monitoring recovered", name)
+                LOGGER.info('%s monitoring recovered', name)
             else:
-                LOGGER.warning("%s monitoring unavailable: %s", name, current)
+                LOGGER.warning('%s monitoring unavailable: %s', name, current)
         self.metric_errors = errors
 
 
@@ -223,10 +223,10 @@ def metric_errors(
     system: models.SystemStatus, snapshot: SnapshotStatus
 ) -> dict[str, str]:
     errors = {}
-    if system.cpu_error and system.cpu_error != "sampling":
-        errors["cpu"] = system.cpu_error
-    if system.memory_error and system.memory_error != "sampling":
-        errors["memory"] = system.memory_error
+    if system.cpu_error and system.cpu_error != 'sampling':
+        errors['cpu'] = system.cpu_error
+    if system.memory_error and system.memory_error != 'sampling':
+        errors['memory'] = system.memory_error
     if snapshot.error:
-        errors["disk"] = snapshot.error
+        errors['disk'] = snapshot.error
     return errors

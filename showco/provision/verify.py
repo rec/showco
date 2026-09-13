@@ -15,21 +15,21 @@ from . import config, network, ssh
 
 POST_REBOOT_READY_WAIT_SECONDS = 60
 STARTUP_CHECK_NAMES = [
-    "Lyte service",
-    "recs service is active",
-    "recs status is advancing",
-    "showco service is active",
-    "showco web UI revision",
-    "Streamo service",
-    "X18 bridge has the configured address",
-    "private Wi-Fi hotspot is active",
+    'Lyte service',
+    'recs service is active',
+    'recs status is advancing',
+    'showco service is active',
+    'showco web UI revision',
+    'Streamo service',
+    'X18 bridge has the configured address',
+    'private Wi-Fi hotspot is active',
 ]
 
 
 class VerificationResult(BaseModel, frozen=True):
     name: str
     error: str
-    note: str = ""
+    note: str = ''
 
 
 def verify_provisioning(
@@ -43,53 +43,53 @@ def verify_provisioning(
             private_wifi_verification.append(
                 verify_remote_command(
                     provision_config,
-                    "X18 bridge has the configured address",
-                    "ip -4 -o address show dev "
-                    f"{network.X18_BRIDGE_INTERFACE} "
-                    f"| grep -F {shlex.quote(bridge_address)}",
+                    'X18 bridge has the configured address',
+                    'ip -4 -o address show dev '
+                    f'{network.X18_BRIDGE_INTERFACE} '
+                    f'| grep -F {shlex.quote(bridge_address)}',
                 )
             )
         private_wifi_verification.append(
             verify_remote_command(
                 provision_config,
-                "private Wi-Fi hotspot is active",
-                "nmcli -t -f TYPE,STATE,CONNECTION device status "
-                f"| grep -F -x "
+                'private Wi-Fi hotspot is active',
+                'nmcli -t -f TYPE,STATE,CONNECTION device status '
+                f'| grep -F -x '
                 f"'wifi:connected:{network.PRIVATE_WIFI_CONNECTION}'",
             )
         )
     return [
         verify_remote_command(
             provision_config,
-            "no failed systemd units",
-            "systemctl --failed --no-legend --plain",
+            'no failed systemd units',
+            'systemctl --failed --no-legend --plain',
             expect_empty_stdout=True,
         ),
         verify_remote_command(
             provision_config,
-            "target project statuses are clean",
+            'target project statuses are clean',
             project_statuses_command(provision_config.paths.root),
             expect_empty_stdout=True,
         ),
         verify_remote_command(
             provision_config,
-            "recs service is active",
-            showco_service_status_command("recs", provision_config.paths.root),
+            'recs service is active',
+            showco_service_status_command('recs', provision_config.paths.root),
         ),
         verify_remote_command(
             provision_config,
-            "recs status is advancing",
+            'recs status is advancing',
             recs.status_changes_command(),
             summarize_error=recs.status_failure_summary,
         ),
         verify_remote_command(
             provision_config,
-            "showco service is active",
-            showco_service_status_command("showco", provision_config.paths.root),
+            'showco service is active',
+            showco_service_status_command('showco', provision_config.paths.root),
         ),
         verify_remote_command(
             provision_config,
-            "showco web UI revision",
+            'showco web UI revision',
             revision.showco_revision_command(
                 provision_config.paths.root,
                 provision_config.network.web_port,
@@ -98,18 +98,18 @@ def verify_provisioning(
         ),
         verify_remote_command(
             provision_config,
-            "persistent journal is readable",
+            'persistent journal is readable',
             persistent_journal_command(),
         ),
         verify_remote_command(
             provision_config,
-            "NetworkManager device status is readable",
-            "nmcli device status >/dev/null",
+            'NetworkManager device status is readable',
+            'nmcli device status >/dev/null',
         ),
         verify_remote_command(
             provision_config,
-            "NetworkManager connection list is readable",
-            "nmcli connection show >/dev/null",
+            'NetworkManager connection list is readable',
+            'nmcli connection show >/dev/null',
         ),
         *private_wifi_verification,
         verify_lyte_service(provision_config),
@@ -134,66 +134,66 @@ def wait_for_provisioning_ready(
 
 
 def project_status_command(project: str, root: Path) -> str:
-    return f"git -C {shlex.quote(str(root / project))} status --short"
+    return f'git -C {shlex.quote(str(root / project))} status --short'
 
 
 def project_statuses_command(root: Path) -> str:
     root_value = shlex.quote(str(root))
     return (
-        "for project in reccy recs streamo lyte showco; do "
-        f"status=$(git -C {root_value}/$project status --short) || exit $?; "
+        'for project in reccy recs streamo lyte showco; do '
+        f'status=$(git -C {root_value}/$project status --short) || exit $?; '
         'if [ -n "$status" ]; then '
         'printf \'%s:\\n%s\\n\' "$project" "$status"; fi; '
-        "done"
+        'done'
     )
 
 
 def user_systemctl_command(arguments: str) -> str:
-    return user_session_command(f"systemctl --user {arguments}")
+    return user_session_command(f'systemctl --user {arguments}')
 
 
 def showco_service_status_command(service: str, root: Path) -> str:
     return user_session_command(
         f'cd {shlex.quote(str(root / "showco"))} && PATH="$HOME/.local/bin:$PATH" '
-        f"uv run --locked showco run service-status {service}"
+        f'uv run --locked showco run service-status {service}'
     )
 
 
 def showco_streamo_health_command(root: Path) -> str:
-    showco_directory = shlex.quote(str(root / "showco"))
+    showco_directory = shlex.quote(str(root / 'showco'))
     return user_session_command(
         f'cd {showco_directory} && PATH="$HOME/.local/bin:$PATH" '
-        "uv run --locked showco run streamo-health"
+        'uv run --locked showco run streamo-health'
     )
 
 
 def persistent_journal_command() -> str:
     return (
-        "sudo systemd-cat --identifier=showco-provisioning "
+        'sudo systemd-cat --identifier=showco-provisioning '
         "/usr/bin/printf '%s\\n' 'Showco journal check' && "
-        "sudo journalctl -t showco-provisioning -n 1 --no-pager --output=cat "
+        'sudo journalctl -t showco-provisioning -n 1 --no-pager --output=cat '
         "| grep --fixed-strings --line-regexp 'Showco journal check'"
     )
 
 
 def user_session_command(command: str) -> str:
-    return f"uid=$(id -u); XDG_RUNTIME_DIR=/run/user/$uid {command}"
+    return f'uid=$(id -u); XDG_RUNTIME_DIR=/run/user/$uid {command}'
 
 
 def verify_lyte_service(provision_config: config.Config) -> VerificationResult:
     if not provision_config.lyte.enabled:
-        return VerificationResult(name="Lyte MIDI service", error="", note="disabled")
+        return VerificationResult(name='Lyte MIDI service', error='', note='disabled')
     installed = verify_remote_command(
         provision_config,
-        "Lyte service is installed",
-        user_systemctl_command("is-enabled --quiet lyte.service"),
+        'Lyte service is installed',
+        user_systemctl_command('is-enabled --quiet lyte.service'),
     )
     if installed.error:
         return installed
     active = verify_remote_command(
         provision_config,
-        "Lyte service",
-        user_systemctl_command("is-active --quiet lyte.service"),
+        'Lyte service',
+        user_systemctl_command('is-active --quiet lyte.service'),
     )
     if not active.error:
         return active
@@ -202,10 +202,10 @@ def verify_lyte_service(provision_config: config.Config) -> VerificationResult:
 
 def verify_streamo_service(provision_config: config.Config) -> VerificationResult:
     if not provision_config.stream.enabled:
-        return VerificationResult(name="Streamo service", error="", note="disabled")
+        return VerificationResult(name='Streamo service', error='', note='disabled')
     return verify_remote_command(
         provision_config,
-        "Streamo service",
+        'Streamo service',
         showco_streamo_health_command(provision_config.paths.root),
     )
 
@@ -230,9 +230,9 @@ def verify_mixer_devices(provision_config: config.Config) -> list[VerificationRe
 def verify_mixer_audio_inputs(
     provision_config: config.Config, mixer_name: str, selectors: list[str]
 ) -> VerificationResult:
-    selector_options = " ".join(f"-e {shlex.quote(s)}" for s in selectors)
-    selector_names = "/".join(selectors)
-    command = f"arecord -l | grep -Fi {selector_options} >/dev/null"
+    selector_options = ' '.join(f'-e {shlex.quote(s)}' for s in selectors)
+    selector_names = '/'.join(selectors)
+    command = f'arecord -l | grep -Fi {selector_options} >/dev/null'
     try:
         completed = subprocess.run(
             ssh.ssh_command(
@@ -248,16 +248,16 @@ def verify_mixer_audio_inputs(
         )
     except TimeoutExpired:
         return VerificationResult(
-            name=f"{mixer_name} USB audio",
-            error="",
-            note=f"detection timed out after {ssh.SSH_VERIFICATION_TIMEOUT_SECONDS}s",
+            name=f'{mixer_name} USB audio',
+            error='',
+            note=f'detection timed out after {ssh.SSH_VERIFICATION_TIMEOUT_SECONDS}s',
         )
     if completed.returncode == 0:
-        return VerificationResult(name=f"{mixer_name} USB audio", error="")
+        return VerificationResult(name=f'{mixer_name} USB audio', error='')
     return VerificationResult(
-        name=f"{mixer_name} USB audio",
-        error="",
-        note=f"{selector_names} not detected",
+        name=f'{mixer_name} USB audio',
+        error='',
+        note=f'{selector_names} not detected',
     )
 
 
@@ -265,13 +265,13 @@ def verify_mixer_midi_input(
     provision_config: config.Config, mixer_name: str, selector: str
 ) -> VerificationResult:
     matcher = (
-        "from recs.midi.device import input_names; import sys; "
-        "sys.exit(not any(name.startswith(sys.argv[1]) for name in input_names()))"
+        'from recs.midi.device import input_names; import sys; '
+        'sys.exit(not any(name.startswith(sys.argv[1]) for name in input_names()))'
     )
-    command = " ".join(
+    command = ' '.join(
         [
-            f"cd {shlex.quote(str(provision_config.paths.root / 'recs'))}",
-            "&& uv run --locked python -c",
+            f'cd {shlex.quote(str(provision_config.paths.root / "recs"))}',
+            '&& uv run --locked python -c',
             shlex.quote(matcher),
             shlex.quote(selector),
         ]
@@ -291,16 +291,16 @@ def verify_mixer_midi_input(
         )
     except TimeoutExpired:
         return VerificationResult(
-            name=f"{mixer_name} USB MIDI {selector}",
-            error="",
-            note=f"detection timed out after {ssh.SSH_VERIFICATION_TIMEOUT_SECONDS}s",
+            name=f'{mixer_name} USB MIDI {selector}',
+            error='',
+            note=f'detection timed out after {ssh.SSH_VERIFICATION_TIMEOUT_SECONDS}s',
         )
     if completed.returncode == 0:
-        return VerificationResult(name=f"{mixer_name} USB MIDI {selector}", error="")
+        return VerificationResult(name=f'{mixer_name} USB MIDI {selector}', error='')
     return VerificationResult(
-        name=f"{mixer_name} USB MIDI {selector}",
-        error="",
-        note=f"{selector} not detected",
+        name=f'{mixer_name} USB MIDI {selector}',
+        error='',
+        note=f'{selector} not detected',
     )
 
 
@@ -328,15 +328,15 @@ def verify_remote_command(
     except TimeoutExpired:
         return VerificationResult(
             name=name,
-            error=f"command timed out after {ssh.SSH_VERIFICATION_TIMEOUT_SECONDS}s",
+            error=f'command timed out after {ssh.SSH_VERIFICATION_TIMEOUT_SECONDS}s',
         )
-    output = f"{completed.stdout}{completed.stderr}".strip()
+    output = f'{completed.stdout}{completed.stderr}'.strip()
     if completed.returncode == 0 and (not expect_empty_stdout or not output):
-        return VerificationResult(name=name, error="")
+        return VerificationResult(name=name, error='')
     if summarize_error is not None:
         output = summarize_error(output)
     if not output:
-        output = f"command exited with status {completed.returncode}"
+        output = f'command exited with status {completed.returncode}'
     return VerificationResult(name=name, error=output)
 
 
@@ -345,16 +345,16 @@ def report_verification_results(results: list[VerificationResult]) -> None:
     notes = [r for r in results if r.note]
     if not errors:
         if notes:
-            print("Notes:")
+            print('Notes:')
             for note in notes:
-                print(f"- {note.name}: {note.note}")
-        print("Success!")
+                print(f'- {note.name}: {note.note}')
+        print('Success!')
         return
-    print("ERROR")
+    print('ERROR')
     for error in errors:
-        print(f"- {error.name}: {error.error}")
+        print(f'- {error.name}: {error.error}')
     if notes:
-        print("Notes:")
+        print('Notes:')
         for note in notes:
-            print(f"- {note.name}: {note.note}")
+            print(f'- {note.name}: {note.note}')
     sys.exit(1)

@@ -15,12 +15,12 @@ class IncidentTimeline:
         if self.previous is not None:
             for name, value in current.items():
                 if self.previous.get(name) != value:
-                    previous = self.previous.get(name, "unavailable")
+                    previous = self.previous.get(name, 'unavailable')
                     self.incidents.insert(
                         0,
                         models.Incident(
                             timestamp=datetime.now().astimezone(),
-                            message=f"{name}: {previous} to {value}",
+                            message=f'{name}: {previous} to {value}',
                         ),
                     )
             self.incidents = self.incidents[:100]
@@ -31,26 +31,26 @@ class IncidentTimeline:
 def states(status: models.ShowStatus) -> dict[str, str]:
     disk = status.recs.disk
     recording = (
-        "paused"
+        'paused'
         if status.recs.paused
-        else "recording"
+        else 'recording'
         if status.recs.recording
-        else "stopped"
+        else 'stopped'
     )
     disk_state = (
-        "unavailable"
+        'unavailable'
         if disk is None
-        else "paused"
+        else 'paused'
         if disk.paused_for_disk_space
-        else "alert"
+        else 'alert'
         if disk.alert_active
-        else "ready"
+        else 'ready'
     )
     return {
-        "Recs": status.recs.service.state,
-        "Recording": recording,
-        "Recording disk": disk_state,
-        "Lyte": status.lyte.service.state,
-        "Streamo": status.streamo.service.state,
+        'Recs': status.recs.service.state,
+        'Recording': recording,
+        'Recording disk': disk_state,
+        'Lyte': status.lyte.service.state,
+        'Streamo': status.streamo.service.state,
         **{mixer.name: mixer.state for mixer in status.mixers},
     }

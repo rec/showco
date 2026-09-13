@@ -48,21 +48,21 @@ class MonitoringTests(unittest.TestCase):
             monitor.sample(at(12, 0, 0))
             monitor.sample(at(12, 0, 1))
             monitor.sample(at(12, 1, 0))
-            record = json.loads((Path(directory) / "2026-09-07.jsonl").read_text())
+            record = json.loads((Path(directory) / '2026-09-07.jsonl').read_text())
 
-        self.assertEqual(record["sample_count"], 2)
-        self.assertEqual(record["cpu_average_percent"], 50)
-        self.assertEqual(record["cpu_peak_percent"], 80)
-        self.assertEqual(record["memory_average_used_bytes"], 400)
-        self.assertEqual(record["memory_peak_used_bytes"], 600)
-        self.assertEqual(record["disk_minimum_free_bytes"], 800)
-        self.assertTrue(record["disk_alert_occurred"])
+        self.assertEqual(record['sample_count'], 2)
+        self.assertEqual(record['cpu_average_percent'], 50)
+        self.assertEqual(record['cpu_peak_percent'], 80)
+        self.assertEqual(record['memory_average_used_bytes'], 400)
+        self.assertEqual(record['memory_peak_used_bytes'], 600)
+        self.assertEqual(record['disk_minimum_free_bytes'], 800)
+        self.assertTrue(record['disk_alert_occurred'])
 
     def test_close_writes_partial_minute_and_removes_old_days(self) -> None:
         with TemporaryDirectory() as directory:
             history = Path(directory)
-            (history / "2026-08-31.jsonl").write_text("old\n")
-            (history / "2026-09-01.jsonl").write_text("retained\n")
+            (history / '2026-08-31.jsonl').write_text('old\n')
+            (history / '2026-09-01.jsonl').write_text('retained\n')
             monitor = PerformanceMonitor(
                 SequenceSystemMonitor([system_status(cpu=20, memory=200)]),
                 lambda: snapshot(free=900),
@@ -72,16 +72,16 @@ class MonitoringTests(unittest.TestCase):
             monitor.sample(at(12, 0, 0))
             monitor.close()
 
-            record = json.loads((history / "2026-09-07.jsonl").read_text())
+            record = json.loads((history / '2026-09-07.jsonl').read_text())
             files = sorted(p.name for p in history.iterdir())
 
-        self.assertEqual(record["sample_count"], 1)
-        self.assertEqual(files, ["2026-09-01.jsonl", "2026-09-07.jsonl"])
+        self.assertEqual(record['sample_count'], 1)
+        self.assertEqual(files, ['2026-09-01.jsonl', '2026-09-07.jsonl'])
 
     def test_storage_failure_does_not_replace_latest_status(self) -> None:
         with TemporaryDirectory() as directory:
-            history = Path(directory) / "not-a-directory"
-            history.write_text("file")
+            history = Path(directory) / 'not-a-directory'
+            history.write_text('file')
             status = system_status(cpu=20, memory=200)
             monitor = PerformanceMonitor(
                 SequenceSystemMonitor([status]),
@@ -133,7 +133,7 @@ def system_status(*, cpu: float, memory: int) -> models.SystemStatus:
 def snapshot(*, free: int, alert: bool = False) -> SnapshotStatus:
     return SnapshotStatus(
         disk=models.RecordingDiskStatus(
-            path="/recordings",
+            path='/recordings',
             used_bytes=1000 - free,
             free_bytes=free,
             total_bytes=1000,
@@ -147,5 +147,5 @@ def at(hour: int, minute: int, second: int) -> datetime:
     return datetime(2026, 9, 7, hour, minute, second, tzinfo=timezone.utc)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     unittest.main()
