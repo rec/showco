@@ -15,6 +15,7 @@ from .runtime import rehearsal, services
 from .runtime.mixer import MixersMonitor, load_mixer_specs
 from .runtime.server import make_server
 from .streamo import auth, client, config
+from .x18 import cable_test
 
 
 class WebUiOptions(BaseModel, frozen=True):
@@ -48,10 +49,12 @@ def run_web_ui(options: WebUiOptions) -> int:
         )
         print(f'showco rehearsal listening on http://{options.host}:{options.port}')
     else:
+        mixer_specs = load_mixer_specs(options.mixers_config)
         server = make_server(
             options.host,
             options.port,
-            mixers=MixersMonitor(load_mixer_specs(options.mixers_config)),
+            mixers=MixersMonitor(mixer_specs),
+            mixer_specs=mixer_specs,
             streamo_enabled=options.streamo_enabled,
             lyte_enabled=options.lyte_enabled,
             performance_enabled=True,
@@ -75,6 +78,7 @@ def main(argv: list[str] | None = None) -> int:
         {
             'run': run_command,
             'bundle': bundle.main,
+            'cable-test': cable_test.main,
             'prepare-card': card.main,
             'go': go.main,
             'logs': logs.main,

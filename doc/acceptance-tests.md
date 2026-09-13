@@ -74,6 +74,21 @@ failed probe is not by itself proof that the mixer is unreachable. Confirm with
 the tablet mixer application and, when diagnosing, packet capture or recent Recs
 OSC feedback.
 
+### X18 cable test
+
+1. Route X18 buses 1 through 6 to physical AUX outputs 1 through 6.
+2. Patch six known-good cables from AUX sends 1 through 6 to inputs 9 through
+   14.
+3. Run `showco cable-test` on the target.
+4. Confirm that six individual results appear, all pass, Main LR is on after the
+   test, and ordinary Recs audio recording resumes.
+5. Repeat from the Actions page and confirm that the result remains readable in
+   Recent actions.
+6. Substitute an open or known-bad cable and confirm that only its corresponding
+   send/input pair fails.
+7. Confirm that the tested input gains, phantom-power settings, bus processing,
+   and temporary source-channel settings match their values before the test.
+
 ## 4. Recs recording
 
 Pass criteria:

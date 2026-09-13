@@ -102,6 +102,25 @@ topologies, NetworkManager bridges the private Wi-Fi access point and Ethernet
 so the tablet and mixer share the internal subnet. In public topology, Ethernet
 is configured directly on that subnet.
 
+### X18 cable test
+
+`showco cable-test [CHANNELS] [SENDS]` tests analog cables patched from X18 AUX
+outputs to X18 inputs. The defaults are channels `9-14` and sends `1-6`; ranges
+are inclusive and must have equal lengths. AUX send `N` must be routed to
+physical AUX output `N` on the mixer.
+
+The command pauses Recs audio capture while leaving MIDI and OSC recording
+running. For each pair in sequence, it synthesizes a three-second, 110 Hz sine
+wave, sends it through a temporarily configured USB-return channel and AUX bus,
+and captures the selected X18 USB input. A cable passes when the captured tone
+has at least 98 percent spectral similarity, its level is within 70 to 130
+percent of the sent tone, and it is not clipped.
+
+Main LR is muted before mixer routing changes and explicitly unmuted afterward.
+Temporary USB-return, processing, bus, tested-preamp, gain, and phantom-power
+settings are restored even after failure. Recs audio recording resumes only if
+the command paused it. The same operation is available on the Actions page.
+
 ## Lyte and Streamo
 
 When Lyte is enabled, Showco polls its Reccy RPC status and exposes a one-second,

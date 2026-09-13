@@ -6,6 +6,7 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 from subprocess import CompletedProcess
+from typing import ClassVar
 
 from pydantic import BaseModel
 from reccy import reccy
@@ -29,8 +30,8 @@ SERVICES = {
 
 
 class ShowcoDaemon(reccy.Reccy):
-    name = 'showco'
-    service_spec = SHOWCO_SERVICE
+    service_spec: ClassVar[ServiceSpec] = SHOWCO_SERVICE
+    daemon_module: ClassVar[str] = 'showco'
 
 
 class RecsDaemonStatus(BaseModel, frozen=True):

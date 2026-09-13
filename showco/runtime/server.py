@@ -17,9 +17,10 @@ from pydantic import ValidationError
 from reccy.runtime import logging
 
 from ..streamo.client import StreamoClient
+from ..x18.cable_test import CableTester, cable_tester_from_specs, parse_range
 from . import incidents, input_check, models, readiness, recording_progress, services
 from .lyte import LyteClient
-from .mixer import MixersMonitor
+from .mixer import MixersMonitor, MixerSpec
 from .monitoring import PerformanceMonitor
 from .recs import RecsClient, WaveformBridge
 from .system import SystemMonitor
@@ -47,6 +48,7 @@ class ShowcoApp:
         streamo_restart: Callable[[], models.ActionResult] | None = None,
         waveforms: WaveformBridge | None = None,
         lyte: LyteClient | None = None,
+        cable_tester: CableTester | None = None,
     ) -> None:
         self.recs = recs
         self.streamo = streamo
@@ -55,6 +57,7 @@ class ShowcoApp:
         self.streamo_restart = streamo_restart or services.restart_streamo_service
         self.waveforms = waveforms
         self.lyte = lyte
+        self.cable_tester = cable_tester
         self.revision = source_revision()
         self.run_started_at = time.time()
         self.action_log: list[models.ActionLogEntry] = []
@@ -178,6 +181,16 @@ class ShowcoApp:
                 if self.lyte is not None
                 else models.ActionResult(ok=False, message='lyte is disabled')
             )
+        if action == 'cable-test':
+            if self.cable_tester is None:
+                return models.ActionResult(
+                    ok=False, message='X18 cable test is not configured'
+                )
+            report = self.cable_tester.run(
+                parse_range(form.get('channels', ''), 1, 18, 'channels'),
+                parse_range(form.get('sends', ''), 1, 6, 'sends'),
+            )
+            return models.ActionResult(ok=report.passed, message=report.message())
         if action in STREAMO_ACTIONS:
             if self.streamo is None:
                 return models.ActionResult(ok=False, message='streamo is disabled')
@@ -426,6 +439,7 @@ def make_server(
     streamo_enabled: bool = False,
     lyte_enabled: bool = False,
     performance_enabled: bool = False,
+    mixer_specs: list[MixerSpec] | None = None,
 ) -> ThreadingHTTPServer:
     handler = type('ConfiguredShowcoHandler', (ShowcoHandler,), {})
     recs_client = recs or RecsClient()
@@ -450,6 +464,11 @@ def make_server(
         streamo_restart if streamo_enabled else None,
         waveforms,
         LyteClient(enabled=lyte_enabled),
+        (
+            cable_tester_from_specs(recs_client, mixer_specs)
+            if mixer_specs and any(m.name == 'X18' for m in mixer_specs)
+            else None
+        ),
     )
     handler.app = app
     server = ShowcoServer((host, port), handler)
@@ -677,6 +696,7 @@ def actions_page(
           {button('recs-capabilities', 'Recs capabilities')}
           {shutdown_action()}
           {button('lyte-test', 'Test lights') if lyte_enabled else ''}
+          {cable_test_action()}
           {_streamo_actions(title_fields) if streamo_enabled else ''}
         </section>
         <section>
@@ -977,6 +997,18 @@ def shutdown_action() -> str:
         </select>
       </label>
       <button>Apply shutdown choice</button>
+    </form>
+    """
+
+
+def cable_test_action() -> str:
+    return """
+    <form method="post">
+      <input type="hidden" name="action" value="cable-test">
+      <h2>Test X18 cables</h2>
+      <label>channels<input name="channels" value="9-14"></label>
+      <label>sends<input name="sends" value="1-6"></label>
+      <button>Test cables</button>
     </form>
     """
 

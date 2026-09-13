@@ -765,6 +765,35 @@ class ServerTests(unittest.TestCase):
         self.assertIn('button.setAttribute("aria-busy", "true")', html)
         self.assertIn('button:active, button[aria-busy="true"]', html)
 
+    def test_actions_page_has_cable_test_defaults(self) -> None:
+        html = actions_page([])
+
+        self.assertIn('value="cable-test"', html)
+        self.assertIn('name="channels" value="9-14"', html)
+        self.assertIn('name="sends" value="1-6"', html)
+
+    def test_cable_test_action_reports_each_pair(self) -> None:
+        tester = mock.Mock()
+        tester.run.return_value = mock.Mock(
+            passed=False,
+            message=mock.Mock(return_value='Cable test: 1/2 passed'),
+        )
+        app = ShowcoApp(
+            mock.Mock(),
+            None,
+            rehearsal.RehearsalSystemMonitor(),
+            rehearsal.RehearsalMixersMonitor(),
+            cable_tester=tester,
+        )
+
+        result = app.run_action(
+            {'action': 'cable-test', 'channels': '9-10', 'sends': '1-2'}
+        )
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.message, 'Cable test: 1/2 passed')
+        tester.run.assert_called_once_with([9, 10], [1, 2])
+
     def test_actions_page_shows_action_history_details(self) -> None:
         html = actions_page(
             [
