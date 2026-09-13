@@ -39,22 +39,24 @@ class LyteClient:
                     last_error='lyte status reply is not an object',
                 )
             )
-        error = _status_error(result)
-        state = _string(result.get('state')) or 'unknown'
+        strings = _string_statuses(result.get('strings'))
+        error = _status_error(result, strings)
         return models.LyteStatus(
             service=models.ServiceStatus(
                 name='lyte',
                 state='error' if error else 'connected',
                 last_error=error,
             ),
-            daemon_state=state,
-            output_state=_string(result.get('output_state')) or 'unknown',
-            host=_string(result.get('host')),
-            device_mac=_string(result.get('device_mac')),
-            planned_led_count=_integer(result.get('planned_led_count')),
-            actual_led_count=_integer(result.get('actual_led_count')),
-            frame_send_count=_integer(result.get('frame_send_count')),
-            last_frame_sent_at=_string(result.get('last_frame_sent_at')),
+            running=result.get('running') is True,
+            active_animation=_string(result.get('active_animation')),
+            queued_animation=_string(result.get('queued_animation')),
+            strings=strings,
+            bindings=_string_dict(result.get('bindings')),
+            midi_connected=result.get('midi_connected') is True,
+            midi_error=_string(result.get('midi_error')),
+            note=_integer(result.get('note')),
+            breath=_integer(result.get('breath')),
+            pitch_bend=_integer(result.get('pitch_bend')),
             queued_test=result.get('queued_test') is not None,
             active_test=result.get('active_test') is not None,
         )
@@ -76,14 +78,44 @@ class LyteClient:
         return rpc.Client(self.control_endpoint, role='showco').call(command, **params)
 
 
-def _status_error(status: dict[str, object]) -> str | None:
-    for name in ('output_error', 'render_error'):
-        if error := _string(status.get(name)):
-            return error
+def _status_error(
+    status: dict[str, object], strings: dict[str, models.LyteStringStatus]
+) -> str | None:
     errors = status.get('errors')
     if isinstance(errors, list) and errors and isinstance(errors[-1], dict):
-        return _string(errors[-1].get('message'))
+        if error := _string(errors[-1].get('message')):
+            return error
+    if error := _string(status.get('midi_error')):
+        return f'MIDI: {error}'
+    for name, value in strings.items():
+        if value.last_error:
+            return f'{name}: {value.last_error}'
     return None
+
+
+def _string_statuses(value: object) -> dict[str, models.LyteStringStatus]:
+    if not isinstance(value, dict):
+        return {}
+    result = {}
+    for name, status in value.items():
+        if not isinstance(name, str) or not isinstance(status, dict):
+            continue
+        result[name] = models.LyteStringStatus(
+            state=_string(status.get('state')) or 'unknown',
+            host=_string(status.get('host')),
+            mac=_string(status.get('mac')),
+            led_count=_integer(status.get('led_count')),
+            frame_count=_integer(status.get('frame_count')) or 0,
+            failure_count=_integer(status.get('failure_count')) or 0,
+            last_error=_string(status.get('last_error')),
+        )
+    return result
+
+
+def _string_dict(value: object) -> dict[str, str]:
+    if not isinstance(value, dict):
+        return {}
+    return {k: v for k, v in value.items() if isinstance(k, str) and isinstance(v, str)}
 
 
 def _string(value: object) -> str | None:

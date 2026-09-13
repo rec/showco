@@ -12,21 +12,31 @@ class LyteClientTests(unittest.TestCase):
         status = LyteClient(enabled=False).status()
 
         self.assertEqual(status.service.state, 'disabled')
-        self.assertEqual(status.daemon_state, 'disabled')
+        self.assertFalse(status.running)
 
-    def test_status_reports_output_error_and_progress(self) -> None:
+    def test_status_reports_installation_progress_and_error(self) -> None:
         client = mock.Mock()
         client.call.return_value = {
-            'state': 'streaming',
-            'output_state': 'streaming',
-            'host': '10.0.0.17',
-            'device_mac': '00:11:22:33:44:55',
-            'planned_led_count': 200,
-            'actual_led_count': 250,
-            'frame_send_count': 42,
-            'last_frame_sent_at': '2026-09-03T20:00:00Z',
+            'running': True,
+            'active_animation': 'tree_show',
+            'bindings': {'light': 'dots + strings'},
+            'strings': {
+                'dots': {
+                    'state': 'streaming',
+                    'host': '10.0.0.17',
+                    'mac': '00:11:22:33:44:55',
+                    'led_count': 250,
+                    'frame_count': 42,
+                },
+                'strings': {
+                    'state': 'failed',
+                    'failure_count': 1,
+                    'last_error': 'controller unreachable',
+                },
+            },
+            'midi_connected': True,
+            'note': 64,
             'active_test': {'level': 50},
-            'output_error': 'controller unreachable',
         }
         with mock.patch('showco.runtime.lyte.rpc.Client', return_value=client):
             status = LyteClient(
@@ -34,9 +44,12 @@ class LyteClientTests(unittest.TestCase):
             ).status()
 
         self.assertEqual(status.service.state, 'error')
-        self.assertEqual(status.service.last_error, 'controller unreachable')
-        self.assertEqual(status.actual_led_count, 250)
-        self.assertEqual(status.frame_send_count, 42)
+        self.assertEqual(status.service.last_error, 'strings: controller unreachable')
+        self.assertEqual(status.active_animation, 'tree_show')
+        self.assertEqual(status.strings['dots'].led_count, 250)
+        self.assertEqual(status.strings['dots'].frame_count, 42)
+        self.assertTrue(status.midi_connected)
+        self.assertEqual(status.note, 64)
         self.assertTrue(status.active_test)
         client.call.assert_called_once_with('status')
 

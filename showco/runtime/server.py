@@ -553,7 +553,7 @@ def health_page(status: models.ShowStatus) -> str:
           <p id="streamo-health">
             streamo: {_service_detail(streamo.state, streamo.last_error)}
           </p>
-          <p id="lyte-health">lyte: {_lyte_detail(status.lyte)}</p>
+          <p id="lyte-health">lyte: {html.escape(_lyte_detail(status.lyte))}</p>
           <p>Pi temperature: <span id="temperature">{_temperature(status)}</span></p>
           <p>Stream bitrate: <span id="bitrate">{_bitrate(status)}</span></p>
           <div id="mixers">{_mixers(status)}</div>
@@ -1163,20 +1163,54 @@ def _bitrate(status: models.ShowStatus) -> str:
 
 
 def _lyte_detail(status: models.LyteStatus) -> str:
-    if status.service.last_error:
-        return f'{status.service.state}: {status.service.last_error}'
     if status.service.state == 'disabled':
         return 'disabled'
-    details = [f'{status.daemon_state}, {status.output_state}']
-    if status.host:
-        details.append(status.host)
+    details = []
+    if status.service.last_error:
+        details.append(f'{status.service.state}: {status.service.last_error}')
+    elif status.active_animation:
+        details.append(f'animation {status.active_animation}')
+    else:
+        details.append(status.service.state)
+    if status.queued_animation:
+        details.append(f'queued {status.queued_animation}')
+    details.extend(f'{name}={value}' for name, value in status.bindings.items())
     if status.active_test:
         details.append('test active')
     elif status.queued_test:
         details.append('test queued')
-    if status.frame_send_count is not None:
-        details.append(f'{status.frame_send_count} frames')
+    if status.midi_error:
+        details.append('MIDI error')
+    elif status.midi_connected:
+        midi = 'MIDI connected'
+        if status.note is not None:
+            midi += f', note {status.note}'
+        if status.breath is not None:
+            midi += f', breath {status.breath}'
+        if status.pitch_bend is not None:
+            midi += f', bend {status.pitch_bend}'
+        details.append(midi)
+    details.extend(
+        f'{name}: {_lyte_string_detail(value)}'
+        for name, value in status.strings.items()
+    )
     return ', '.join(details)
+
+
+def _lyte_string_detail(status: models.LyteStringStatus) -> str:
+    details = [status.state]
+    if status.host:
+        details.append(status.host)
+    if status.mac:
+        details.append(status.mac)
+    if status.led_count is not None:
+        details.append(f'{status.led_count} LEDs')
+    details.append(f'{status.frame_count} frames')
+    if status.failure_count:
+        details.append(f'{status.failure_count} failures')
+    if status.last_error:
+        details.append(status.last_error)
+    return ' '.join(details)
 
 
 def _mixers(status: models.ShowStatus) -> str:
