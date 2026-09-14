@@ -99,7 +99,7 @@ def test_cable_test_pauses_audio_and_restores_mixer_settings() -> None:
     recs.pause_recording.return_value = True
     recs.action.return_value = models.ActionResult(ok=True, message='ok')
     osc = FakeOsc()
-    calls: list[tuple[int, int, int, int]] = []
+    calls: list[tuple[str, int, int, int]] = []
     queried_after_pause = False
 
     def query_devices() -> list[dict[str, float | int | str]]:
@@ -108,7 +108,7 @@ def test_cable_test_pauses_audio_and_restores_mixer_settings() -> None:
         return [audio_device()]
 
     def round_trip(
-        device: int,
+        device: str,
         source_channel: int,
         input_channel: int,
         sample_rate: int,
@@ -129,7 +129,7 @@ def test_cable_test_pauses_audio_and_restores_mixer_settings() -> None:
 
     assert report.passed
     assert queried_after_pause
-    assert calls == [(0, 1, 9, 48_000), (0, 1, 10, 48_000)]
+    assert calls == [('hw:2,0', 1, 9, 48_000), ('hw:2,0', 1, 10, 48_000)]
     recs.pause_recording.assert_called_once_with()
     recs.action.assert_called_once_with('resume_recording')
     assert osc.values['/lr/mix/on'] == 1
@@ -191,27 +191,21 @@ def test_cable_test_resumes_after_audio_device_discovery_failure() -> None:
         query_devices=list,
     )
 
-    with (
-        mock.patch(
-            'showco.x18.cable_test.monotonic',
-            side_effect=[0.0, cable_test.AUDIO_RELEASE_TIMEOUT_SECONDS],
-        ),
-        pytest.raises(ValueError, match='not found'),
-    ):
+    with pytest.raises(ValueError, match='not found'):
         tester.run([9], [1])
 
     recs.pause_recording.assert_called_once_with()
     recs.action.assert_called_once_with('resume_recording')
 
 
-def test_find_audio_device_requires_only_requested_channels() -> None:
+def test_find_audio_device_uses_alsa_hardware_address() -> None:
     devices = [
         {**audio_device(), 'max_output_channels': 2},
         {**audio_device(), 'name': 'Other'},
     ]
 
-    assert cable_test.find_audio_device(devices, ['X18', 'XR18'], 14, 1) == (
-        0,
+    assert cable_test.find_audio_device(devices, ['X18', 'XR18'], 1) == (
+        'hw:2,0',
         48_000,
     )
 
@@ -219,25 +213,16 @@ def test_find_audio_device_requires_only_requested_channels() -> None:
 def test_find_audio_device_reports_missing_requested_channels() -> None:
     devices = [{**audio_device(), 'max_output_channels': 2}]
 
-    with pytest.raises(ValueError, match='at least 14 input and 3 output'):
-        cable_test.find_audio_device(devices, ['X18', 'XR18'], 14, 3)
+    with pytest.raises(ValueError, match='at least 3 output'):
+        cable_test.find_audio_device(devices, ['X18', 'XR18'], 3)
 
 
-def test_wait_for_audio_device_retries_after_recs_releases_input() -> None:
-    devices = [
-        {**audio_device(), 'max_input_channels': 0},
-        audio_device(),
-    ]
+def test_s24le_round_trip() -> None:
+    samples = np.array([[0, 8_388_607, -8_388_608] + [0] * 15], dtype=np.int32)
 
-    with (
-        mock.patch('showco.x18.cable_test.monotonic', side_effect=[0.0, 2.1]),
-        mock.patch('showco.x18.cable_test.sleep'),
-    ):
-        result = cable_test.wait_for_audio_device(
-            lambda: [devices.pop(0)], ['X18', 'XR18'], 9, 1
-        )
+    decoded = cable_test.decode_s24le(cable_test.encode_s24le(samples))
 
-    assert result == (0, 48_000)
+    assert decoded[0, :3] == pytest.approx([0.0, 1.0 - 1 / (1 << 23), -1.0])
 
 
 def mixer() -> MixerSpec:
@@ -257,7 +242,7 @@ def mixer() -> MixerSpec:
 
 def audio_device() -> dict[str, float | int | str]:
     return {
-        'name': 'X18: USB Audio',
+        'name': 'X18: USB Audio (hw:2,0)',
         'max_input_channels': 18,
         'max_output_channels': 18,
         'default_samplerate': 48_000.0,
