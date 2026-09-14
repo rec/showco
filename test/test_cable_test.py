@@ -205,7 +205,10 @@ def test_cable_test_resumes_after_audio_device_discovery_failure() -> None:
     )
 
     with (
-        mock.patch('showco.x18.cable_test.monotonic', side_effect=[0.0, 2.0]),
+        mock.patch(
+            'showco.x18.cable_test.monotonic',
+            side_effect=[0.0, cable_test.AUDIO_RELEASE_TIMEOUT_SECONDS],
+        ),
         pytest.raises(ValueError, match='not found'),
     ):
         tester.run([9], [1])
@@ -233,6 +236,23 @@ def test_find_audio_device_reports_missing_requested_channels() -> None:
 
     with pytest.raises(ValueError, match='at least 14 input and 3 output'):
         cable_test.find_audio_device(devices, ['X18', 'XR18'], 14, 3)
+
+
+def test_wait_for_audio_device_retries_after_recs_releases_input() -> None:
+    devices = [
+        {**audio_device(), 'max_input_channels': 0},
+        audio_device(),
+    ]
+
+    with (
+        mock.patch('showco.x18.cable_test.monotonic', side_effect=[0.0, 2.1]),
+        mock.patch('showco.x18.cable_test.sleep'),
+    ):
+        result = cable_test.wait_for_audio_device(
+            lambda: [devices.pop(0)], ['X18', 'XR18'], 9, 1
+        )
+
+    assert result == (0, 48_000)
 
 
 def mixer() -> MixerSpec:
