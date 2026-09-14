@@ -90,10 +90,15 @@ class X18OscClient:
         self.socket.close()
 
     def query(self, path: str) -> str | int | float | bool:
-        return self._request(path, [])
+        try:
+            return self._request(path, [])
+        except TimeoutError:
+            raise TimeoutError(
+                f'X18 did not reply to {path} within {OSC_TIMEOUT_SECONDS}s'
+            ) from None
 
     def set(self, path: str, value: str | int | float | bool) -> None:
-        self._request(path, [value])
+        self.socket.send(encode_message(path, [value]))
 
     def _request(
         self, path: str, arguments: list[str | int | float | bool]
