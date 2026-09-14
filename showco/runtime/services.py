@@ -30,6 +30,7 @@ SERVICES = {
 
 
 class ShowcoDaemon(reccy.Reccy):
+    name: ClassVar[str] = 'showco'
     service_spec: ClassVar[ServiceSpec] = SHOWCO_SERVICE
     daemon_module: ClassVar[str] = 'showco'
 
