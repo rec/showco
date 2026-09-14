@@ -5,6 +5,7 @@ from collections.abc import Callable, Sequence
 from contextlib import AbstractContextManager
 from math import pi
 from pathlib import Path
+from time import monotonic, sleep
 from typing import Annotated, Protocol, cast
 
 import numpy as np
@@ -28,6 +29,7 @@ MINIMUM_SIMILARITY = 0.98
 MINIMUM_LEVEL_RATIO = 0.7
 MAXIMUM_LEVEL_RATIO = 1.3
 OSC_TIMEOUT_SECONDS = 1.0
+AUDIO_RELEASE_TIMEOUT_SECONDS = 2.0
 UNITY_FADER = 0.75
 
 
@@ -229,13 +231,6 @@ class CableTester:
         validate_pairs(channels, sends)
         if self.mixer.osc is None:
             raise ValueError('X18 OSC control is not configured')
-        source_channel = next(i for i in range(1, 17) if i not in channels)
-        device, sample_rate = find_audio_device(
-            self.query_devices(),
-            self.mixer.audio_device_names,
-            max(channels),
-            source_channel,
-        )
         status = self.recs.status()
         if status.service.state != 'connected':
             raise ConnectionError(status.service.last_error or 'recs is not connected')
@@ -243,6 +238,13 @@ class CableTester:
         if resume:
             require_action(self.recs.action('pause_recording'), 'pause recording')
         try:
+            source_channel = next(i for i in range(1, 17) if i not in channels)
+            device, sample_rate = wait_for_audio_device(
+                self.query_devices,
+                self.mixer.audio_device_names,
+                max(channels),
+                source_channel,
+            )
             results = self._test_pairs(
                 channels,
                 sends,
@@ -370,6 +372,24 @@ def find_audio_device(
             f'{output_channels} output channels; found {", ".join(matches)}'
         )
     raise ValueError('X18 USB audio device not found')
+
+
+def wait_for_audio_device(
+    query_devices: Callable[[], Sequence[DeviceDict]],
+    names: list[str],
+    input_channels: int,
+    output_channels: int,
+) -> tuple[int, int]:
+    deadline = monotonic() + AUDIO_RELEASE_TIMEOUT_SECONDS
+    while True:
+        try:
+            return find_audio_device(
+                query_devices(), names, input_channels, output_channels
+            )
+        except ValueError:
+            if monotonic() >= deadline:
+                raise
+            sleep(0.1)
 
 
 def sine_wave(sample_rate: int) -> np.ndarray:
