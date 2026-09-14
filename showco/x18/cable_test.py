@@ -380,14 +380,17 @@ def wait_for_audio_device(
     input_channels: int,
     output_channels: int,
 ) -> tuple[int, int]:
-    deadline = monotonic() + AUDIO_RELEASE_TIMEOUT_SECONDS
+    deadline: float | None = None
     while True:
         try:
             return find_audio_device(
                 query_devices(), names, input_channels, output_channels
             )
         except ValueError:
-            if monotonic() >= deadline:
+            now = monotonic()
+            if deadline is None:
+                deadline = now + AUDIO_RELEASE_TIMEOUT_SECONDS
+            elif now >= deadline:
                 raise
             sleep(0.1)
 
