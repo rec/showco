@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import re
 import socket
+import subprocess
 from collections.abc import Callable, Sequence
 from contextlib import AbstractContextManager
 from math import pi
 from pathlib import Path
-from time import monotonic, sleep
+from tempfile import TemporaryDirectory
 from typing import Annotated, Protocol, cast
 
 import numpy as np
@@ -29,8 +31,9 @@ MINIMUM_SIMILARITY = 0.98
 MINIMUM_LEVEL_RATIO = 0.7
 MAXIMUM_LEVEL_RATIO = 1.3
 OSC_TIMEOUT_SECONDS = 1.0
-AUDIO_RELEASE_TIMEOUT_SECONDS = 2.0
 UNITY_FADER = 0.75
+X18_CHANNELS = 18
+X18_SAMPLE_FORMAT = 'S24_3LE'
 
 
 class CableTestOptions(BaseModel, frozen=True):
@@ -213,7 +216,7 @@ class CableTester:
             [str, int], AbstractContextManager[OscControl]
         ] = X18OscClient,
         query_devices: Callable[[], Sequence[DeviceDict]] | None = None,
-        round_trip: Callable[[int, int, int, int, np.ndarray], np.ndarray]
+        round_trip: Callable[[str, int, int, int, np.ndarray], np.ndarray]
         | None = None,
     ) -> None:
         self.recs = recs
@@ -236,10 +239,9 @@ class CableTester:
             require_action(resume, 'pause recording')
         try:
             source_channel = next(i for i in range(1, 17) if i not in channels)
-            device, sample_rate = wait_for_audio_device(
-                self.query_devices,
+            device, sample_rate = find_audio_device(
+                self.query_devices(),
                 self.mixer.audio_device_names,
-                max(channels),
                 source_channel,
             )
             results = self._test_pairs(
@@ -260,7 +262,7 @@ class CableTester:
         channels: list[int],
         sends: list[int],
         source_channel: int,
-        device: int,
+        device: str,
         sample_rate: int,
         progress: Callable[[CablePairResult], None] | None,
     ) -> list[CablePairResult]:
@@ -348,48 +350,27 @@ def audio_devices() -> Sequence[DeviceDict]:
 
 
 def find_audio_device(
-    devices: Sequence[DeviceDict],
-    names: list[str],
-    input_channels: int,
-    output_channels: int,
-) -> tuple[int, int]:
+    devices: Sequence[DeviceDict], names: list[str], output_channels: int
+) -> tuple[str, int]:
     matches = []
-    for index, device in enumerate(devices):
+    for device in devices:
         name = str(device.get('name', ''))
-        inputs = int(device.get('max_input_channels', 0))
         outputs = int(device.get('max_output_channels', 0))
         if not any(name.startswith(prefix) for prefix in names):
             continue
-        if inputs >= input_channels and outputs >= output_channels:
-            return index, int(float(device.get('default_samplerate', 48_000)))
-        matches.append(f'{name} ({inputs} input, {outputs} output)')
+        if outputs >= output_channels:
+            if match := re.search(r'\((hw:\d+,\d+)\)$', name):
+                sample_rate = int(float(device.get('default_samplerate', 48_000)))
+                return match.group(1), sample_rate
+            matches.append(f'{name} (no ALSA hardware address)')
+        else:
+            matches.append(f'{name} ({outputs} output)')
     if matches:
         raise ValueError(
-            f'X18 USB audio device needs at least {input_channels} input and '
-            f'{output_channels} output channels; found {", ".join(matches)}'
+            f'X18 USB audio device needs at least {output_channels} output '
+            f'channels; found {", ".join(matches)}'
         )
     raise ValueError('X18 USB audio device not found')
-
-
-def wait_for_audio_device(
-    query_devices: Callable[[], Sequence[DeviceDict]],
-    names: list[str],
-    input_channels: int,
-    output_channels: int,
-) -> tuple[int, int]:
-    deadline: float | None = None
-    while True:
-        try:
-            return find_audio_device(
-                query_devices(), names, input_channels, output_channels
-            )
-        except ValueError:
-            now = monotonic()
-            if deadline is None:
-                deadline = now + AUDIO_RELEASE_TIMEOUT_SECONDS
-            elif now >= deadline:
-                raise
-            sleep(0.1)
 
 
 def sine_wave(sample_rate: int) -> np.ndarray:
@@ -404,23 +385,88 @@ def sine_wave(sample_rate: int) -> np.ndarray:
 
 
 def audio_round_trip(
-    device: int,
+    device: str,
     source_channel: int,
     input_channel: int,
     sample_rate: int,
     tone: np.ndarray,
 ) -> np.ndarray:
-    recorded = sounddevice.playrec(
-        tone[:, np.newaxis],
-        samplerate=sample_rate,
-        channels=1,
-        dtype='float32',
-        device=(device, device),
-        input_mapping=[input_channel],
-        output_mapping=[source_channel],
-        blocking=True,
+    output = np.zeros((tone.size, X18_CHANNELS), dtype=np.int32)
+    output[:, source_channel - 1] = np.rint(tone * ((1 << 23) - 1)).astype(np.int32)
+    with TemporaryDirectory() as directory:
+        path = Path(directory)
+        output_path = path / 'output.raw'
+        recorded_path = path / 'recorded.raw'
+        output_path.write_bytes(encode_s24le(output))
+        recorder = subprocess.Popen(
+            [
+                'arecord',
+                '-D',
+                device,
+                '-t',
+                'raw',
+                '-f',
+                X18_SAMPLE_FORMAT,
+                '-c',
+                str(X18_CHANNELS),
+                '-r',
+                str(sample_rate),
+                '-d',
+                str(round(tone.size / sample_rate)),
+                str(recorded_path),
+            ],
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        playback = subprocess.run(
+            [
+                'aplay',
+                '-D',
+                device,
+                '-t',
+                'raw',
+                '-f',
+                X18_SAMPLE_FORMAT,
+                '-c',
+                str(X18_CHANNELS),
+                '-r',
+                str(sample_rate),
+                str(output_path),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        _, recording_error = recorder.communicate()
+        if playback.returncode:
+            raise ValueError(f'X18 playback failed: {playback.stderr.strip()}')
+        if recorder.returncode:
+            raise ValueError(f'X18 recording failed: {recording_error.strip()}')
+        recorded = decode_s24le(recorded_path.read_bytes())
+    if recorded.shape != output.shape:
+        raise ValueError('X18 recorded an unexpected number of frames')
+    return recorded[:, input_channel - 1]
+
+
+def encode_s24le(samples: np.ndarray) -> bytes:
+    values = samples.reshape(-1)
+    encoded = np.empty(values.size * 3, dtype=np.uint8)
+    encoded[0::3] = values & 0xFF
+    encoded[1::3] = values >> 8 & 0xFF
+    encoded[2::3] = values >> 16 & 0xFF
+    return encoded.tobytes()
+
+
+def decode_s24le(data: bytes) -> np.ndarray:
+    encoded = np.frombuffer(data, dtype=np.uint8)
+    if encoded.size % (X18_CHANNELS * 3):
+        raise ValueError('X18 recorded an invalid sample size')
+    values = (
+        encoded[0::3].astype(np.int32)
+        | encoded[1::3].astype(np.int32) << 8
+        | encoded[2::3].astype(np.int32) << 16
     )
-    return cast(np.ndarray, recorded[:, 0])
+    values[values >= 1 << 23] -= 1 << 24
+    return values.reshape(-1, X18_CHANNELS).astype(np.float32) / (1 << 23)
 
 
 def analyze(
