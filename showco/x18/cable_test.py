@@ -231,7 +231,10 @@ class CableTester:
             raise ValueError('X18 OSC control is not configured')
         source_channel = next(i for i in range(1, 17) if i not in channels)
         device, sample_rate = find_audio_device(
-            self.query_devices(), self.mixer.audio_device_names
+            self.query_devices(),
+            self.mixer.audio_device_names,
+            max(channels),
+            source_channel,
         )
         status = self.recs.status()
         if status.service.state != 'connected':
@@ -346,19 +349,27 @@ def audio_devices() -> Sequence[DeviceDict]:
 
 
 def find_audio_device(
-    devices: Sequence[DeviceDict], names: list[str]
+    devices: Sequence[DeviceDict],
+    names: list[str],
+    input_channels: int,
+    output_channels: int,
 ) -> tuple[int, int]:
+    matches = []
     for index, device in enumerate(devices):
         name = str(device.get('name', ''))
         inputs = int(device.get('max_input_channels', 0))
         outputs = int(device.get('max_output_channels', 0))
-        if (
-            any(name.startswith(prefix) for prefix in names)
-            and inputs >= 18
-            and outputs >= 18
-        ):
+        if not any(name.startswith(prefix) for prefix in names):
+            continue
+        if inputs >= input_channels and outputs >= output_channels:
             return index, int(float(device.get('default_samplerate', 48_000)))
-    raise ValueError('X18 18-input/18-output USB audio device not found')
+        matches.append(f'{name} ({inputs} input, {outputs} output)')
+    if matches:
+        raise ValueError(
+            f'X18 USB audio device needs at least {input_channels} input and '
+            f'{output_channels} output channels; found {", ".join(matches)}'
+        )
+    raise ValueError('X18 USB audio device not found')
 
 
 def sine_wave(sample_rate: int) -> np.ndarray:
