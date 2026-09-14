@@ -37,6 +37,17 @@ def test_options_use_default_ranges() -> None:
     assert options.sends == '1-6'
 
 
+def test_x18_osc_writes_do_not_wait_for_a_reply() -> None:
+    transport = mock.Mock()
+    with mock.patch('showco.x18.cable_test.socket.socket', return_value=transport):
+        client = cable_test.X18OscClient('10.0.0.18', 10_024)
+
+    client.set('/lr/mix/on', 0)
+
+    transport.send.assert_called_once()
+    transport.recv.assert_not_called()
+
+
 @pytest.mark.parametrize(
     ('value', 'minimum', 'maximum', 'expected'),
     [
