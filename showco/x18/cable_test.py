@@ -231,12 +231,9 @@ class CableTester:
         validate_pairs(channels, sends)
         if self.mixer.osc is None:
             raise ValueError('X18 OSC control is not configured')
-        status = self.recs.status()
-        if status.service.state != 'connected':
-            raise ConnectionError(status.service.last_error or 'recs is not connected')
-        resume = not status.paused
-        if resume:
-            require_action(self.recs.action('pause_recording'), 'pause recording')
+        resume = self.recs.pause_recording()
+        if isinstance(resume, models.ActionResult):
+            require_action(resume, 'pause recording')
         try:
             source_channel = next(i for i in range(1, 17) if i not in channels)
             device, sample_rate = wait_for_audio_device(

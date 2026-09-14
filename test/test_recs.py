@@ -57,6 +57,19 @@ class RecsTests(unittest.TestCase):
 
         control.call.assert_called_once_with('status_snapshot', timeout=0.25)
 
+    def test_pause_recording_reports_whether_showco_must_resume(self) -> None:
+        control = mock.Mock(spec=RecsControlClient)
+        control.call.return_value = {
+            'type': 'recording_state',
+            'paused': True,
+            'was_paused': False,
+        }
+
+        result = RecsClient(control=control).pause_recording()
+
+        self.assertIs(result, True)
+        control.call.assert_called_once_with('pause_recording')
+
     def test_unsupported_action_returns_failure(self) -> None:
         result = RecsClient().action('stop_recording')
 
@@ -567,6 +580,8 @@ def action_response(command: str) -> object:
             'previous_record_path': '/recordings/session-1/session-record.jsonl',
             'record_path': '/recordings/session-2/session-record.jsonl',
         }
+    if command == 'pause_recording':
+        return {'type': 'recording_state', 'paused': True, 'was_paused': False}
     if command == 'status_snapshot':
         return status_snapshot()
     return 'ok'
