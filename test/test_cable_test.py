@@ -96,9 +96,7 @@ def test_analyze_rejects_noise() -> None:
 
 def test_cable_test_pauses_audio_and_restores_mixer_settings() -> None:
     recs = mock.Mock()
-    recs.status.return_value = models.RecsStatus(
-        service=models.ServiceStatus(name='recs', state='connected')
-    )
+    recs.pause_recording.return_value = True
     recs.action.return_value = models.ActionResult(ok=True, message='ok')
     osc = FakeOsc()
     calls: list[tuple[int, int, int, int]] = []
@@ -106,9 +104,7 @@ def test_cable_test_pauses_audio_and_restores_mixer_settings() -> None:
 
     def query_devices() -> list[dict[str, float | int | str]]:
         nonlocal queried_after_pause
-        queried_after_pause = recs.action.call_args_list == [
-            mock.call('pause_recording')
-        ]
+        queried_after_pause = recs.pause_recording.call_count == 1
         return [audio_device()]
 
     def round_trip(
@@ -134,10 +130,8 @@ def test_cable_test_pauses_audio_and_restores_mixer_settings() -> None:
     assert report.passed
     assert queried_after_pause
     assert calls == [(0, 1, 9, 48_000), (0, 1, 10, 48_000)]
-    assert recs.action.call_args_list == [
-        mock.call('pause_recording'),
-        mock.call('resume_recording'),
-    ]
+    recs.pause_recording.assert_called_once_with()
+    recs.action.assert_called_once_with('resume_recording')
     assert osc.values['/lr/mix/on'] == 1
     assert all(
         value == 0.25 for path, value in osc.values.items() if path != '/lr/mix/on'
@@ -148,9 +142,7 @@ def test_cable_test_pauses_audio_and_restores_mixer_settings() -> None:
 
 def test_cable_test_leaves_already_paused_recs_paused() -> None:
     recs = mock.Mock()
-    recs.status.return_value = models.RecsStatus(
-        service=models.ServiceStatus(name='recs', state='connected'), paused=True
-    )
+    recs.pause_recording.return_value = False
     osc = FakeOsc()
     tester = cable_test.CableTester(
         recs,
@@ -161,14 +153,13 @@ def test_cable_test_leaves_already_paused_recs_paused() -> None:
     )
 
     assert tester.run([9], [1]).passed
+    recs.pause_recording.assert_called_once_with()
     recs.action.assert_not_called()
 
 
 def test_cable_test_restores_state_and_resumes_after_audio_failure() -> None:
     recs = mock.Mock()
-    recs.status.return_value = models.RecsStatus(
-        service=models.ServiceStatus(name='recs', state='connected')
-    )
+    recs.pause_recording.return_value = True
     recs.action.return_value = models.ActionResult(ok=True, message='ok')
     osc = FakeOsc()
     tester = cable_test.CableTester(
@@ -182,10 +173,8 @@ def test_cable_test_restores_state_and_resumes_after_audio_failure() -> None:
     with pytest.raises(OSError, match='audio failed'):
         tester.run([9], [1])
 
-    assert recs.action.call_args_list == [
-        mock.call('pause_recording'),
-        mock.call('resume_recording'),
-    ]
+    recs.pause_recording.assert_called_once_with()
+    recs.action.assert_called_once_with('resume_recording')
     assert osc.values['/lr/mix/on'] == 1
     assert all(
         value == 0.25 for path, value in osc.values.items() if path != '/lr/mix/on'
@@ -194,9 +183,7 @@ def test_cable_test_restores_state_and_resumes_after_audio_failure() -> None:
 
 def test_cable_test_resumes_after_audio_device_discovery_failure() -> None:
     recs = mock.Mock()
-    recs.status.return_value = models.RecsStatus(
-        service=models.ServiceStatus(name='recs', state='connected')
-    )
+    recs.pause_recording.return_value = True
     recs.action.return_value = models.ActionResult(ok=True, message='ok')
     tester = cable_test.CableTester(
         recs,
@@ -213,10 +200,8 @@ def test_cable_test_resumes_after_audio_device_discovery_failure() -> None:
     ):
         tester.run([9], [1])
 
-    assert recs.action.call_args_list == [
-        mock.call('pause_recording'),
-        mock.call('resume_recording'),
-    ]
+    recs.pause_recording.assert_called_once_with()
+    recs.action.assert_called_once_with('resume_recording')
 
 
 def test_find_audio_device_requires_only_requested_channels() -> None:

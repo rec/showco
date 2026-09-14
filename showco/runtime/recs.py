@@ -412,6 +412,21 @@ class RecsClient:
             ok=False, message=f'recs sent invalid {command} response'
         )
 
+    def pause_recording(self) -> bool | models.ActionResult:
+        response = self._control_command('pause_recording')
+        if isinstance(response, models.ActionResult):
+            return response
+        if (
+            not recs_snapshot.object_dict(response)
+            or response.get('type') != 'recording_state'
+            or response.get('paused') is not True
+            or not isinstance(was_paused := response.get('was_paused'), bool)
+        ):
+            return models.ActionResult(
+                ok=False, message='recs sent invalid pause_recording response'
+            )
+        return not was_paused
+
     def shutdown(self) -> models.ActionResult:
         response = self._control_command('shutdown')
         if isinstance(response, models.ActionResult):
@@ -580,6 +595,8 @@ def valid_data_response(command: str, value: object) -> bool:
         return isinstance(devices, list) and all(valid_device(v) for v in devices)
     if command == 'status_snapshot':
         return not isinstance(recs_snapshot.snapshot_status(value), str)
+    if command == 'pause_recording':
+        return value.get('paused') is True and isinstance(value.get('was_paused'), bool)
     if command in PLAYBACK_COMMANDS:
         playback = {k: v for k, v in value.items() if k != 'type'}
         return not isinstance(recs_snapshot.playback_status(playback), str)
@@ -756,6 +773,7 @@ DATA_RESPONSE_TYPES = {
     'disk_status': 'disk_status_result',
     'list_devices': 'devices',
     'new_session': 'new_session_started',
+    'pause_recording': 'recording_state',
     'pause_playback': 'playback_state',
     'play_session': 'playback_state',
     'status_snapshot': 'status_snapshot_result',
