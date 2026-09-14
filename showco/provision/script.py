@@ -12,7 +12,7 @@ REMOTE_SCRIPT = (SCRIPT_DIR / REMOTE_SCRIPT_TEMPLATE).read_text()
 
 
 def remote_command(
-    provision_config: config.Config, remote_script: str, *, system: bool = False
+    provision_config: config.Config, remote_script: str, *, upgrade: bool = False
 ) -> str:
     private = config.internal_wifi(provision_config)
     external = config.external_wifi(provision_config)
@@ -43,7 +43,7 @@ def remote_command(
         'LYTE_REFNAME': provision_config.git.lyte.refname,
         'SHOWCO_PORT': str(provision_config.network.web_port),
         'ARGON_ONE': shell_bool(provision_config.argon_one),
-        'SYSTEM_UPDATE': shell_bool(system),
+        'UPGRADE_PACKAGES': shell_bool(upgrade),
         'X18': shell_bool(x18_network is not None),
         'SWAP_WIFI': shell_bool(provision_config.network.swap_wifi),
         'NETWORK_TOPOLOGY': provision_config.network.topology,

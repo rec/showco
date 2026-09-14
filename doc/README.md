@@ -68,11 +68,13 @@ Run `showco` or `showco go` from the provisioning machine for ordinary deploymen
 
 Provisioning validates local repositories, publishes and synchronizes all five projects, checks SSH and passwordless sudo, configures the target, installs user services, and verifies the web UI, Recs progress, enabled services, networking, and configured inputs. It may reboot the target when necessary.
 
+Ordinary provisioning updates the APT package index and installs missing base packages, but does not upgrade installed packages. Pass `--upgrade` to run `apt-get upgrade` as part of provisioning.
+
 Use these explicit modes only when their effects are intended:
 
 ```bash
-# Provision and refresh operating-system packages.
-showco go --system
+# Provision and run apt-get upgrade.
+showco go --upgrade
 
 # Publish and deploy selected repositories. Recs also updates Showco.
 showco go recs

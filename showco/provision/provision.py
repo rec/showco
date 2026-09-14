@@ -31,9 +31,9 @@ class GoOptions(BaseModel, frozen=True):
     lyte_repo: str | None = None
     lyte_enabled: bool | None = None
     lyte_installation_config: Path | None = None
-    system: Annotated[
+    upgrade: Annotated[
         bool,
-        tyro.conf.arg(help='Refresh operating-system packages before provisioning'),
+        tyro.conf.arg(help='Run apt-get upgrade during provisioning'),
     ] = False
     repositories: Annotated[list[str] | None, tyro.conf.Positional] = None
     push: bool = False
@@ -101,7 +101,7 @@ def run(options: GoOptions, *, provision_config: config.Config | None = None) ->
             provision_config,
             local_script,
             remote_script,
-            system=options.system,
+            upgrade=options.upgrade,
             fingerprint=state.provisioning_fingerprint(
                 provision_config, script.REMOTE_SCRIPT
             ),

@@ -32,7 +32,7 @@ showco                         # provision if configuration changed, else update
 showco go                      # same as showco
 showco go recs showco          # update selected repositories and consumers
 showco go --remote             # update the target directly from GitHub
-showco go --system             # provision and refresh OS packages
+showco go --upgrade            # provision and run apt-get upgrade
 showco --push [repository ...] # publish local histories only
 showco --sync [repository ...] # publish and synchronize internal lockfiles
 showco logs [service ...]      # read target service log files
@@ -40,15 +40,15 @@ showco python 'CODE'           # run one Python expression on the target
 showco prepare-card            # prepare and eject an Imager-written SD card
 ```
 
+Ordinary provisioning installs missing packages without running `apt-get upgrade`; add `--upgrade` when a package upgrade is intended.
+
 Internal target commands live under `showco run`. For local UI development,
 `showco run --rehearsal` starts the web server with simulated Recs, Streamo,
 system, and mixer data. It does not simulate waveform events or Lyte.
 
 ## Documentation
 
-- [Architecture](doc/architecture.md)
-- [Provisioning and updating](doc/provisioning.md)
-- [Hardware acceptance tests](doc/acceptance-tests.md)
+- [Operations and deployment](doc/README.md)
 
 ## Development
 

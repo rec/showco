@@ -11,11 +11,13 @@ from showco.provision import provision
 
 
 class GoTests(unittest.TestCase):
-    def options(self, *, system: bool = False, **kwargs: object) -> provision.GoOptions:
+    def options(
+        self, *, upgrade: bool = False, **kwargs: object
+    ) -> provision.GoOptions:
         return provision.GoOptions(
             config_path=Path('config.toml'),
             secrets=Path('secrets.toml'),
-            system=system,
+            upgrade=upgrade,
             **kwargs,
         )
 
@@ -102,7 +104,7 @@ class GoTests(unittest.TestCase):
         )
         update_target.assert_not_called()
 
-    def test_system_option_forces_provisioning(self) -> None:
+    def test_upgrade_option_forces_provisioning(self) -> None:
         provision_config = mock.Mock(ssh_target='tom@bertrand.local')
         with (
             mock.patch(
@@ -116,12 +118,12 @@ class GoTests(unittest.TestCase):
                 'showco.provision.provision.run', return_value=0
             ) as provision_target,
         ):
-            result = go.run(self.options(system=True))
+            result = go.run(self.options(upgrade=True))
 
         self.assertEqual(result, 0)
         applied.assert_not_called()
         provision_target.assert_called_once_with(
-            self.options(system=True), provision_config=provision_config
+            self.options(upgrade=True), provision_config=provision_config
         )
 
     def test_selected_repositories_update_without_provisioning(self) -> None:
@@ -285,9 +287,9 @@ class GoTests(unittest.TestCase):
 
         self.assertFalse(options.clear_settings)
 
-    def test_system_cannot_be_combined_with_update_options(self) -> None:
+    def test_upgrade_cannot_be_combined_with_update_options(self) -> None:
         with self.assertRaisesRegex(SystemExit, 'cannot be combined'):
-            go.run(self.options(system=True, repositories=['recs']))
+            go.run(self.options(upgrade=True, repositories=['recs']))
 
     def test_remote_is_unavailable_on_target_machine(self) -> None:
         with self.assertRaisesRegex(SystemExit, 'unavailable on the target'):
