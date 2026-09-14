@@ -102,6 +102,14 @@ def test_cable_test_pauses_audio_and_restores_mixer_settings() -> None:
     recs.action.return_value = models.ActionResult(ok=True, message='ok')
     osc = FakeOsc()
     calls: list[tuple[int, int, int, int]] = []
+    queried_after_pause = False
+
+    def query_devices() -> list[dict[str, float | int | str]]:
+        nonlocal queried_after_pause
+        queried_after_pause = recs.action.call_args_list == [
+            mock.call('pause_recording')
+        ]
+        return [audio_device()]
 
     def round_trip(
         device: int,
@@ -117,13 +125,14 @@ def test_cable_test_pauses_audio_and_restores_mixer_settings() -> None:
         recs,
         mixer(),
         osc_factory=lambda host, port: osc,
-        query_devices=lambda: [audio_device()],
+        query_devices=query_devices,
         round_trip=round_trip,
     )
 
     report = tester.run([9, 10], [1, 2])
 
     assert report.passed
+    assert queried_after_pause
     assert calls == [(0, 1, 9, 48_000), (0, 1, 10, 48_000)]
     assert recs.action.call_args_list == [
         mock.call('pause_recording'),
@@ -181,6 +190,30 @@ def test_cable_test_restores_state_and_resumes_after_audio_failure() -> None:
     assert all(
         value == 0.25 for path, value in osc.values.items() if path != '/lr/mix/on'
     )
+
+
+def test_cable_test_resumes_after_audio_device_discovery_failure() -> None:
+    recs = mock.Mock()
+    recs.status.return_value = models.RecsStatus(
+        service=models.ServiceStatus(name='recs', state='connected')
+    )
+    recs.action.return_value = models.ActionResult(ok=True, message='ok')
+    tester = cable_test.CableTester(
+        recs,
+        mixer(),
+        query_devices=list,
+    )
+
+    with (
+        mock.patch('showco.x18.cable_test.monotonic', side_effect=[0.0, 2.0]),
+        pytest.raises(ValueError, match='not found'),
+    ):
+        tester.run([9], [1])
+
+    assert recs.action.call_args_list == [
+        mock.call('pause_recording'),
+        mock.call('resume_recording'),
+    ]
 
 
 def test_find_audio_device_requires_only_requested_channels() -> None:
