@@ -28,9 +28,9 @@ def run(options: provision.GoOptions) -> int:
         options.target_machine
         or machine_role.machine_role() == machine_role.TARGET_ROLE
     ):
-        if options.system or options.remote or options.push or options.sync:
+        if options.upgrade or options.remote or options.push or options.sync:
             sys.exit(
-                'ERROR: --system, --remote, --push, and --sync are unavailable '
+                'ERROR: --upgrade, --remote, --push, and --sync are unavailable '
                 'on the target machine'
             )
         return update.update_target(
@@ -43,10 +43,10 @@ def run(options: provision.GoOptions) -> int:
     update_requested = (
         options.repositories is not None or options.autosquash is not None
     )
-    if options.system and (
+    if options.upgrade and (
         update_requested or options.remote or options.push or options.sync
     ):
-        sys.exit('ERROR: --system cannot be combined with update options')
+        sys.exit('ERROR: --upgrade cannot be combined with update options')
     if options.remote and (options.push or options.sync):
         sys.exit('ERROR: --remote cannot be combined with --push or --sync')
     if options.push or options.sync:
@@ -87,8 +87,10 @@ def run(options: provision.GoOptions) -> int:
             autosquash=options.autosquash or 50,
             clear_settings=options.clear_settings,
         )
-    if options.system:
-        print(f'System update requested: provisioning {provision_config.ssh_target}...')
+    if options.upgrade:
+        print(
+            f'Package upgrade requested: provisioning {provision_config.ssh_target}...'
+        )
         return provision.run(options, provision_config=provision_config)
 
     fingerprint = state.provisioning_fingerprint(provision_config, script.REMOTE_SCRIPT)

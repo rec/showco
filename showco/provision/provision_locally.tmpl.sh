@@ -2,7 +2,7 @@
 set -euo pipefail
 
 PHASE_STARTED_SECONDS=0
-SYSTEM_UPDATE=${SYSTEM_UPDATE:-false}
+UPGRADE_PACKAGES=${UPGRADE_PACKAGES:-false}
 ARGON_ONE=${ARGON_ONE:-true}
 
 install_base_packages() {
@@ -22,14 +22,14 @@ install_base_packages() {
       missing+=("$package")
     fi
   done
-  if [[ "$SYSTEM_UPDATE" != true && "$desired_hash" == "$installed_hash" \
+  if [[ "$UPGRADE_PACKAGES" != true && "$desired_hash" == "$installed_hash" \
     && ${#missing[@]} -eq 0 ]]; then
     printf 'Base packages are already installed.\n'
     return
   fi
 
   sudo apt-get update
-  if [[ "$SYSTEM_UPDATE" == true || -z "$installed_hash" ]]; then
+  if [[ "$UPGRADE_PACKAGES" == true ]]; then
     sudo apt-get upgrade -y
   fi
   if [[ ${#missing[@]} -gt 0 ]]; then

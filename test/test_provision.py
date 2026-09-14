@@ -30,7 +30,7 @@ class ProvisionTests(unittest.TestCase):
                 'True',
                 '--lyte-installation-config',
                 'patches/test-installation.toml',
-                '--system',
+                '--upgrade',
                 '--remote',
                 '--autosquash',
                 '0',
@@ -46,7 +46,7 @@ class ProvisionTests(unittest.TestCase):
             options.lyte_installation_config,
             Path('patches/test-installation.toml'),
         )
-        self.assertTrue(options.system)
+        self.assertTrue(options.upgrade)
         self.assertTrue(options.remote)
         self.assertEqual(options.autosquash, 0)
         self.assertEqual(options.repositories, ['recs'])
@@ -84,11 +84,12 @@ class ProvisionTests(unittest.TestCase):
             ),
             mock.patch(
                 'showco.provision.remote.provision_remote',
-            ),
+            ) as provision_remote,
         ):
             result = provision.run(options)
 
         self.assertEqual(result, 0)
+        self.assertFalse(provision_remote.call_args.kwargs['upgrade'])
 
     def test_run_prepares_local_repositories_with_update(self) -> None:
         options = provision.GoOptions(
@@ -115,9 +116,9 @@ class ProvisionTests(unittest.TestCase):
         self.assertEqual(prepare.call_args.args[0], update.REPOSITORY_NAMES)
         self.assertEqual(refresh.call_args.args[0], update.REPOSITORY_NAMES)
 
-    def test_run_passes_system_update_to_remote_provisioning(self) -> None:
+    def test_run_passes_package_upgrade_to_remote_provisioning(self) -> None:
         options = provision.GoOptions(
-            config_path=Path('config.toml'), secrets=Path('secrets.toml'), system=True
+            config_path=Path('config.toml'), secrets=Path('secrets.toml'), upgrade=True
         )
         with (
             mock.patch(
@@ -137,7 +138,7 @@ class ProvisionTests(unittest.TestCase):
         ):
             provision.run(options)
 
-        self.assertTrue(provision_remote.call_args.kwargs['system'])
+        self.assertTrue(provision_remote.call_args.kwargs['upgrade'])
 
     def test_lyte_defaults_to_disabled(self) -> None:
         parsed = make_config(values())
@@ -943,6 +944,10 @@ class ProvisionTests(unittest.TestCase):
         self.assertLess(locale, journal)
         self.assertIn('sudo apt-get update', script.REMOTE_SCRIPT)
         self.assertIn('sudo apt-get upgrade -y', script.REMOTE_SCRIPT)
+        self.assertIn(
+            'if [[ "$UPGRADE_PACKAGES" == true ]]; then', script.REMOTE_SCRIPT
+        )
+        self.assertNotIn('|| -z "$installed_hash"', script.REMOTE_SCRIPT)
         self.assertLess(journal, install)
 
     def test_remote_script_configures_persistent_journal(self) -> None:
@@ -1037,14 +1042,19 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn('X18=false', command)
         self.assertIn("RECS_REFNAME=''", command)
 
-    def test_remote_command_passes_system_update_request(self) -> None:
+    def test_remote_command_passes_package_upgrade_request(self) -> None:
+        default = script.remote_command(
+            make_config(values(networks=networks(x18=False))),
+            '/tmp/provision.sh',
+        )
         command = script.remote_command(
             make_config(values(networks=networks(x18=False))),
             '/tmp/provision.sh',
-            system=True,
+            upgrade=True,
         )
 
-        self.assertIn('SYSTEM_UPDATE=true', command)
+        self.assertIn('UPGRADE_PACKAGES=false', default)
+        self.assertIn('UPGRADE_PACKAGES=true', command)
 
     def test_remote_command_passes_argon_one_configuration(self) -> None:
         enabled = script.remote_command(make_config(values()), '/tmp/provision.sh')

@@ -28,7 +28,7 @@ def provision_remote(
     local_script: Path,
     remote_script: str,
     *,
-    system: bool = False,
+    upgrade: bool = False,
     fingerprint: str | None = None,
 ) -> None:
     uploaded = False
@@ -53,7 +53,7 @@ def provision_remote(
         print(f'Running provisioning on {provision_config.ssh_target}...')
         ssh.run_ssh(
             provision_config,
-            script.remote_command(provision_config, remote_script, system=system),
+            script.remote_command(provision_config, remote_script, upgrade=upgrade),
             timeout_seconds=REMOTE_PROVISION_TIMEOUT_SECONDS,
         )
 
