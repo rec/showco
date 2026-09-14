@@ -183,14 +183,23 @@ def test_cable_test_restores_state_and_resumes_after_audio_failure() -> None:
     )
 
 
-def test_find_audio_device_requires_full_duplex_x18() -> None:
+def test_find_audio_device_requires_only_requested_channels() -> None:
     devices = [
         {**audio_device(), 'max_output_channels': 2},
         {**audio_device(), 'name': 'Other'},
     ]
 
-    with pytest.raises(ValueError, match='not found'):
-        cable_test.find_audio_device(devices, ['X18', 'XR18'])
+    assert cable_test.find_audio_device(devices, ['X18', 'XR18'], 14, 1) == (
+        0,
+        48_000,
+    )
+
+
+def test_find_audio_device_reports_missing_requested_channels() -> None:
+    devices = [{**audio_device(), 'max_output_channels': 2}]
+
+    with pytest.raises(ValueError, match='at least 14 input and 3 output'):
+        cable_test.find_audio_device(devices, ['X18', 'XR18'], 14, 3)
 
 
 def mixer() -> MixerSpec:
