@@ -50,11 +50,15 @@ Define whether this belongs at startup, on explicit operator request, or on ever
 
 ### 6. Accepted cable-test ranges can raise an uncaught exception
 
+**Resolved.** Validation rejects ranges without a spare source channel before requesting pause.
+
 **Bug.** `validate_channels` accepts `1-16`, `1-17`, and `1-18`. `CableTester.run` then selects an unused source from channels 1 through 16 with `next(...)`, which raises `StopIteration` for all those ranges. Neither the CLI error handler nor the web action handler catches it. The test has already requested a recording pause by this point.
 
 Validate the spare-source requirement before pausing recs, and report a useful range error or explicitly support a different routing arrangement.
 
 ### 7. Cable-test playback and capture have no bounded cleanup
+
+**Resolved.** Playback and capture have finite deadlines. Capture is killed and reaped on failure, with cleanup errors reported without replacing the primary failure. Tests cover missing playback executable and both process timeouts.
 
 **Risk.** `audio_round_trip` launches `arecord`, calls `subprocess.run` for `aplay` without a timeout, then calls `recorder.communicate()` without a timeout. If playback startup raises, the recorder has no `finally` cleanup. If a process hangs, recs remains paused and mixer restoration is delayed indefinitely; a web-triggered test also holds the application action lock.
 
@@ -79,6 +83,8 @@ Specify the required mixer scene and verify it, or save, isolate, and restore al
 Separate waveform distortion, clipping, absent signal, and incorrect level in the result, or state precisely which failures the combined label covers. Validate tolerances against known-good cables on the actual gain configuration.
 
 ### 11. OSC queries have an inactivity timeout, not a total deadline
+
+**Resolved.** Queries enforce a monotonic total deadline and report the configured timeout. Unrelated replies cannot extend the deadline.
 
 **Risk.** `X18OscClient._request` loops until it sees the requested path. Unrelated packets can keep arriving and prevent the socket timeout forever. Its error message also reports the global one-second constant even if the constructor received a different timeout.
 

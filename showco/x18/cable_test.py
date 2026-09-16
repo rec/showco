@@ -3,11 +3,13 @@ from __future__ import annotations
 import re
 import socket
 import subprocess
+import sys
 from collections.abc import Callable, Sequence
 from contextlib import AbstractContextManager
 from math import pi
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from time import monotonic
 from typing import Annotated, Protocol, cast
 
 import numpy as np
@@ -87,6 +89,7 @@ class X18OscClient:
         self, host: str, port: int, timeout_seconds: float = OSC_TIMEOUT_SECONDS
     ) -> None:
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.timeout_seconds = timeout_seconds
         self.socket.connect((host, port))
         self.socket.settimeout(timeout_seconds)
 
@@ -101,7 +104,7 @@ class X18OscClient:
             return self._request(path, [])
         except TimeoutError:
             raise TimeoutError(
-                f'X18 did not reply to {path} within {OSC_TIMEOUT_SECONDS}s'
+                f'X18 did not reply to {path} within {self.timeout_seconds}s'
             ) from None
 
     def set(self, path: str, value: str | int | float | bool) -> None:
@@ -111,7 +114,12 @@ class X18OscClient:
         self, path: str, arguments: list[str | int | float | bool]
     ) -> str | int | float | bool:
         self.socket.send(encode_message(path, arguments))
+        deadline = monotonic() + self.timeout_seconds
         while True:
+            remaining = deadline - monotonic()
+            if remaining <= 0:
+                raise TimeoutError
+            self.socket.settimeout(remaining)
             for message in decode_packet(self.socket.recv(65_535)):
                 if message.get('path') != path:
                     continue
@@ -331,6 +339,10 @@ def validate_channels(channels: list[int]) -> None:
         raise ValueError('channels must not be empty')
     if min(channels) < 1 or max(channels) > 18:
         raise ValueError('channels must be within 1-18')
+    if all(i in channels for i in range(1, 17)):
+        raise ValueError(
+            'leave at least one input channel in 1-16 unused for the test source'
+        )
 
 
 def validate_sends(sends: list[int]) -> None:
@@ -412,25 +424,41 @@ def audio_round_trip(
             stderr=subprocess.PIPE,
             text=True,
         )
-        playback = subprocess.run(
-            [
-                'aplay',
-                '-D',
-                device,
-                '-t',
-                'raw',
-                '-f',
-                X18_SAMPLE_FORMAT,
-                '-c',
-                str(X18_CHANNELS),
-                '-r',
-                str(sample_rate),
-                str(output_path),
-            ],
-            capture_output=True,
-            text=True,
-        )
-        _, recording_error = recorder.communicate()
+        try:
+            playback = subprocess.run(
+                [
+                    'aplay',
+                    '-D',
+                    device,
+                    '-t',
+                    'raw',
+                    '-f',
+                    X18_SAMPLE_FORMAT,
+                    '-c',
+                    str(X18_CHANNELS),
+                    '-r',
+                    str(sample_rate),
+                    str(output_path),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=tone.size / sample_rate + 5,
+            )
+            _, recording_error = recorder.communicate(
+                timeout=tone.size / sample_rate + 5
+            )
+        except subprocess.TimeoutExpired as error:
+            raise TimeoutError('X18 audio playback or recording timed out') from error
+        finally:
+            original_error = sys.exception()
+            try:
+                if recorder.poll() is None:
+                    recorder.kill()
+                    recorder.communicate(timeout=5)
+            except (OSError, subprocess.TimeoutExpired) as error:
+                if original_error is None:
+                    raise
+                print(f'X18 recorder cleanup failed: {error}', file=sys.stderr)
         if playback.returncode:
             raise ValueError(f'X18 playback failed: {playback.stderr.strip()}')
         if recorder.returncode:

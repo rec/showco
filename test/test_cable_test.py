@@ -64,6 +64,52 @@ def test_validate_channels_and_sends_are_independent() -> None:
     cable_test.validate_sends([1])
 
 
+@pytest.mark.parametrize('last', [16, 17, 18])
+def test_full_input_range_is_rejected_before_recording_is_paused(last: int) -> None:
+    recs = mock.Mock()
+    tester = cable_test.CableTester(recs, mixer())
+    with pytest.raises(ValueError, match='unused'):
+        tester.run(list(range(1, last + 1)), [1])
+    recs.pause_recording.assert_not_called()
+
+
+def test_osc_unrelated_replies_cannot_extend_the_query_deadline() -> None:
+    transport = mock.Mock()
+    transport.recv.return_value = cable_test.encode_message('/other', [1])
+    with (
+        mock.patch.object(cable_test.socket, 'socket', return_value=transport),
+        mock.patch.object(cable_test, 'monotonic', side_effect=[0, 0, 0.5, 2]),
+    ):
+        client = cable_test.X18OscClient('10.0.0.18', 10024, timeout_seconds=2)
+        with pytest.raises(TimeoutError, match='within 2s'):
+            client.query('/wanted')
+    assert transport.recv.call_count == 2
+
+
+@pytest.mark.parametrize('failure', ['startup', 'playback_timeout', 'capture_timeout'])
+def test_audio_failure_reaps_the_capture_process(failure: str) -> None:
+    recorder = mock.Mock()
+    recorder.poll.return_value = None
+    recorder.communicate.return_value = ('', '')
+    timeout = cable_test.subprocess.TimeoutExpired('audio', 8)
+    playback = mock.Mock(return_value=mock.Mock(returncode=0))
+    if failure == 'startup':
+        playback.side_effect = FileNotFoundError('aplay missing')
+    elif failure == 'playback_timeout':
+        playback.side_effect = timeout
+    else:
+        recorder.communicate.side_effect = [timeout, ('', '')]
+    with (
+        mock.patch.object(cable_test.subprocess, 'Popen', return_value=recorder),
+        mock.patch.object(cable_test.subprocess, 'run', playback),
+        pytest.raises((FileNotFoundError, TimeoutError)),
+    ):
+        cable_test.audio_round_trip('hw:2,0', 1, 48000, np.zeros(48000))
+    recorder.kill.assert_called_once_with()
+    assert recorder.communicate.call_args.kwargs['timeout'] == 5
+    assert playback.call_args.kwargs['timeout'] == 6
+
+
 def test_analyze_accepts_a_delayed_phase_shifted_tone() -> None:
     tone = cable_test.sine_wave(48_000)
     recorded = np.roll(tone, 317)
