@@ -59,16 +59,16 @@ def test_parse_range_rejects_invalid_values(value: str) -> None:
         cable_test.parse_range(value, 1, 6, 'sends')
 
 
-def test_validate_pairs_rejects_different_lengths() -> None:
-    with pytest.raises(ValueError, match='same length'):
-        cable_test.validate_pairs([9, 10], [1])
+def test_validate_channels_and_sends_are_independent() -> None:
+    cable_test.validate_channels([9, 10])
+    cable_test.validate_sends([1])
 
 
 def test_analyze_accepts_a_delayed_phase_shifted_tone() -> None:
     tone = cable_test.sine_wave(48_000)
     recorded = np.roll(tone, 317)
 
-    result = cable_test.analyze(1, 9, tone, recorded, 48_000)
+    result = cable_test.analyze(9, tone, recorded, 48_000)
 
     assert result.passed
     assert result.similarity > 0.999
@@ -80,10 +80,20 @@ def test_analyze_rejects_noise() -> None:
     tone = cable_test.sine_wave(48_000)
     recorded = random.normal(0, 0.05, tone.size).astype(np.float32)
 
-    result = cable_test.analyze(1, 9, tone, recorded, 48_000)
+    result = cable_test.analyze(9, tone, recorded, 48_000)
 
     assert not result.passed
     assert result.similarity < 0.02
+    assert 'distorted signal' in result.line()
+
+
+def test_analyze_reports_no_signal() -> None:
+    tone = cable_test.sine_wave(48_000)
+
+    result = cable_test.analyze(9, tone, np.zeros_like(tone), 48_000)
+
+    assert not result.passed
+    assert result.line() == 'FAIL: channel 9: no signal'
 
 
 def test_cable_test_pauses_audio_and_restores_mixer_settings() -> None:
@@ -91,7 +101,7 @@ def test_cable_test_pauses_audio_and_restores_mixer_settings() -> None:
     recs.pause_recording.return_value = True
     recs.action.return_value = models.ActionResult(ok=True, message='ok')
     osc = FakeOsc()
-    calls: list[tuple[str, int, int, int]] = []
+    calls: list[tuple[str, int, int]] = []
     queried_after_pause = False
 
     def query_devices() -> list[dict[str, float | int | str]]:
@@ -102,12 +112,11 @@ def test_cable_test_pauses_audio_and_restores_mixer_settings() -> None:
     def round_trip(
         device: str,
         source_channel: int,
-        input_channel: int,
         sample_rate: int,
         tone: np.ndarray,
     ) -> np.ndarray:
-        calls.append((device, source_channel, input_channel, sample_rate))
-        return tone.copy()
+        calls.append((device, source_channel, sample_rate))
+        return np.broadcast_to(tone[:, np.newaxis], (tone.size, 18)).copy()
 
     tester = cable_test.CableTester(
         recs,
@@ -117,11 +126,11 @@ def test_cable_test_pauses_audio_and_restores_mixer_settings() -> None:
         round_trip=round_trip,
     )
 
-    report = tester.run([9, 10], [1, 2])
+    report = tester.run([9, 10], [1])
 
     assert report.passed
     assert queried_after_pause
-    assert calls == [('hw:2,0', 1, 9, 48_000), ('hw:2,0', 1, 10, 48_000)]
+    assert calls == [('hw:2,0', 1, 48_000)]
     recs.pause_recording.assert_called_once_with()
     recs.action.assert_called_once_with('resume_recording')
     assert osc.values['/lr/mix/on'] == 1
@@ -130,6 +139,31 @@ def test_cable_test_pauses_audio_and_restores_mixer_settings() -> None:
     )
     assert ('/headamp/09/phantom', 0) in osc.sets
     assert ('/headamp/09/gain', 1 / 6) in osc.sets
+    assert ('/ch/01/mix/01/level', cable_test.UNITY_FADER) in osc.sets
+
+
+def test_cable_test_reports_only_failed_channels() -> None:
+    recs = mock.Mock()
+    recs.pause_recording.return_value = False
+    tone = cable_test.sine_wave(48_000)
+    recorded = np.broadcast_to(tone[:, np.newaxis], (tone.size, 18)).copy()
+    recorded[:, 9] = 0
+    failures: list[cable_test.CableChannelResult] = []
+    tester = cable_test.CableTester(
+        recs,
+        mixer(),
+        osc_factory=lambda host, port: FakeOsc(),
+        query_devices=lambda: [audio_device()],
+        round_trip=lambda device, source, rate, tone: recorded,
+    )
+
+    report = tester.run([9, 10], [1, 2], failures.append)
+
+    assert report.message().splitlines() == [
+        'Cable test: 1/2 passed',
+        'FAIL: channel 10: no signal',
+    ]
+    assert [failure.channel for failure in failures] == [10]
 
 
 def test_cable_test_leaves_already_paused_recs_paused() -> None:
@@ -141,7 +175,9 @@ def test_cable_test_leaves_already_paused_recs_paused() -> None:
         mixer(),
         osc_factory=lambda host, port: osc,
         query_devices=lambda: [audio_device()],
-        round_trip=lambda device, source, channel, rate, tone: tone.copy(),
+        round_trip=lambda device, source, rate, tone: np.broadcast_to(
+            tone[:, np.newaxis], (tone.size, 18)
+        ).copy(),
     )
 
     assert tester.run([9], [1]).passed
