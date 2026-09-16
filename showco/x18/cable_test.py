@@ -27,6 +27,7 @@ DEFAULT_SENDS = '1-6'
 TONE_FREQUENCY = 110.0
 TONE_SECONDS = 3.0
 TONE_AMPLITUDE = 0.1
+MINIMUM_SIGNAL_RMS = TONE_AMPLITUDE * 0.01
 MINIMUM_SIMILARITY = 0.98
 MINIMUM_LEVEL_RATIO = 0.7
 MAXIMUM_LEVEL_RATIO = 1.3
@@ -42,8 +43,7 @@ class CableTestOptions(BaseModel, frozen=True):
     mixers_config: Path = Path.home() / '.config/showco/mixers.toml'
 
 
-class CablePairResult(BaseModel, frozen=True):
-    send: int
+class CableChannelResult(BaseModel, frozen=True):
     channel: int
     passed: bool
     similarity: float
@@ -52,15 +52,17 @@ class CablePairResult(BaseModel, frozen=True):
     peak: float
 
     def line(self) -> str:
-        state = 'PASS' if self.passed else 'FAIL'
+        if not self.passed and self.rms < MINIMUM_SIGNAL_RMS:
+            return f'FAIL: channel {self.channel}: no signal'
+        state = 'PASS' if self.passed else 'FAIL: distorted signal'
         return (
-            f'{state}: send {self.send} -> channel {self.channel}: '
+            f'{state}: channel {self.channel}: '
             f'{self.similarity:.1%} tone match, {self.level_ratio:.1%} level'
         )
 
 
 class CableTestReport(BaseModel, frozen=True):
-    results: list[CablePairResult]
+    results: list[CableChannelResult]
 
     @property
     def passed(self) -> bool:
@@ -68,9 +70,9 @@ class CableTestReport(BaseModel, frozen=True):
 
     def message(self) -> str:
         passed = sum(r.passed for r in self.results)
+        failures = [r.line() for r in self.results if not r.passed]
         return '\n'.join(
-            [f'Cable test: {passed}/{len(self.results)} passed']
-            + [r.line() for r in self.results]
+            [f'Cable test: {passed}/{len(self.results)} passed'] + failures
         )
 
 
@@ -180,11 +182,10 @@ class X18TestRouting:
     def __exit__(self, *args: object) -> None:
         self._restore()
 
-    def select_send(self, send: int) -> None:
+    def enable_sends(self) -> None:
         channel = f'/ch/{self.source_channel:02}/mix'
         for number in self.sends:
-            level = UNITY_FADER if number == send else 0.0
-            self.osc.set(f'{channel}/{number:02}/level', level)
+            self.osc.set(f'{channel}/{number:02}/level', UNITY_FADER)
 
     def _change(self, path: str, value: str | int | float | bool) -> None:
         self.saved.append((path, self.osc.query(path)))
@@ -216,8 +217,7 @@ class CableTester:
             [str, int], AbstractContextManager[OscControl]
         ] = X18OscClient,
         query_devices: Callable[[], Sequence[DeviceDict]] | None = None,
-        round_trip: Callable[[str, int, int, int, np.ndarray], np.ndarray]
-        | None = None,
+        round_trip: Callable[[str, int, int, np.ndarray], np.ndarray] | None = None,
     ) -> None:
         self.recs = recs
         self.mixer = mixer
@@ -229,9 +229,10 @@ class CableTester:
         self,
         channels: list[int],
         sends: list[int],
-        progress: Callable[[CablePairResult], None] | None = None,
+        progress: Callable[[CableChannelResult], None] | None = None,
     ) -> CableTestReport:
-        validate_pairs(channels, sends)
+        validate_channels(channels)
+        validate_sends(sends)
         if self.mixer.osc is None:
             raise ValueError('X18 OSC control is not configured')
         resume = self.recs.pause_recording()
@@ -264,27 +265,22 @@ class CableTester:
         source_channel: int,
         device: str,
         sample_rate: int,
-        progress: Callable[[CablePairResult], None] | None,
-    ) -> list[CablePairResult]:
+        progress: Callable[[CableChannelResult], None] | None,
+    ) -> list[CableChannelResult]:
         if self.mixer.osc is None:
             raise ValueError('X18 OSC control is not configured')
         tone = sine_wave(sample_rate)
         results = []
         with self.osc_factory(self.mixer.osc.host, self.mixer.osc.port) as osc:
             with X18TestRouting(osc, source_channel, channels, sends) as routing:
-                for channel, send in zip(channels, sends, strict=True):
-                    routing.select_send(send)
+                routing.enable_sends()
+                recorded = self.round_trip(device, source_channel, sample_rate, tone)
+                for channel in channels:
                     result = analyze(
-                        send,
-                        channel,
-                        tone,
-                        self.round_trip(
-                            device, source_channel, channel, sample_rate, tone
-                        ),
-                        sample_rate,
+                        channel, tone, recorded[:, channel - 1], sample_rate
                     )
                     results.append(result)
-                    if progress is not None:
+                    if not result.passed and progress is not None:
                         progress(result)
         return results
 
@@ -334,13 +330,16 @@ def parse_range(value: str, minimum: int, maximum: int, name: str) -> list[int]:
     return list(range(first, last + 1))
 
 
-def validate_pairs(channels: list[int], sends: list[int]) -> None:
-    if len(channels) != len(sends):
-        raise ValueError('channel and send ranges must have the same length')
+def validate_channels(channels: list[int]) -> None:
     if not channels:
-        raise ValueError('channel and send ranges must not be empty')
+        raise ValueError('channels must not be empty')
     if min(channels) < 1 or max(channels) > 18:
         raise ValueError('channels must be within 1-18')
+
+
+def validate_sends(sends: list[int]) -> None:
+    if not sends:
+        raise ValueError('sends must not be empty')
     if min(sends) < 1 or max(sends) > 6:
         raise ValueError('sends must be within 1-6')
 
@@ -387,7 +386,6 @@ def sine_wave(sample_rate: int) -> np.ndarray:
 def audio_round_trip(
     device: str,
     source_channel: int,
-    input_channel: int,
     sample_rate: int,
     tone: np.ndarray,
 ) -> np.ndarray:
@@ -444,7 +442,7 @@ def audio_round_trip(
         recorded = decode_s24le(recorded_path.read_bytes())
     if recorded.shape != output.shape:
         raise ValueError('X18 recorded an unexpected number of frames')
-    return recorded[:, input_channel - 1]
+    return recorded
 
 
 def encode_s24le(samples: np.ndarray) -> bytes:
@@ -470,12 +468,11 @@ def decode_s24le(data: bytes) -> np.ndarray:
 
 
 def analyze(
-    send: int,
     channel: int,
     sent: np.ndarray,
     recorded: np.ndarray,
     sample_rate: int,
-) -> CablePairResult:
+) -> CableChannelResult:
     if recorded.shape != sent.shape:
         raise ValueError('X18 recorded an unexpected number of frames')
     margin = round(0.25 * sample_rate)
@@ -497,8 +494,7 @@ def analyze(
         and MINIMUM_LEVEL_RATIO <= level_ratio <= MAXIMUM_LEVEL_RATIO
         and peak < 0.99
     )
-    return CablePairResult(
-        send=send,
+    return CableChannelResult(
         channel=channel,
         passed=passed,
         similarity=similarity,
