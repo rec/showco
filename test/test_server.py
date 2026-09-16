@@ -248,7 +248,7 @@ class ServerTests(unittest.TestCase):
         self.assertIn(
             '.levels {\n  grid-template-columns: repeat(3, minmax(0, 1fr));', html
         )
-        self.assertIn('fetch("/status"', html)
+        self.assertIn('id="connection-status"', html)
 
     def test_health_page_shows_pi_temperature(self) -> None:
         html = health_page(

@@ -31,11 +31,14 @@
       return `${lyte.service.state}: ${lyte.service.last_error}`;
     }
     if (lyte.service.state === "disabled") return "disabled";
-    const details = [`${lyte.daemon_state}, ${lyte.output_state}`];
-    if (lyte.host) details.push(lyte.host);
+    const details = [lyte.running ? 'running' : 'stopped'];
+    if (lyte.active_animation) details.push(`animation ${lyte.active_animation}`);
     if (lyte.active_test) details.push("test active");
     else if (lyte.queued_test) details.push("test queued");
-    if (lyte.frame_send_count !== null) details.push(`${lyte.frame_send_count} frames`);
+    for (const [name, string] of Object.entries(lyte.strings)) {
+      details.push(`${name}: ${string.state}, ${string.frame_count} frames${
+        string.last_error ? `: ${string.last_error}` : ''}`);
+    }
     return details.join(", ");
   }
 
@@ -80,6 +83,7 @@
   function saveTrackName(form) {
     const input = form.querySelector("[name=track_name]");
     if (input.value === form.dataset.savedTrackName) return Promise.resolve();
+    const submittedName = input.value;
     input.setCustomValidity("");
     return fetch("/actions", {
       method: "POST",
@@ -91,7 +95,7 @@
         action: "recs-track-name",
         device: form.dataset.device,
         channel: form.dataset.channel,
-        track_name: input.value,
+        track_name: submittedName,
       }),
     })
       .then(response => {
@@ -102,7 +106,7 @@
       })
       .then(result => {
         if (!result.ok) throw new Error(result.message);
-        form.dataset.savedTrackName = input.value;
+        form.dataset.savedTrackName = submittedName;
       })
       .catch(error => {
         input.setCustomValidity(error.message);
@@ -507,11 +511,7 @@
   }
 
   function updateStatus() {
-    return fetch("/status", { cache: "no-store" })
-      .then(response => {
-      if (!response.ok) throw new Error(`status request failed: ${response.status}`);
-        return response.json();
-      })
+    return requestStatus()
       .then(status => {
       updateService(
         "recording", status.recs.service, recordingText(status.recs), "recs-health",
@@ -571,8 +571,9 @@
         }));
         if (!status.recs.osc.length) oscRecorders.textContent = "No OSC recorders.";
       }
+      statusConnected();
       })
-      .catch(() => {});
+      .catch(statusFailed);
   }
 
   function pollStatus() {
