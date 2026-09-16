@@ -105,6 +105,14 @@ class IncidentTimeline:
                 return
         raise ValueError('This fault is no longer current; refresh status')
 
+    def record(self, message: str) -> None:
+        self.incidents = [
+            models.Incident(timestamp=datetime.now().astimezone(), message=message),
+            *self.incidents[:99],
+        ]
+        self.pending_save = True
+        self.save()
+
     def save(self) -> None:
         if self.path is not None:
             self.path.parent.mkdir(parents=True, exist_ok=True)

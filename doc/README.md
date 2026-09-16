@@ -12,7 +12,10 @@ Open showCo on the show network at the configured address and port. The Health p
 
 | Page | Use it for |
 | --- | --- |
-| Performance | Large marker and pause/resume controls, recording destination and capacity, stream state, pinned inputs, dimming, and optional screen-awake mode. |
+| Performance | Manual song cues, large marker and pause/resume controls, recording destination and capacity, stream state, pinned inputs, dimming, and optional screen-awake mode. |
+| Set list | Prepare and reorder songs, notes, and expected durations. |
+| Soundcheck | Save measured checks and explicit playback, lighting, and stream confirmations. |
+| Recovery | Download diagnostics, explicitly restart a failed service, and verify recovery. |
 | Channels | Watch input levels and waveforms. Edit track names and stereo groups, then save them. |
 | Health | Check readiness, recording and streaming state, disk space, CPU, memory, temperature, mixer and input status, current recs errors, and incidents from this showCo run. |
 | Playback | Play and navigate available recs recordings. |
@@ -28,11 +31,37 @@ Recording-input checks cover channels currently recording and flag silence or cl
 
 ### Performance controls and protection
 
-Open **Performance** for large controls that mark a moment or pause/resume recording. Marker presses use the label `performance moment`. The page shows recording state, destination, remaining capacity, stream state, and connection age. Pin important inputs and enable dimming for this browser. Screen-awake mode is opt-in and reports whether the browser and connection support it. Controls are disabled when status is unavailable; an action with an unknown outcome is never automatically retried. Set-list advancement is not implemented yet.
+Open **Performance** for large controls that advance the set list, mark a moment, or pause/resume recording. Moment markers use the label `performance moment`. The page shows recording state, destination, remaining capacity, stream state, and connection age. Pin important inputs and enable dimming for this browser. Screen-awake mode is opt-in and reports whether the browser and connection support it. Controls are disabled when status is unavailable; an action with an unknown outcome is never automatically retried.
 
-Enable **Performance lock** from any page before a show. It blocks web requests for cable and lighting tests, calibration, recorder shutdown, new sessions, track names, stereo grouping, mutable attributes, noise-floor changes, key labels, and profile reloads. Markers and pause/resume remain available. An older tab receives the same server-side rejection. To unlock, select **Confirm unlock** and press **Unlock protected actions**; submit any previously rejected action again yourself.
+Enable **Performance lock** from any page before a show. It blocks web requests for cable and lighting tests, calibration, recorder shutdown, new sessions, track names, stereo grouping, mutable attributes, noise-floor changes, key labels, profile reloads, set-list replacement, soundcheck, and recovery restarts. Manual cues, ordinary markers, pause/resume, and recovery verification remain available. An older tab receives the same server-side rejection. To unlock, select **Confirm unlock** and press **Unlock protected actions**; submit any previously rejected action again yourself.
 
 Lock state persists in `~/.local/state/showco/performance.json`. If that file cannot be read, protected actions remain blocked until an explicit unlock can be saved successfully. The lock does not affect separate CLI or deployment commands, and it never starts or stops services itself. Rehearsal uses temporary in-memory lock and incident state and observes services when status is requested.
+
+### Set list and cues
+
+Prepare songs on **Set list**, with optional performer notes and expected minutes. Add, remove, and reorder songs, then save. Saving resets the set position and elapsed clock; it does not remove recs markers. The editor preserves unsaved work through status refreshes. If another tab changed the list or position, a stale save is rejected; use **Discard edits and reload saved list** to load the current version.
+
+On **Performance**, **Start next song** sends `song start: TITLE` to recs. Skip advances the next-song cursor without a marker. Repeat sends the current song's marker again; Interval sends `interval`. Nothing advances automatically or changes lighting, streaming, or recording state. Position, notes, durations, elapsed start time, and pending cues persist in `~/.local/state/showco/setlist.json`.
+
+Repeated requests carrying the same list revision are rejected. If recs may have accepted a marker but its reply was lost, the cue remains pending through restart. Resolve it explicitly: keep the cue without resending, with delivery marked unverified, or retry knowing that a duplicate marker is possible. The recs API cannot guarantee exactly-once delivery across a lost reply.
+
+### Guided soundcheck
+
+Open **Soundcheck**, select the expected recording inputs, and begin. This clears earlier results without starting output. Confirm the intended disk, then make sound on all selected inputs and check their measured signal/clipping state. Disk confirmation requires fresh recs status, available space without an active disk alert, and a readable Linux mount identity. On systems without that identity, disk verification remains unsuccessful.
+
+Explicitly confirm and resume recording to begin a sample in the current session. After making sound, check that the recorded-audio counter advanced, then explicitly pause. Open **Playback**, select and listen to that sample, and enter its session/file description before confirming you heard it. Counter growth is measured evidence; playback is an operator confirmation. Recording remains paused until you resume it yourself. Starting another sample clears the previous sample's recording and playback results.
+
+Lighting tests require an explicit output confirmation and button press; they leave the lights off. Confirm lighting by watching it and streaming by receiving the stream externally. Optional steps can be skipped with a reason and remain visibly skipped, never passed. Opening or refreshing the page starts no test.
+
+Results and timestamps persist in `~/.local/state/showco/soundcheck.json`. Background observations invalidate them when the date, mount identity, observed input layout, service state, saved recs settings, or deployed showCo revision changes. Relevant showCo configuration actions also invalidate results. External physical changes, including mixer gain or cabling changes, require a fresh soundcheck. Checks are observations at a stated time, not continuing guarantees. Cable testing remains separate pending [hardware validation](../plan/hardware.md).
+
+### Guided recovery
+
+Open **Recovery** to refresh status, inspect the active-fault banner, or download diagnostics. A restart is offered only for a failed or disconnected enabled recs, lyte, or streamO service. Unlock protection and confirm the named interruption first: recs restart interrupts recording and playback, lyte restart interrupts lighting, and streamO restart interrupts streaming. Other services are not restarted.
+
+The request and original failure are saved before execution in `~/.local/state/showco/recovery.json` and recorded in incident history. A successful restart command remains **checking** until you press **Refresh and verify recovery**. A failed or uncertain outcome is visible and never automatically retried, including after a showCo restart. Verification may be repeated while a service starts without restarting it again. Connected-recorder disk and input faults require inspection on Health; stalled file growth alone never triggers a restart. Recovery cannot restore missed audio.
+
+The downloaded bundle uses the existing diagnostic collector and includes incident/recovery history alongside service logs and public configuration. It excludes the private configuration file and set-list notes. Review logs before sharing.
 
 ### Before the performance
 
@@ -139,4 +168,4 @@ The web UI is for a trusted show network and has no login. Every client that can
 
 The mixer state combines recs-reported audio and MIDI input names with an optional TCP or UDP probe. For X18, the UDP probe sends `/xremote` and waits for a reply. It is a reachability hint only; confirm mixer control with the tablet application or real OSC feedback. X18 `/xremote` subscriptions are renewed for feedback, but successful renewals are not recording events.
 
-The web service limits ordinary requests to eight concurrent connections and waveform event streams to four. Its browser routes are `/` and `/channels`, `/performance`, `/health`, `/playback`, `/attributes`, `/actions`, `/errors`, `/status` (JSON), and `/waveforms` (server-sent events). Form posts go to `/actions`; requests that accept JSON receive the action result directly.
+The web service limits ordinary requests to eight concurrent connections and waveform event streams to four. Its browser routes are `/` and `/channels`, `/performance`, `/setlist`, `/soundcheck`, `/recovery`, `/health`, `/playback`, `/attributes`, `/actions`, `/errors`, `/status` and `/workflow-status` (JSON), `/diagnostics` (download), and `/waveforms` (server-sent events). Form posts go to `/actions`; requests that accept JSON receive the action result directly.

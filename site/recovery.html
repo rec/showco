@@ -1,0 +1,13 @@
+<section>
+  <h2>Guided recovery</h2>
+  <p>Refresh status and collect diagnostics first. No service is restarted automatically.
+    File growth may pause during silence filtering; this alone is not a reason to restart recs.</p>
+  <button type="button" data-workflow-action="recovery-refresh" disabled>Refresh and verify recovery</button>
+  <a href="/diagnostics" download>Download diagnostic bundle</a>
+  <p>The bundle includes existing service logs and public configuration; review it before sharing.</p>
+  <div id="recovery-options"></div>
+  <h3>Latest recovery</h3><div id="recovery-state"></div>
+  <p id="workflow-result" role="status"></p>
+  <p>Recovery does not restore missed audio. Recording, storage, and input faults with a connected
+    recorder need inspection on <a href="/health">Health</a>; restart is not offered for them.</p>
+</section>

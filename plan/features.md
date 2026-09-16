@@ -1,6 +1,6 @@
 # Feature suggestions
 
-The first three priorities were implemented on 2026-09-16: the performance screen, performance lock, and persistent incident monitoring. The remaining entries are proposals. Unresolved physical validation belongs in [hardware.md](hardware.md).
+The performance screen, performance lock, persistent incident monitoring, set list, guided soundcheck, and guided recovery are implemented. Keyboard and footswitch controls are deferred at the operator's request. The later entries remain proposals. Unresolved physical validation belongs in [hardware.md](hardware.md).
 
 Start with features that reduce attention and mistakes during a performance. Keep recording, lighting generation, and streaming in recs, lyte, and streamO; showCo should coordinate their public interfaces. Any sibling-project work needs its own scope and coordination.
 
@@ -11,17 +11,17 @@ Start with features that reduce attention and mistakes during a performance. Kee
 | Implemented | Performance screen | Fewer page changes and missed problems | showCo |
 | Implemented | Performance lock | Fewer accidental interruptions | showCo |
 | Implemented | Persistent incident monitoring | Detect trouble without an open browser | showCo, using current service evidence |
-| Next | Set list and manual cues | Less administration between songs | showCo; combined cues depend on service capabilities |
-| Next | Guided soundcheck | Repeatable preparation and useful evidence | showCo plus physical validation |
-| Next | Guided recovery | Faster, more predictable fault handling | showCo; some recovery actions may need sibling support |
-| Next | Keyboard and footswitch controls | Operate without reaching for a tablet | Browser controls first; device integration separately |
+| Implemented | Set list and manual cues | Less administration between songs | showCo; recs markers only |
+| Implemented | Guided soundcheck | Repeatable preparation and useful evidence | showCo; physical acceptance outstanding |
+| Implemented | Guided recovery | Faster, more predictable fault handling | showCo; explicit service restart and verification |
+| Deferred | Keyboard and footswitch controls | Operate without reaching for a tablet | Not requested for this implementation |
 | Later | Lighting looks and transitions | More expressive visual performances | lyte capability work, then showCo controls |
 | Later | Highlight markers and stream presentation | Capture memorable moments and keep viewers informed | recs and streamO capability checks |
 | Later | Show report | Easier troubleshooting and preparation for the next show | showCo |
 
 ## 1. Performance screen
 
-**Implemented:** `/performance` provides marker and pause/resume controls, status and fault visibility, persistent browser pins and dimming, and optional screen-awake mode. Next-song controls remain part of the later set-list feature. Automated browser tests cover operation and disconnection; physical tablet acceptance remains outstanding.
+**Implemented:** `/performance` provides marker, next-song, and pause/resume controls, status and fault visibility, persistent browser pins and dimming, and optional screen-awake mode. Automated browser tests cover operation and disconnection; physical tablet acceptance remains outstanding.
 
 Add a dedicated screen with large controls for the few actions used during a show: mark a moment, advance the set list, pause or resume recording, and inspect the most urgent fault. Keep recording state, recording destination, remaining capacity, stream state, and connection age visible together. Let the performer pin important inputs so unused channels do not dominate the screen.
 
@@ -51,6 +51,8 @@ Present one persistent banner for an ongoing fault, with its start time, latest 
 
 ## 4. Set list and manual cues
 
+**Implemented:** `/setlist` prepares songs, notes, and durations; `/performance` sends manual named markers and supports skip, repeat, and interval. Position and pending requests persist. Revision checks reject stale requests. The current recs API has no marker request identifier: an uncertain reply requires explicit acceptance without resending, or an explicit retry acknowledging duplicate risk. Lighting and title cues remain later work.
+
 Let the performer prepare an ordered list of songs with short notes and an expected duration. During the show, display the current song, next song, elapsed set time, and one “Start next song” control. That action can create a named recs marker without requiring typing. Support skips, repeats, and an interval without rewriting earlier markers.
 
 Later, an explicitly configured cue could also select a lyte look and update a streamO title. Show each service's result separately: a lighting failure must not imply the recording marker failed, and advancing the set list must not stop recording. Do not advance songs automatically from elapsed time or inferred silence.
@@ -59,6 +61,8 @@ Later, an explicitly configured cue could also select a lyte look and update a s
 
 ## 5. Guided soundcheck
 
+**Implemented:** `/soundcheck` saves expected inputs and timestamped measured or operator-confirmed results, with explicit skipped steps. Sample recording uses the current session; playback confirmation names the sample the operator heard. Date, Linux mount identity, observed input layout, service state, and saved recs settings changes invalidate results through background observation. Physical mixer changes still require a fresh operator check. Cable testing remains excluded pending hardware validation.
+
 Turn the manual preparation checklist into a short, resumable workflow: identify the recording disk, confirm expected inputs, inspect signal and clipping, record a sample, and confirm playback from that recording. Include optional explicit lighting and streaming checks. Display when each check last passed and which device or configuration it covered.
 
 Keep automated observations separate from operator confirmations such as “heard playback” or “saw the lights.” Device or configuration changes should invalidate relevant checks. Add the cable test only with clear physical setup instructions and after the outstanding timing, routing, and calibration work is validated.
@@ -66,6 +70,8 @@ Keep automated observations separate from operator confirmations such as “hear
 **Acceptance:** yesterday's check or a different disk cannot silently count as today's successful test; skipping a step remains visible; no output-producing test starts merely by opening the page.
 
 ## 6. Guided recovery
+
+**Implemented:** `/recovery` refreshes status, downloads the existing diagnostic bundle, and offers a confirmed restart only for a failed or disconnected enabled recs, lyte, or streamO service. Restart requests and the original failure persist before execution; verification is a separate explicit action. No automatic retry or restart occurs. Connected-recorder storage and input faults require inspection rather than a restart shortcut.
 
 For a disconnected service or recording fault, offer a short explanation and only the relevant recovery actions. Show what each action interrupts before it runs. Begin with status refresh, diagnostics download, and reconnection where supported; require an explicit choice for service restart or recorder interruption.
 
@@ -107,10 +113,10 @@ Where recs supplies authoritative session or file information, include it with i
 
 ## Delivery approach
 
-The performance screen, lock, and monitoring are delivered. Manual set-list markers are the next suggested step. Add soundcheck and recovery once their evidence and interruption behavior are clear. Introduce lighting and streaming cues only after the necessary service contracts are confirmed and rehearsed.
+The first six features are delivered. Keyboard and footswitch controls remain deferred. Introduce lighting and streaming cues only after the necessary service contracts are confirmed and rehearsed.
 
 For each feature, verify normal use, stale status, browser reload, repeated input, and partial service failure. Physical claims still require the checks in [hardware.md](hardware.md). These suggestions do not authorize running services, changing sibling repositories, or deploying anything.
 
 ## Additional work beyond the prompt
 
-None. Implementation is limited to the first three priorities requested by the operator; later entries remain proposals.
+None. Implementation covers the first priorities and the next three requested workflows. Keyboard and footswitch controls are excluded; later entries remain proposals.

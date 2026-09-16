@@ -13,6 +13,9 @@ showCo requires Python 3.13. The deployed system uses five sibling repositories:
 The target runs a standard-library `ThreadingHTTPServer`. Its pages are:
 
 - **Performance**: large runtime controls, pinned inputs, dimming, and fault visibility.
+- **Set list**: songs, notes, durations, and manual next-song markers on Performance.
+- **Soundcheck**: saved disk, input, sample-recording, playback, and optional output checks.
+- **Recovery**: diagnostics, confirmed service restarts, and separate recovery verification.
 - **Channels**: recording state, track names, stereo grouping, and live
   waveforms reported by recs.
 - **Health**: service state, CPU, memory, recording-disk use, temperature,

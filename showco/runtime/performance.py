@@ -36,6 +36,13 @@ class PerformanceLock:
 
 
 PROTECTED_ACTIONS = {
+    'setlist-save',
+    'soundcheck-begin',
+    'soundcheck-check',
+    'soundcheck-start-recording',
+    'soundcheck-pause-recording',
+    'soundcheck-lights',
+    'recovery-restart',
     'cable-test',
     'lyte-test',
     'recs-calibrate',

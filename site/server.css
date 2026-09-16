@@ -197,6 +197,17 @@ button[aria-busy="true"] { cursor: wait; }
   min-height: 3.5rem; font-size: 1.1rem; padding: .8rem;
 }
 #performance-result { min-height: 3rem; }
+#cue-position { height: 3rem; overflow: auto; font-weight: 700; }
+#cue-notes { height: 3rem; overflow: auto; white-space: pre-wrap; }
+#cue-message, #setlist-controls #workflow-result { min-height: 1.5rem; }
+#setlist-editor label { display: block; margin: .5rem 0; }
+#setlist-editor textarea { box-sizing: border-box; width: 100%; min-height: 4rem; font: inherit; }
+#expected-inputs label { display: block; padding: .4rem; }
+input[type="checkbox"] { display: inline-block; width: auto; min-height: 1rem; }
+[data-workflow-action] { min-height: 2.75rem; }
+@media (min-width: 60rem) {
+  main:has(#performance-screen) { grid-template-columns: 1fr 1fr; align-items: start; }
+}
 .display-controls { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; }
 #input-pins label { display: block; padding: .5rem; }
 body.dim-display { background: #111820; color: #d2d8dd; }

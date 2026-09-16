@@ -86,11 +86,13 @@ def showco_args(
     return result
 
 
-def restart_streamo_service() -> models.ActionResult:
-    result = service_registry().controller('streamo').restart()
+def restart_service(name: str) -> models.ActionResult:
+    if name not in {'recs', 'lyte', 'streamo'}:
+        raise ValueError('Unsupported restart service')
+    result = service_registry().controller(name).restart()
     if result.running:
-        return models.ActionResult(ok=True, message='streamo restart requested')
-    return models.ActionResult(ok=False, message='streamo service did not start')
+        return models.ActionResult(ok=True, message=f'{name} restart requested')
+    return models.ActionResult(ok=False, message=f'{name} service did not start')
 
 
 def refresh_service_definition(
