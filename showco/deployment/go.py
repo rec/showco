@@ -5,7 +5,7 @@ import sys
 import tyro
 
 from ..provision import provision, remote, script, state
-from . import local_update, machine_role, update
+from . import local_update, machine_role, target_update, update
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -33,7 +33,7 @@ def run(options: provision.GoOptions) -> int:
                 'ERROR: --upgrade, --remote, --push, and --sync are unavailable '
                 'on the target machine'
             )
-        return update.update_target(
+        return target_update.update_target(
             selected,
             root=options.root,
             clear_settings=options.clear_settings,

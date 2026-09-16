@@ -6,7 +6,7 @@ from unittest import mock
 
 import pytest
 
-from showco.deployment import update
+from showco.deployment import target_update, update
 
 
 class Target:
@@ -80,7 +80,7 @@ def target(monkeypatch: pytest.MonkeyPatch) -> Target:
 
 
 def deploy(target: Target, output: StringIO | None = None) -> int:
-    return update.update_target(
+    return target_update.update_target(
         ['recs'],
         root=Path('/code'),
         run_command=target.run,
@@ -198,7 +198,7 @@ def test_explicit_settings_clear_is_restored_after_failed_update(
 
     monkeypatch.setattr(update, 'clear_recs_settings_step', clear)
     assert (
-        update.update_target(
+        target_update.update_target(
             ['recs'],
             root=Path('/code'),
             run_command=target.run,
@@ -214,7 +214,7 @@ def test_explicit_settings_clear_is_restored_after_failed_update(
 def test_unrelated_update_does_not_clear_recs_settings(target: Target) -> None:
     with mock.patch.object(update, 'clear_recs_settings_step') as clear:
         assert (
-            update.update_target(
+            target_update.update_target(
                 ['lyte'],
                 root=Path('/code'),
                 run_command=target.run,
@@ -236,7 +236,7 @@ def test_reccy_update_refreshes_enabled_services_after_sync(target: Target) -> N
         ),
     ) as restart:
         assert (
-            update.update_target(
+            target_update.update_target(
                 ['reccy'], root=Path('/code'), run_command=target.run, output=StringIO()
             )
             == 0

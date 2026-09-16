@@ -36,7 +36,9 @@ def channels_page(status: models.ShowStatus) -> str:
           </div>
         </section>
         """,
-        script=site_file('status-script.js') + site_file('waveform-script.js'),
+        script=site_file('channel-controls.js')
+        + site_file('status-script.js')
+        + site_file('waveform-script.js'),
     )
 
 
@@ -114,7 +116,7 @@ def health_page(status: models.ShowStatus) -> str:
           <div id="incidents">{incident_list(status.incidents)}</div>
         </section>
         """,
-        script=site_file('status-script.js'),
+        script=site_file('channel-controls.js') + site_file('status-script.js'),
     )
 
 
@@ -173,7 +175,7 @@ def attributes_page(
     return page(
         'Attributes',
         mutable_attributes_section(mutable_attributes),
-        script=site_file('status-script.js'),
+        script=site_file('channel-controls.js') + site_file('status-script.js'),
     )
 
 
@@ -186,7 +188,7 @@ def errors_page(errors: list[models.ErrorRecord]) -> str:
     return page(
         'Errors',
         body,
-        script=site_file('status-script.js'),
+        script=site_file('channel-controls.js') + site_file('status-script.js'),
     )
 
 

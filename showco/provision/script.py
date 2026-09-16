@@ -7,8 +7,10 @@ from pathlib import Path
 from . import config
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-REMOTE_SCRIPT_TEMPLATE = 'provision_locally.tmpl.sh'
-REMOTE_SCRIPT = (SCRIPT_DIR / REMOTE_SCRIPT_TEMPLATE).read_text()
+REMOTE_SCRIPT = '\n'.join(
+    (SCRIPT_DIR / 'templates' / n).read_text()
+    for n in ['system.sh', 'network.sh', 'services.sh', 'main.sh']
+)
 
 
 def remote_command(

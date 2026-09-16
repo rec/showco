@@ -269,7 +269,7 @@ class GoTests(unittest.TestCase):
 
     def test_target_machine_updates_selected_repositories(self) -> None:
         with mock.patch(
-            'showco.deployment.update.update_target', return_value=0
+            'showco.deployment.target_update.update_target', return_value=0
         ) as update_target:
             result = go.run(self.options(target_machine=True, repositories=['recs']))
 
@@ -280,7 +280,7 @@ class GoTests(unittest.TestCase):
 
     def test_clear_settings_option_is_forwarded_to_target_update(self) -> None:
         with mock.patch(
-            'showco.deployment.update.update_target', return_value=0
+            'showco.deployment.target_update.update_target', return_value=0
         ) as update_target:
             result = go.run(
                 self.options(

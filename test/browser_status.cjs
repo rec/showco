@@ -19,6 +19,7 @@ const context = vm.createContext({
   AbortController,
 });
 vm.runInContext(fs.readFileSync('site/status-connection.js', 'utf8'), context);
+vm.runInContext(fs.readFileSync('site/channel-controls.js', 'utf8'), context);
 vm.runInContext(fs.readFileSync('site/status-script.js', 'utf8'), context);
 vm.runInContext('updateStatus()', context).then(async () => {
   assert.equal(elements.get('streamo-health').textContent,
