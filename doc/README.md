@@ -6,7 +6,7 @@ Showco runs on a Raspberry Pi. A provisioning machine configures and deploys it.
 
 ## Perform a show
 
-Open Showco on the show network at the configured address and port. The Health page is the first place to look: **Ready to perform** is ready only when Recs is connected and recording, the recording disk is usable, every configured mixer is connected, and enabled Lyte and Streamo services are connected.
+Open showCo on the show network at the configured address and port. The Health page shows **Service readiness**: recs must be connected and recording, the recording disk usable, every configured mixer connected, and enabled lyte and streamO services connected. This checks service state, not successful audio writes. Check recorded-audio progress separately; silence filtering may legitimately pause file growth.
 
 | Page | Use it for |
 | --- | --- |
@@ -18,6 +18,8 @@ Open Showco on the show network at the configured address and port. The Health p
 | Errors | See up to 25 Recs errors from the current Showco process. |
 
 The browser refreshes status and channel data. Waveforms use a dedicated event stream and resynchronize after a delayed browser connection. An unavailable optional service does not make the other pages unavailable.
+
+Incidents are observations made when status is requested. Changes between requests, including while no browser is open, may be missed. Recording-input checks cover channels currently recording and flag silence or clipping. Recording progress needs an observed increase after startup, pause, or a session counter reset.
 
 ### Before the performance
 

@@ -132,17 +132,23 @@ Capture the submitted value and use it when acknowledging the response. Keep lat
 
 ### 17. Readiness ignores the recording-progress failure displayed beside it
 
+**Resolved by clarifying the contract.** The heading is now Service readiness, with an explicit explanation that recorded-audio progress is a separate check and silence filtering can pause file growth.
+
 **Design.** `ShowcoApp.status` calculates readiness before calculating `recording_progress` and `input_checks`. `readiness.status` checks service state and recording flags, but not actual progress. “Ready to perform” can coexist with “recorded audio has not advanced.” Silence filtering may make this legitimate, but the UI does not explain that distinction.
 
 Define what ready guarantees, including silence-filtered recording, and make contradictory-looking indicators actionable rather than simply combining all checks.
 
 ### 18. Progress and incidents depend on viewers and share unprotected state
 
+**Resolved for request-driven observation.** Status collection and observer updates are serialized. Progress resets across pause, disconnection, and decreasing counters and requires observed advancement before reporting success. The UI and documentation explicitly identify incidents as observations made during status requests, not a continuous event history.
+
 **Risk / incomplete idea.** `ProgressMonitor.observe` and `IncidentTimeline.observe` run from `ShowcoApp.status`, not the background performance sampler. Transitions between browser visits are lost. Multiple request threads mutate the same monitors without locks. Progress state is also retained across pauses and decreases in recorded duration, so a new session can initially inherit an old stall timer.
 
 Decide whether these are continuous monitoring features or observations made while someone polls. Serialize updates and reset progress at meaningful session/recording boundaries.
 
 ### 19. Input checks report clipping as healthy signal presence
+
+**Resolved.** Clipping is reported as a failure. The UI explicitly describes these as signal checks for channels currently recording.
 
 **Design.** `showco/runtime/input_check.py:checks` marks every state except `silent` as okay, including `clipping` produced by `recs.level_state`. It also omits all channels whose `on` flag is false. “Input checks” therefore neither checks all configured inputs nor treats clipping as a fault.
 
