@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 class StreamoConfigOptions(BaseModel, frozen=True):
     source: Annotated[Path, tyro.conf.arg(help='Existing Twitcho JSON configuration')]
-    target: Annotated[Path, tyro.conf.arg(help='New Streamo TOML configuration')]
+    target: Annotated[Path, tyro.conf.arg(help='New streamO TOML configuration')]
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -174,6 +174,8 @@ Use unique directory creation and report partial bundle failures clearly.
 
 ### 22. Static assets rely on a source-checkout layout
 
+**Resolved for source-checkout deployment.** The checkout requirement and lack of standalone wheel support are explicit in the setup and operations documentation. Application assets are no longer ignored by Git.
+
 **Packaging risk, not build-verified.** `server.SITE_DIRECTORY` resolves to a top-level `site/` outside the Python package. `pyproject.toml` has no explicit wheel asset mapping. A source checkout works, but an installed artifact needs both correct asset inclusion and a different dependable lookup location. `.gitignore` also ignores `/site`, so new assets can be silently omitted even though the current assets are tracked.
 
 Choose whether installed wheels are supported. If so, verify an isolated wheel installation; otherwise document the checkout requirement. Remove the misleading ignore rule for actual application assets.
@@ -181,6 +183,8 @@ Choose whether installed wheels are supported. If so, verify an isolated wheel i
 ## Naming, structure, documentation, and verification
 
 ### 23. Names and documentation no longer match the source layout
+
+**Resolved.** Module references follow `runtime/` and `deployment/`; rendering and waveform ownership are documented. The simultaneous cable test uses channel terminology. Public prose and UI labels use the requested project capitalization. Historical `doc/handover.md` remains untouched.
 
 **Maintenance.** `AGENTS.md` points to moved paths such as `showco/server.py`, `showco/recs.py`, and `showco/update.py`; their current homes are `runtime/` and `deployment/`. The cable test still calls its simultaneous channel analysis `_test_pairs`. The browser retains `twitcho` naming, including identifiers. Public prose inconsistently capitalizes project names instead of lyte, streamO, recs, uFor, reccy, tuney, enge, and showCo.
 

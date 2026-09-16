@@ -15,12 +15,12 @@ from . import config, network, ssh
 
 POST_REBOOT_READY_WAIT_SECONDS = 60
 STARTUP_CHECK_NAMES = [
-    'Lyte service',
+    'lyte service',
     'recs service is active',
     'recs status is advancing',
     'showco service is active',
     'showco web UI revision',
-    'Streamo service',
+    'streamO service',
     'X18 bridge has the configured address',
     'private Wi-Fi hotspot is active',
 ]
@@ -170,9 +170,9 @@ def showco_streamo_health_command(root: Path) -> str:
 def persistent_journal_command() -> str:
     return (
         'sudo systemd-cat --identifier=showco-provisioning '
-        "/usr/bin/printf '%s\\n' 'Showco journal check' && "
+        "/usr/bin/printf '%s\\n' 'showCo journal check' && "
         'sudo journalctl -t showco-provisioning -n 1 --no-pager --output=cat '
-        "| grep --fixed-strings --line-regexp 'Showco journal check'"
+        "| grep --fixed-strings --line-regexp 'showCo journal check'"
     )
 
 
@@ -182,17 +182,17 @@ def user_session_command(command: str) -> str:
 
 def verify_lyte_service(provision_config: config.Config) -> VerificationResult:
     if not provision_config.lyte.enabled:
-        return VerificationResult(name='Lyte service', error='', note='disabled')
+        return VerificationResult(name='lyte service', error='', note='disabled')
     installed = verify_remote_command(
         provision_config,
-        'Lyte service is installed',
+        'lyte service is installed',
         user_systemctl_command('is-enabled --quiet lyte.service'),
     )
     if installed.error:
         return installed
     active = verify_remote_command(
         provision_config,
-        'Lyte service',
+        'lyte service',
         user_systemctl_command('is-active --quiet lyte.service'),
     )
     if not active.error:
@@ -202,10 +202,10 @@ def verify_lyte_service(provision_config: config.Config) -> VerificationResult:
 
 def verify_streamo_service(provision_config: config.Config) -> VerificationResult:
     if not provision_config.stream.enabled:
-        return VerificationResult(name='Streamo service', error='', note='disabled')
+        return VerificationResult(name='streamO service', error='', note='disabled')
     return verify_remote_command(
         provision_config,
-        'Streamo service',
+        'streamO service',
         showco_streamo_health_command(provision_config.paths.root),
     )
 

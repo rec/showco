@@ -357,7 +357,7 @@ class ShowcoHandler(BaseHTTPRequestHandler):
     def _acquire_request(self) -> bool:
         if cast(ShowcoServer, self.server).request_slots.acquire(blocking=False):
             return True
-        self.send_error(503, 'Showco is busy')
+        self.send_error(503, 'showCo is busy')
         return False
 
     def _log_action(self, action: str, result: models.ActionResult) -> None:

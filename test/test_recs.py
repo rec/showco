@@ -422,8 +422,8 @@ class RecsTests(unittest.TestCase):
 
         self.assertEqual(
             summary,
-            'Recs status did not advance; updated_at=123.0\n'
-            'Recent Recs errors:\n- second\n- third\n- fourth',
+            'recs status did not advance; updated_at=123.0\n'
+            'Recent recs errors:\n- second\n- third\n- fourth',
         )
 
     def test_level_state_uses_four_display_states(self) -> None:

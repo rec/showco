@@ -12,7 +12,7 @@ class ReadinessTests(unittest.TestCase):
         self.assertTrue(value.ready)
         self.assertEqual(
             [check.name for check in value.checks],
-            ['Recs', 'Recording', 'Recording disk', 'Lyte', 'Streamo'],
+            ['recs', 'Recording', 'Recording disk', 'lyte', 'streamO'],
         )
 
     def test_paused_recording_blocks_readiness(self) -> None:
@@ -42,7 +42,7 @@ class ReadinessTests(unittest.TestCase):
             value.checks,
         )
         self.assertIn(
-            models.ReadinessCheck(name='Lyte', ok=False, message='offline'),
+            models.ReadinessCheck(name='lyte', ok=False, message='offline'),
             value.checks,
         )
 

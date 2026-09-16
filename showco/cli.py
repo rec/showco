@@ -104,7 +104,7 @@ def run_command(arguments: list[str]) -> int:
     options = tyro.cli(
         WebUiOptions,
         args=arguments,
-        description='Run the Showco web UI',
+        description='Run the showCo web UI',
     )
     return run_web_ui(options)
 

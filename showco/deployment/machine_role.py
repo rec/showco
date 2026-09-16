@@ -18,7 +18,7 @@ def require_target_machine(command: str) -> None:
     if machine_role() == TARGET_ROLE:
         return
     sys.exit(
-        f'ERROR: {command} must run on a provisioned Showco target machine. '
+        f'ERROR: {command} must run on a provisioned showCo target machine. '
         f'Missing {role_file()}.'
     )
 
@@ -27,7 +27,7 @@ def require_provisioning_machine(command: str) -> None:
     if machine_role() == TARGET_ROLE:
         sys.exit(
             f'ERROR: {command} must run on the provisioning machine, not on a '
-            'provisioned Showco target machine.'
+            'provisioned showCo target machine.'
         )
 
 

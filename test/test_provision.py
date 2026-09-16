@@ -648,7 +648,7 @@ class ProvisionTests(unittest.TestCase):
         sleep.assert_called_once_with(1)
 
     def test_lyte_service_is_a_startup_check(self) -> None:
-        self.assertIn('Lyte service', verify.STARTUP_CHECK_NAMES)
+        self.assertIn('lyte service', verify.STARTUP_CHECK_NAMES)
 
     def test_streamo_health_command_uses_target_showco(self) -> None:
         command = verify.showco_streamo_health_command(Path('/code'))
@@ -872,9 +872,9 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn('Wi-Fi interfaces discovered:', script.REMOTE_SCRIPT)
         self.assertIn('nmcli device status', script.REMOTE_SCRIPT)
         self.assertIn('iw dev', script.REMOTE_SCRIPT)
-        self.assertIn('Lyte:', script.REMOTE_SCRIPT)
+        self.assertIn('lyte:', script.REMOTE_SCRIPT)
         self.assertIn('lyte service:', script.REMOTE_SCRIPT)
-        self.assertIn('Streamo:', script.REMOTE_SCRIPT)
+        self.assertIn('streamO:', script.REMOTE_SCRIPT)
         self.assertIn('streamo service:', script.REMOTE_SCRIPT)
         self.assertIn('PROVISIONING-REPORT.txt', script.REMOTE_SCRIPT)
 

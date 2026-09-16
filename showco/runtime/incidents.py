@@ -47,10 +47,10 @@ def states(status: models.ShowStatus) -> dict[str, str]:
         else 'ready'
     )
     return {
-        'Recs': status.recs.service.state,
+        'recs': status.recs.service.state,
         'Recording': recording,
         'Recording disk': disk_state,
-        'Lyte': status.lyte.service.state,
-        'Streamo': status.streamo.service.state,
+        'lyte': status.lyte.service.state,
+        'streamO': status.streamo.service.state,
         **{mixer.name: mixer.state for mixer in status.mixers},
     }

@@ -25,7 +25,7 @@ class RecsControlClient:
         deadline = time.monotonic() + timeout
         if not self.lock.acquire(timeout=timeout):
             raise TimeoutError(
-                f'Recs control request timed out after {timeout}s waiting for access'
+                f'recs control request timed out after {timeout}s waiting for access'
             )
         try:
             return rpc.Client(

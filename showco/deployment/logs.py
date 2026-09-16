@@ -27,7 +27,7 @@ def main(argv: list[str] | None = None) -> int:
     options = tyro.cli(
         LogsOptions,
         args=sys.argv[1:] if argv is None else argv,
-        description='Fetch user service logs from the Showco target machine',
+        description='Fetch user service logs from the showCo target machine',
     )
     return fetch_logs(options)
 

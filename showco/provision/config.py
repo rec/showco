@@ -371,7 +371,7 @@ def lyte_value(
     )
     if installation_config.is_absolute() or '..' in installation_config.parts:
         sys.exit(
-            'ERROR: lyte.installation_config must be relative to the Lyte checkout'
+            'ERROR: lyte.installation_config must be relative to the lyte checkout'
         )
     return Lyte(
         enabled=bool_value(values, 'enabled', default=False)

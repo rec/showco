@@ -33,7 +33,7 @@ def main(argv: list[str] | None = None) -> int:
     options = tyro.cli(
         PrepareCardOptions,
         args=argv,
-        description='Prepare an Imager-written Raspberry Pi OS card for Showco',
+        description='Prepare an Imager-written Raspberry Pi OS card for showCo',
     )
     user = options.user or configured_user(options.config_path)
     card_path = select_card(options.card)
