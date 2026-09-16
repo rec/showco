@@ -180,6 +180,14 @@ class RecordingProgress(BaseModel, frozen=True):
     message: str = 'unknown'
 
 
+class ActiveFault(BaseModel, frozen=True):
+    name: str
+    started_at: datetime
+    message: str
+    next_action: str
+    acknowledged: bool = False
+
+
 class InputCheck(BaseModel, frozen=True):
     name: str
     ok: bool
@@ -202,3 +210,7 @@ class ShowStatus(BaseModel, frozen=True):
     input_checks: list[InputCheck] = Field(default_factory=list)
     revision: str | None = None
     run_started_at: float = 0.0
+    performance_locked: bool = False
+    active_faults: list[ActiveFault] = Field(default_factory=list)
+    observed_at: datetime | None = None
+    monitoring_error: str | None = None

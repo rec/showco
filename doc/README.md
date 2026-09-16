@@ -12,6 +12,7 @@ Open showCo on the show network at the configured address and port. The Health p
 
 | Page | Use it for |
 | --- | --- |
+| Performance | Large marker and pause/resume controls, recording destination and capacity, stream state, pinned inputs, dimming, and optional screen-awake mode. |
 | Channels | Watch input levels and waveforms. Edit track names and stereo groups, then save them. |
 | Health | Check readiness, recording and streaming state, disk space, CPU, memory, temperature, mixer and input status, current recs errors, and incidents from this showCo run. |
 | Playback | Play and navigate available recs recordings. |
@@ -21,7 +22,17 @@ Open showCo on the show network at the configured address and port. The Health p
 
 The browser refreshes status and channel data. Waveforms use a dedicated event stream and resynchronize after a delayed browser connection. An unavailable optional service does not make the other pages unavailable.
 
-Incidents are observations made when status is requested. Changes between requests, including while no browser is open, may be missed. Recording-input checks cover channels currently recording and flag silence or clipping. Recording progress needs an observed increase after startup, pause, or a session counter reset.
+On the target, background sampling collects service and recording observations even with no browser open. The latest 100 incident events and up to 100 active faults are retained in `~/.local/state/showco/incidents.json` across restarts. Changes between samples can still be missed. A fault banner shows its start time, latest evidence, and a next step. Acknowledgment does not resolve a fault; recurrence after recovery requires a new acknowledgment. History write failures remain visible, and observations continue in memory.
+
+Recording-input checks cover channels currently recording and flag silence or clipping. Recording progress needs an observed increase after startup, pause, or a session counter reset. Silence filtering can legitimately pause file growth; a write-progress observation alone is not a reason to restart recs.
+
+### Performance controls and protection
+
+Open **Performance** for large controls that mark a moment or pause/resume recording. Marker presses use the label `performance moment`. The page shows recording state, destination, remaining capacity, stream state, and connection age. Pin important inputs and enable dimming for this browser. Screen-awake mode is opt-in and reports whether the browser and connection support it. Controls are disabled when status is unavailable; an action with an unknown outcome is never automatically retried. Set-list advancement is not implemented yet.
+
+Enable **Performance lock** from any page before a show. It blocks web requests for cable and lighting tests, calibration, recorder shutdown, new sessions, track names, stereo grouping, mutable attributes, noise-floor changes, key labels, and profile reloads. Markers and pause/resume remain available. An older tab receives the same server-side rejection. To unlock, select **Confirm unlock** and press **Unlock protected actions**; submit any previously rejected action again yourself.
+
+Lock state persists in `~/.local/state/showco/performance.json`. If that file cannot be read, protected actions remain blocked until an explicit unlock can be saved successfully. The lock does not affect separate CLI or deployment commands, and it never starts or stops services itself. Rehearsal uses temporary in-memory lock and incident state and observes services when status is requested.
 
 ### Before the performance
 
@@ -128,4 +139,4 @@ The web UI is for a trusted show network and has no login. Every client that can
 
 The mixer state combines recs-reported audio and MIDI input names with an optional TCP or UDP probe. For X18, the UDP probe sends `/xremote` and waits for a reply. It is a reachability hint only; confirm mixer control with the tablet application or real OSC feedback. X18 `/xremote` subscriptions are renewed for feedback, but successful renewals are not recording events.
 
-The web service limits ordinary requests to eight concurrent connections and waveform event streams to four. Its browser routes are `/` and `/channels`, `/health`, `/playback`, `/attributes`, `/actions`, `/errors`, `/status` (JSON), and `/waveforms` (server-sent events). Form posts go to `/actions`; requests that accept JSON receive the action result directly.
+The web service limits ordinary requests to eight concurrent connections and waveform event streams to four. Its browser routes are `/` and `/channels`, `/performance`, `/health`, `/playback`, `/attributes`, `/actions`, `/errors`, `/status` (JSON), and `/waveforms` (server-sent events). Form posts go to `/actions`; requests that accept JSON receive the action result directly.

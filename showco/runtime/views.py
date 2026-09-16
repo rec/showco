@@ -111,8 +111,9 @@ def health_page(status: models.ShowStatus) -> str:
         </section>
         <section>
           <h2>Observed incidents</h2>
-          <p>Observed while status is requested;
-          transitions between requests may be missed.</p>
+          <p>The target samples in the background, even without a browser.
+          History retains the latest 100 events across restarts.
+          Transitions between samples may be missed.</p>
           <div id="incidents">{incident_list(status.incidents)}</div>
         </section>
         """,
@@ -316,15 +317,51 @@ def _streamo_actions(title_fields: list[str]) -> str:
     """
 
 
+def performance_page() -> str:
+    return page(
+        'Performance',
+        """
+      <section class="performance" id="performance-screen">
+        <h2>Performance</h2>
+        <div class="performance-status" aria-live="polite">
+          <p id="performance-recording">Recording: checking</p>
+          <p id="performance-disk">Destination and capacity: checking</p>
+          <p id="performance-progress">Audio writes: checking</p>
+          <p id="performance-stream">Stream: checking</p>
+        </div>
+        <div class="performance-buttons">
+          <button type="button" data-performance-action="recs-marker">
+            Mark this moment</button>
+          <button type="button" data-performance-action="recs-pause-recording">
+            Pause recording</button>
+          <button type="button" data-performance-action="recs-resume-recording">
+            Resume recording</button>
+          <a href="/health">Inspect health</a>
+        </div>
+        <p id="performance-result" role="status">Ready for an explicit action.</p>
+        <div class="display-controls">
+          <label><input type="checkbox" id="dim-display"> Dim display</label>
+          <button type="button" id="keep-awake">Keep screen awake</button>
+          <span id="awake-status" role="status">Screen awake: off</span>
+        </div>
+        <h3>Pinned inputs</h3>
+        <p>Pins and dimming are saved on this browser.
+          Unpinning never changes recording.</p>
+        <div id="performance-inputs"></div>
+        <details><summary>Choose inputs to pin</summary>
+          <div id="input-pins"></div></details>
+      </section>""",
+        script=site_file('performance.js'),
+    )
+
+
 def page(title: str, body: str, *, script: str = '') -> str:
     page_script = (
-        f'<script>{site_file("status-connection.js")}</script><script>{script}</script>'
-        if script
-        else ''
+        f'<script>{site_file("status-connection.js")}</script>'
+        f'<script>{site_file("show-controls.js")}</script>'
+        f'<script>{script or "pollShowControls();"}</script>'
     )
-    connection = (
-        '<p id="connection-status" role="status">Connecting...</p>' if script else ''
-    )
+    connection = '<p id="connection-status" role="status">Connecting...</p>'
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -337,6 +374,7 @@ def page(title: str, body: str, *, script: str = '') -> str:
   <header>
     <h1>showCo</h1>
     <nav>
+      <a href="/performance">Performance</a>
       <a href="/channels">Channels</a>
       <a href="/health">Health</a>
       <a href="/playback">Playback</a>
@@ -345,7 +383,25 @@ def page(title: str, body: str, *, script: str = '') -> str:
       <a href="/errors">Errors</a>
     </nav>
   </header>
-  <main>{connection}{body}</main>
+  <main>{connection}
+    <section class="show-controls" aria-label="Performance protection">
+      <strong id="performance-lock-state">Performance lock: checking</strong>
+      <form id="performance-lock-form" method="post" action="/actions">
+        <button name="action" value="performance-lock">Enable performance lock</button>
+        <label><input type="checkbox" name="confirmation" value="unlock">
+          Confirm unlock</label>
+        <button name="action" value="performance-unlock">
+          Unlock protected actions</button>
+      </form>
+      <p>Protects web configuration, calibration, tests,
+         session replacement, and shutdown.
+         Separate CLI and deployment commands are not locked.</p>
+      <p id="lock-result" role="status"></p>
+    </section>
+    <section id="fault-banner" class="failed" aria-live="polite">
+      Checking for faults...</section>
+    <p id="monitoring-error" role="status"></p>
+    {body}</main>
   <script>{site_file('shutdown-action.js')}</script>
   {page_script}
 </body>

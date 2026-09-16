@@ -21,6 +21,7 @@ from . import (
     incidents,
     input_check,
     models,
+    performance,
     readiness,
     recording_progress,
     services,
@@ -51,6 +52,7 @@ class ShowcoApp:
         waveforms: WaveformBridge | None = None,
         lyte: LyteClient | None = None,
         cable_tester: CableTester | None = None,
+        state_directory: Path | None = None,
     ) -> None:
         self.recs = recs
         self.streamo = streamo
@@ -66,7 +68,12 @@ class ShowcoApp:
         self.action_lock = threading.Lock()
         self.action_log_lock = threading.Lock()
         self.status_lock = threading.Lock()
-        self.incidents = incidents.IncidentTimeline()
+        self.performance_lock = performance.PerformanceLock(
+            state_directory / 'performance.json' if state_directory else None
+        )
+        self.incidents = incidents.IncidentTimeline(
+            state_directory / 'incidents.json' if state_directory else None
+        )
         self.recording_progress = recording_progress.ProgressMonitor()
 
     def status(self) -> models.ShowStatus:
@@ -101,10 +108,23 @@ class ShowcoApp:
                 run_started_at=self.run_started_at,
             )
             status = status.model_copy(update={'readiness': readiness.status(status)})
+            status = status.model_copy(
+                update={'recording_progress': self.recording_progress.observe(recs)}
+            )
+            observed = self.incidents.observe(status)
             return status.model_copy(
                 update={
-                    'incidents': self.incidents.observe(status),
-                    'recording_progress': self.recording_progress.observe(recs),
+                    'incidents': observed,
+                    'active_faults': list(self.incidents.faults),
+                    'performance_locked': self.performance_lock.locked,
+                    'observed_at': datetime.now().astimezone(),
+                    'monitoring_error': self.performance_lock.error
+                    or self.incidents.storage_error
+                    or (
+                        self.system.observation_error
+                        if isinstance(self.system, PerformanceMonitor)
+                        else None
+                    ),
                     'input_checks': input_check.checks(recs.channels),
                 }
             )
@@ -130,6 +150,34 @@ class ShowcoApp:
     def _dispatch_action(
         self, action: str, form: dict[str, str]
     ) -> models.ActionResult:
+        if action in {'performance-lock', 'performance-unlock'}:
+            locked = action == 'performance-lock'
+            if not locked and form.get('confirmation') != 'unlock':
+                return models.ActionResult(
+                    ok=False,
+                    message='Confirm unlock before changing protected controls',
+                )
+            self.performance_lock.set(locked)
+            return models.ActionResult(
+                ok=True,
+                message='Performance lock enabled'
+                if locked
+                else 'Performance lock disabled',
+            )
+        if self.performance_lock.locked and action in performance.PROTECTED_ACTIONS:
+            return models.ActionResult(
+                ok=False,
+                message='Performance lock blocks this action. '
+                'Unlock explicitly, then submit it again.',
+            )
+        if action == 'acknowledge-fault':
+            with self.status_lock:
+                self.incidents.acknowledge(
+                    form.get('name', ''), form.get('started_at', '')
+                )
+            return models.ActionResult(
+                ok=True, message='Fault acknowledged; it remains active until recovery'
+            )
         if action == 'recs-calibrate':
             device = form.get('device', '')
             channels = _channel_numbers(form.get('channels', ''))
@@ -220,6 +268,9 @@ class ShowcoHandler(BaseHTTPRequestHandler):
             return
         if self.path in {'/', '/channels'}:
             self._html(views.channels_page(self.app.status()))
+            return
+        if self.path == '/performance':
+            self._html(views.performance_page())
             return
         if self.path == '/health':
             self._html(views.health_page(self.app.status()))
@@ -506,12 +557,16 @@ def make_server(
             if mixer_specs and any(m.name == 'X18' for m in mixer_specs)
             else None
         ),
+        state_directory=Path.home() / '.local/state/showco'
+        if performance_enabled
+        else None,
     )
     handler.app = app
     server = ShowcoServer((host, port), handler)
     server.app = app
     server.performance = performance
     if performance is not None:
+        performance.observe = app.status
         performance.start()
     return server
 

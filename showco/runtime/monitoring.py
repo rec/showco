@@ -6,7 +6,7 @@ from collections.abc import Callable
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 from reccy.runtime import logging
 
 from . import models
@@ -65,6 +65,8 @@ class PerformanceMonitor:
         self.metric_errors: dict[str, str] = {}
         self.storage_error: str | None = None
         self.retention_day: date | None = None
+        self.observe: Callable[[], object] | None = None
+        self.observation_error: str | None = None
 
     def start(self) -> None:
         if self.thread is not None:
@@ -110,6 +112,22 @@ class PerformanceMonitor:
             self._write(monitoring_record(self.samples))
             self.samples = []
         self.samples.append(sample)
+        if self.observe is not None:
+            try:
+                self.observe()
+            except (
+                OSError,
+                ConnectionError,
+                TimeoutError,
+                ValidationError,
+                ValueError,
+            ) as error:
+                message = f'Service observation failed: {error}'
+                if message != self.observation_error:
+                    LOGGER.warning('%s', message)
+                self.observation_error = message
+            else:
+                self.observation_error = None
 
     def _run(self) -> None:
         next_sample = time.monotonic()

@@ -184,6 +184,27 @@ button[aria-busy="true"] { cursor: wait; }
   color: #b3261e;
   font-weight: 700;
 }
+.show-controls { border: 1px solid #888; padding: .6rem; margin-bottom: .6rem; }
+.show-controls p { font-size: .85rem; margin: .3rem 0; }
+#performance-lock-form { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+#fault-banner { height: 9rem; overflow: auto; box-sizing: border-box; padding: .7rem; border: 2px solid currentColor; }
+#fault-banner p { margin: .3rem 0; }
+#fault-banner button { margin-left: 1rem; min-height: 2.75rem; }
+.performance-status { height: 10rem; overflow: auto; display: grid; grid-template-columns: 1fr 1fr; gap: .4rem; }
+.performance-status p { margin: .3rem 0; overflow-wrap: anywhere; }
+.performance-buttons { display: grid; grid-template-columns: repeat(2, 1fr); gap: .7rem; }
+.performance-buttons button, .performance-buttons a {
+  min-height: 3.5rem; font-size: 1.1rem; padding: .8rem;
+}
+#performance-result { min-height: 3rem; }
+.display-controls { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; }
+#input-pins label { display: block; padding: .5rem; }
+body.dim-display { background: #111820; color: #d2d8dd; }
+body.dim-display section, body.dim-display header { background: #18222c; }
+body.dim-display a { color: #9dc5e8; }
+body.dim-display button { background: #293c4b; color: #e0e5eb; border: 1px solid #7992a5; }
+body.dim-display .failed { color: #ffb0a8; }
+body.dim-display .ok { color: #91d6a1; }
 @media (max-width: 42rem) {
   .transport { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .performance-row {

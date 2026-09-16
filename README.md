@@ -12,6 +12,7 @@ showCo requires Python 3.13. The deployed system uses five sibling repositories:
 
 The target runs a standard-library `ThreadingHTTPServer`. Its pages are:
 
+- **Performance**: large runtime controls, pinned inputs, dimming, and fault visibility.
 - **Channels**: recording state, track names, stereo grouping, and live
   waveforms reported by recs.
 - **Health**: service state, CPU, memory, recording-disk use, temperature,
@@ -22,6 +23,9 @@ The target runs a standard-library `ThreadingHTTPServer`. Its pages are:
 
 The root URL is the Channels page. `GET /status` provides the current JSON
 status snapshot, and `GET /waveforms` provides the waveform event stream.
+
+Every page shows the persistent performance lock and active-fault banner. The target
+monitors services without an open browser and retains its latest 100 incident events.
 
 ## Commands
 
