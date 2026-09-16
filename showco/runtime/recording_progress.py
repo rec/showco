@@ -15,19 +15,29 @@ class ProgressMonitor:
         self.advanced_at: float | None = None
 
     def observe(self, recs: models.RecsStatus) -> models.RecordingProgress:
-        if not recs.recording or recs.paused:
+        if not recs.recording or recs.paused or not recs.service.fresh:
+            self.recorded_seconds = None
+            self.advanced_at = None
             return models.RecordingProgress(ok=False, message='not recording')
         if recs.recorded_seconds is None:
+            self.recorded_seconds = None
+            self.advanced_at = None
             return models.RecordingProgress(
                 ok=False, message='recording progress unknown'
             )
         now = self.clock()
         if (
             self.recorded_seconds is None
-            or recs.recorded_seconds > self.recorded_seconds
+            or recs.recorded_seconds < self.recorded_seconds
         ):
+            self.advanced_at = None
+        elif recs.recorded_seconds > self.recorded_seconds:
             self.advanced_at = now
         self.recorded_seconds = recs.recorded_seconds
+        if self.advanced_at is None:
+            return models.RecordingProgress(
+                ok=False, message='waiting for recorded audio to advance'
+            )
         if self.advanced_at is not None and now - self.advanced_at <= STALL_SECONDS:
             return models.RecordingProgress(ok=True, message='recorded audio advancing')
         return models.RecordingProgress(

@@ -365,7 +365,7 @@ class ServerTests(unittest.TestCase):
             )
         )
 
-        self.assertIn('Ready to perform', html)
+        self.assertIn('Service readiness', html)
         self.assertIn('id="readiness-state">not ready', html)
         self.assertIn('Recs</b>: offline', html)
 
@@ -387,7 +387,7 @@ class ServerTests(unittest.TestCase):
             )
         )
 
-        self.assertIn('Incidents this run', html)
+        self.assertIn('Observed incidents', html)
         self.assertIn('Recording: recording to paused', html)
 
     def test_health_page_shows_lyte_installation_status(self) -> None:

@@ -65,47 +65,49 @@ class ShowcoApp:
         self.action_log: list[models.ActionLogEntry] = []
         self.action_lock = threading.Lock()
         self.action_log_lock = threading.Lock()
+        self.status_lock = threading.Lock()
         self.incidents = incidents.IncidentTimeline()
         self.recording_progress = recording_progress.ProgressMonitor()
 
     def status(self) -> models.ShowStatus:
-        if self.streamo is None:
-            streamo = models.StreamoStatus(
-                service=models.ServiceStatus(name='streamo', state='disabled')
+        with self.status_lock:
+            if self.streamo is None:
+                streamo = models.StreamoStatus(
+                    service=models.ServiceStatus(name='streamo', state='disabled')
+                )
+            else:
+                streamo = self.streamo.status()
+            recs = self.recs.status()
+            recs = recs.model_copy(
+                update={'errors': errors_since(recs.errors, self.run_started_at)}
             )
-        else:
-            streamo = self.streamo.status()
-        recs = self.recs.status()
-        recs = recs.model_copy(
-            update={'errors': errors_since(recs.errors, self.run_started_at)}
-        )
-        lyte = (
-            self.lyte.status()
-            if self.lyte is not None
-            else models.LyteStatus(
-                service=models.ServiceStatus(name='lyte', state='disabled')
+            lyte = (
+                self.lyte.status()
+                if self.lyte is not None
+                else models.LyteStatus(
+                    service=models.ServiceStatus(name='lyte', state='disabled')
+                )
             )
-        )
-        status = models.ShowStatus(
-            recs=recs,
-            streamo=streamo,
-            lyte=lyte,
-            system=self.system.status(),
-            mixers=self.mixers.status(
-                {channel.device for channel in recs.channels},
-                {midi.name: midi.state for midi in recs.midi},
-            ),
-            revision=self.revision,
-            run_started_at=self.run_started_at,
-        )
-        status = status.model_copy(update={'readiness': readiness.status(status)})
-        return status.model_copy(
-            update={
-                'incidents': self.incidents.observe(status),
-                'recording_progress': self.recording_progress.observe(recs),
-                'input_checks': input_check.checks(recs.channels),
-            }
-        )
+            status = models.ShowStatus(
+                recs=recs,
+                streamo=streamo,
+                lyte=lyte,
+                system=self.system.status(),
+                mixers=self.mixers.status(
+                    {channel.device for channel in recs.channels},
+                    {midi.name: midi.state for midi in recs.midi},
+                ),
+                revision=self.revision,
+                run_started_at=self.run_started_at,
+            )
+            status = status.model_copy(update={'readiness': readiness.status(status)})
+            return status.model_copy(
+                update={
+                    'incidents': self.incidents.observe(status),
+                    'recording_progress': self.recording_progress.observe(recs),
+                    'input_checks': input_check.checks(recs.channels),
+                }
+            )
 
     def run_action(self, form: dict[str, str]) -> models.ActionResult:
         with self.action_lock:
@@ -596,6 +598,7 @@ def health_page(status: models.ShowStatus) -> str:
         </section>
         <section>
           <h2>Recording inputs</h2>
+          <p>Signal checks for channels currently recording, including clipping.</p>
           <div id="input-checks">{input_checks(status.input_checks)}</div>
         </section>
         <section>
@@ -605,7 +608,9 @@ def health_page(status: models.ShowStatus) -> str:
           </div>
         </section>
         <section>
-          <h2>Incidents this run</h2>
+          <h2>Observed incidents</h2>
+          <p>Observed while status is requested;
+          transitions between requests may be missed.</p>
           <div id="incidents">{incident_list(status.incidents)}</div>
         </section>
         """,
@@ -618,7 +623,10 @@ def readiness_section(status: models.ReadinessStatus) -> str:
     css_class = 'healthy' if status.ready else 'error'
     return f"""
         <section class="readiness {css_class}">
-          <h2>Ready to perform</h2>
+          <h2>Service readiness</h2>
+          <p>Checks service connections and recording flags.
+          Confirm recorded-audio progress below;
+          silence filtering may legitimately pause file growth.</p>
           <p class="state" id="readiness-state">{state}</p>
           <ul id="readiness-checks">
             {''.join(readiness_check(check) for check in status.checks)}
