@@ -3,7 +3,11 @@ from unittest import mock
 
 import pytest
 
-from showco.runtime.server import CONNECTION_TIMEOUT_SECONDS, ShowcoServer
+from showco.runtime.server import (
+    CONNECTION_TIMEOUT_SECONDS,
+    ShowcoHandler,
+    ShowcoServer,
+)
 
 
 def test_excess_connections_are_closed_before_thread_creation() -> None:
@@ -41,3 +45,27 @@ def test_finished_request_returns_connection_slot() -> None:
     with mock.patch('socketserver.ThreadingMixIn.process_request_thread'):
         server.process_request_thread(mock.Mock(), ('127.0.0.1', 1234))
     assert server.connection_slots.acquire(blocking=False)
+
+
+@pytest.mark.parametrize(
+    'headers',
+    [
+        {'Host': 'show.local', 'Origin': 'https://other.example'},
+        {'Host': 'show.local', 'Origin': 'null'},
+        {'Host': 'show.local', 'Origin': 'http://[invalid'},
+        {'Host': 'show.local', 'Sec-Fetch-Site': 'cross-site'},
+    ],
+)
+def test_cross_origin_actions_are_rejected_before_reading_body(
+    headers: dict[str, str],
+) -> None:
+    handler = object.__new__(ShowcoHandler)
+    handler.path = '/actions'
+    handler.headers = headers
+    with (
+        mock.patch.object(handler, 'send_error') as error,
+        mock.patch.object(handler, '_form') as form,
+    ):
+        handler._do_post()
+    assert error.call_args.args[0] == 403
+    form.assert_not_called()
