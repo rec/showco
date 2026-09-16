@@ -140,7 +140,7 @@ class X18TestRouting:
 
     def __enter__(self) -> X18TestRouting:
         try:
-            self.osc.set('/lr/mix/on', 0)
+            self._change('/lr/mix/on', 0)
             source_pair = self.source_channel - (self.source_channel + 1) % 2
             self._change(f'/config/chlink/{source_pair}-{source_pair + 1}', 0)
             for pair in sorted({send - (send + 1) % 2 for send in self.sends}):
@@ -199,10 +199,6 @@ class X18TestRouting:
             except (OSError, TimeoutError, ValueError) as e:
                 error = error or e
         self.saved.clear()
-        try:
-            self.osc.set('/lr/mix/on', 1)
-        except (OSError, TimeoutError, ValueError) as e:
-            error = error or e
         if error is not None:
             raise error
 

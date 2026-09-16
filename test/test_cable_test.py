@@ -96,11 +96,13 @@ def test_analyze_reports_no_signal() -> None:
     assert result.line() == 'FAIL: channel 9: no signal'
 
 
-def test_cable_test_pauses_audio_and_restores_mixer_settings() -> None:
+@pytest.mark.parametrize('master_on', [0, 1])
+def test_cable_test_pauses_audio_and_restores_mixer_settings(master_on: int) -> None:
     recs = mock.Mock()
     recs.pause_recording.return_value = True
     recs.action.return_value = models.ActionResult(ok=True, message='ok')
     osc = FakeOsc()
+    osc.values['/lr/mix/on'] = master_on
     calls: list[tuple[str, int, int]] = []
     queried_after_pause = False
 
@@ -133,7 +135,7 @@ def test_cable_test_pauses_audio_and_restores_mixer_settings() -> None:
     assert calls == [('hw:2,0', 1, 48_000)]
     recs.pause_recording.assert_called_once_with()
     recs.action.assert_called_once_with('resume_recording')
-    assert osc.values['/lr/mix/on'] == 1
+    assert osc.values['/lr/mix/on'] == master_on
     assert all(
         value == 0.25 for path, value in osc.values.items() if path != '/lr/mix/on'
     )
@@ -185,11 +187,15 @@ def test_cable_test_leaves_already_paused_recs_paused() -> None:
     recs.action.assert_not_called()
 
 
-def test_cable_test_restores_state_and_resumes_after_audio_failure() -> None:
+@pytest.mark.parametrize('master_on', [0, 1])
+def test_cable_test_restores_state_and_resumes_after_audio_failure(
+    master_on: int,
+) -> None:
     recs = mock.Mock()
     recs.pause_recording.return_value = True
     recs.action.return_value = models.ActionResult(ok=True, message='ok')
     osc = FakeOsc()
+    osc.values['/lr/mix/on'] = master_on
     tester = cable_test.CableTester(
         recs,
         mixer(),
@@ -203,10 +209,31 @@ def test_cable_test_restores_state_and_resumes_after_audio_failure() -> None:
 
     recs.pause_recording.assert_called_once_with()
     recs.action.assert_called_once_with('resume_recording')
-    assert osc.values['/lr/mix/on'] == 1
+    assert osc.values['/lr/mix/on'] == master_on
     assert all(
         value == 0.25 for path, value in osc.values.items() if path != '/lr/mix/on'
     )
+
+
+@pytest.mark.parametrize('master_on', [0, 1])
+def test_routing_restores_master_after_setup_failure(master_on: int) -> None:
+    osc = FakeOsc()
+    osc.values['/lr/mix/on'] = master_on
+    query = osc.query
+
+    def failing_query(path: str) -> str | int | float | bool:
+        if path == '/config/chlink/1-2':
+            raise TimeoutError('setup failed')
+        return query(path)
+
+    with (
+        mock.patch.object(osc, 'query', side_effect=failing_query),
+        pytest.raises(TimeoutError, match='setup failed'),
+        cable_test.X18TestRouting(osc, 1, [9], [1]),
+    ):
+        pytest.fail('setup should not complete')
+
+    assert osc.values['/lr/mix/on'] == master_on
 
 
 def test_cable_test_resumes_after_audio_device_discovery_failure() -> None:
