@@ -1,0 +1,25 @@
+<section id="setlist-controls">
+  <h3>Set list</h3>
+  <div id="cue-position" aria-live="polite">Loading set list...</div>
+  <p id="cue-notes"></p>
+  <p id="cue-elapsed"></p>
+  <div class="performance-buttons">
+    <button type="button" data-workflow-action="setlist-next" disabled>Start next song</button>
+  </div>
+  <details><summary>Skip, repeat, or interval</summary>
+  <div class="performance-buttons">
+    <button type="button" data-workflow-action="setlist-skip" disabled>Skip next song</button>
+    <button type="button" data-workflow-action="setlist-repeat" disabled>Repeat current song</button>
+    <button type="button" data-workflow-action="setlist-interval" disabled>Start interval</button>
+  </div>
+  </details>
+  <p id="cue-message" role="status"></p>
+  <div id="cue-resolution" hidden>
+    <p>Marker delivery is uncertain. Keeping the cue sends nothing.
+      Retrying may create a duplicate marker.</p>
+    <label><input type="checkbox" id="confirm-cue-resolution"> I checked the outcome and chose how to proceed</label>
+    <button type="button" data-workflow-action="setlist-accept" disabled>Keep cue without resending</button>
+    <button type="button" data-workflow-action="setlist-retry" disabled>Retry marker with duplicate risk</button>
+  </div>
+  <p id="workflow-result" role="status"></p>
+</section>

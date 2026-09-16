@@ -320,7 +320,8 @@ def _streamo_actions(title_fields: list[str]) -> str:
 def performance_page() -> str:
     return page(
         'Performance',
-        """
+        site_file('setlist-controls.html')
+        + """
       <section class="performance" id="performance-screen">
         <h2>Performance</h2>
         <div class="performance-status" aria-live="polite">
@@ -351,7 +352,13 @@ def performance_page() -> str:
         <details><summary>Choose inputs to pin</summary>
           <div id="input-pins"></div></details>
       </section>""",
-        script=site_file('performance.js'),
+        script=site_file('performance.js') + site_file('workflow.js'),
+    )
+
+
+def workflow_page(name: str) -> str:
+    return page(
+        name.title(), site_file(f'{name}.html'), script=site_file('workflow.js')
     )
 
 
@@ -375,6 +382,9 @@ def page(title: str, body: str, *, script: str = '') -> str:
     <h1>showCo</h1>
     <nav>
       <a href="/performance">Performance</a>
+      <a href="/setlist">Set list</a>
+      <a href="/soundcheck">Soundcheck</a>
+      <a href="/recovery">Recovery</a>
       <a href="/channels">Channels</a>
       <a href="/health">Health</a>
       <a href="/playback">Playback</a>

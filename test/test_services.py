@@ -128,7 +128,7 @@ class ServicesTests(unittest.TestCase):
         with mock.patch(
             'showco.runtime.services.service_registry', return_value=registry
         ):
-            result = services.restart_streamo_service()
+            result = services.restart_service('streamo')
 
         self.assertTrue(result.ok)
         self.assertEqual(result.message, 'streamo restart requested')

@@ -24,8 +24,12 @@ from . import (
     performance,
     readiness,
     recording_progress,
+    recovery,
     services,
+    setlist,
+    soundcheck,
     views,
+    workflows,
 )
 from .lyte import LyteClient
 from .mixer import MixersMonitor, MixerSpec
@@ -58,7 +62,12 @@ class ShowcoApp:
         self.streamo = streamo
         self.system = system
         self.mixers = mixers
-        self.streamo_restart = streamo_restart or services.restart_streamo_service
+        self.streamo_restart = streamo_restart or (
+            lambda: services.restart_service('streamo')
+        )
+        self.recovery_restart: Callable[[str], models.ActionResult] = (
+            services.restart_service
+        )
         self.waveforms = waveforms
         self.lyte = lyte
         self.cable_tester = cable_tester
@@ -68,6 +77,8 @@ class ShowcoApp:
         self.action_lock = threading.Lock()
         self.action_log_lock = threading.Lock()
         self.status_lock = threading.Lock()
+        self.soundcheck_lock = threading.Lock()
+        self.soundcheck_error: str | None = None
         self.performance_lock = performance.PerformanceLock(
             state_directory / 'performance.json' if state_directory else None
         )
@@ -75,6 +86,15 @@ class ShowcoApp:
             state_directory / 'incidents.json' if state_directory else None
         )
         self.recording_progress = recording_progress.ProgressMonitor()
+        self.setlist = setlist.SetListController(
+            state_directory / 'setlist.json' if state_directory else None
+        )
+        self.soundcheck = soundcheck.Soundcheck(
+            state_directory / 'soundcheck.json' if state_directory else None
+        )
+        self.recovery = recovery.Recovery(
+            state_directory / 'recovery.json' if state_directory else None
+        )
 
     def status(self) -> models.ShowStatus:
         with self.status_lock:
@@ -111,6 +131,13 @@ class ShowcoApp:
             status = status.model_copy(
                 update={'recording_progress': self.recording_progress.observe(recs)}
             )
+            with self.soundcheck_lock:
+                try:
+                    workflows.refresh_soundcheck(self, status)
+                except OSError as error:
+                    self.soundcheck_error = f'Soundcheck evidence unavailable: {error}'
+                else:
+                    self.soundcheck_error = None
             observed = self.incidents.observe(status)
             return status.model_copy(
                 update={
@@ -120,6 +147,7 @@ class ShowcoApp:
                     'observed_at': datetime.now().astimezone(),
                     'monitoring_error': self.performance_lock.error
                     or self.incidents.storage_error
+                    or self.soundcheck_error
                     or (
                         self.system.observation_error
                         if isinstance(self.system, PerformanceMonitor)
@@ -178,6 +206,18 @@ class ShowcoApp:
             return models.ActionResult(
                 ok=True, message='Fault acknowledged; it remains active until recovery'
             )
+        if action.startswith(('setlist-', 'soundcheck-', 'recovery-')):
+            return workflows.run(self, form)
+        if action in performance.PROTECTED_ACTIONS:
+            with self.soundcheck_lock:
+                try:
+                    self.soundcheck.invalidate(
+                        'Configuration or output test requested; repeat soundcheck'
+                    )
+                except OSError as error:
+                    self.soundcheck_error = (
+                        f'Soundcheck invalidation not saved: {error}'
+                    )
         if action == 'recs-calibrate':
             device = form.get('device', '')
             channels = _channel_numbers(form.get('channels', ''))
@@ -271,6 +311,17 @@ class ShowcoHandler(BaseHTTPRequestHandler):
             return
         if self.path == '/performance':
             self._html(views.performance_page())
+            return
+        if self.path in {'/setlist', '/soundcheck', '/recovery'}:
+            self._html(views.workflow_page(self.path[1:]))
+            return
+        if self.path == '/workflow-status':
+            with self.app.action_lock:
+                payload = workflows.status(self.app)
+            self._json(payload)
+            return
+        if self.path == '/diagnostics':
+            workflows.download(self)
             return
         if self.path == '/health':
             self._html(views.health_page(self.app.status()))
@@ -431,7 +482,7 @@ class ShowcoHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-    def _json(self, value: models.ShowStatus) -> None:
+    def _json(self, value: models.ShowStatus | workflows.WorkflowStatus) -> None:
         data = value.model_dump_json().encode()
         self.send_response(200)
         self.send_header('Cache-Control', 'no-store')

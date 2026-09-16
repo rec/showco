@@ -70,6 +70,8 @@ def sources(state_directory: Path, config_directory: Path) -> list[Path]:
         path
         for path in [
             state_directory / 'recs/status.json',
+            state_directory / 'showco/incidents.json',
+            state_directory / 'showco/recovery.json',
             config_directory / 'config.toml',
             config_directory / 'mixers.toml',
         ]
