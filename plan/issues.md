@@ -104,17 +104,23 @@ Document the trust boundary of the show network and choose protection appropriat
 
 ### 14. Browser failures retain apparently live information
 
+**Resolved.** Status and playback polling share a five-second abort deadline and visible connection indicator with the last successful update time. Failed status refreshes mark readiness unknown rather than retaining a ready label.
+
 **Bug in observability.** Both `site/status-script.js:updateStatus` and `site/playback-script.js:poll` swallow refresh failures. Fetches have no explicit deadline. A disconnected tablet can show old ready/recording values without a visible connection age, and a hanging request prevents the next poll from being scheduled.
 
 Display a stale/disconnected state and last successful refresh time. Bound each poll and preserve useful error details for diagnosis.
 
 ### 15. The browser's lyte display uses a superseded schema
 
+**Resolved.** The browser renders running state, animations, and per-string state/frame counts from the current model. Executable JavaScript tests cover connected and disabled responses.
+
 **Bug.** `site/status-script.js:lyteDetail` reads `daemon_state`, `output_state`, `host`, and `frame_send_count`. `models.LyteStatus` contains `running`, animation fields, and a `strings` mapping instead. Once issue 1 is fixed, connected lighting still displays undefined or missing details.
 
 Render the current lyte model and verify connected, disabled, and per-string failure cases.
 
 ### 16. Editing while a track-name save is in flight loses the saved-value boundary
+
+**Resolved.** Save acknowledgments record the submitted name; a subsequent edit remains dirty. A delayed-response JavaScript regression verifies this case.
 
 **Bug.** `site/status-script.js:saveTrackName` submits the current input value, but after the response it assigns `form.dataset.savedTrackName = input.value` again. If the operator changes A to B while the request for A is pending, B is marked saved even though only A reached recs. A later save can skip B and revert can restore the wrong value.
 

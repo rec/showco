@@ -778,7 +778,14 @@ def _streamo_actions(title_fields: list[str]) -> str:
 
 
 def page(title: str, body: str, *, script: str = '') -> str:
-    page_script = f'<script>{script}</script>' if script else ''
+    page_script = (
+        f'<script>{site_file("status-connection.js")}</script><script>{script}</script>'
+        if script
+        else ''
+    )
+    connection = (
+        '<p id="connection-status" role="status">Connecting...</p>' if script else ''
+    )
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -799,7 +806,7 @@ def page(title: str, body: str, *, script: str = '') -> str:
       <a href="/errors">Errors</a>
     </nav>
   </header>
-  <main>{body}</main>
+  <main>{connection}{body}</main>
   <script>{site_file('shutdown-action.js')}</script>
   {page_script}
 </body>

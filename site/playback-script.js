@@ -26,9 +26,8 @@
   }
 
   async function refresh() {
-    const response = await fetch("/status", {cache: "no-store"});
-    if (!response.ok) throw new Error(`status request failed: ${response.status}`);
-    update((await response.json()).recs.playback);
+    update((await requestStatus()).recs.playback);
+    statusConnected();
   }
 
   for (const form of document.querySelectorAll("#playback-transport form")) {
@@ -58,13 +57,13 @@
       } finally {
         button.removeAttribute("aria-busy");
         button.disabled = false;
-        await refresh().catch(() => {});
+        await refresh().catch(statusFailed);
       }
     });
   }
 
   function poll() {
-    refresh().catch(() => {}).finally(() => setTimeout(poll, 1000));
+    refresh().catch(statusFailed).finally(() => setTimeout(poll, 1000));
   }
 
   poll();

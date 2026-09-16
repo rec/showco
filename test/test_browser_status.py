@@ -17,6 +17,13 @@ def test_browser_refresh_consumes_current_status_schema(state: str) -> None:
             output_bitrate_kbps=128 if state == 'connected' else None,
         ),
         system=models.SystemStatus(temperature_c=42),
+        lyte=models.LyteStatus(
+            service=models.ServiceStatus(name='lyte', state=state),
+            running=True,
+            strings={
+                'stage': models.LyteStringStatus(state='streaming', frame_count=42)
+            },
+        ),
     )
     subprocess.run(
         ['node', 'test/browser_status.cjs'],
