@@ -10,6 +10,21 @@ from showco.deployment.bundle import create_bundle
 
 
 class BundleTests(unittest.TestCase):
+    def test_two_bundles_at_the_same_time_have_separate_destinations(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            destinations = [
+                create_bundle(
+                    root / 'bundles',
+                    state_directory=root / 'state',
+                    config_directory=root / 'config',
+                    now=datetime(2026, 9, 10, tzinfo=timezone.utc),
+                )
+                for _ in range(2)
+            ]
+            self.assertNotEqual(*destinations)
+            self.assertTrue(all((p / 'bundle.json').is_file() for p in destinations))
+
     def test_excludes_secrets_and_includes_recording_journal(self) -> None:
         with TemporaryDirectory() as directory:
             root = Path(directory)
