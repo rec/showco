@@ -29,6 +29,9 @@ client-side tooling unless the user explicitly asks for that direction.
 - `showco/runtime/rehearsal.py`: in-process fakes for local rehearsal and tests.
 - `showco/provision/`: configuration, card preparation, remote provisioning,
   verification, and the generated target script.
+- `showco/provision/templates/`: system, network, service, and execution sections
+  assembled into one remote shell script.
+- `showco/deployment/target_update.py`: target transaction and rollback.
 - `showco/deployment/update.py` and `showco/deployment/local_update.py`: target deployment and local
   publication for reccy, recs, streamo, lyte, and showco.
 

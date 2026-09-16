@@ -1,5 +1,9 @@
 # Repository issues
 
+Current status: software fixes are implemented and tested. Issues 8 and 9, hardware calibration in 10, and physical acceptance in 25 remain open. The operator deferred hardware testing on 2026-09-16. No Pi or X18 acceptance result is implied by the automated checks.
+
+The findings below preserve the original review for context; resolution paragraphs describe the changes made afterward.
+
 Reviewed against `04e1a48` on 2026-09-16. This is a source review, not a hardware acceptance result. No application, services, deployment, or tests were run for this documentation-only task. Private configuration contents were not inspected.
 
 Entries marked **Bug** follow directly from the source. **Risk** describes a failure path whose real-world occurrence still needs verification. **Design** identifies an operator or maintenance concern, rather than necessarily incorrect behavior. Suggested changes are follow-up work, not changes made by this review.
@@ -191,6 +195,8 @@ Choose whether installed wheels are supported. If so, verify an isolated wheel i
 Update references and public wording to current concepts. Preserve actual lowercase executable/module names where they are required, rather than mechanically changing code identifiers to branding.
 
 ### 24. Several files combine too many responsibilities
+
+**Resolved by separating existing responsibilities.** HTTP and action handling are separate from HTML views, waveform transport is separate from recs control, and target rollback has its own module. Browser channel controls are separate from status rendering and connection tracking. Provisioning shell sections are assembled into one target script from system, network, services, and execution files. Rendering, provisioning configuration, generated-script, local publication, and target transaction tests now have separate modules. Remaining file lengths reflect cohesive responsibilities rather than an arbitrary size limit.
 
 **Maintenance.** Current sizes are approximately:
 
