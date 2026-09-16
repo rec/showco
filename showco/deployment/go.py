@@ -84,7 +84,7 @@ def run(options: provision.GoOptions) -> int:
             root=options.root,
             target_config=provision_config,
             output=sys.stdout,
-            autosquash=options.autosquash or 50,
+            autosquash=options.autosquash if options.autosquash is not None else 50,
             clear_settings=options.clear_settings,
         )
     if options.upgrade:

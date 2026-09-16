@@ -146,11 +146,15 @@ Name this narrowly as signal presence on recording channels, or expand it to the
 
 ### 20. `--autosquash 0` is ignored on the normal update path
 
+**Resolved.** Normal deployment preserves an explicit zero; regression coverage checks that it reaches the updater.
+
 **Bug.** `showco/deployment/go.py:run` passes `options.autosquash or 50` to `update_from_provisioning_machine`, turning an explicit zero into 50. The push/sync path correctly distinguishes `None` from zero. A user trying to disable rewriting gets different behavior depending on the selected mode.
 
 Use the same explicit `None` handling for both paths and verify zero separately from omission.
 
 ### 21. Diagnostic bundle names collide within one second
+
+**Resolved.** Bundle directories use atomic unique creation with the UTC timestamp as a prefix. A regression creates two bundles at the same supplied time.
 
 **Bug.** `showco/deployment/bundle.py:create_bundle` names the destination using whole-second UTC time and calls `mkdir` without collision handling. Two invocations in one second raise `FileExistsError`; a partial previous attempt in that second has the same effect.
 

@@ -183,6 +183,19 @@ class GoTests(unittest.TestCase):
         refresh.assert_not_called()
         resolved.assert_not_called()
 
+    def test_normal_update_respects_disabled_autosquash(self) -> None:
+        with (
+            mock.patch('showco.provision.provision.resolved_config'),
+            mock.patch(
+                'showco.deployment.local_update.update_from_provisioning_machine',
+                return_value=0,
+            ) as deploy,
+        ):
+            self.assertEqual(
+                go.run(self.options(repositories=['recs'], autosquash=0)), 0
+            )
+        self.assertEqual(deploy.call_args.kwargs['autosquash'], 0)
+
     def test_sync_prepares_and_refreshes_local_repositories(self) -> None:
         options = self.options(sync=True, repositories=['recs'], autosquash=0)
         with (

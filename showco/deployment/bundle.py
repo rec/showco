@@ -5,6 +5,7 @@ import shutil
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from tempfile import mkdtemp
 
 import tyro
 from pydantic import BaseModel
@@ -35,8 +36,10 @@ def create_bundle(
     now: datetime | None = None,
 ) -> Path:
     now = now or datetime.now(timezone.utc)
-    destination = output_directory / now.strftime('%Y%m%dT%H%M%SZ')
-    destination.mkdir(parents=True)
+    output_directory.mkdir(parents=True, exist_ok=True)
+    destination = Path(
+        mkdtemp(prefix=now.strftime('%Y%m%dT%H%M%SZ-'), dir=output_directory)
+    )
     copied = []
     for source in sources(state_directory, config_directory):
         target = destination / bundle_path(source, state_directory, config_directory)
