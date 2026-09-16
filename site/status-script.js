@@ -22,8 +22,8 @@
     } files`;
   }
 
-  function streamingText(twitcho) {
-    return `${twitcho.stream_state}${twitcho.muted ? ", muted" : ""}`;
+  function streamingText(streamo) {
+    return `${streamo.stream_state}${streamo.muted ? ", muted" : ""}`;
   }
 
   function lyteDetail(lyte) {
@@ -526,8 +526,8 @@
         recordingProgress.textContent = `recording progress: ${status.recording_progress.message}`;
       }
       updateService(
-        "streaming", status.twitcho.service, streamingText(status.twitcho),
-        "twitcho-health",
+        "streaming", status.streamo.service, streamingText(status.streamo),
+        "streamo-health",
       );
       const lyteHealth = document.getElementById("lyte-health");
       if (lyteHealth) lyteHealth.textContent = `lyte: ${lyteDetail(status.lyte)}`;
@@ -545,9 +545,9 @@
       }
       const bitrate = document.getElementById("bitrate");
       if (bitrate) {
-        bitrate.textContent = status.twitcho.output_bitrate_kbps === null
+        bitrate.textContent = status.streamo.output_bitrate_kbps === null
           ? "unknown"
-          : `${status.twitcho.output_bitrate_kbps.toFixed(0)} kbps`;
+          : `${status.streamo.output_bitrate_kbps.toFixed(0)} kbps`;
       }
       const mixers = document.getElementById("mixers");
       if (mixers) {

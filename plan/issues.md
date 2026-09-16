@@ -8,6 +8,8 @@ Entries marked **Bug** follow directly from the source. **Risk** describes a fai
 
 ### 1. Browser status refresh crashes on the old streaming field
 
+**Resolved.** Browser fields and the health element now use `streamo`. An executable JavaScript regression consumes serialized `ShowStatus` for connected and disabled streamO and verifies rendering continues to the end of the refresh. The test requires Node.js.
+
 **Bug.** `site/status-script.js:updateStatus` reads `status.twitcho.service`, `status.twitcho.output_bitrate_kbps`, and other `twitcho` fields. `showco/runtime/models.py:ShowStatus` exposes only `streamo`. Every normal response therefore throws before channel, readiness, incident, input-check, temperature, and mixer updates execute. The empty `.catch(() => {})` hides the failure, leaving much of the page frozen at its initial values.
 
 Use the current response schema throughout the browser. Verify a complete refresh using a real serialized `ShowStatus`, including disabled streamO.
