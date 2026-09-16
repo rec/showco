@@ -193,6 +193,11 @@ def test_cable_test_pauses_audio_and_restores_mixer_settings(master_on: int) -> 
         tone: np.ndarray,
     ) -> np.ndarray:
         calls.append((device, source_channel, sample_rate))
+        assert all(
+            osc.values[f'/ch/{source_channel:02}/mix/{s:02}/level']
+            == cable_test.UNITY_FADER
+            for s in [1, 2, 3]
+        )
         return np.broadcast_to(tone[:, np.newaxis], (tone.size, 18)).copy()
 
     tester = cable_test.CableTester(
@@ -203,7 +208,7 @@ def test_cable_test_pauses_audio_and_restores_mixer_settings(master_on: int) -> 
         round_trip=round_trip,
     )
 
-    report = tester.run([9, 10], [1])
+    report = tester.run([9, 10], [1, 2, 3])
 
     assert report.passed
     assert queried_after_pause
