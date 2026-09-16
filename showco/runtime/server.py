@@ -20,6 +20,7 @@ from ..x18.cable_test import CableTester, cable_tester_from_specs, parse_range
 from . import (
     incidents,
     input_check,
+    lighting,
     models,
     performance,
     readiness,
@@ -88,6 +89,9 @@ class ShowcoApp:
         self.recording_progress = recording_progress.ProgressMonitor()
         self.setlist = setlist.SetListController(
             state_directory / 'setlist.json' if state_directory else None
+        )
+        self.lighting = lighting.LightingController(
+            state_directory / 'lighting.json' if state_directory else None
         )
         self.soundcheck = soundcheck.Soundcheck(
             state_directory / 'soundcheck.json' if state_directory else None
@@ -206,7 +210,7 @@ class ShowcoApp:
             return models.ActionResult(
                 ok=True, message='Fault acknowledged; it remains active until recovery'
             )
-        if action.startswith(('setlist-', 'soundcheck-', 'recovery-')):
+        if action.startswith(('setlist-', 'soundcheck-', 'recovery-', 'lighting-')):
             return workflows.run(self, form)
         if action in performance.PROTECTED_ACTIONS:
             with self.soundcheck_lock:
@@ -312,7 +316,7 @@ class ShowcoHandler(BaseHTTPRequestHandler):
         if self.path == '/performance':
             self._html(views.performance_page())
             return
-        if self.path in {'/setlist', '/soundcheck', '/recovery'}:
+        if self.path in {'/setlist', '/soundcheck', '/recovery', '/lighting'}:
             self._html(views.workflow_page(self.path[1:]))
             return
         if self.path == '/workflow-status':
@@ -577,6 +581,7 @@ def make_server(
     streamo_restart: Callable[[], models.ActionResult] | None = None,
     streamo_enabled: bool = False,
     lyte_enabled: bool = False,
+    lyte: LyteClient | None = None,
     performance_enabled: bool = False,
     mixer_specs: list[MixerSpec] | None = None,
 ) -> ThreadingHTTPServer:
@@ -602,7 +607,7 @@ def make_server(
         mixers or MixersMonitor([]),
         streamo_restart if streamo_enabled else None,
         waveforms,
-        LyteClient(enabled=lyte_enabled),
+        lyte if lyte is not None else LyteClient(enabled=lyte_enabled),
         (
             cable_tester_from_specs(recs_client, mixer_specs)
             if mixer_specs and any(m.name == 'X18' for m in mixer_specs)

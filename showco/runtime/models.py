@@ -127,6 +127,8 @@ class LyteStringStatus(BaseModel, frozen=True):
 class LyteStatus(BaseModel, frozen=True):
     service: ServiceStatus
     running: bool = False
+    animations: list[str] = Field(default_factory=list)
+    blackout: bool = False
     active_animation: str | None = None
     queued_animation: str | None = None
     strings: dict[str, LyteStringStatus] = Field(default_factory=dict)

@@ -1,7 +1,7 @@
 import subprocess
 from pathlib import Path
 
-from showco.runtime import models, recovery, setlist, soundcheck, workflows
+from showco.runtime import lighting, models, recovery, setlist, soundcheck, workflows
 
 
 def test_workflow_browser_cues_uncertainty_checks_recovery_and_disconnection() -> None:
@@ -14,6 +14,7 @@ def test_workflow_browser_cues_uncertainty_checks_recovery_and_disconnection() -
                 service=models.ServiceStatus(name='streamo', state='disabled')
             ),
         ),
+        lighting=lighting.LightingState(),
         setlist=setlist.SetList(
             revision=1,
             songs=[

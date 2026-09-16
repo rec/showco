@@ -45,6 +45,7 @@ def run_web_ui(options: WebUiOptions) -> int:
             system=rehearsal.RehearsalSystemMonitor(),
             mixers=rehearsal.RehearsalMixersMonitor(),
             streamo_restart=rehearsal.restart_streamo,
+            lyte=rehearsal.RehearsalLyteClient(),
             streamo_enabled=True,
         )
         print(f'showco rehearsal listening on http://{options.host}:{options.port}')

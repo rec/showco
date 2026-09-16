@@ -358,7 +358,9 @@ def performance_page() -> str:
 
 def workflow_page(name: str) -> str:
     return page(
-        name.title(), site_file(f'{name}.html'), script=site_file('workflow.js')
+        name.title(),
+        site_file(f'{name}.html'),
+        script=site_file('lighting.js' if name == 'lighting' else 'workflow.js'),
     )
 
 
@@ -383,6 +385,7 @@ def page(title: str, body: str, *, script: str = '') -> str:
     <nav>
       <a href="/performance">Performance</a>
       <a href="/setlist">Set list</a>
+      <a href="/lighting">Lighting cues</a>
       <a href="/soundcheck">Soundcheck</a>
       <a href="/recovery">Recovery</a>
       <a href="/channels">Channels</a>
