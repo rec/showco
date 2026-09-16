@@ -100,6 +100,8 @@ Apply connection-level admission and finite read deadlines. Clarify that the cur
 
 ### 13. Network clients can perform actions without authentication or origin checks
 
+**Resolved for a trusted-network deployment.** Cross-site browser actions and mismatched Origin headers are rejected before reading the action body. Documentation explicitly limits use to a trusted show network; network clients are not authenticated. Adding login remains a separate deployment-policy choice.
+
 **Design / risk.** `ShowcoHandler._do_post` accepts form submissions without authentication, a CSRF token, or an Origin check. Reachable clients can pause recording, shut down recs, or run a cable test. An unrelated browser page can attempt ordinary cross-origin form posts where browser network policy permits them; reading the response is not required to cause the action.
 
 Document the trust boundary of the show network and choose protection appropriate to it. Do not rely on response CORS restrictions as action authorization.

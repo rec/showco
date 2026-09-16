@@ -118,6 +118,8 @@ The Health page samples Pi temperature, aggregate CPU use, memory use, and Recs 
 
 ## Service and protocol boundaries
 
+The web UI is for a trusted show network and has no login. Every client that can reach it can operate it. Do not expose the web port to the public Internet or an untrusted network. Browser action requests from a different origin are rejected; this is protection against cross-site submissions, not authentication of network clients. Command-line clients without an Origin header remain supported.
+
 `showco.service` runs the standard-library HTTP server. Recs, Lyte, and Streamo are user services and communicate with Showco through their public Reccy RPC interfaces. Showco creates a Recs control client per request, serializes actions, gives operator actions a six-second timeout, and caches short status snapshots for one second. The last valid Recs snapshot remains visible and is marked stale after a transport failure.
 
 The mixer state combines Recs-reported audio and MIDI input names with an optional TCP or UDP probe. For X18, the UDP probe sends `/xremote` and waits for a reply. It is a reachability hint only; confirm mixer control with the tablet application or real OSC feedback. X18 `/xremote` subscriptions are renewed for feedback, but successful renewals are not recording events.

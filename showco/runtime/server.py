@@ -303,6 +303,21 @@ class ShowcoHandler(BaseHTTPRequestHandler):
         if self.path != '/actions':
             self.send_error(404)
             return
+        if self.headers.get('Sec-Fetch-Site') == 'cross-site':
+            self.send_error(403, 'cross-site actions are not allowed')
+            return
+        if (origin := self.headers.get('Origin')) is not None:
+            try:
+                parsed_origin = parse.urlsplit(origin)
+            except ValueError:
+                self.send_error(403, 'invalid action origin')
+                return
+            if parsed_origin.scheme not in {
+                'http',
+                'https',
+            } or parsed_origin.netloc != self.headers.get('Host'):
+                self.send_error(403, 'action origin does not match this server')
+                return
         try:
             form = self._form()
         except FormError as error:
