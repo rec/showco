@@ -16,6 +16,8 @@ Use the current response schema throughout the browser. Verify a complete refres
 
 ### 2. Cable-test cleanup unconditionally unmutes the main mix
 
+**Resolved.** The main mix state is now saved and restored with the other mixer settings. Tests cover both initial states after success, audio failure, and setup failure.
+
 **Bug.** `showco/x18/cable_test.py:X18TestRouting.__enter__` sets `/lr/mix/on` to zero without saving it. `_restore` always sets it to one, including after setup failure. A mixer that was intentionally muted is unmuted by the test. Existing restoration tests assert this behavior rather than preservation of the original state.
 
 Save and restore the master state just like the other changed settings. Verify both initially muted and initially unmuted cases, including failure during setup.
