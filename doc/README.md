@@ -35,7 +35,7 @@ For a full installation or major-change check, also power-cycle the Pi, test dev
 - **Pause recording**, **resume recording**, and **start new recording session** change Recs recording. Use the action result and the Health page to confirm the new state.
 - The named marker buttons create `show start`, `song start`, `song end`, `set break`, or `show end` markers. A custom marker is also available.
 - **Shutdown Recs daemon** requires choosing the shutdown confirmation. It stops the recorder.
-- **Test lights** runs Lyte's one-second, 30-percent test and leaves the lights off. Showco automatically runs the same test once when Lyte first connects.
+- **Test lights** runs lyte's one-second, 30-percent test and leaves the lights off. It runs only when you press the button; status polling and reconnects never trigger it.
 - **Test X18 cables** pauses audio recording while it runs, then restores it if it was recording. It temporarily changes X18 routing and restores the affected mixer settings afterward. The default sends the same tone to AUX 1-6 at once and records inputs 9-14, so the cables may be connected in any order. It reports input channels with no signal or a distorted signal. Results require at least 98 percent tone similarity, 70-130 percent level, and no clipping.
 - Streamo actions appear only when streaming is enabled. They include restart, mute, unmute, stop, stream information, chat, announcement, clip, and marker actions.
 

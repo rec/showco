@@ -40,6 +40,8 @@ At minimum, perform non-mutating preflight checks first and scope clearing to th
 
 ### 5. Reading status can change live lighting, repeatedly
 
+**Resolved.** Per operator decision, light tests run only through the explicit Test lights action. Status and reconnection no longer produce physical lighting output.
+
 **Design / risk.** `showco/runtime/server.py:ShowcoApp._lyte_status` calls the light-test action when lyte becomes connected. Any non-connected status resets the flag, so a transient error followed by recovery triggers another test. Opening a page or polling `/status` can therefore change physical lighting during a performance. `doc/README.md` describes a test “once when Lyte first connects,” which understates the reconnect behavior.
 
 Define whether this belongs at startup, on explicit operator request, or on every reconnect. Keep status polling free of unexpected output changes, or make that behavior explicit in the operational contract.

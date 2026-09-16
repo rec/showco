@@ -837,7 +837,7 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(result, expected)
         lyte.test.assert_called_once_with()
 
-    def test_lyte_reconnection_queues_one_light_test(self) -> None:
+    def test_lyte_reconnection_does_not_trigger_light_tests(self) -> None:
         lyte = mock.Mock(spec=LyteClient)
         offline = models.LyteStatus(
             service=models.ServiceStatus(name='lyte', state='offline')
@@ -860,7 +860,7 @@ class ServerTests(unittest.TestCase):
         for _ in range(5):
             app.status()
 
-        self.assertEqual(lyte.test.call_count, 2)
+        lyte.test.assert_not_called()
 
     def test_stream_restart_action_uses_service_restart(self) -> None:
         restart = mock.Mock(

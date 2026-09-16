@@ -63,8 +63,6 @@ class ShowcoApp:
         self.action_log: list[models.ActionLogEntry] = []
         self.action_lock = threading.Lock()
         self.action_log_lock = threading.Lock()
-        self.lyte_status_lock = threading.Lock()
-        self.lyte_connected = False
         self.incidents = incidents.IncidentTimeline()
         self.recording_progress = recording_progress.ProgressMonitor()
 
@@ -79,7 +77,13 @@ class ShowcoApp:
         recs = recs.model_copy(
             update={'errors': errors_since(recs.errors, self.run_started_at)}
         )
-        lyte = self._lyte_status()
+        lyte = (
+            self.lyte.status()
+            if self.lyte is not None
+            else models.LyteStatus(
+                service=models.ServiceStatus(name='lyte', state='disabled')
+            )
+        )
         status = models.ShowStatus(
             recs=recs,
             streamo=streamo,
@@ -100,22 +104,6 @@ class ShowcoApp:
                 'input_checks': input_check.checks(recs.channels),
             }
         )
-
-    def _lyte_status(self) -> models.LyteStatus:
-        if self.lyte is None:
-            return models.LyteStatus(
-                service=models.ServiceStatus(name='lyte', state='disabled')
-            )
-        status = self.lyte.status()
-        with self.lyte_status_lock:
-            if status.service.state != 'connected':
-                self.lyte_connected = False
-                return status
-            if self.lyte_connected:
-                return status
-            self.lyte_connected = True
-        self.run_action({'action': 'lyte-test'})
-        return status
 
     def run_action(self, form: dict[str, str]) -> models.ActionResult:
         with self.action_lock:
