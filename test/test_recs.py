@@ -366,6 +366,7 @@ class RecsTests(unittest.TestCase):
     def test_waveform_bridge_subscribes_and_unsubscribes(self) -> None:
         subscribed = Event()
         events: rpc.EventClient = mock.Mock(spec=rpc.EventClient)
+        events.wait_closed.side_effect = Event().wait
         control = mock.Mock(spec=RecsControlClient)
 
         def call(

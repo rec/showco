@@ -5,6 +5,7 @@ import string
 import sys
 from pathlib import Path
 from subprocess import CalledProcessError, TimeoutExpired
+from typing import cast
 
 from reccy.runtime import subprocess
 
@@ -123,7 +124,7 @@ def applied_provisioning_fingerprint(provision_config: config.Config) -> str | N
         )
     except TimeoutExpired:
         return None
-    fingerprint = completed.stdout.strip()
+    fingerprint = cast(str, completed.stdout).strip()
     if completed.returncode != 0 or len(fingerprint) != 64:
         return None
     if not all(character in string.hexdigits for character in fingerprint):

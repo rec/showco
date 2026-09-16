@@ -25,6 +25,8 @@ Open showCo on the show network at the configured address and port. The Health p
 
 The browser refreshes status and channel data. Waveforms use a dedicated event stream and resynchronize after a delayed browser connection. An unavailable optional service does not make the other pages unavailable.
 
+The waveform bridge uses reccy's `EventClient.wait_closed()` to detect a closed connection even if recs sends no shutdown event. It closes the old client, retains the one-second interruptible retry delay, creates a fresh client, and checks recs's subscription activation response. Explicit shutdown events and invalid waveform data also trigger reconnection. Stopping showCo interrupts its connection wait; this does not change snapshot/event ordering or replay control commands.
+
 On the target, background sampling collects service and recording observations even with no browser open. The latest 100 incident events and up to 100 active faults are retained in `~/.local/state/showco/incidents.json` across restarts. Changes between samples can still be missed. A fault banner shows its start time, latest evidence, and a next step. Acknowledgment does not resolve a fault; recurrence after recovery requires a new acknowledgment. History write failures remain visible, and observations continue in memory.
 
 Recording-input checks cover channels currently recording and flag silence or clipping. Recording progress needs an observed increase after startup, pause, or a session counter reset. Silence filtering can legitimately pause file growth; a write-progress observation alone is not a reason to restart recs.

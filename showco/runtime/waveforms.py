@@ -19,6 +19,7 @@ MAX_WAVEFORM_EVENTS = 400
 WAVEFORM_RECONNECT_SECONDS = 1.0
 WAVEFORM_FAILURE_LOG_SECONDS = 60.0
 WAVEFORM_CLOSE_SECONDS = 1.0
+WAVEFORM_STOP_POLL_SECONDS = 0.1
 LOGGER = logging.get_logger(__name__)
 
 
@@ -117,7 +118,9 @@ class WaveformBridge:
                     or result.get('active') is not True
                 ):
                     raise ConnectionError('recs did not activate waveforms')
-                self.reconnect.wait()
+                while not self.stopped.is_set() and not self.reconnect.is_set():
+                    if events.wait_closed(WAVEFORM_STOP_POLL_SECONDS):
+                        self.reconnect.set()
             except (
                 ConnectionError,
                 OSError,
