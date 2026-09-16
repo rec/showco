@@ -13,16 +13,16 @@ from recs.base.waveform import (
     WaveformTrackLayout,
 )
 
-from showco.runtime import models, recs
+from showco.runtime import models, recs, waveforms
 from showco.runtime.recs import (
     RecsClient,
-    WaveformBridge,
     channel_levels,
     level_state,
     replace_track_name,
     stereo_tracks,
 )
 from showco.runtime.recs_control import RecsControlClient
+from showco.runtime.waveforms import WaveformBridge
 
 
 class RecsTests(unittest.TestCase):
@@ -332,7 +332,7 @@ class RecsTests(unittest.TestCase):
             rpc.Event(name='waveform_layout', data=waveform_layout().model_dump())
         )
 
-        with mock.patch.object(recs, 'MAX_WAVEFORM_BATCHES', 2):
+        with mock.patch.object(waveforms, 'MAX_WAVEFORM_BATCHES', 2):
             for sequence in range(3):
                 data = waveform_batch().model_dump()
                 data['sequence'] = sequence
@@ -343,7 +343,7 @@ class RecsTests(unittest.TestCase):
         self.assertEqual([b.sequence for b in batches], [1, 2])
 
     def test_waveform_bridge_marks_evicted_event_history_as_missed(self) -> None:
-        with mock.patch.object(recs, 'MAX_WAVEFORM_EVENTS', 2):
+        with mock.patch.object(waveforms, 'MAX_WAVEFORM_EVENTS', 2):
             bridge = WaveformBridge()
         for generation in range(1, 4):
             data = waveform_layout().model_dump()
@@ -357,7 +357,7 @@ class RecsTests(unittest.TestCase):
 
     def test_invalid_waveform_event_reconnects_subscription(self) -> None:
         bridge = WaveformBridge()
-        with mock.patch.object(recs.LOGGER, 'error') as error:
+        with mock.patch.object(waveforms.LOGGER, 'error') as error:
             bridge.receive(rpc.Event(name='waveform_layout', data={}))
 
         self.assertTrue(bridge.reconnect.is_set())
