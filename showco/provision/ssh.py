@@ -4,6 +4,7 @@ import sys
 import time
 from pathlib import Path
 from subprocess import CalledProcessError, CompletedProcess, TimeoutExpired
+from typing import cast
 
 from reccy.runtime import subprocess
 
@@ -75,7 +76,7 @@ def ssh_is_reachable(provision_config: config.Config) -> bool:
         check=False,
         text=True,
     )
-    if has_changed_host_key(completed):
+    if has_changed_host_key(cast(CompletedProcess[str], completed)):
         if not provision_config.accept_changed_host_key:
             sys.exit(
                 'ERROR: SSH host key changed for '
@@ -202,16 +203,22 @@ def run_command(
     timeout_seconds: int | None = None,
 ) -> CompletedProcess[str]:
     if timeout_seconds is None:
-        return subprocess.run(
+        return cast(
+            CompletedProcess[str],
+            subprocess.run(
+                command,
+                capture_output=capture_output,
+                check=True,
+                text=True,
+            ),
+        )
+    return cast(
+        CompletedProcess[str],
+        subprocess.run(
             command,
             capture_output=capture_output,
             check=True,
             text=True,
-        )
-    return subprocess.run(
-        command,
-        capture_output=capture_output,
-        check=True,
-        text=True,
-        timeout=timeout_seconds,
+            timeout=timeout_seconds,
+        ),
     )

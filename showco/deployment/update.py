@@ -6,7 +6,7 @@ import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from subprocess import CalledProcessError, CompletedProcess, TimeoutExpired
-from typing import TextIO
+from typing import TextIO, cast
 
 from pydantic import BaseModel
 from reccy.runtime import subprocess
@@ -454,13 +454,16 @@ def run_command_with_timeout(command: Sequence[str]) -> CompletedProcess[str]:
         if 'rebase' in command:
             env['GIT_SEQUENCE_EDITOR'] = ':'
             env['GIT_EDITOR'] = ':'
-    return subprocess.run(
-        command,
-        capture_output=True,
-        check=False,
-        env=env,
-        text=True,
-        timeout=timeout(command),
+    return cast(
+        CompletedProcess[str],
+        subprocess.run(
+            command,
+            capture_output=True,
+            check=False,
+            env=env,
+            text=True,
+            timeout=timeout(command),
+        ),
     )
 
 

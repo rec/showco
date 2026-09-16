@@ -7,7 +7,7 @@ import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from subprocess import CompletedProcess
-from typing import Annotated, TextIO
+from typing import Annotated, TextIO, cast
 
 import tyro
 from pydantic import BaseModel
@@ -432,7 +432,10 @@ def shlex_quote(value: str) -> str:
 
 
 def run(command: Sequence[str]) -> CompletedProcess[str]:
-    return subprocess.run(command, capture_output=True, check=False, text=True)
+    return cast(
+        CompletedProcess[str],
+        subprocess.run(command, capture_output=True, check=False, text=True),
+    )
 
 
 def check_command_result(completed: CompletedProcess[str]) -> None:
