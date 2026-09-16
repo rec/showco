@@ -209,6 +209,8 @@ Split by existing responsibilities when those areas next change, without adding 
 
 ### 25. Tests do not cover the browser/runtime boundary or real cable acquisition
 
+**Software regressions covered; hardware acceptance remains open.** Executable browser tests consume real serialized status models and exercise connection failures and overlapping edits. Audio subprocess failure cleanup, all selected sends active at capture time, unequal send/input counts, and 48 kHz WAV classification are covered. Fakes do not establish ALSA timing or physical routing; those remain with issues 8–10 and the installation acceptance check.
+
 **Verification gap.** `test/test_smoke.py` checks HTTP payloads and HTML strings but does not execute the browser scripts. This allowed issues 1 and 15 to survive. Cable-test tests inject `round_trip`, so they do not establish subprocess cleanup, acquisition timing, or physical routing. The simultaneous-routing test checks one enabled send; the multiple-send test does not inspect routing at capture time. Audio tests use arrays rather than the WAV regression artifacts required by the repository instructions.
 
 Add focused coverage for the identified failure modes, including a full status refresh and all selected sends enabled before capture. Keep hardware acceptance separate from fakes. `doc/handover.md` explicitly records that the exact live installation still lacks a recorded end-to-end acceptance result.
