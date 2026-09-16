@@ -78,6 +78,8 @@ Specify the required mixer scene and verify it, or save, isolate, and restore al
 
 ### 10. “Distorted signal” also means clean audio at an unexpected level
 
+**Reporting fixed; hardware calibration remains open.** Results now distinguish absent signal, clipping, distortion, and incorrect level. A 48 kHz WAV regression checks those classifications. The numeric thresholds still need validation with known-good physical cables.
+
 **Bug in reporting.** `CableChannelResult.line` calls every non-silent failure distorted, but `analyze` fails a pure sine solely for a level ratio outside 70–130 percent. This sends an operator looking for distortion when the waveform is clean but quieter or louder. `MINIMUM_SIGNAL_RMS` is a fixed threshold, not a measured noise floor, and the level tolerance is not backed by a recorded hardware calibration in this repository.
 
 Separate waveform distortion, clipping, absent signal, and incorrect level in the result, or state precisely which failures the combined label covers. Validate tolerances against known-good cables on the actual gain configuration.
