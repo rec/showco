@@ -1,6 +1,6 @@
 # Feature suggestions
 
-These are proposals, not implemented features or an approved implementation plan. They build on the current web controls, service monitoring, recording markers, playback, and explicit light test. Unresolved physical validation belongs in [hardware.md](hardware.md).
+The first three priorities were implemented on 2026-09-16: the performance screen, performance lock, and persistent incident monitoring. The remaining entries are proposals. Unresolved physical validation belongs in [hardware.md](hardware.md).
 
 Start with features that reduce attention and mistakes during a performance. Keep recording, lighting generation, and streaming in recs, lyte, and streamO; showCo should coordinate their public interfaces. Any sibling-project work needs its own scope and coordination.
 
@@ -8,9 +8,9 @@ Start with features that reduce attention and mistakes during a performance. Kee
 
 | Priority | Feature | Main benefit | Scope |
 | --- | --- | --- | --- |
-| First | Performance screen | Fewer page changes and missed problems | showCo |
-| First | Performance lock | Fewer accidental interruptions | showCo |
-| First | Persistent incident monitoring | Detect trouble without an open browser | showCo; service evidence may need sibling support |
+| Implemented | Performance screen | Fewer page changes and missed problems | showCo |
+| Implemented | Performance lock | Fewer accidental interruptions | showCo |
+| Implemented | Persistent incident monitoring | Detect trouble without an open browser | showCo, using current service evidence |
 | Next | Set list and manual cues | Less administration between songs | showCo; combined cues depend on service capabilities |
 | Next | Guided soundcheck | Repeatable preparation and useful evidence | showCo plus physical validation |
 | Next | Guided recovery | Faster, more predictable fault handling | showCo; some recovery actions may need sibling support |
@@ -21,6 +21,8 @@ Start with features that reduce attention and mistakes during a performance. Kee
 
 ## 1. Performance screen
 
+**Implemented:** `/performance` provides marker and pause/resume controls, status and fault visibility, persistent browser pins and dimming, and optional screen-awake mode. Next-song controls remain part of the later set-list feature. Automated browser tests cover operation and disconnection; physical tablet acceptance remains outstanding.
+
 Add a dedicated screen with large controls for the few actions used during a show: mark a moment, advance the set list, pause or resume recording, and inspect the most urgent fault. Keep recording state, recording destination, remaining capacity, stream state, and connection age visible together. Let the performer pin important inputs so unused channels do not dominate the screen.
 
 Use readable text alongside color, large touch targets, and a dim display option. Keep detailed configuration on the existing pages. Offer a screen-awake control where the browser supports it, with a visible indication when it is unavailable.
@@ -29,6 +31,8 @@ Use readable text alongside color, large touch targets, and a dim display option
 
 ## 2. Performance lock
 
+**Implemented:** server-side protection, explicit unlock confirmation, persistent state, and visible status on every page. Read failures block protected actions. Separate CLI and deployment commands remain outside this lock.
+
 Add an explicit “Performance in progress” mode. Block cable tests, calibration, recorder shutdown, session replacement, and configuration edits until the operator deliberately unlocks them. Leave normal performance controls available. State exactly which operations the mode protects; a web lock cannot imply that separate CLI or deployment commands are blocked.
 
 Enforce the lock on the server so another open tab cannot bypass it. Show its state on every page and retain it through a showCo restart. Entering or leaving the mode must not itself change recording, lighting, or streaming.
@@ -36,6 +40,8 @@ Enforce the lock on the server so another open tab cannot bypass it. Show its st
 **Acceptance:** an old tab cannot run a protected action after the lock is enabled, and unlocking never replays a previously rejected action.
 
 ## 3. Persistent incident monitoring
+
+**Implemented:** the target's existing sampling worker collects service observations without browsers, retains 100 history entries and up to 100 active faults, and preserves acknowledgment separately from recovery. Storage and observation failures are visible. There are no audible alerts. Rehearsal retains its in-memory, request-driven behavior.
 
 Extend the existing background health sampling to collect service and recording observations even when nobody has the UI open. Save a bounded history across showCo restarts. Distinguish “service connected,” “recording requested,” and “audio writes observed,” including the expected effects of silence filtering.
 
@@ -101,10 +107,10 @@ Where recs supplies authoritative session or file information, include it with i
 
 ## Delivery approach
 
-Implement the performance screen and lock first, then monitoring and manual set-list markers. Add soundcheck and recovery once their evidence and interruption behavior are clear. Introduce lighting and streaming cues only after the necessary service contracts are confirmed and rehearsed.
+The performance screen, lock, and monitoring are delivered. Manual set-list markers are the next suggested step. Add soundcheck and recovery once their evidence and interruption behavior are clear. Introduce lighting and streaming cues only after the necessary service contracts are confirmed and rehearsed.
 
 For each feature, verify normal use, stale status, browser reload, repeated input, and partial service failure. Physical claims still require the checks in [hardware.md](hardware.md). These suggestions do not authorize running services, changing sibling repositories, or deploying anything.
 
 ## Additional work beyond the prompt
 
-None. This document proposes features only.
+None. Implementation is limited to the first three priorities requested by the operator; later entries remain proposals.

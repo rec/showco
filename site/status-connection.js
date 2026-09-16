@@ -8,6 +8,10 @@ function requestStatus() {
       if (!response.ok) throw new Error(`status request failed: ${response.status}`);
       return response.json();
     })
+    .then(status => {
+      if (typeof updateShowControls === 'function') updateShowControls(status);
+      return status;
+    })
     .finally(() => clearTimeout(timer));
 }
 
@@ -21,10 +25,12 @@ function statusConnected() {
 }
 
 function statusFailed(error) {
+  if (typeof showControlsUnavailable === 'function') showControlsUnavailable();
   const indicator = document.getElementById('connection-status');
   if (indicator) {
     indicator.className = 'failed';
-    const last = lastStatusReceived ? lastStatusReceived.toLocaleTimeString() : 'never';
+    const last = lastStatusReceived
+      ? `${lastStatusReceived.toLocaleTimeString()} (${Math.floor((Date.now() - lastStatusReceived.getTime()) / 1000)}s ago)` : 'never';
     indicator.textContent = `Status unavailable: ${error.message}. Last update: ${last}. Displayed values may be stale.`;
   }
   const readiness = document.getElementById('readiness-state');
