@@ -1,0 +1,33 @@
+<section>
+  <h2>Lighting cues</h2>
+  <p id="lighting-position" aria-live="polite">Loading cues...</p>
+  <p id="lighting-live">Live lyte state: checking</p>
+  <div class="performance-buttons">
+    <button type="button" data-lighting-action="lighting-back" disabled>Back</button>
+    <button type="button" data-lighting-action="lighting-go" disabled>Go</button>
+  </div>
+  <p id="lighting-message" role="status"></p>
+  <div id="lighting-resolution" hidden>
+    <p id="lighting-pending"></p>
+    <p>Check live lyte state. Keeping or canceling the pending cue sends nothing.
+      Retrying may restart a look that already began.</p>
+    <label><input type="checkbox" id="confirm-lighting"> I checked the outcome</label>
+    <button type="button" data-lighting-action="lighting-accept" disabled>Keep pending cue</button>
+    <button type="button" data-lighting-action="lighting-cancel" disabled>Keep previous position</button>
+    <button type="button" data-lighting-action="lighting-retry" disabled>Retry selection</button>
+  </div>
+  <p id="lighting-result" role="status"></p>
+  <details><summary>Edit lighting cues</summary>
+    <p>Choose installation look names in order. Saving resets the cue position and
+      leaves lighting unchanged. Unlock performance protection before editing.</p>
+    <div id="lighting-editor"></div>
+    <datalist id="lighting-looks"></datalist>
+    <button type="button" id="add-lighting" disabled>Add cue</button>
+    <button type="button" id="reload-lighting" disabled>Discard edits and reload</button>
+    <button type="button" data-lighting-action="lighting-save" disabled>Save cues and reset position</button>
+  </details>
+  <p>Current cue is the last accepted selection, or an explicitly kept pending cue.
+    Live lyte state shows the active and queued looks, blackout and test overrides.
+    Other clients and MIDI can change the lights without moving this list.
+    Go and Back select immediately, without a fade. Nothing advances automatically.</p>
+</section>

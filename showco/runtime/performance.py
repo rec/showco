@@ -37,6 +37,7 @@ class PerformanceLock:
 
 PROTECTED_ACTIONS = {
     'setlist-save',
+    'lighting-save',
     'soundcheck-begin',
     'soundcheck-check',
     'soundcheck-start-recording',

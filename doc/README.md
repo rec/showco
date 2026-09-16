@@ -12,6 +12,7 @@ Open showCo on the show network at the configured address and port. The Health p
 
 | Page | Use it for |
 | --- | --- |
+| Lighting cues | Named lighting looks, Go/Back, current/next cue position, and live lyte state. |
 | Performance | Manual song cues, large marker and pause/resume controls, recording destination and capacity, stream state, pinned inputs, dimming, and optional screen-awake mode. |
 | Set list | Prepare and reorder songs, notes, and expected durations. |
 | Soundcheck | Save measured checks and explicit playback, lighting, and stream confirmations. |
@@ -35,7 +36,7 @@ Recording-input checks cover channels currently recording and flag silence or cl
 
 Open **Performance** for large controls that advance the set list, mark a moment, or pause/resume recording. Moment markers use the label `performance moment`. The page shows recording state, destination, remaining capacity, stream state, and connection age. Pin important inputs and enable dimming for this browser. Screen-awake mode is opt-in and reports whether the browser and connection support it. Controls are disabled when status is unavailable; an action with an unknown outcome is never automatically retried.
 
-Enable **Performance lock** from any page before a show. It blocks web requests for cable and lighting tests, calibration, recorder shutdown, new sessions, track names, stereo grouping, mutable attributes, noise-floor changes, key labels, profile reloads, set-list replacement, soundcheck, and recovery restarts. Manual cues, ordinary markers, pause/resume, and recovery verification remain available. An older tab receives the same server-side rejection. To unlock, select **Confirm unlock** and press **Unlock protected actions**; submit any previously rejected action again yourself.
+Enable **Performance lock** from any page before a show. It blocks web requests for cable and lighting tests, calibration, recorder shutdown, new sessions, track names, stereo grouping, mutable attributes, noise-floor changes, key labels, profile reloads, set-list and lighting-cue replacement, soundcheck, and recovery restarts. Manual cues, ordinary markers, pause/resume, and recovery verification remain available. An older tab receives the same server-side rejection. To unlock, select **Confirm unlock** and press **Unlock protected actions**; submit any previously rejected action again yourself.
 
 Lock state persists in `~/.local/state/showco/performance.json`. If that file cannot be read, protected actions remain blocked until an explicit unlock can be saved successfully. The lock does not affect separate CLI or deployment commands, and it never starts or stops services itself. Rehearsal uses temporary in-memory lock and incident state and observes services when status is requested.
 
@@ -46,6 +47,43 @@ Prepare songs on **Set list**, with optional performer notes and expected minute
 On **Performance**, **Start next song** sends `song start: TITLE` to recs. Skip advances the next-song cursor without a marker. Repeat sends the current song's marker again; Interval sends `interval`. Nothing advances automatically or changes lighting, streaming, or recording state. Position, notes, durations, elapsed start time, and pending cues persist in `~/.local/state/showco/setlist.json`.
 
 Repeated requests carrying the same list revision are rejected. If recs may have accepted a marker but its reply was lost, the cue remains pending through restart. Resolve it explicitly: keep the cue without resending, with delivery marked unverified, or retry knowing that a duplicate marker is possible. The recs API cannot guarantee exactly-once delivery across a lost reply.
+
+### Lighting cues
+
+showCo owns the ordered lighting cue list, Go/Back, and cue position. lyte owns
+lighting execution through its existing `select_animation` RPC. Open **Lighting
+cues**, expand **Edit lighting cues**, give each cue a name and an installation
+look, then save. Look suggestions come from lyte. Cues can repeat the same look.
+Saving resets the cursor without changing the lights; it requires performance
+protection to be unlocked. Unsaved edits survive polling; stale saves are rejected.
+
+**Go** selects the first or next cue. **Back** selects the previous cue; at the
+first cue it is unavailable. Neither end wraps. Both controls cut immediately
+and remain available under performance lock. Song markers and lighting cues are
+independent manual actions. There are no timed cues, automatic resends, or changes
+to recording or streaming. This Go button is unrelated to the `showco go`
+deployment command.
+
+Current cue means the last selection acknowledged by lyte, or a pending cue
+explicitly kept by the operator. It does not prove physical output. The page
+also displays live active/queued looks, blackout, and test overrides. MIDI or
+another client can change lighting without changing showCo's cue position.
+Reconnecting only reads status. Production state persists in
+`~/.local/state/showco/lighting.json`, including unresolved selections. A restart
+restores the cursor without selecting a look.
+
+A lost or unsuccessful reply leaves the selection pending and blocks further
+Go/Back. Inspect the live look, then explicitly keep the pending cue, keep the
+previous position, or retry. Keeping either position sends nothing; retrying may
+restart an already-running look. Saving pending state must succeed before sending
+any selection, so a disk failure prevents that new cue while existing lighting
+continues.
+
+The existing `showco run --rehearsal` mode supplies in-memory `idle`, `circle`,
+and `square` looks without contacting lyte or output hardware; its cue list lasts
+for that process. These names also match lyte's `examples/installation-laser.toml`.
+Try Opening/circle, Finale/square, and End/idle, then Go, Go, Back and refresh the
+page. This tests cue operation only, not laser output or physical readiness.
 
 ### Guided soundcheck
 
@@ -170,4 +208,4 @@ The web UI is for a trusted show network and has no login. Every client that can
 
 The mixer state combines recs-reported audio and MIDI input names with an optional TCP or UDP probe. For X18, the UDP probe sends `/xremote` and waits for a reply. It is a reachability hint only; confirm mixer control with the tablet application or real OSC feedback. X18 `/xremote` subscriptions are renewed for feedback, but successful renewals are not recording events.
 
-The web service limits ordinary requests to eight concurrent connections and waveform event streams to four. Its browser routes are `/` and `/channels`, `/performance`, `/setlist`, `/soundcheck`, `/recovery`, `/health`, `/playback`, `/attributes`, `/actions`, `/errors`, `/status` and `/workflow-status` (JSON), `/diagnostics` (download), and `/waveforms` (server-sent events). Form posts go to `/actions`; requests that accept JSON receive the action result directly.
+The web service limits ordinary requests to eight concurrent connections and waveform event streams to four. Its browser routes are `/` and `/channels`, `/performance`, `/setlist`, `/lighting`, `/soundcheck`, `/recovery`, `/health`, `/playback`, `/attributes`, `/actions`, `/errors`, `/status` and `/workflow-status` (JSON), `/diagnostics` (download), and `/waveforms` (server-sent events). Form posts go to `/actions`; requests that accept JSON receive the action result directly.

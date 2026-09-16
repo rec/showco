@@ -5,6 +5,7 @@ import time
 
 from ..streamo.client import StreamoClient
 from . import models
+from .lyte import LyteClient
 from .mixer import MixersMonitor
 from .recs import RecsClient, stereo_tracks
 from .system import SystemMonitor
@@ -107,6 +108,33 @@ class RehearsalRecsClient(RecsClient):
 
     def shutdown(self) -> models.ActionResult:
         return models.ActionResult(ok=True, message='rehearsal recs shutdown requested')
+
+
+class RehearsalLyteClient(LyteClient):
+    def __init__(self) -> None:
+        super().__init__(enabled=True)
+        self.animation = 'idle'
+
+    def status(self) -> models.LyteStatus:
+        return models.LyteStatus(
+            service=models.ServiceStatus(name='lyte', state='connected'),
+            running=True,
+            animations=['idle', 'circle', 'square'],
+            active_animation=self.animation,
+        )
+
+    def select_animation(self, name: str) -> models.ActionResult:
+        if name not in self.status().animations:
+            return models.ActionResult(
+                ok=False, message=f'Unknown rehearsal look: {name}'
+            )
+        self.animation = name
+        return models.ActionResult(ok=True, message=f'Rehearsal look selected: {name}')
+
+    def test(self) -> models.ActionResult:
+        return models.ActionResult(
+            ok=True, message='Rehearsal light test; no physical output'
+        )
 
 
 class RehearsalStreamoClient(StreamoClient):

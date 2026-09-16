@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, TypeAdapter
 
 from ..deployment import bundle
-from . import models, recovery, setlist, soundcheck
+from . import lighting, models, recovery, setlist, soundcheck
 
 if TYPE_CHECKING:
     from .server import ShowcoApp, ShowcoHandler
@@ -20,6 +20,7 @@ class ExpectedInput(BaseModel, frozen=True):
 
 class WorkflowStatus(BaseModel, frozen=True):
     show: models.ShowStatus
+    lighting: lighting.LightingState
     setlist: setlist.SetList
     soundcheck: soundcheck.SoundcheckState
     recovery: recovery.RecoveryState
@@ -32,6 +33,7 @@ def status(app: 'ShowcoApp') -> WorkflowStatus:
     return WorkflowStatus(
         show=show,
         setlist=app.setlist.state,
+        lighting=app.lighting.state,
         soundcheck=app.soundcheck.state,
         recovery=app.recovery.state,
         soundcheck_error=app.soundcheck_error,
@@ -55,6 +57,24 @@ def refresh_soundcheck(app: 'ShowcoApp', show: models.ShowStatus) -> None:
 
 def run(app: 'ShowcoApp', form: dict[str, str]) -> models.ActionResult:
     action = form['action']
+    if action.startswith('lighting-'):
+        if (
+            action in {'lighting-accept', 'lighting-cancel', 'lighting-retry'}
+            and form.get('confirmation') != 'resolve'
+        ):
+            raise ValueError('Confirm how to resolve the uncertain lighting cue first')
+        if app.lyte is None or not app.lyte.enabled:
+            raise ValueError('lyte is disabled')
+        cues = (
+            TypeAdapter(list[lighting.LightingCue]).validate_json(
+                form.get('cues', '[]')
+            )
+            if action == 'lighting-save'
+            else None
+        )
+        return app.lighting.act(
+            action, int(form.get('revision', '-1')), app.lyte.select_animation, cues
+        )
     if action.startswith('setlist-'):
         if (
             action in {'setlist-retry', 'setlist-accept'}

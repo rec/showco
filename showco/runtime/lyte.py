@@ -39,6 +39,7 @@ class LyteClient:
                     last_error='lyte status reply is not an object',
                 )
             )
+        animations = result.get('animations')
         strings = _string_statuses(result.get('strings'))
         error = _status_error(result, strings)
         return models.LyteStatus(
@@ -48,6 +49,10 @@ class LyteClient:
                 last_error=error,
             ),
             running=result.get('running') is True,
+            animations=[a for a in animations if isinstance(a, str)]
+            if isinstance(animations, list)
+            else [],
+            blackout=result.get('blackout') is True,
             active_animation=_string(result.get('active_animation')),
             queued_animation=_string(result.get('queued_animation')),
             strings=strings,
@@ -73,6 +78,20 @@ class LyteClient:
         if isinstance(result, dict) and result.get('state') == 'queued':
             return models.ActionResult(ok=True, message='lyte light test queued')
         return models.ActionResult(ok=False, message='lyte did not queue light test')
+
+    def select_animation(self, name: str) -> models.ActionResult:
+        if not self.enabled:
+            return models.ActionResult(ok=False, message='lyte is disabled')
+        result = self._call('select_animation', name=name)
+        if (
+            isinstance(result, dict)
+            and result.get('state') == 'queued'
+            and result.get('name') == name
+        ):
+            return models.ActionResult(ok=True, message=f'lyte queued {name}')
+        return models.ActionResult(
+            ok=False, message='lyte selection was not acknowledged'
+        )
 
     def _call(self, command: str, **params: object) -> str | dict[str, object]:
         return rpc.Client(self.control_endpoint, role='showco').call(command, **params)
