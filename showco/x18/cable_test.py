@@ -56,7 +56,14 @@ class CableChannelResult(BaseModel, frozen=True):
     def line(self) -> str:
         if not self.passed and self.rms < MINIMUM_SIGNAL_RMS:
             return f'FAIL: channel {self.channel}: no signal'
-        state = 'PASS' if self.passed else 'FAIL: distorted signal'
+        if self.passed:
+            state = 'PASS'
+        elif self.peak >= 0.99:
+            state = 'FAIL: clipping'
+        elif self.similarity < MINIMUM_SIMILARITY:
+            state = 'FAIL: distorted signal'
+        else:
+            state = 'FAIL: incorrect level'
         return (
             f'{state}: channel {self.channel}: '
             f'{self.similarity:.1%} tone match, {self.level_ratio:.1%} level'
@@ -249,7 +256,7 @@ class CableTester:
                 self.mixer.audio_device_names,
                 source_channel,
             )
-            results = self._test_pairs(
+            results = self._test_channels(
                 channels,
                 sends,
                 source_channel,
@@ -262,7 +269,7 @@ class CableTester:
                 require_action(self.recs.action('resume_recording'), 'resume recording')
         return CableTestReport(results=results)
 
-    def _test_pairs(
+    def _test_channels(
         self,
         channels: list[int],
         sends: list[int],
@@ -501,6 +508,7 @@ def analyze(
         raise ValueError('X18 recorded an unexpected number of frames')
     margin = round(0.25 * sample_rate)
     signal = recorded[margin:-margin].astype(np.float64)
+    peak = float(np.max(np.abs(signal)))
     signal -= np.mean(signal)
     positions = np.arange(signal.size, dtype=np.float64) / sample_rate
     sine = np.sin(2 * pi * TONE_FREQUENCY * positions)
@@ -509,7 +517,6 @@ def analyze(
     cosine_amplitude = 2 * float(np.dot(signal, cosine)) / signal.size
     tone_rms = float(np.hypot(sine_amplitude, cosine_amplitude) / np.sqrt(2))
     rms = float(np.sqrt(np.mean(np.square(signal))))
-    peak = float(np.max(np.abs(signal)))
     sent_rms = float(np.sqrt(np.mean(np.square(sent[margin:-margin]))))
     similarity = min(1.0, tone_rms / rms) if rms else 0.0
     level_ratio = tone_rms / sent_rms if sent_rms else 0.0

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import wave
+from pathlib import Path
 from unittest import mock
 
 import numpy as np
 import pytest
+from pytest_regressions.data_regression import DataRegressionFixture
 
 from showco.runtime import models
 from showco.runtime.mixer import MixerOscSpec, MixerSpec
@@ -140,6 +143,32 @@ def test_analyze_reports_no_signal() -> None:
 
     assert not result.passed
     assert result.line() == 'FAIL: channel 9: no signal'
+
+
+def test_audio_classification_wav_regression(
+    tmp_path: Path, data_regression: DataRegressionFixture
+) -> None:
+    tone = cable_test.sine_wave(48000)
+    signals = np.column_stack(
+        [
+            tone,
+            tone * 0.5,
+            np.clip(tone * 20, -1, 1),
+            np.zeros_like(tone),
+            np.clip(tone, -0.025, 0.025),
+        ]
+    )
+    path = tmp_path / 'cable-signals.wav'
+    with wave.open(str(path), 'wb') as output:
+        output.setnchannels(signals.shape[1])
+        output.setsampwidth(2)
+        output.setframerate(48000)
+        output.writeframes(np.rint(signals * 32767).astype('<i2').tobytes())
+    with wave.open(str(path)) as source:
+        recorded = np.frombuffer(source.readframes(source.getnframes()), dtype='<i2')
+    recorded = recorded.reshape(-1, signals.shape[1]).astype(np.float32) / 32767
+    results = [cable_test.analyze(i + 1, tone, recorded[:, i], 48000) for i in range(5)]
+    data_regression.check([{'passed': r.passed, 'message': r.line()} for r in results])
 
 
 @pytest.mark.parametrize('master_on', [0, 1])

@@ -1,0 +1,10 @@
+- message: 'PASS: channel 1: 100.0% tone match, 100.0% level'
+  passed: true
+- message: 'FAIL: incorrect level: channel 2: 100.0% tone match, 50.0% level'
+  passed: false
+- message: 'FAIL: clipping: channel 3: 97.4% tone match, 1218.0% level'
+  passed: false
+- message: 'FAIL: channel 4: no signal'
+  passed: false
+- message: 'FAIL: distorted signal: channel 5: 94.3% tone match, 31.5% level'
+  passed: false
