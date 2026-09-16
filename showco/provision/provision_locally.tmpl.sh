@@ -511,7 +511,7 @@ $RECS_AUDIO_DEVICE_NAMES
 $RECS_MIDI_INPUT_NAMES
 $RECS_OSC_NODES_TOML")
   if service_is_current recs "$input"; then
-    printf 'Recs service is already installed.\n'
+    printf 'recs service is already installed.\n'
     return
   fi
   sudo -H -u "$SHOW_USER" \
@@ -532,7 +532,7 @@ $STREAMO_ENABLED
 $LYTE_ENABLED
 $SHOWCO_MIXERS_TOML")
   if service_is_current showco "$input"; then
-    printf 'Showco service is already installed.\n'
+    printf 'showCo service is already installed.\n'
     return
   fi
   sudo -H -u "$SHOW_USER" \
@@ -559,7 +559,7 @@ migrate_streamo_configuration() {
     env XDG_RUNTIME_DIR="/run/user/$uid" \
     PATH="$ROOT/showco/.venv/bin:/home/$SHOW_USER/.local/bin:$PATH" \
     bash -lc "cd '$ROOT/showco' && uv run --locked showco run streamo-config --source $quoted_source --target $quoted_target"
-  printf 'Converted Twitcho configuration to Streamo TOML.\n'
+  printf 'Converted Twitcho configuration to streamO TOML.\n'
 }
 
 uninstall_twitcho_service() {
@@ -577,12 +577,12 @@ install_streamo_service() {
   local uid
   local input
   if [[ "$STREAMO_ENABLED" != true ]]; then
-    printf 'Streamo service is disabled.\n'
+    printf 'streamO service is disabled.\n'
     return
   fi
   config_path="/home/$SHOW_USER/.config/streamo/config.toml"
   if [[ ! -f "$config_path" ]]; then
-    printf 'ERROR: Streamo configuration does not exist: %s\n' "$config_path" >&2
+    printf 'ERROR: streamO configuration does not exist: %s\n' "$config_path" >&2
     return 1
   fi
   quoted_config=$(printf '%q' "$config_path")
@@ -590,7 +590,7 @@ install_streamo_service() {
   input=$(service_input "$(git -C "$ROOT/streamo" rev-parse HEAD)
 $(sha256sum "$config_path" | awk '{print $1}')")
   if service_is_current streamo "$input"; then
-    printf 'Streamo service is already installed.\n'
+    printf 'streamO service is already installed.\n'
     return
   fi
   sudo -H -u "$SHOW_USER" \
@@ -607,12 +607,12 @@ install_lyte_service() {
   local uid
   local input
   if [[ "$LYTE_ENABLED" != true ]]; then
-    printf 'Lyte service is disabled.\n'
+    printf 'lyte service is disabled.\n'
     return
   fi
   config_path="$ROOT/lyte/$LYTE_INSTALLATION_CONFIG"
   if [[ ! -f "$config_path" ]]; then
-    printf 'ERROR: Lyte installation configuration does not exist: %s\n' "$config_path" >&2
+    printf 'ERROR: lyte installation configuration does not exist: %s\n' "$config_path" >&2
     return 1
   fi
   quoted_config=$(printf '%q' "$config_path")
@@ -620,7 +620,7 @@ install_lyte_service() {
   input=$(service_input "$(git -C "$ROOT/lyte" rev-parse HEAD)
 $(sha256sum "$config_path" | awk '{print $1}')")
   if service_is_current lyte "$input"; then
-    printf 'Lyte service is already installed.\n'
+    printf 'lyte service is already installed.\n'
     return
   fi
   sudo -H -u "$SHOW_USER" \
@@ -634,7 +634,7 @@ $(sha256sum "$config_path" | awk '{print $1}')")
 write_provisioning_report() {
   local report="/tmp/SHOWCO-PROVISIONING-REPORT.txt"
   {
-    printf 'Showco provisioning report\n'
+    printf 'showCo provisioning report\n'
     date -Is
     printf '\nDisks discovered:\n'
     lsblk -f || true
@@ -652,7 +652,7 @@ write_provisioning_report() {
     else
       printf 'iw not installed\n'
     fi
-    printf '\nLyte:\n'
+    printf '\nlyte:\n'
     printf 'enabled: %s\n' "$LYTE_ENABLED"
     printf 'installation config: %s\n' "$LYTE_INSTALLATION_CONFIG"
     if [[ -d "$ROOT/lyte/.git" ]]; then
@@ -667,7 +667,7 @@ write_provisioning_report() {
     else
       printf 'lyte service: disabled\n'
     fi
-    printf '\nStreamo:\n'
+    printf '\nstreamO:\n'
     printf 'enabled: %s\n' "$STREAMO_ENABLED"
     if [[ "$STREAMO_ENABLED" == true ]]; then
       printf 'streamo service: '
@@ -778,13 +778,13 @@ main() {
   phase "installing recs service"
   install_recs_service
 
-  phase "installing Streamo service"
+  phase "installing streamO service"
   install_streamo_service
 
   phase "installing showco service"
   install_showco_service
 
-  phase "installing Lyte service"
+  phase "installing lyte service"
   install_lyte_service
 
   phase "writing provisioning report"
@@ -797,10 +797,10 @@ Provisioning completed.
 Next manual steps:
 
 1. Fill final streamo config values if Stream streaming is required.
-2. Configure and enable Lyte if lighting control is required.
+2. Configure and enable lyte if lighting control is required.
 3. Fill Wi-Fi password values and rerun provisioning if network configuration was skipped.
 4. Confirm the X18 USB device name.
-5. Run the acceptance tests in showco/doc/acceptance-tests.md.
+5. Run the installation checks in showco/doc/README.md, Before the performance.
 TEXT
   sudo install -o "$SHOW_USER" -g "$SHOW_USER" -m 0644 \
     /tmp/PROVISIONING-NEXT-STEPS.txt \

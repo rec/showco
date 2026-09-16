@@ -25,7 +25,7 @@ class StreamoHealthOptions(BaseModel, frozen=True):
 
 def health_main(argv: list[str] | None = None) -> int:
     machine_role.require_target_machine('showco run streamo-health')
-    tyro.cli(StreamoHealthOptions, args=argv, description='Check Streamo health')
+    tyro.cli(StreamoHealthOptions, args=argv, description='Check streamO health')
     status = StreamoClient().status()
     if status.service.state == 'connected':
         return 0
@@ -132,13 +132,13 @@ def _health_error(status: dict[str, object], stream_state: str) -> str | None:
     if error := _string(status.get('last_error')):
         return error
     if stream_state == 'failed':
-        return 'Streamo stream failed'
+        return 'streamO stream failed'
     if stream_state not in ACTIVE_STREAM_STATES:
         return None
     if not bool(status.get('ffmpeg_alive')):
-        return 'Streamo encoder is not running'
+        return 'streamO encoder is not running'
     if (last_audio_at := _float(status.get('last_audio_at'))) is None:
-        return 'Streamo has not received audio'
+        return 'streamO has not received audio'
     if (stalled_seconds := time.time() - last_audio_at) > AUDIO_STALE_SECONDS:
-        return f'Streamo audio has not advanced for {stalled_seconds:.1f} seconds'
+        return f'streamO audio has not advanced for {stalled_seconds:.1f} seconds'
     return None

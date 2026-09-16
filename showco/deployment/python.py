@@ -24,7 +24,7 @@ def main(argv: list[str] | None = None) -> int:
     options = tyro.cli(
         PythonOptions,
         args=sys.argv[1:] if argv is None else argv,
-        description='Run Python source in the Showco target environment',
+        description='Run Python source in the showCo target environment',
     )
     return run_python(options)
 

@@ -324,7 +324,7 @@ def status_failure_summary(output: str) -> str:
         return output.strip()
     if not isinstance(data, dict):
         return output.strip()
-    result = 'Recs status did not advance'
+    result = 'recs status did not advance'
     if isinstance(updated_at := data.get('updated_at'), int | float):
         result += f'; updated_at={updated_at}'
     errors = data.get('errors')
@@ -336,7 +336,7 @@ def status_failure_summary(output: str) -> str:
         return result
     return (
         result
-        + '\nRecent Recs errors:\n'
+        + '\nRecent recs errors:\n'
         + '\n'.join(f'- {m}' for m in messages[-STATUS_ERROR_LIMIT:])
     )
 

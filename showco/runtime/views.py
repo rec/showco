@@ -102,7 +102,7 @@ def health_page(status: models.ShowStatus) -> str:
           <div id="input-checks">{input_checks(status.input_checks)}</div>
         </section>
         <section>
-          <h2>Recs errors</h2>
+          <h2>recs errors</h2>
           <div id="recs-errors" data-limit="{ERROR_PAGE_LIMIT}">
             {_recs_errors(status.recs.errors[-ERROR_PAGE_LIMIT:])}
           </div>
@@ -208,17 +208,17 @@ def actions_page(
         <section class="actions">
           {button('recs-calibrate', 'Calibrate noise floor')}
           {noise_floor}
-          {button('recs-reload-profiles', 'Reload Recs profiles')}
+          {button('recs-reload-profiles', 'Reload recs profiles')}
           {''.join(marker_button(label) for label in SHOW_MARKERS)}
-          {field_action('recs-marker', 'Create Recs marker', ['label'])}
-          {field_action('recs-key-label', 'Set Recs key label', ['key', 'label'])}
+          {field_action('recs-marker', 'Create recs marker', ['label'])}
+          {field_action('recs-key-label', 'Set recs key label', ['key', 'label'])}
           {button('recs-new-session', 'Start new recording session', confirm=True)}
           {button('recs-pause-recording', 'Pause recording')}
           {button('recs-resume-recording', 'Resume recording')}
-          {button('recs-status-snapshot', 'Recs status snapshot')}
-          {button('recs-disk-status', 'Recs disk status')}
-          {button('recs-list-devices', 'List Recs devices')}
-          {button('recs-capabilities', 'Recs capabilities')}
+          {button('recs-status-snapshot', 'recs status snapshot')}
+          {button('recs-disk-status', 'recs disk status')}
+          {button('recs-list-devices', 'List recs devices')}
+          {button('recs-capabilities', 'recs capabilities')}
           {shutdown_action()}
           {button('lyte-test', 'Test lights') if lyte_enabled else ''}
           {cable_test_action()}
@@ -328,12 +328,12 @@ def page(title: str, body: str, *, script: str = '') -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Showco {title}</title>
+  <title>showCo {title}</title>
   <style>{site_file('server.css')}</style>
 </head>
 <body>
   <header>
-    <h1>Showco</h1>
+    <h1>showCo</h1>
     <nav>
       <a href="/channels">Channels</a>
       <a href="/health">Health</a>
@@ -416,10 +416,10 @@ def mutable_attributes_section(
             + '</div>'
         )
     else:
-        body = '<p>No mutable Recs attributes.</p>'
+        body = '<p>No mutable recs attributes.</p>'
     return f"""
         <section>
-          <h2>Recs attributes</h2>
+          <h2>recs attributes</h2>
           {body}
         </section>
     """
@@ -514,11 +514,11 @@ def shutdown_action() -> str:
     return """
     <form method="post">
       <input type="hidden" name="action" value="recs-shutdown">
-      <h2>Shutdown Recs daemon</h2>
+      <h2>Shutdown recs daemon</h2>
       <label>confirmation
         <select name="confirmation">
           <option value="cancel" selected>Cancel</option>
-          <option value="shutdown">Shutdown Recs daemon</option>
+          <option value="shutdown">Shutdown recs daemon</option>
         </select>
       </label>
       <button>Apply shutdown choice</button>

@@ -64,7 +64,7 @@ class StreamoTests(unittest.TestCase):
         status = client.status()
 
         self.assertEqual(status.service.state, 'error')
-        self.assertEqual(status.service.last_error, 'Streamo encoder is not running')
+        self.assertEqual(status.service.last_error, 'streamO encoder is not running')
 
     @mock.patch('showco.streamo.client.time.time', return_value=106.0)
     def test_status_reports_stalled_audio(self, current_time: mock.Mock) -> None:
@@ -81,7 +81,7 @@ class StreamoTests(unittest.TestCase):
         self.assertEqual(status.service.state, 'error')
         self.assertEqual(
             status.service.last_error,
-            'Streamo audio has not advanced for 6.0 seconds',
+            'streamO audio has not advanced for 6.0 seconds',
         )
         current_time.assert_called_once_with()
 

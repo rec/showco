@@ -165,7 +165,7 @@ class ViewsTests(unittest.TestCase):
                 ),
                 readiness=models.ReadinessStatus(
                     checks=[
-                        models.ReadinessCheck(name='Recs', ok=False, message='offline')
+                        models.ReadinessCheck(name='recs', ok=False, message='offline')
                     ]
                 ),
             )
@@ -173,7 +173,7 @@ class ViewsTests(unittest.TestCase):
 
         self.assertIn('Service readiness', html)
         self.assertIn('id="readiness-state">not ready', html)
-        self.assertIn('Recs</b>: offline', html)
+        self.assertIn('recs</b>: offline', html)
 
     def test_health_page_shows_incidents(self) -> None:
         html = health_page(
@@ -463,7 +463,7 @@ class ViewsTests(unittest.TestCase):
             ],
         )
 
-        self.assertIn('Recs attributes', html)
+        self.assertIn('recs attributes', html)
         self.assertIn('id="mutable-attributes"', html)
         self.assertIn('data-address="recording.noise_floor"', html)
         self.assertIn('type="number" data-value-type="number" value="70.0"', html)

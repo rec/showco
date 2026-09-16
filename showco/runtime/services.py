@@ -141,7 +141,7 @@ def install_main(argv: list[str] | None = None) -> int:
     machine_role.require_target_machine('showco run install-service')
     parser = argparse.ArgumentParser(
         prog='showco run install-service',
-        description='Install or refresh the Showco user service',
+        description='Install or refresh the showCo user service',
     )
     parser.add_argument('--host', default='0.0.0.0')
     parser.add_argument('--port', default=17_352, type=int)

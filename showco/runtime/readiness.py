@@ -5,7 +5,7 @@ from . import models
 
 def status(value: models.ShowStatus) -> models.ReadinessStatus:
     checks = [
-        _service_check('Recs', value.recs.service),
+        _service_check('recs', value.recs.service),
         models.ReadinessCheck(
             name='Recording',
             ok=value.recs.recording and not value.recs.paused,
@@ -19,8 +19,8 @@ def status(value: models.ShowStatus) -> models.ReadinessStatus:
         ),
         _disk_check(value.recs),
         *[_mixer_check(mixer) for mixer in value.mixers],
-        _optional_service_check('Lyte', value.lyte.service),
-        _optional_service_check('Streamo', value.streamo.service),
+        _optional_service_check('lyte', value.lyte.service),
+        _optional_service_check('streamO', value.streamo.service),
     ]
     return models.ReadinessStatus(
         checks=checks,

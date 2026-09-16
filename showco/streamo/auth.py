@@ -40,7 +40,7 @@ def main(argv: list[str] | None = None) -> int:
             'validate-token': validate_token_command,
         },
         args=argv,
-        description='Manage Showco stream OAuth tokens',
+        description='Manage showCo stream OAuth tokens',
         sort_subcommands=True,
     )
 
