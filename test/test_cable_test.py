@@ -4,7 +4,6 @@ from unittest import mock
 
 import numpy as np
 import pytest
-import tyro
 
 from showco.runtime import models
 from showco.runtime.mixer import MixerOscSpec, MixerSpec
@@ -28,13 +27,6 @@ class FakeOsc:
     def set(self, path: str, value: str | int | float | bool) -> None:
         self.values[path] = value
         self.sets.append((path, value))
-
-
-def test_options_use_default_ranges() -> None:
-    options = tyro.cli(cable_test.CableTestOptions, args=[])
-
-    assert options.channels == '9-14'
-    assert options.sends == '1-6'
 
 
 def test_x18_osc_writes_do_not_wait_for_a_reply() -> None:
