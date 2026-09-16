@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 import json
+import socket
 import subprocess
 import threading
 import time
@@ -28,6 +29,7 @@ from .system import SystemMonitor
 MAX_ACTION_BYTES = 65_536
 MAX_CONCURRENT_REQUESTS = 8
 MAX_WAVEFORM_CONNECTIONS = 4
+CONNECTION_TIMEOUT_SECONDS = 10
 ERROR_PAGE_LIMIT = 25
 LOGGER = logging.get_logger(__name__)
 SITE_DIRECTORY = Path(__file__).parent.parent.parent / 'site'
@@ -389,8 +391,38 @@ class ShowcoServer(ThreadingHTTPServer):
         super().__init__(address, handler)
         self.request_slots = threading.BoundedSemaphore(MAX_CONCURRENT_REQUESTS)
         self.waveform_slots = threading.BoundedSemaphore(MAX_WAVEFORM_CONNECTIONS)
+        self.connection_slots = threading.BoundedSemaphore(
+            MAX_CONCURRENT_REQUESTS + MAX_WAVEFORM_CONNECTIONS
+        )
         self.performance = None
         self.daemon_threads = True
+
+    def process_request(
+        self,
+        request: socket.socket | tuple[bytes, socket.socket],
+        client_address: tuple[str, int],
+    ) -> None:
+        cast(socket.socket, request).settimeout(CONNECTION_TIMEOUT_SECONDS)
+        if not self.connection_slots.acquire(blocking=False):
+            self.shutdown_request(request)
+            return
+        started = False
+        try:
+            super().process_request(request, client_address)
+            started = True
+        finally:
+            if not started:
+                self.connection_slots.release()
+
+    def process_request_thread(
+        self,
+        request: socket.socket | tuple[bytes, socket.socket],
+        client_address: tuple[str, int],
+    ) -> None:
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self.connection_slots.release()
 
     def server_close(self) -> None:
         if self.performance is not None:
