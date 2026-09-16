@@ -92,6 +92,8 @@ Use a total query deadline and report the configured timeout. Exercise continuou
 
 ### 12. HTTP concurrency limits do not bound connection threads
 
+**Resolved.** A twelve-connection admission limit now applies before handler threads are created, in addition to ordinary-request and waveform limits. Accepted sockets have a ten-second I/O timeout; completion and thread-creation failure release the connection slot.
+
 **Risk.** `ShowcoServer` inherits `ThreadingHTTPServer`; the eight-request semaphore is acquired only inside `do_GET` or `do_POST`, after a thread already exists and request headers have been read. Connections with incomplete headers bypass the intended admission limit. Accepted POSTs can also block indefinitely in `_form` waiting for their declared body because no socket read deadline is set here.
 
 Apply connection-level admission and finite read deadlines. Clarify that the current limits cover active handlers, not all connections or threads.
