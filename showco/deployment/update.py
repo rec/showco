@@ -47,7 +47,7 @@ def update_remote_target(
     root: Path | None = None,
     target_config: config.Config | None = None,
     output: TextIO = sys.stdout,
-    clear_settings: bool = True,
+    clear_settings: bool = False,
 ) -> int:
     provision_config = target_config or provisioning_config()
     target_host = host or provision_config.network.host
@@ -55,7 +55,6 @@ def update_remote_target(
     command = remote_update_command(
         selected,
         root or provision_config.paths.root,
-        skip_worktree_check=True,
         clear_settings=clear_settings,
     )
     tqdm.write(f'Updating {ssh_target} from GitHub', file=output)
@@ -84,198 +83,205 @@ def update_target(
     provision_config = provisioning_config()
     root = root or provision_config.paths.root
     run_command = run_command or run_command_with_timeout
-    if clear_settings:
-        print('Clearing saved Recs settings.', file=output)
-        clear_settings_result = clear_recs_settings_step(
-            provision_config.network.user, run_command
-        )
-        if not clear_settings_result.ok:
-            report_failures([clear_settings_result], output)
-            return 1
     programs = programs_for_repositories(
-        selected,
+        expand_repository_selection(selected),
         root,
         provision_config.stream.enabled,
         provision_config.lyte.enabled,
     )
     if not check_main_branches(programs, run_command, output):
         return 1
-    refresh_definitions = any(p.name == 'reccy' for p in programs)
-    with progress_bar(len(programs), output) as progress:
-        if 'showco' in selected:
-            return update_target_with_showco(
-                programs,
-                provision_config.network.web_port,
-                run_command,
-                output,
-                progress,
-                refresh_definitions,
-            )
-        service_names = selected_service_names(programs)
-        results = [run_service_step(n, 'stop', run_command) for n in service_names]
-        for program in programs:
-            progress.set_description_str(f'Updating {program.name}')
-            results.extend(update_program_on_target(program, run_command))
-            progress.update()
+    clean = [clean_worktree_step(p, run_command) for p in programs]
+    if not all(r.ok for r in clean):
+        report_failures(clean, output)
+        return 1
 
-        results.extend(
-            start_or_refresh_service_step(
-                n,
-                refresh_definitions,
-                root,
-                provision_config,
-                run_command,
-            )
-            for n in service_names
-        )
-        if 'showco' in service_names:
-            results.append(
-                showco_revision_step(
-                    root, provision_config.network.web_port, run_command
+    previous: dict[str, str] = {}
+    targets: dict[str, str] = {}
+    for program in programs:
+        for label, revision_name, destination in [
+            ('previous revision', 'HEAD', previous),
+            ('target revision', '@{upstream}', targets),
+        ]:
+            if destination is targets:
+                fetched = run_step(
+                    program.name,
+                    'fetch',
+                    ['git', '-C', str(program.directory), 'fetch'],
+                    run_command,
                 )
-            )
-        if 'recs' in service_names:
-            results.append(recs_status_changes_step(run_command))
-    report_failures(results, output)
-    return 0 if all(r.ok for r in results) else 1
-
-
-def update_target_with_showco(
-    programs: list[Program],
-    web_port: int,
-    run_command: RunCommand,
-    output: TextIO,
-    progress: tqdm,
-    refresh_definitions: bool,
-) -> int:
-    showco = program_named(programs, 'showco')
-    other_programs = [p for p in programs if p.name != 'showco']
-    results = [run_service_step('showco', 'stop', run_command)]
-    progress.set_description_str(f'Updating {showco.name}')
-    results.extend(update_program_on_target(showco, run_command))
-    progress.update()
-    for program in other_programs:
-        service_names = [n for n in program.service_names if n != 'showco']
-        results.extend(run_service_step(n, 'stop', run_command) for n in service_names)
-        progress.set_description_str(f'Updating {program.name}')
-        results.extend(update_program_on_target(program, run_command))
-        results.extend(
-            start_or_refresh_service_step(
-                n,
-                refresh_definitions,
-                showco.directory.parent,
-                provisioning_config(),
-                run_command,
-            )
-            for n in service_names
-        )
-        progress.update()
-    results.append(
-        start_or_refresh_service_step(
-            'showco',
-            refresh_definitions,
-            showco.directory.parent,
-            provisioning_config(),
-            run_command,
-        )
-    )
-    results.append(showco_revision_step(showco.directory.parent, web_port, run_command))
-    if 'recs' in selected_service_names(programs):
-        results.append(recs_status_changes_step(run_command))
-    report_failures(results, output)
-    return 0 if all(r.ok for r in results) else 1
-
-
-def update_program_on_target(
-    program: Program, run_command: RunCommand
-) -> list[StepResult]:
-    results = []
-    clean = clean_worktree_step(program, run_command)
-    results.append(clean)
-    if not clean.ok:
-        return results
-    before = run_step(
-        program.name,
-        'current commit',
-        ['git', '-C', str(program.directory), 'rev-parse', 'HEAD'],
-        run_command,
-    )
-    results.append(before)
-    if not before.ok:
-        return results
-    commit = before.output.strip()
-    pull = run_step(
-        program.name,
-        'pull',
-        ['git', '-C', str(program.directory), 'pull', '--ff-only'],
-        run_command,
-    )
-    if not pull.ok:
-        upstream = run_step(
-            program.name,
-            'upstream commit',
-            ['git', '-C', str(program.directory), 'rev-parse', '@{upstream}'],
-            run_command,
-        )
-        results.append(upstream)
-        upstream_commit = upstream.output.strip()
-        if upstream.ok and upstream_commit and upstream_commit != commit:
-            reset = run_step(
+                if not fetched.ok:
+                    report_failure(fetched, output)
+                    return 1
+            result = run_step(
                 program.name,
-                'reset to upstream',
+                label,
                 [
                     'git',
                     '-C',
                     str(program.directory),
-                    'reset',
-                    '--hard',
-                    upstream_commit,
+                    'rev-parse',
+                    '--verify',
+                    revision_name,
                 ],
                 run_command,
             )
-            results.append(reset)
-            if reset.ok:
-                pull = reset
-            else:
-                results.append(pull)
-        else:
-            results.append(pull)
-        if not pull.ok:
-            results.append(
-                run_step(
-                    program.name,
-                    'reset',
-                    ['git', '-C', str(program.directory), 'reset', '--hard', commit],
-                    run_command,
-                )
-            )
-            return results
-    else:
-        results.append(pull)
-    after = run_step(
-        program.name,
-        'new commit',
-        ['git', '-C', str(program.directory), 'rev-parse', 'HEAD'],
-        run_command,
+            if not result.ok or not result.output.strip():
+                report_failure(result, output)
+                if result.ok:
+                    print(f'{program.name}: empty {label}', file=output)
+                return 1
+            destination[program.name] = result.output.strip()
+
+    names = selected_service_names(programs)
+    names = [n for n in names if n != 'showco'] + (
+        ['showco'] if 'showco' in names else []
     )
-    results.append(after)
-    if after.ok and after.output.strip() != commit:
-        dependencies = run_step(
+    refresh = any(p.name == 'reccy' for p in programs)
+    settings_path = (
+        Path('/home') / provision_config.network.user / '.config/recs/settings.json'
+    )
+    restore_settings = clear_settings and 'recs' in names
+    saved_settings: bytes | None = None
+    if restore_settings:
+        try:
+            saved_settings = settings_path.read_bytes()
+        except FileNotFoundError:
+            pass
+        except OSError as error:
+            print(f'Cannot back up recs settings: {error}', file=output)
+            return 1
+    stopped = [run_service_step(n, 'stop', run_command) for n in reversed(names)]
+    if not all(r.ok for r in stopped):
+        report_failures(stopped, output)
+        report_failures(
+            [run_service_step(n, 'start', run_command) for n in names], output
+        )
+        return 1
+
+    results: list[StepResult] = []
+    try:
+        if restore_settings:
+            results.append(
+                clear_recs_settings_step(provision_config.network.user, run_command)
+            )
+        if all(r.ok for r in results):
+            results.extend(install_revisions(programs, targets, run_command))
+        if all(r.ok for r in results):
+            results.extend(
+                start_or_refresh_service_step(
+                    n, refresh, root, provision_config, run_command
+                )
+                for n in names
+            )
+        if all(r.ok for r in results):
+            results.extend(
+                check_updated_services(names, root, provision_config, run_command)
+            )
+        if all(r.ok for r in results):
+            return 0
+
+    except (OSError, KeyboardInterrupt) as error:
+        results.append(
+            StepResult(
+                program='target',
+                step='deployment interrupted',
+                command=[],
+                returncode=1,
+                output=str(error) or 'Interrupted',
+            )
+        )
+
+    report_failures(results, output)
+    print('Update failed; restoring previous revisions and environments.', file=output)
+    stopped = [run_service_step(n, 'stop', run_command) for n in reversed(names)]
+    if not all(r.ok for r in stopped):
+        report_failures(stopped, output)
+        print('Rollback blocked: could not stop affected services.', file=output)
+        return 1
+    restored = install_revisions(programs, previous, run_command, restore=True)
+    report_failures(restored, output)
+    if restore_settings:
+        try:
+            if saved_settings is None:
+                settings_path.unlink(missing_ok=True)
+            else:
+                settings_path.write_bytes(saved_settings)
+        except OSError as error:
+            print(
+                f'Rollback incomplete: cannot restore recs settings: {error}',
+                file=output,
+            )
+            return 1
+    if not all(r.ok for r in restored):
+        print('Rollback incomplete; affected services remain stopped.', file=output)
+        return 1
+    restarted = [
+        start_or_refresh_service_step(n, refresh, root, provision_config, run_command)
+        for n in names
+    ]
+    restarted.extend(check_updated_services(names, root, provision_config, run_command))
+    report_failures(restarted, output)
+    if all(r.ok for r in restarted):
+        print('Previous versions restored and services restarted.', file=output)
+    else:
+        print('Previous versions restored, but service recovery failed.', file=output)
+    return 1
+
+
+def install_revisions(
+    programs: list[Program],
+    revisions: dict[str, str],
+    run_command: RunCommand,
+    *,
+    restore: bool = False,
+) -> list[StepResult]:
+    results = []
+    for program in programs:
+        result = run_step(
             program.name,
-            'sync dependencies',
+            'restore revision' if restore else 'install revision',
+            [
+                'git',
+                '-C',
+                str(program.directory),
+                'reset',
+                '--hard',
+                revisions[program.name],
+            ],
+            run_command,
+        )
+        results.append(result)
+        if not result.ok and not restore:
+            return results
+    if not all(r.ok for r in results):
+        return results
+    for program in programs:
+        result = run_step(
+            program.name,
+            'restore dependencies' if restore else 'sync dependencies',
             ['uv', 'sync', '--locked', '--directory', str(program.directory)],
             run_command,
         )
-        results.append(dependencies)
-        if not dependencies.ok:
-            results.append(
-                run_step(
-                    program.name,
-                    'reset',
-                    ['git', '-C', str(program.directory), 'reset', '--hard', commit],
-                    run_command,
-                )
-            )
+        results.append(result)
+        if not result.ok and not restore:
+            return results
+    return results
+
+
+def check_updated_services(
+    names: list[str],
+    root: Path,
+    provision_config: config.Config,
+    run_command: RunCommand,
+) -> list[StepResult]:
+    results = []
+    if 'showco' in names:
+        results.append(
+            showco_revision_step(root, provision_config.network.web_port, run_command)
+        )
+    if 'recs' in names:
+        results.append(recs_status_changes_step(run_command))
     return results
 
 
@@ -307,13 +313,6 @@ def showco_revision_step(
 ) -> StepResult:
     command = revision.showco_revision_command(root, web_port, retry=True)
     return run_step('showco', 'web UI revision', ['sh', '-c', command], run_command)
-
-
-def program_named(programs: list[Program], name: str) -> Program:
-    for program in programs:
-        if program.name == name:
-            return program
-    sys.exit(f'ERROR: update target {name} is required')
 
 
 def selected_repositories(arguments: list[str]) -> list[str]:
@@ -450,46 +449,16 @@ def remote_update_command(
     selected: list[str],
     root: Path,
     *,
-    skip_worktree_check: bool = False,
-    clear_settings: bool = True,
+    clear_settings: bool = False,
 ) -> str:
-    arguments_list = ['--target-machine', '--root', str(root)]
-    if not clear_settings:
-        arguments_list.append('--no-clear-settings')
-    arguments = shlex.join([*arguments_list, *selected])
-    showco_directory = shlex.quote(str(root / 'showco'))
-    dependency_directories = shlex.join(
-        [str(root / name) for name in ['reccy', 'recs', 'streamo', 'lyte']]
-    )
-    worktree_check = ''
-    if not skip_worktree_check:
-        worktree_check = (
-            'status=$(git status --porcelain --untracked-files=no) && '
-            'if [ -n "$status" ]; then '
-            'printf "%s\\n" "showco target worktree has tracked changes" >&2; '
-            'printf "%s\\n" "$status" >&2; exit 1; fi && '
-        )
+    arguments = ['--target-machine', '--root', str(root)]
+    if clear_settings:
+        arguments.append('--clear-settings')
     return (
-        f'cd {showco_directory} && '
-        f'{worktree_check}'
-        'upstream=$(git rev-parse --abbrev-ref --symbolic-full-name "@{upstream}") && '
-        'remote=${upstream%%/*} && branch=${upstream#*/} && '
-        'git fetch "$remote" "+refs/heads/$branch:refs/remotes/$remote/$branch" && '
-        'git reset --hard "$remote/$branch" && '
-        f'for directory in {dependency_directories}; do '
-        'cd "$directory" && '
-        'upstream=$(git rev-parse --abbrev-ref --symbolic-full-name "@{upstream}") && '
-        'remote=${upstream%%/*} && branch=${upstream#*/} && '
-        'git fetch "$remote" "+refs/heads/$branch:refs/remotes/$remote/$branch" && '
-        'git reset --hard "$remote/$branch" || exit 1; done && '
-        'git config --global url."https://github.com/".insteadOf '
-        '"ssh://git@github.com/" && '
-        'PATH="$HOME/.local/bin:$PATH" uv sync --locked --directory '
-        f'{showco_directory} && '
-        f'cd {showco_directory} && '
+        f'cd {shlex.quote(str(root / "showco"))} && '
         'PATH="$HOME/.local/bin:$PATH" '
-        f'uv run --locked showco go {arguments}'
-    ).rstrip()
+        f'uv run --no-sync showco go {shlex.join([*arguments, *selected])}'
+    )
 
 
 def run_service_step(
@@ -632,7 +601,7 @@ def run_step(
 ) -> StepResult:
     try:
         completed = run_command(command)
-    except FileNotFoundError as e:
+    except OSError as e:
         return StepResult(
             program=program,
             step=step,
@@ -664,7 +633,7 @@ def run_remote_step(program: str, step: str, command: list[str]) -> StepResult:
             capture_output=True,
             check=False,
             text=True,
-            timeout=timeout(command),
+            timeout=3600 if step == 'update' else timeout(command),
         )
     except FileNotFoundError as e:
         return StepResult(

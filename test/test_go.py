@@ -150,7 +150,7 @@ class GoTests(unittest.TestCase):
             target_config=provision_config,
             output=mock.ANY,
             autosquash=50,
-            clear_settings=True,
+            clear_settings=False,
         )
         provision_target.assert_not_called()
 
@@ -250,7 +250,7 @@ class GoTests(unittest.TestCase):
             root=None,
             target_config=provision_config,
             output=mock.ANY,
-            clear_settings=True,
+            clear_settings=False,
         )
         local.assert_not_called()
 
@@ -262,7 +262,7 @@ class GoTests(unittest.TestCase):
 
         self.assertEqual(result, 0)
         update_target.assert_called_once_with(
-            ['recs', 'showco'], root=None, clear_settings=True
+            ['recs', 'showco'], root=None, clear_settings=False
         )
 
     def test_clear_settings_option_is_forwarded_to_target_update(self) -> None:

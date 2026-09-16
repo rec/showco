@@ -24,11 +24,15 @@ Save and restore the master state just like the other changed settings. Verify b
 
 ### 3. Remote updates reset unselected repositories before stopping services
 
+**Resolved.** Remote invocation no longer resets checkouts or synchronizes environments before the target transaction. The target preflights selected repositories and consumers, snapshots revisions, stops affected services, and restores all selected revisions and locked environments on deployment failure before restarting. Recovery failures are reported rather than declared successful. Older targets must install the new updater before these guarantees apply.
+
 **Risk.** `showco/deployment/update.py:remote_update_command` fetches and hard-resets showCo and all four sibling repositories before invoking the selected update operation. Only the showCo worktree receives the optional dirty check. Thus `showco go recs` can replace changes in other target checkouts and move their source while their services remain running. A failure halfway through bootstrap leaves a partially updated installation before the normal service lifecycle even starts.
 
 Make the bootstrap scope and service-stop boundary explicit. Preserve the documented disposable-checkout policy where intended, but do not present repository selection as limiting all target mutations. Verify partial-bootstrap failures.
 
 ### 4. Updates erase saved recs settings before preflight checks
+
+**Resolved.** Settings preservation is the default. Explicit clearing applies only when recs is affected and after preflight and service shutdown; failed updates restore the original settings.
 
 **Bug / design.** `showco/provision/provision.py:GoOptions.clear_settings` defaults to true. `showco/deployment/update.py:update_target` clears settings before constructing the selected program list and checking branches. A rejected update can therefore still remove operator configuration; the clearing is not conditional on selecting recs. The documentation warns about the default, but ordinary deployment remains a trap for track names and stereo groups.
 

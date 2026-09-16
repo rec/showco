@@ -89,7 +89,11 @@ showco --push recs
 showco --sync recs
 ```
 
-Updates clear mutable Recs web settings by default, including track names and stereo groups. Pass `--no-clear-settings` for the one update that must preserve them. Do not use `showco go` as a casual diagnostic: it can publish histories, reset disposable target checkouts, restart services, clear Recs settings, and change network or system configuration.
+Updates preserve saved recs settings by default. Pass `--clear-settings` to explicitly clear them when updating recs. Preflight checks run before settings or services are changed. A failed update restores the previous selected revisions, locked environments, and any settings explicitly cleared, then restarts affected services. If restoration fails, services remain stopped and the command reports the failure; a recovered update still exits unsuccessfully.
+
+Repository selection includes dependent applications. All affected services stop before any selected checkout changes, and showCo starts last. Unselected checkouts are not reset. Remote updates require a working installed showCo updater and environment; provisioning is the repair path for a broken installation. Install this updater on older targets before relying on its rollback guarantees. Rollback handles command failures and interruption within the update process; it is not a durable recovery mechanism for power loss or a killed process.
+
+Do not use `showco go` as a casual diagnostic: it can publish histories, reset selected target checkouts, restart services, and change network or system configuration during provisioning.
 
 ## Diagnose a problem
 
