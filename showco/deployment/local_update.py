@@ -37,7 +37,7 @@ def update_from_provisioning_machine(
     run_command: update.RunCommand | None = None,
     output: TextIO = sys.stdout,
     autosquash: int = 50,
-    clear_settings: bool = True,
+    clear_settings: bool = False,
 ) -> int:
     run_command = run_command or update.run_command_with_timeout
     provision_config = target_config or update.provisioning_config()

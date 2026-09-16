@@ -40,7 +40,7 @@ class GoOptions(BaseModel, frozen=True):
     sync: bool = False
     remote: bool = False
     target_machine: bool = False
-    clear_settings: bool = True
+    clear_settings: bool = False
     autosquash: int | None = Field(default=None, ge=0)
 
 
