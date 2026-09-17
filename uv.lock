@@ -7,7 +7,7 @@ resolution-markers = [
 ]
 
 [options]
-exclude-newer = "2026-09-09T10:47:13.442543Z"
+exclude-newer = "2026-09-10T09:29:33.878563Z"
 exclude-newer-span = "P1W"
 
 [[package]]
@@ -886,7 +886,7 @@ dependencies = [
 [[package]]
 name = "recs"
 version = "0.12.5"
-source = { git = "https://github.com/rec/recs.git?branch=main#580e9074823ad793f50ec24d7b867ccb3c0662ed" }
+source = { git = "https://github.com/rec/recs.git?branch=main#9f183e5d2ea4e8900764072ace7d2092eab9979e" }
 dependencies = [
     { name = "humanfriendly" },
     { name = "mido", extra = ["ports-rtmidi"] },
@@ -1206,17 +1206,10 @@ wheels = [
 [[package]]
 name = "ufor"
 version = "0.1.0"
-source = { url = "https://github.com/rec/ufor/archive/5f6f1df9cec42890f31044e90a363f8ed1920eb3.tar.gz" }
+source = { git = "https://github.com/rec/ufor.git?branch=main#1239e4586cee42032be5fc29bfb9516e21324b92" }
 dependencies = [
     { name = "pydantic" },
     { name = "tomlkit" },
-]
-sdist = { hash = "sha256:53ab2710456e7942dfb4a429af2279f0608ec8ccc10b69967340b291fddb0b7d" }
-
-[package.metadata]
-requires-dist = [
-    { name = "pydantic", specifier = ">=2.13.4" },
-    { name = "tomlkit", specifier = ">=0.15.1" },
 ]
 
 [[package]]
