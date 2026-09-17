@@ -656,6 +656,17 @@ class LocalUpdateTests(unittest.TestCase):
             '--upgrade-package',
             'recs',
         ]
+        recs_lock = [
+            'uv',
+            'lock',
+            '--directory',
+            '/code/recs',
+            '--upgrade-package',
+            'reccy',
+            '--upgrade-package',
+            'ufor',
+        ]
+        self.assertIn(recs_lock, commands)
         self.assertLess(commands.index(recs_push), commands.index(showco_lock))
 
     def test_refresh_reports_unchanged_and_skipped_repositories(self) -> None:
