@@ -5,6 +5,7 @@ import tomllib
 from enum import StrEnum, auto
 from pathlib import Path
 from typing import TextIO
+from urllib.parse import urlparse
 
 from pydantic import BaseModel
 from tqdm import tqdm
@@ -83,7 +84,11 @@ def prepare_local_repositories(
     *,
     autosquash: int = 50,
 ) -> bool:
-    programs = update.programs_for_repositories(selected, root)
+    try:
+        programs = dependency_programs(selected, root)
+    except ValueError as error:
+        tqdm.write(f'Dependency closure: {error}', file=output)
+        return False
     if not update.check_main_branches(programs, run_command, output):
         return False
     clean_results = [update.clean_worktree_step(p, run_command) for p in programs]
@@ -118,14 +123,18 @@ def prepare_local_repositories(
 def refresh_local_dependencies(
     selected: list[str], root: Path, run_command: update.RunCommand, output: TextIO
 ) -> bool:
-    programs = update.programs_for_repositories(selected, root)
+    try:
+        programs = dependency_programs(selected, root)
+    except ValueError as error:
+        tqdm.write(f'Dependency closure: {error}', file=output)
+        return False
     updated: list[str] = []
     unchanged: list[str] = []
     skipped: list[str] = []
     with update.progress_bar(len(programs), output) as progress:
         for program in programs:
             progress.set_description_str(f'Synchronizing {program.name}')
-            dependencies = INTERNAL_DEPENDENCIES.get(program.name)
+            dependencies = github_source_packages(program)
             if not dependencies:
                 skipped.append(program.name)
                 progress.update()
@@ -145,7 +154,7 @@ def refresh_local_dependencies(
     if unchanged:
         outcomes.append(f'unchanged {", ".join(unchanged)}')
     if skipped:
-        outcomes.append(f'no internal dependencies {", ".join(skipped)}')
+        outcomes.append(f'no GitHub source dependencies {", ".join(skipped)}')
     tqdm.write(f'Dependency synchronization: {"; ".join(outcomes)}.', file=output)
     return True
 
@@ -298,6 +307,93 @@ def locked_dependency_sources(
         ):
             result[name] = git
     return result
+
+
+def dependency_programs(selected: list[str], root: Path) -> list[update.Program]:
+    result: list[update.Program] = []
+    visited: set[str] = set()
+    visiting: set[str] = set()
+
+    def visit(name: str) -> None:
+        if name in visited:
+            return
+        if name in visiting:
+            raise ValueError(f'GitHub dependency cycle includes {name}')
+        visiting.add(name)
+        program = dependency_program(name, root)
+        for dependency in internal_dependency_projects(program):
+            visit(dependency)
+        visiting.remove(name)
+        visited.add(name)
+        result.append(program)
+
+    for name in selected:
+        visit(name)
+    return result
+
+
+def dependency_program(name: str, root: Path) -> update.Program:
+    if name in update.REPOSITORY_NAMES:
+        return update.programs_for_repositories([name], root)[0]
+    directory = root / name
+    if not (directory / 'pyproject.toml').is_file():
+        raise ValueError(f'GitHub dependency {name} has no checkout at {directory}')
+    return update.Program(name=name, directory=directory, service_names=[])
+
+
+def github_source_packages(program: update.Program) -> list[str]:
+    return list(github_sources(program))
+
+
+def internal_dependency_projects(program: update.Program) -> list[str]:
+    return [name for name in github_sources(program).values() if name is not None]
+
+
+def github_sources(program: update.Program) -> dict[str, str | None]:
+    path = program.directory / 'pyproject.toml'
+    if not path.is_file():
+        return {}
+    data = tomllib.loads(path.read_text())
+    tool = data.get('tool')
+    uv = tool.get('uv') if isinstance(tool, dict) else None
+    sources = uv.get('sources') if isinstance(uv, dict) else None
+    if sources is None:
+        return {}
+    if not isinstance(sources, dict):
+        raise ValueError(f'{path} has invalid tool.uv.sources')
+    result = {}
+    for package, source in sources.items():
+        if not isinstance(package, str) or not isinstance(source, dict):
+            raise ValueError(f'{path} has an invalid source entry')
+        git = source.get('git')
+        if not isinstance(git, str):
+            raise ValueError(
+                f'{path}: {package} must use a GitHub git source, not a local source'
+            )
+        owner, repository = github_repository(git, path, package)
+        if owner == 'rec':
+            if package != repository:
+                raise ValueError(
+                    f'{path}: source package {package} does not match GitHub project '
+                    f'{repository}'
+                )
+            if source.get('branch') != 'main' or 'rev' in source or 'tag' in source:
+                raise ValueError(f'{path}: {package} must follow GitHub main')
+            result[package] = repository
+        else:
+            result[package] = None
+    return result
+
+
+def github_repository(git: str, path: Path, package: str) -> tuple[str, str]:
+    parsed = urlparse(git)
+    parts = parsed.path.strip('/').split('/')
+    if parsed.scheme != 'https' or parsed.netloc != 'github.com' or len(parts) != 2:
+        raise ValueError(f'{path}: {package} must use an https GitHub repository')
+    owner, repository = parts
+    if not repository.endswith('.git') or not owner or repository == '.git':
+        raise ValueError(f'{path}: {package} has an invalid GitHub repository')
+    return owner, repository.removesuffix('.git')
 
 
 def restore_generated_lockfile(
@@ -559,11 +655,3 @@ def log_commits(output: str) -> list[tuple[str, str]]:
         (commit.strip(), subject.strip())
         for commit, subject in zip(values[::2], values[1::2], strict=False)
     ]
-
-
-INTERNAL_DEPENDENCIES = {
-    'recs': ['reccy', 'ufor'],
-    'streamo': ['reccy'],
-    'lyte': ['reccy'],
-    'showco': ['reccy', 'recs'],
-}

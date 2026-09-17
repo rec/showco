@@ -13,6 +13,90 @@ from update_helpers import make_config
 from showco.deployment import local_update, update
 
 
+class DependencyClosureTests(unittest.TestCase):
+    def write_project(
+        self, root: Path, name: str, sources: dict[str, str] | None = None
+    ) -> None:
+        directory = root / name
+        directory.mkdir()
+        lines = ['[project]', f'name = "{name}"', 'version = "0"']
+        if sources:
+            lines.extend(['', '[tool.uv.sources]'])
+            lines.extend(
+                f'{package} = {{ git = "{git}", branch = "main" }}'
+                for package, git in sources.items()
+            )
+        (directory / 'pyproject.toml').write_text('\n'.join(lines))
+
+    def test_dependency_closure_orders_internal_projects_before_dependants(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.write_project(root, 'reccy')
+            self.write_project(root, 'ufor')
+            self.write_project(
+                root,
+                'recs',
+                {
+                    'reccy': 'https://github.com/rec/reccy.git',
+                    'ufor': 'https://github.com/rec/ufor.git',
+                },
+            )
+            self.write_project(
+                root,
+                'showco',
+                {'recs': 'https://github.com/rec/recs.git'},
+            )
+
+            programs = local_update.dependency_programs(['showco'], root)
+
+        self.assertEqual(
+            [p.name for p in programs], ['reccy', 'ufor', 'recs', 'showco']
+        )
+
+    def test_dependency_closure_rejects_local_source(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.write_project(root, 'recs')
+            (root / 'recs' / 'pyproject.toml').write_text(
+                '[tool.uv.sources]\nreccy = { path = "../reccy" }\n'
+            )
+
+            with self.assertRaisesRegex(ValueError, 'must use a GitHub git source'):
+                local_update.dependency_programs(['recs'], root)
+
+    def test_dependency_closure_requires_internal_checkout(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.write_project(
+                root,
+                'recs',
+                {'ufor': 'https://github.com/rec/ufor.git'},
+            )
+
+            with self.assertRaisesRegex(ValueError, 'ufor has no checkout'):
+                local_update.dependency_programs(['recs'], root)
+
+    def test_dependency_closure_rejects_internal_revision(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.write_project(root, 'reccy')
+            self.write_project(
+                root,
+                'recs',
+                {'reccy': 'https://github.com/rec/reccy.git'},
+            )
+            (root / 'recs' / 'pyproject.toml').write_text(
+                '[tool.uv.sources]\n'
+                'reccy = { git = "https://github.com/rec/reccy.git", '
+                'rev = "1234567" }\n'
+            )
+
+            with self.assertRaisesRegex(ValueError, 'must follow GitHub main'):
+                local_update.dependency_programs(['recs'], root)
+
+
 class LocalUpdateTests(unittest.TestCase):
     def setUp(self) -> None:
         ensure_log = mock.patch(
@@ -26,6 +110,17 @@ class LocalUpdateTests(unittest.TestCase):
         )
         self.locked_sources = locked_sources.start()
         self.addCleanup(locked_sources.stop)
+        source_packages = mock.patch(
+            'showco.deployment.local_update.github_source_packages',
+            side_effect=lambda p: {
+                'recs': ['reccy', 'ufor'],
+                'streamo': ['reccy'],
+                'lyte': ['reccy', 'ufor'],
+                'showco': ['reccy', 'recs', 'streamo'],
+            }.get(p.name, []),
+        )
+        source_packages.start()
+        self.addCleanup(source_packages.stop)
 
     def test_locked_dependency_sources_reads_known_git_packages(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -111,7 +206,7 @@ class LocalUpdateTests(unittest.TestCase):
         self.assertEqual(
             output.getvalue(),
             'Dependency synchronization: unchanged recs, streamo, lyte, showco; '
-            'no internal dependencies reccy.\n',
+            'no GitHub source dependencies reccy.\n',
         )
 
     def test_provisioning_update_rejects_non_main_branches_before_pushing(self) -> None:
@@ -655,6 +750,8 @@ class LocalUpdateTests(unittest.TestCase):
             'reccy',
             '--upgrade-package',
             'recs',
+            '--upgrade-package',
+            'streamo',
         ]
         recs_lock = [
             'uv',
@@ -683,7 +780,7 @@ class LocalUpdateTests(unittest.TestCase):
         self.assertEqual(
             output.getvalue(),
             'Dependency synchronization: unchanged recs; '
-            'no internal dependencies reccy.\n',
+            'no GitHub source dependencies reccy.\n',
         )
 
     def test_provisioning_update_defaults_to_saved_host(self) -> None:
