@@ -18,6 +18,7 @@ class Target:
         self.failure = ''
         self.failed = False
         self.rollback_failure = False
+        self.unloaded_stops = False
         self.dirty = ''
         self.branch = 'main'
 
@@ -47,6 +48,8 @@ class Target:
         if not self.failed and operation == self.failure:
             self.failed = True
             return CompletedProcess(command, 1, '', 'injected failure')
+        if self.unloaded_stops and operation == 'stop' and self.failed:
+            return CompletedProcess(command, 5, '', f'Unit {name}.service not loaded.')
         if self.rollback_failure and operation == 'sync' and self.failed:
             return CompletedProcess(command, 1, '', 'recovery unavailable')
         if operation == 'reset':
@@ -115,6 +118,19 @@ def test_failed_deployment_restores_all_versions_and_environments(
     target.failure = failure
     output = StringIO()
     assert deploy(target, output) == 1
+    assert target.revisions == {n: f'old-{n}' for n in update.REPOSITORY_NAMES}
+    assert target.environments == target.revisions
+    assert target.running == {'recs', 'showco', 'streamo', 'lyte'}
+    assert 'Previous versions restored and services restarted.' in output.getvalue()
+
+
+def test_failed_deployment_rolls_back_unloaded_services(target: Target) -> None:
+    target.failure = 'start'
+    target.unloaded_stops = True
+    output = StringIO()
+
+    assert deploy(target, output) == 1
+
     assert target.revisions == {n: f'old-{n}' for n in update.REPOSITORY_NAMES}
     assert target.environments == target.revisions
     assert target.running == {'recs', 'showco', 'streamo', 'lyte'}

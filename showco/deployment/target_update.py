@@ -87,7 +87,7 @@ def update_target(
         except OSError as error:
             print(f'Cannot back up recs settings: {error}', file=output)
             return 1
-    stopped = [update.run_service_step(n, 'stop', run_command) for n in reversed(names)]
+    stopped = stop_services(names, run_command)
     if not all(r.ok for r in stopped):
         update.report_failures(stopped, output)
         update.report_failures(
@@ -132,7 +132,7 @@ def update_target(
 
     update.report_failures(results, output)
     print('Update failed; restoring previous revisions and environments.', file=output)
-    stopped = [update.run_service_step(n, 'stop', run_command) for n in reversed(names)]
+    stopped = stop_services(names, run_command)
     if not all(r.ok for r in stopped):
         update.report_failures(stopped, output)
         print('Rollback blocked: could not stop affected services.', file=output)
@@ -206,6 +206,20 @@ def install_revisions(
         results.append(result)
         if not result.ok and not restore:
             return results
+    return results
+
+
+def stop_services(
+    names: list[str], run_command: update.RunCommand
+) -> list[update.StepResult]:
+    results = []
+    for name in reversed(names):
+        result = update.run_service_step(name, 'stop', run_command)
+        if not result.ok and result.output.rstrip().endswith(
+            f'Unit {name}.service not loaded.'
+        ):
+            result = result.model_copy(update={'returncode': 0, 'output': 'not loaded'})
+        results.append(result)
     return results
 
 
