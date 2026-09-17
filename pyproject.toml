@@ -48,3 +48,6 @@ quote-style = "single"
 
 [tool.ruff.lint]
 select = ["B", "E", "F", "I"]
+
+[tool.pytest.ini_options]
+addopts = "-n 4 --dist=loadfile"

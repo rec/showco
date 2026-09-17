@@ -586,6 +586,21 @@ class LocalUpdateTests(unittest.TestCase):
             commands,
         )
         self.assertFalse(any('commit' in c for c in commands))
+        self.assertIn(
+            [
+                'uv',
+                'run',
+                '--locked',
+                '--directory',
+                '/code/recs',
+                'pytest',
+                '-q',
+                '-n',
+                '4',
+                '--dist=loadfile',
+            ],
+            commands,
+        )
 
     def test_refresh_program_commits_only_changed_lockfile(self) -> None:
         program = update.Program(
