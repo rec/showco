@@ -7,7 +7,7 @@ resolution-markers = [
 ]
 
 [options]
-exclude-newer = "2026-09-10T09:40:47.929265Z"
+exclude-newer = "2026-09-10T10:44:27.302527Z"
 exclude-newer-span = "P1W"
 
 [[package]]
@@ -897,7 +897,7 @@ wheels = [
 [[package]]
 name = "reccy"
 version = "0.1.0"
-source = { git = "https://github.com/rec/reccy.git?branch=main#88a0b6b34e810cd86a93eb253c4b17131a9ef8e9" }
+source = { git = "https://github.com/rec/reccy.git?branch=main#a66f286a88fac06f9868d3091fab9f2a01b45bf6" }
 dependencies = [
     { name = "pint" },
     { name = "pydantic" },
@@ -908,7 +908,7 @@ dependencies = [
 [[package]]
 name = "recs"
 version = "0.12.5"
-source = { git = "https://github.com/rec/recs.git?branch=main#9f183e5d2ea4e8900764072ace7d2092eab9979e" }
+source = { git = "https://github.com/rec/recs.git?branch=main#ffc4aafdc14519b6bd8fd0f1c6322900df3f0a0e" }
 dependencies = [
     { name = "humanfriendly" },
     { name = "mido", extra = ["ports-rtmidi"] },
@@ -1092,7 +1092,7 @@ wheels = [
 [[package]]
 name = "streamo"
 version = "0.1.0"
-source = { git = "https://github.com/rec/streamo.git?branch=main#80cc844315b0a226ed61ec84f909231f2ab5cdc7" }
+source = { git = "https://github.com/rec/streamo.git?branch=main#5ddf3254e17b1bd6eae62cb0eaedc9419146a903" }
 dependencies = [
     { name = "google-auth" },
     { name = "google-auth-oauthlib" },
