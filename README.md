@@ -72,6 +72,9 @@ uv run ruff check showco test
 uv run ty check showco
 ```
 
+`uv run pytest` uses four workers and keeps each test file in one worker. Run
+`uv run pytest -n 0` to reproduce a failure serially.
+
 Automated tests do not establish that audio was recorded, a mixer is reachable,
 lighting frames were displayed, or the streaming service accepted an operation. Use the
 hardware acceptance tests before relying on a deployed system.
