@@ -121,7 +121,22 @@ For a full installation or major-change check, also power-cycle the Pi, test dev
 - **Shutdown recs daemon** requires choosing the shutdown confirmation. It stops the recorder.
 - **Test lights** runs lyte's one-second, 30-percent test and leaves the lights off. It runs only when you press the button; status polling and reconnects never trigger it.
 - **Test X18 cables** pauses audio recording while it runs, then restores it if it was recording. It temporarily changes X18 routing and restores the affected mixer settings afterward. The default sends the same tone to AUX 1-6 at once and records inputs 9-14, so the cables may be connected in any order. Those AUX buses must be assigned to their matching physical outputs. Results distinguish absent signal, distortion, clipping, and incorrect level. The current thresholds are at least 98 percent tone similarity, 70-130 percent level, and no clipping; these need confirmation against known-good cables on the target installation.
+- **Music mode** has four deliberate transitions. **Setup** stops streamO, pauses recs, starts looping setup music, and routes the music to X18 main LR. **Record** fades music out, mutes its X18 channels, starts a new recs session, then restarts streamO to create the stream. **Tear down** stops streamO, pauses recs, stops recorded-session playback, and starts looping tear-down music on main LR. **Stop and shut down** fades and mutes the music before powering off the Pi. All four transitions are blocked by Performance lock.
 - streamO actions appear only when streaming is enabled. They include restart, mute, unmute, stop, stream information, chat, announcement, clip, and marker actions.
+
+Music uses the target's existing ffmpeg installation, so it can decode normal audio formats. It writes stereo audio to X18 USB returns 17 and 18 and configures X18 channels 17 and 18 as USB-return channels routed to main LR. These channels must be reserved for showCo music. The X18 music fader is set to 40 percent; set the existing instrument mix to the intended 60-percent level on the mixer. Default music directories are `~/Music/setup` and `~/Music/teardown`. Custom `source_channels` must be an adjacent odd/even X18 pair.
+
+Optional target configuration is `~/.config/showco/music.toml`:
+
+```toml
+setup_directory = "/home/tom/Music/setup"
+teardown_directory = "/home/tom/Music/teardown"
+fade_seconds = 2
+shuffle = false
+source_channels = [17, 18]
+```
+
+When `shuffle` is false, files run in alphabetical order and repeat. When true, each cycle is shuffled without repeating a track within the cycle.
 
 ## Configure and deploy
 
