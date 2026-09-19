@@ -614,3 +614,60 @@ def waveform_batch() -> WaveformBatchData:
 
 if __name__ == '__main__':
     unittest.main()
+
+    def test_musician_add_and_edit_use_recs_protocol(self) -> None:
+        control = mock.Mock(spec=RecsControlClient)
+        control.call.side_effect = [
+            {
+                'type': 'musician',
+                'musician': {
+                    'name': 'mike',
+                    'other_names': [],
+                    'public_keys': [],
+                    'contacts': ['insta:mike'],
+                },
+            },
+            {
+                'type': 'musician',
+                'musician': {
+                    'name': 'mike',
+                    'other_names': ['Michael'],
+                    'public_keys': ['ssh-ed25519 AAA'],
+                    'contacts': ['insta:mike'],
+                },
+            },
+        ]
+        client = RecsClient(control=control)
+
+        added = client.add_musician('mike', [], [], ['insta:mike'])
+        edited = client.edit_musician(
+            'mike', ['Michael'], ['ssh-ed25519 AAA'], ['insta:mike']
+        )
+
+        self.assertTrue(added.ok)
+        self.assertTrue(edited.ok)
+        self.assertEqual(
+            control.call.call_args_list,
+            [
+                mock.call(
+                    'add_musician',
+                    {
+                        'musician': {
+                            'name': 'mike',
+                            'other_names': [],
+                            'public_keys': [],
+                            'contacts': ['insta:mike'],
+                        }
+                    },
+                ),
+                mock.call(
+                    'edit_musician',
+                    {
+                        'name': 'mike',
+                        'other_names': ['Michael'],
+                        'public_keys': ['ssh-ed25519 AAA'],
+                        'contacts': ['insta:mike'],
+                    },
+                ),
+            ],
+        )

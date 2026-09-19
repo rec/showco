@@ -21,6 +21,7 @@ The target runs a standard-library `ThreadingHTTPServer`. Its pages are:
 - **Health**: service state, CPU, memory, recording-disk use, temperature,
   mixers, MIDI, OSC recorders, and recent recs errors.
 - **Attributes**: mutable recs configuration.
+- **Musicians**: add and edit recs musician identities, aliases, public keys, and contacts.
 - **Actions**: recs, lyte, and optional streamO commands with recent results.
 - **Errors**: recs errors from the current showCo run.
 

@@ -50,6 +50,8 @@ PROTECTED_ACTIONS = {
     'recs-shutdown',
     'recs-new-session',
     'recs-track-name',
+    'recs-musician-add',
+    'recs-musician-edit',
     'recs-set-stereo',
     'recs-set-attr',
     'recs-set-noise-floor',

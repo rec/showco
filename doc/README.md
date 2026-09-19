@@ -21,6 +21,7 @@ Open showCo on the show network at the configured address and port. The Health p
 | Health | Check readiness, recording and streaming state, disk space, CPU, memory, temperature, mixer and input status, current recs errors, and incidents from this showCo run. |
 | Playback | Play and navigate available recs recordings. |
 | Attributes | View and edit mutable recs settings. Changes are saved when an input loses focus. |
+| Musicians | Add and edit recs musician identities, aliases, public keys, and contacts. Enter each alias, key, or contact on its own line. |
 | Actions | Calibrate, mark, start a session, pause or resume, inspect recs status, test lights or cables, operate streamO, and review the ten most recent results. |
 | Errors | See up to 25 recs errors from the current showCo process. |
 
@@ -36,7 +37,7 @@ Recording-input checks cover channels currently recording and flag silence or cl
 
 Open **Performance** for large controls that advance the set list, mark a moment, or pause/resume recording. Moment markers use the label `performance moment`. The page shows recording state, destination, remaining capacity, stream state, and connection age. Pin important inputs and enable dimming for this browser. Screen-awake mode is opt-in and reports whether the browser and connection support it. Controls are disabled when status is unavailable; an action with an unknown outcome is never automatically retried.
 
-Enable **Performance lock** from any page before a show. It blocks web requests for cable and lighting tests, calibration, recorder shutdown, new sessions, track names, stereo grouping, mutable attributes, noise-floor changes, key labels, profile reloads, set-list and lighting-cue replacement, soundcheck, and recovery restarts. Manual cues, ordinary markers, pause/resume, and recovery verification remain available. An older tab receives the same server-side rejection. To unlock, select **Confirm unlock** and press **Unlock protected actions**; submit any previously rejected action again yourself.
+Enable **Performance lock** from any page before a show. It blocks web requests for cable and lighting tests, calibration, recorder shutdown, new sessions, track names, stereo grouping, musician identities, mutable attributes, noise-floor changes, key labels, profile reloads, set-list and lighting-cue replacement, soundcheck, and recovery restarts. Manual cues, ordinary markers, pause/resume, and recovery verification remain available. An older tab receives the same server-side rejection. To unlock, select **Confirm unlock** and press **Unlock protected actions**; submit any previously rejected action again yourself.
 
 Lock state persists in `~/.local/state/showco/performance.json`. If that file cannot be read, protected actions remain blocked until an explicit unlock can be saved successfully. The lock does not affect separate CLI or deployment commands, and it never starts or stops services itself. Rehearsal uses temporary in-memory lock and incident state and observes services when status is requested.
 

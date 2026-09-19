@@ -4,6 +4,7 @@ import json
 import threading
 
 from pydantic import ValidationError
+from recs.musicians import Musician
 
 from . import models, recs_control, recs_snapshot
 
@@ -81,6 +82,85 @@ class RecsClient:
             return models.ActionResult(ok=True, message='recs calibration succeeded')
         return models.ActionResult(
             ok=False, message='recs did not send calibrated response'
+        )
+
+    def musicians(self) -> dict[str, Musician] | models.ActionResult:
+        response = self._control_command('list_musicians')
+        if isinstance(response, models.ActionResult):
+            return response
+        if (
+            not recs_snapshot.object_dict(response)
+            or response.get('type') != 'musicians'
+        ):
+            return models.ActionResult(ok=False, message='recs sent invalid musicians')
+        values = response.get('musicians')
+        if not recs_snapshot.object_dict(values):
+            return models.ActionResult(ok=False, message='recs sent invalid musicians')
+        try:
+            return {
+                name: Musician.model_validate(value) for name, value in values.items()
+            }
+        except ValidationError:
+            return models.ActionResult(ok=False, message='recs sent invalid musician')
+
+    def add_musician(
+        self,
+        name: str,
+        other_names: list[str],
+        public_keys: list[str],
+        contacts: list[str],
+    ) -> models.ActionResult:
+        return self._save_musician(
+            'add_musician',
+            {
+                'musician': {
+                    'name': name,
+                    'other_names': other_names,
+                    'public_keys': public_keys,
+                    'contacts': contacts,
+                }
+            },
+        )
+
+    def edit_musician(
+        self,
+        name: str,
+        other_names: list[str],
+        public_keys: list[str],
+        contacts: list[str],
+    ) -> models.ActionResult:
+        return self._save_musician(
+            'edit_musician',
+            {
+                'name': name,
+                'other_names': other_names,
+                'public_keys': public_keys,
+                'contacts': contacts,
+            },
+        )
+
+    def _save_musician(
+        self, command: str, parameters: dict[str, object]
+    ) -> models.ActionResult:
+        response = self._control_command(command, parameters)
+        if isinstance(response, models.ActionResult):
+            return response
+        if (
+            not recs_snapshot.object_dict(response)
+            or response.get('type') != 'musician'
+            or not recs_snapshot.object_dict(response.get('musician'))
+        ):
+            return models.ActionResult(
+                ok=False, message=f'recs did not confirm {command}'
+            )
+        try:
+            musician = Musician.model_validate(response['musician'])
+        except ValidationError:
+            return models.ActionResult(
+                ok=False, message=f'recs sent invalid {command} musician'
+            )
+        return models.ActionResult(
+            ok=True, message=f'recs saved musician {musician.name}'
         )
 
     def set_track_name(

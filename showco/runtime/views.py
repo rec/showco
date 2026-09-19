@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 import json
+from collections.abc import Mapping
 from functools import cache
 from pathlib import Path
 
@@ -40,6 +41,59 @@ def channels_page(status: models.ShowStatus) -> str:
         + site_file('status-script.js')
         + site_file('waveform-script.js'),
     )
+
+
+def musicians_page(
+    musicians: Mapping[str, object] | models.ActionResult,
+    action_log: list[models.ActionLogEntry],
+) -> str:
+    if isinstance(musicians, models.ActionResult):
+        content = f'<p class="failed">{html.escape(musicians.message)}</p>'
+    else:
+        forms = ''.join(
+            musician_form(name, musician, editing=True)
+            for name, musician in musicians.items()
+        )
+        content = (
+            '<section><h2>Add musician</h2>'
+            '<p>Names, aliases, public keys, and contacts are saved in recs. '
+            'Enter one value per line.</p>'
+            + musician_form('', None, editing=False)
+            + '</section><section><h2>Edit musician</h2>'
+            + (forms or '<p>No musicians saved in recs.</p>')
+            + '</section><section><h2>Recent actions</h2>'
+            + (
+                ''.join(action_result(result) for result in action_log)
+                or '<p>No actions yet.</p>'
+            )
+            + '</section>'
+        )
+    return page('Musicians', content)
+
+
+def musician_form(name: str, musician: object | None, *, editing: bool) -> str:
+    action = 'recs-musician-edit' if editing else 'recs-musician-add'
+    title = f'Edit {html.escape(name)}' if editing else 'Add musician'
+    readonly = ' readonly' if editing else ''
+    return (
+        '<form method="post" action="/musicians" class="musician-form">'
+        f'<h3>{title}</h3><input type="hidden" name="action" value="{action}">'
+        f'<label>Name <input name="name" value="{html.escape(name)}" '
+        f'required{readonly}></label>'
+        f'<label>Other names <textarea name="other_names">'
+        f'{html.escape(_musician_lines(musician, "other_names"))}</textarea></label>'
+        f'<label>Public keys <textarea name="public_keys">'
+        f'{html.escape(_musician_lines(musician, "public_keys"))}</textarea></label>'
+        f'<label>Contacts <textarea name="contacts">'
+        f'{html.escape(_musician_lines(musician, "contacts"))}</textarea></label>'
+        '<button type="submit">'
+        f'{"Save changes" if editing else "Add musician"}</button>'
+        '</form>'
+    )
+
+
+def _musician_lines(musician: object | None, field: str) -> str:
+    return '\n'.join(str(value) for value in getattr(musician, field, []))
 
 
 def health_page(status: models.ShowStatus) -> str:
@@ -409,6 +463,7 @@ def page(title: str, body: str, *, script: str = '') -> str:
       <a href="/soundcheck">Soundcheck</a>
       <a href="/recovery">Recovery</a>
       <a href="/channels">Channels</a>
+      <a href="/musicians">Musicians</a>
       <a href="/health">Health</a>
       <a href="/playback">Playback</a>
       <a href="/attributes">Attributes</a>

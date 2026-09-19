@@ -3,6 +3,8 @@ from __future__ import annotations
 import math
 import time
 
+from recs.musicians import Musician
+
 from ..streamo.client import StreamoClient
 from . import models
 from .lyte import LyteClient
@@ -17,6 +19,7 @@ class RehearsalRecsClient(RecsClient):
         self.calibration_count = 0
         self.rehearsal_tracks = [[channel] for channel in range(1, 19)]
         self.rehearsal_track_names: dict[str, dict[str, int]] = {}
+        self.rehearsal_musicians: dict[str, Musician] = {}
         self.rehearsal_attributes: dict[str, object] = {
             'recording.longest_file_time': 0.0,
             'recording.record_everything': False,
@@ -52,6 +55,51 @@ class RehearsalRecsClient(RecsClient):
         return models.ActionResult(
             ok=True,
             message=f'rehearsal recs calibration {self.calibration_count}',
+        )
+
+    def musicians(self) -> dict[str, Musician]:
+        return dict(self.rehearsal_musicians)
+
+    def add_musician(
+        self,
+        name: str,
+        other_names: list[str],
+        public_keys: list[str],
+        contacts: list[str],
+    ) -> models.ActionResult:
+        if name in self.rehearsal_musicians:
+            return models.ActionResult(
+                ok=False, message=f'Musician already exists: {name}'
+            )
+        return self._save_rehearsal_musician(name, other_names, public_keys, contacts)
+
+    def edit_musician(
+        self,
+        name: str,
+        other_names: list[str],
+        public_keys: list[str],
+        contacts: list[str],
+    ) -> models.ActionResult:
+        if name not in self.rehearsal_musicians:
+            return models.ActionResult(ok=False, message=f'Unknown musician: {name}')
+        return self._save_rehearsal_musician(name, other_names, public_keys, contacts)
+
+    def _save_rehearsal_musician(
+        self,
+        name: str,
+        other_names: list[str],
+        public_keys: list[str],
+        contacts: list[str],
+    ) -> models.ActionResult:
+        musician = Musician(
+            name=name,
+            other_names=other_names,
+            public_keys=public_keys,
+            contacts=contacts,
+        )
+        self.rehearsal_musicians[name] = musician
+        return models.ActionResult(
+            ok=True, message=f'rehearsal recs saved musician {name}'
         )
 
     def set_track_name(

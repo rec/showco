@@ -563,3 +563,17 @@ class ViewsTests(unittest.TestCase):
         self.assertIn('12:34:56', html)
         self.assertIn('recs calibrate: socket unavailable', html)
         self.assertIn('class="failed"', html)
+
+    def test_musicians_page_lists_add_and_edit_forms(self) -> None:
+        from recs.musicians import Musician
+
+        from showco.runtime.views import musicians_page
+
+        html = musicians_page(
+            {'mike': Musician(name='mike', contacts=['insta:mike'])}, []
+        )
+
+        self.assertIn('href="/musicians"', html)
+        self.assertIn('value="recs-musician-add"', html)
+        self.assertIn('value="recs-musician-edit"', html)
+        self.assertIn('insta:mike', html)
