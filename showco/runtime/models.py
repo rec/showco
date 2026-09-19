@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 
 from pydantic import BaseModel, Field
 
@@ -196,6 +197,14 @@ class InputCheck(BaseModel, frozen=True):
     message: str
 
 
+class MusicStatus(BaseModel, frozen=True):
+    mode: str = 'stopped'
+    state: str = 'stopped'
+    directory: Path | None = None
+    track: Path | None = None
+    error: str | None = None
+
+
 class ShowStatus(BaseModel, frozen=True):
     recs: RecsStatus
     streamo: StreamoStatus
@@ -210,6 +219,7 @@ class ShowStatus(BaseModel, frozen=True):
     incidents: list[Incident] = Field(default_factory=list)
     recording_progress: RecordingProgress = Field(default_factory=RecordingProgress)
     input_checks: list[InputCheck] = Field(default_factory=list)
+    music: MusicStatus = Field(default_factory=MusicStatus)
     revision: str | None = None
     run_started_at: float = 0.0
     performance_locked: bool = False

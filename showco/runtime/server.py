@@ -22,6 +22,7 @@ from . import (
     input_check,
     lighting,
     models,
+    music,
     performance,
     readiness,
     recording_progress,
@@ -57,6 +58,7 @@ class ShowcoApp:
         waveforms: WaveformBridge | None = None,
         lyte: LyteClient | None = None,
         cable_tester: CableTester | None = None,
+        music_controller: music.MusicController | None = None,
         state_directory: Path | None = None,
     ) -> None:
         self.recs = recs
@@ -72,6 +74,7 @@ class ShowcoApp:
         self.waveforms = waveforms
         self.lyte = lyte
         self.cable_tester = cable_tester
+        self.music = music_controller
         self.revision = source_revision()
         self.run_started_at = time.time()
         self.action_log: list[models.ActionLogEntry] = []
@@ -158,6 +161,9 @@ class ShowcoApp:
                         else None
                     ),
                     'input_checks': input_check.checks(recs.channels),
+                    'music': self.music.status()
+                    if self.music is not None
+                    else models.MusicStatus(),
                 }
             )
 
@@ -275,6 +281,23 @@ class ShowcoApp:
                 parse_range(form.get('sends', ''), 1, 6, 'sends'),
             )
             return models.ActionResult(ok=report.passed, message=report.message())
+        if action.startswith('music-'):
+            if self.music is None:
+                return models.ActionResult(
+                    ok=False, message='X18 music is not configured'
+                )
+            match action:
+                case 'music-setup':
+                    return self.music.setup()
+                case 'music-record':
+                    return self.music.record()
+                case 'music-teardown':
+                    return self.music.teardown()
+                case 'music-stop':
+                    return self.music.stop()
+            return models.ActionResult(
+                ok=False, message=f'unknown music action {action}'
+            )
         if action in STREAMO_ACTIONS:
             if self.streamo is None:
                 return models.ActionResult(ok=False, message='streamo is disabled')
@@ -343,6 +366,9 @@ class ShowcoHandler(BaseHTTPRequestHandler):
             self._html(
                 views.actions_page(
                     self.app.recent_actions(),
+                    music=(
+                        self.app.music.status() if self.app.music is not None else None
+                    ),
                     streamo_enabled=self.app.streamo is not None,
                     lyte_enabled=self.app.lyte is not None and self.app.lyte.enabled,
                 )
@@ -552,6 +578,8 @@ class ShowcoServer(ThreadingHTTPServer):
             self.performance.close()
         if self.app.waveforms is not None:
             self.app.waveforms.close()
+        if self.app.music is not None:
+            self.app.music.close()
         super().server_close()
 
 
@@ -587,6 +615,10 @@ def make_server(
 ) -> ThreadingHTTPServer:
     handler = type('ConfiguredShowcoHandler', (ShowcoHandler,), {})
     recs_client = recs or RecsClient()
+    streamo_client = (streamo or StreamoClient()) if streamo_enabled else None
+    streamo_restart_action = streamo_restart or (
+        lambda: services.restart_service('streamo')
+    )
     waveforms = (
         WaveformBridge(control=recs_client.control)
         if type(recs_client) is RecsClient
@@ -602,16 +634,22 @@ def make_server(
     )
     app = ShowcoApp(
         recs_client,
-        (streamo or StreamoClient()) if streamo_enabled else None,
+        streamo_client,
         performance or system_monitor,
         mixers or MixersMonitor([]),
-        streamo_restart if streamo_enabled else None,
+        streamo_restart_action if streamo_enabled else None,
         waveforms,
         lyte if lyte is not None else LyteClient(enabled=lyte_enabled),
         (
             cable_tester_from_specs(recs_client, mixer_specs)
             if mixer_specs and any(m.name == 'X18' for m in mixer_specs)
             else None
+        ),
+        music.controller_from_specs(
+            recs_client,
+            mixer_specs or [],
+            streamo_client,
+            streamo_restart_action if streamo_enabled else None,
         ),
         state_directory=Path.home() / '.local/state/showco'
         if performance_enabled
