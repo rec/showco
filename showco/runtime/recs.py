@@ -11,6 +11,7 @@ from . import models, recs_control, recs_snapshot
 STATUS_CHANGE_WAIT_SECONDS = 4
 STATUS_CHANGE_SAMPLE_COUNT = 3
 STATUS_ERROR_LIMIT = 3
+STATUS_DIAGNOSIS_SEPARATOR = '\n--- recs service diagnosis ---\n'
 
 
 class RecsClient:
@@ -381,6 +382,15 @@ class RecsClient:
 def status_changes_command() -> str:
     return (
         'status="$HOME/.local/state/recs/status.json"; '
+        'diagnose() { '
+        'cat "$status" 2>&1; '
+        "printf '\\n--- recs service diagnosis ---\\n'; "
+        'systemctl --user show recs.service '
+        '--property=LoadState,ActiveState,SubState,Result,ExecMainStatus --no-pager '
+        '2>&1 || true; '
+        "printf '\\nRecent recs journal entries:\\n'; "
+        'journalctl --user --unit=recs.service --lines=25 --no-pager 2>&1 || true; '
+        '}; '
         'updated_at() { sed -nE '
         '\'s/.*"updated_at"[[:space:]]*:[[:space:]]*'
         '([0-9]+([.][0-9]+)?).*/\\1/p\' "$status"; }; '
@@ -389,7 +399,7 @@ def status_changes_command() -> str:
         'current=$(updated_at); '
         'if [ -z "$current" ] || '
         '{ [ -n "$previous" ] && [ "$previous" = "$current" ]; }; then '
-        'cat "$status"; exit 1; fi; '
+        'diagnose; exit 1; fi; '
         'previous="$current"; '
         f'[ "$sample" = {STATUS_CHANGE_SAMPLE_COUNT} ] || '
         f'sleep {STATUS_CHANGE_WAIT_SECONDS}; '
@@ -398,8 +408,9 @@ def status_changes_command() -> str:
 
 
 def status_failure_summary(output: str) -> str:
+    status, separator, diagnosis = output.partition(STATUS_DIAGNOSIS_SEPARATOR)
     try:
-        data = json.loads(output)
+        data = json.loads(status)
     except json.JSONDecodeError:
         return output.strip()
     if not isinstance(data, dict):
@@ -408,17 +419,16 @@ def status_failure_summary(output: str) -> str:
     if isinstance(updated_at := data.get('updated_at'), int | float):
         result += f'; updated_at={updated_at}'
     errors = data.get('errors')
-    if not isinstance(errors, list):
-        return result
-    messages = [error_message(e) for e in errors]
-    messages = [m for m in messages if m]
-    if not messages:
-        return result
-    return (
-        result
-        + '\nRecent recs errors:\n'
-        + '\n'.join(f'- {m}' for m in messages[-STATUS_ERROR_LIMIT:])
-    )
+    if isinstance(errors, list):
+        messages = [error_message(e) for e in errors]
+        messages = [m for m in messages if m]
+        if messages:
+            result += '\nRecent recs errors:\n' + '\n'.join(
+                f'- {m}' for m in messages[-STATUS_ERROR_LIMIT:]
+            )
+    if separator and diagnosis.strip():
+        result += '\nrecs service diagnosis:\n' + diagnosis.strip()
+    return result
 
 
 def track_channel(

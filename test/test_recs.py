@@ -410,6 +410,8 @@ class RecsTests(unittest.TestCase):
         self.assertIn('for sample in $(seq 3)', command)
         self.assertIn('current=$(updated_at)', command)
         self.assertIn('previous="$current"', command)
+        self.assertIn('systemctl --user show recs.service', command)
+        self.assertIn('journalctl --user --unit=recs.service --lines=25', command)
 
     def test_status_failure_summary_shows_recent_error_messages(self) -> None:
         summary = recs.status_failure_summary(
@@ -425,6 +427,20 @@ class RecsTests(unittest.TestCase):
             summary,
             'recs status did not advance; updated_at=123.0\n'
             'Recent recs errors:\n- second\n- third\n- fourth',
+        )
+
+    def test_status_failure_summary_includes_service_diagnosis(self) -> None:
+        summary = recs.status_failure_summary(
+            json.dumps({'updated_at': 123.0})
+            + recs.STATUS_DIAGNOSIS_SEPARATOR
+            + 'ActiveState=failed\nRecent recs journal entries:\nrecs crashed'
+        )
+
+        self.assertEqual(
+            summary,
+            'recs status did not advance; updated_at=123.0\n'
+            'recs service diagnosis:\nActiveState=failed\n'
+            'Recent recs journal entries:\nrecs crashed',
         )
 
     def test_level_state_uses_four_display_states(self) -> None:
