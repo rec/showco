@@ -605,6 +605,7 @@ def autosquash_program(
             output=(
                 'fixup target is not in the selected autosquash history: '
                 + ', '.join(missing_targets)
+                + f'\nIncrease --autosquash (now {limit})?'
                 + '\nNo rebase was started.'
             ),
         )
