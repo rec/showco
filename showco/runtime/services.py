@@ -66,7 +66,7 @@ def install_showco_service(
         ]
     )
     controller.print_service_status('showco', result)
-    return 0 if result.running else 1
+    return 0 if result.installed else 1
 
 
 def showco_args(
