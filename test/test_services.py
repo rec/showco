@@ -74,6 +74,23 @@ class ServicesTests(unittest.TestCase):
             metadata.argv[:5], ['run', '--host', '0.0.0.0', '--port', '17352']
         )
 
+    def test_install_showco_service_allows_an_inactive_new_unit(self) -> None:
+        controller = mock.Mock()
+        controller.install.return_value = StatusResult(installed=True, running=None)
+        with (
+            mock.patch(
+                'showco.runtime.services.paths.current_platform',
+                return_value=Platform.linux,
+            ),
+            mock.patch(
+                'showco.runtime.services.controller.ServiceController',
+                return_value=controller,
+            ),
+        ):
+            result = services.install_showco_service(root=Path('/srv/show-projects'))
+
+        self.assertEqual(result, 0)
+
     def test_showco_daemon_uses_reccy_service_lifecycle(self) -> None:
         daemon = services.ShowcoDaemon(platform=Platform.linux)
 
