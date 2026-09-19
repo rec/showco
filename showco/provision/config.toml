@@ -1,7 +1,7 @@
 argon_one = true
 
 [network]
-host = "bertrand.local"
+host = "t.local"
 web_port = 10000
 swap_wifi = false
 topology = ""
