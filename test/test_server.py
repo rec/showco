@@ -553,3 +553,33 @@ class ServerTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+    def test_musician_actions_use_recs_client(self) -> None:
+        recs = rehearsal.RehearsalRecsClient()
+        app = ShowcoApp(
+            recs,
+            rehearsal.RehearsalStreamoClient(),
+            rehearsal.RehearsalSystemMonitor(),
+            rehearsal.RehearsalMixersMonitor(),
+        )
+
+        added = app.run_action(
+            {
+                'action': 'recs-musician-add',
+                'name': 'mike',
+                'other_names': 'Michael\n',
+                'contacts': 'insta:mike',
+            }
+        )
+        edited = app.run_action(
+            {
+                'action': 'recs-musician-edit',
+                'name': 'mike',
+                'public_keys': 'ssh-ed25519 AAA',
+            }
+        )
+
+        self.assertTrue(added.ok)
+        self.assertTrue(edited.ok)
+        self.assertEqual(recs.musicians()['mike'].other_names, [])
+        self.assertEqual(recs.musicians()['mike'].public_keys, ['ssh-ed25519 AAA'])

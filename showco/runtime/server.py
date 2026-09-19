@@ -234,6 +234,8 @@ class ShowcoApp:
             if device or channels:
                 return self.recs.calibrate(device, channels)
             return self.recs.calibrate()
+        if action in {'recs-musician-add', 'recs-musician-edit'}:
+            return self._save_musician(action, form)
         if action == 'recs-track-name':
             return self.recs.set_track_name(
                 form.get('device', ''),
@@ -304,6 +306,17 @@ class ShowcoApp:
             return self.streamo.action(STREAMO_ACTIONS[action], **_streamo_fields(form))
         return models.ActionResult(ok=False, message=f'unknown action {action}')
 
+    def _save_musician(self, action: str, form: dict[str, str]) -> models.ActionResult:
+        name = form.get('name', '').strip()
+        if not name:
+            return models.ActionResult(ok=False, message='Musician name is required')
+        other_names = _text_lines(form.get('other_names', ''))
+        public_keys = _text_lines(form.get('public_keys', ''))
+        contacts = _text_lines(form.get('contacts', ''))
+        if action == 'recs-musician-add':
+            return self.recs.add_musician(name, other_names, public_keys, contacts)
+        return self.recs.edit_musician(name, other_names, public_keys, contacts)
+
     def recent_actions(self) -> list[models.ActionLogEntry]:
         with self.action_log_lock:
             return list(self.action_log)
@@ -335,6 +348,13 @@ class ShowcoHandler(BaseHTTPRequestHandler):
             return
         if self.path in {'/', '/channels'}:
             self._html(views.channels_page(self.app.status()))
+            return
+        if self.path == '/musicians':
+            self._html(
+                views.musicians_page(
+                    self.app.recs.musicians(), self.app.recent_actions()
+                )
+            )
             return
         if self.path == '/performance':
             self._html(views.performance_page())
@@ -434,7 +454,7 @@ class ShowcoHandler(BaseHTTPRequestHandler):
             cast(ShowcoServer, self.server).request_slots.release()
 
     def _do_post(self) -> None:
-        if self.path != '/actions':
+        if self.path not in {'/actions', '/musicians'}:
             self.send_error(404)
             return
         if self.headers.get('Sec-Fetch-Site') == 'cross-site':
@@ -463,7 +483,7 @@ class ShowcoHandler(BaseHTTPRequestHandler):
             self._json_action(result)
             return
         self.send_response(303)
-        self.send_header('Location', '/actions')
+        self.send_header('Location', self.path)
         self.end_headers()
 
     def log_message(self, format: str, *args: object) -> None:
@@ -724,6 +744,10 @@ def _recs_fields(form: dict[str, str]) -> dict[str, object]:
         else:
             fields[k] = v
     return fields
+
+
+def _text_lines(value: str) -> list[str]:
+    return [line.strip() for line in value.splitlines() if line.strip()]
 
 
 RECS_ACTIONS = {
