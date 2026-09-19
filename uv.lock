@@ -7,7 +7,7 @@ resolution-markers = [
 ]
 
 [options]
-exclude-newer = "2026-09-10T10:51:42.334147Z"
+exclude-newer = "2026-09-12T16:40:37.950095Z"
 exclude-newer-span = "P1W"
 
 [[package]]
@@ -908,7 +908,7 @@ dependencies = [
 [[package]]
 name = "recs"
 version = "0.12.5"
-source = { git = "https://github.com/rec/recs.git?branch=main#2b83276ca33189ee2beac2872033f8cb02d5d75e" }
+source = { git = "https://github.com/rec/recs.git?branch=main#98ec8d1e1fddd462a711f0699002eccb12023bf5" }
 dependencies = [
     { name = "humanfriendly" },
     { name = "mido", extra = ["ports-rtmidi"] },
@@ -1092,7 +1092,7 @@ wheels = [
 [[package]]
 name = "streamo"
 version = "0.1.0"
-source = { git = "https://github.com/rec/streamo.git?branch=main#13d044911173b6df87325303a04ac6b7993de7c1" }
+source = { git = "https://github.com/rec/streamo.git?branch=main#69ca643a63f7547e3102f697b8408e18e3786cb1" }
 dependencies = [
     { name = "google-auth" },
     { name = "google-auth-oauthlib" },
