@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 from datetime import datetime, timezone
+from pathlib import Path
 
 from showco.runtime import models
 from showco.runtime.views import (
@@ -34,6 +35,21 @@ class ViewsTests(unittest.TestCase):
         self.assertIn('href="/actions"', html)
         self.assertIn('href="/errors"', html)
         self.assertNotIn('href="/home"', html)
+
+    def test_actions_page_shows_music_modes_when_x18_music_is_configured(self) -> None:
+        html = actions_page(
+            [],
+            music=models.MusicStatus(
+                mode='setup', track=Path('/music/setup/intro.mp3')
+            ),
+        )
+
+        self.assertIn('Music mode', html)
+        self.assertIn('Mode: setup. /music/setup/intro.mp3', html)
+        self.assertIn('value="music-setup"', html)
+        self.assertIn('value="music-record"', html)
+        self.assertIn('value="music-teardown"', html)
+        self.assertIn('value="music-stop"', html)
 
     def test_channels_page_has_live_status_elements(self) -> None:
         html = channels_page(
