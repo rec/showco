@@ -367,6 +367,7 @@ class LocalUpdateTests(unittest.TestCase):
         self.assertIsNotNone(result)
         assert result is not None
         self.assertFalse(result.ok)
+        self.assertIn('Increase --autosquash (now 50)?', result.output)
         self.assertIn('No rebase was started', result.output)
         self.assertFalse(any('rebase' in command for command in commands))
 
