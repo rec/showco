@@ -241,10 +241,20 @@ def remote_update_command(
     arguments = ['--target-machine', '--root', str(root)]
     if clear_settings:
         arguments.append('--clear-settings')
-    return (
+    update_command = (
         f'cd {shlex.quote(str(root / "showco"))} && '
         'PATH="$HOME/.local/bin:$PATH" '
         f'uv run --no-sync showco go {shlex.join([*arguments, *selected])}'
+    )
+    return (
+        f'if {update_command}; then exit 0; fi; '
+        "printf '\\nPost-update recs service diagnosis:\\n'; "
+        'systemctl --user show recs.service '
+        '--property=LoadState,ActiveState,SubState,Result,ExecMainStatus --no-pager '
+        '2>&1 || true; '
+        "printf '\\nRecent recs journal entries:\\n'; "
+        'journalctl --user --unit=recs.service --lines=25 --no-pager 2>&1 || true; '
+        'exit 1'
     )
 
 
