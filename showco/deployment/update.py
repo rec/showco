@@ -254,6 +254,8 @@ def remote_update_command(
         '2>&1 || true; '
         "printf '\\nRecent recs journal entries:\\n'; "
         'journalctl --user --unit=recs.service --lines=25 --no-pager 2>&1 || true; '
+        "printf '\\nRecent recs service log entries:\\n'; "
+        'tail --lines=50 "$HOME/.local/state/recs/recs.log" 2>&1 || true; '
         'exit 1'
     )
 
