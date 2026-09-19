@@ -137,6 +137,78 @@ class LocalUpdateTests(unittest.TestCase):
 
         self.assertEqual(result, {'reccy': 'https://example/reccy#commit'})
 
+    def test_current_locked_dependencies_skip_refresh(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            program_directory = root / 'recs'
+            dependency_directory = root / 'reccy'
+            program_directory.mkdir()
+            dependency_directory.mkdir()
+            (program_directory / 'pyproject.toml').write_text(
+                '[tool.uv.sources]\n'
+                'reccy = { git = "https://github.com/rec/reccy.git", '
+                'branch = "main" }\n'
+            )
+            (program_directory / 'uv.lock').write_text(
+                '[[package]]\nname = "reccy"\n'
+                'source = { git = "https://github.com/rec/reccy.git?branch=main#abc" '
+                '}\n'
+            )
+            program = update.Program(
+                name='recs', directory=program_directory, service_names=[]
+            )
+
+            with mock.patch(
+                'showco.deployment.local_update.locked_dependency_sources',
+                self.read_locked_sources,
+            ):
+                result = local_update.dependency_refresh_needed(
+                    program,
+                    ['reccy'],
+                    root,
+                    lambda command: subprocess.CompletedProcess(
+                        command, 0, 'abc\n', ''
+                    ),
+                )
+
+        self.assertFalse(result)
+
+    def test_changed_locked_dependency_requires_refresh(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            program_directory = root / 'recs'
+            dependency_directory = root / 'reccy'
+            program_directory.mkdir()
+            dependency_directory.mkdir()
+            (program_directory / 'pyproject.toml').write_text(
+                '[tool.uv.sources]\n'
+                'reccy = { git = "https://github.com/rec/reccy.git", '
+                'branch = "main" }\n'
+            )
+            (program_directory / 'uv.lock').write_text(
+                '[[package]]\nname = "reccy"\n'
+                'source = { git = "https://github.com/rec/reccy.git?branch=main#old" '
+                '}\n'
+            )
+            program = update.Program(
+                name='recs', directory=program_directory, service_names=[]
+            )
+
+            with mock.patch(
+                'showco.deployment.local_update.locked_dependency_sources',
+                self.read_locked_sources,
+            ):
+                result = local_update.dependency_refresh_needed(
+                    program,
+                    ['reccy'],
+                    root,
+                    lambda command: subprocess.CompletedProcess(
+                        command, 0, 'new\n', ''
+                    ),
+                )
+
+        self.assertTrue(result)
+
     def test_provisioning_update_pushes_selected_repos_then_ssh_updates_target(
         self,
     ) -> None:
