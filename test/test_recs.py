@@ -412,6 +412,7 @@ class RecsTests(unittest.TestCase):
         self.assertIn('previous="$current"', command)
         self.assertIn('systemctl --user show recs.service', command)
         self.assertIn('journalctl --user --unit=recs.service --lines=25', command)
+        self.assertIn('tail --lines=50 "$HOME/.local/state/recs/recs.log"', command)
 
     def test_status_failure_summary_shows_recent_error_messages(self) -> None:
         summary = recs.status_failure_summary(
