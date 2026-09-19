@@ -139,6 +139,16 @@ def refresh_local_dependencies(
                 skipped.append(program.name)
                 progress.update()
                 continue
+            refresh = dependency_refresh_needed(
+                program, dependencies, root, run_command
+            )
+            if isinstance(refresh, update.StepResult):
+                update.report_failure(refresh, output)
+                return False
+            if not refresh:
+                unchanged.append(program.name)
+                progress.update()
+                continue
             result = refresh_program_dependencies(
                 program, dependencies, run_command, output
             )
@@ -157,6 +167,37 @@ def refresh_local_dependencies(
         outcomes.append(f'no GitHub source dependencies {", ".join(skipped)}')
     tqdm.write(f'Dependency synchronization: {"; ".join(outcomes)}.', file=output)
     return True
+
+
+def dependency_refresh_needed(
+    program: update.Program,
+    dependencies: list[str],
+    root: Path,
+    run_command: update.RunCommand,
+) -> bool | update.StepResult:
+    if not program.directory.is_dir() or not (program.directory / 'uv.lock').is_file():
+        return True
+    locked = locked_dependency_sources(program, dependencies)
+    if set(locked) != set(dependencies):
+        return True
+    sources = github_sources(program)
+    for package in dependencies:
+        if (project := sources.get(package)) is None:
+            return True
+        revision = locked_git_revision(locked[package])
+        if revision is None:
+            return True
+        head = update.run_step(
+            project,
+            'dependency revision',
+            ['git', '-C', str(root / project), 'rev-parse', 'HEAD'],
+            run_command,
+        )
+        if not head.ok:
+            return head
+        if head.output.strip() != revision:
+            return True
+    return False
 
 
 def refresh_program_dependencies(
@@ -311,6 +352,11 @@ def locked_dependency_sources(
         ):
             result[name] = git
     return result
+
+
+def locked_git_revision(source: str) -> str | None:
+    _, separator, revision = source.rpartition('#')
+    return revision if separator and revision else None
 
 
 def dependency_programs(selected: list[str], root: Path) -> list[update.Program]:
