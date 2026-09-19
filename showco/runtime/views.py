@@ -196,6 +196,7 @@ def errors_page(errors: list[models.ErrorRecord]) -> str:
 def actions_page(
     action_log: list[models.ActionLogEntry],
     *,
+    music: models.MusicStatus | None = None,
     streamo_enabled: bool = True,
     lyte_enabled: bool = True,
 ) -> str:
@@ -225,6 +226,7 @@ def actions_page(
           {shutdown_action()}
           {button('lyte-test', 'Test lights') if lyte_enabled else ''}
           {cable_test_action()}
+          {music_actions(music)}
           {_streamo_actions(title_fields) if streamo_enabled else ''}
         </section>
         <section>
@@ -233,6 +235,24 @@ def actions_page(
         </section>
         """,
     )
+
+
+def music_actions(status: models.MusicStatus | None) -> str:
+    if status is None:
+        return ''
+    track = str(status.track) if status.track is not None else 'No music playing'
+    error = f'<p>{html.escape(status.error)}</p>' if status.error else ''
+    return f"""
+      <section>
+        <h2>Music mode</h2>
+        <p>Mode: {html.escape(status.mode)}. {html.escape(track)}</p>
+        {error}
+        {button('music-setup', 'Setup')}
+        {button('music-record', 'Record')}
+        {button('music-teardown', 'Tear down')}
+        {button('music-stop', 'Stop and shut down', confirm=True)}
+      </section>
+    """
 
 
 def playback_page(playback: models.PlaybackStatus) -> str:

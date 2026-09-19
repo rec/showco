@@ -55,4 +55,8 @@ PROTECTED_ACTIONS = {
     'recs-set-noise-floor',
     'recs-key-label',
     'recs-reload-profiles',
+    'music-setup',
+    'music-record',
+    'music-teardown',
+    'music-stop',
 }
