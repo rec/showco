@@ -7,7 +7,7 @@ resolution-markers = [
 ]
 
 [options]
-exclude-newer = "2026-09-12T18:06:08.367366Z"
+exclude-newer = "2026-09-12T18:38:37.03572Z"
 exclude-newer-span = "P1W"
 
 [[package]]
@@ -1092,7 +1092,7 @@ wheels = [
 [[package]]
 name = "streamo"
 version = "0.1.0"
-source = { git = "https://github.com/rec/streamo.git?branch=main#69ca643a63f7547e3102f697b8408e18e3786cb1" }
+source = { git = "https://github.com/rec/streamo.git?branch=main#bb2dd41c8cf64ab0da8e0dd097347794b1018065" }
 dependencies = [
     { name = "google-auth" },
     { name = "google-auth-oauthlib" },
