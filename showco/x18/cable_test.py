@@ -6,7 +6,7 @@ import subprocess
 import sys
 from collections.abc import Callable, Sequence
 from contextlib import AbstractContextManager
-from math import pi
+from math import isfinite, pi
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from time import monotonic
@@ -15,7 +15,7 @@ from typing import Annotated, Protocol, cast
 import numpy as np
 import sounddevice
 import tyro
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from reccy.device import DeviceDict
 from recs.osc.codec import decode_packet, encode_message
 
@@ -28,6 +28,7 @@ DEFAULT_CHANNELS = '9-14'
 DEFAULT_SENDS = '1-6'
 TONE_FREQUENCY = 110.0
 TONE_SECONDS = 3.0
+ANALYSIS_MARGIN_SECONDS = 0.25
 TONE_AMPLITUDE = 0.1
 MINIMUM_SIGNAL_RMS = TONE_AMPLITUDE * 0.01
 MINIMUM_SIMILARITY = 0.98
@@ -42,6 +43,9 @@ X18_SAMPLE_FORMAT = 'S24_3LE'
 class CableTestOptions(BaseModel, frozen=True):
     channels: Annotated[str, tyro.conf.Positional] = DEFAULT_CHANNELS
     sends: Annotated[str, tyro.conf.Positional] = DEFAULT_SENDS
+    duration_seconds: Annotated[
+        float, Field(gt=ANALYSIS_MARGIN_SECONDS * 2, allow_inf_nan=False)
+    ] = TONE_SECONDS
     mixers_config: Path = Path.home() / '.config/showco/mixers.toml'
 
 
@@ -241,9 +245,11 @@ class CableTester:
         channels: list[int],
         sends: list[int],
         progress: Callable[[CableChannelResult], None] | None = None,
+        duration_seconds: float = TONE_SECONDS,
     ) -> CableTestReport:
         validate_channels(channels)
         validate_sends(sends)
+        validate_duration(duration_seconds)
         if self.mixer.osc is None:
             raise ValueError('X18 OSC control is not configured')
         resume = self.recs.pause_recording()
@@ -263,6 +269,7 @@ class CableTester:
                 device,
                 sample_rate,
                 progress,
+                duration_seconds,
             )
         finally:
             if resume:
@@ -277,10 +284,11 @@ class CableTester:
         device: str,
         sample_rate: int,
         progress: Callable[[CableChannelResult], None] | None,
+        duration_seconds: float,
     ) -> list[CableChannelResult]:
         if self.mixer.osc is None:
             raise ValueError('X18 OSC control is not configured')
-        tone = sine_wave(sample_rate)
+        tone = sine_wave(sample_rate, duration_seconds)
         results = []
         with self.osc_factory(self.mixer.osc.host, self.mixer.osc.port) as osc:
             with X18TestRouting(osc, source_channel, channels, sends) as routing:
@@ -309,7 +317,12 @@ def main(argv: list[str] | None = None) -> int:
         tester = cable_tester_from_specs(
             RecsClient(), load_mixer_specs(options.mixers_config)
         )
-        report = tester.run(channels, sends, lambda r: print(r.line(), flush=True))
+        report = tester.run(
+            channels,
+            sends,
+            lambda r: print(r.line(), flush=True),
+            options.duration_seconds,
+        )
     except (ConnectionError, OSError, TimeoutError, ValueError) as e:
         print(f'ERROR: {e}')
         return 1
@@ -359,6 +372,13 @@ def validate_sends(sends: list[int]) -> None:
         raise ValueError('sends must be within 1-6')
 
 
+def validate_duration(seconds: float) -> None:
+    if not isfinite(seconds) or seconds <= ANALYSIS_MARGIN_SECONDS * 2:
+        raise ValueError(
+            f'duration must be greater than {ANALYSIS_MARGIN_SECONDS * 2:g} seconds'
+        )
+
+
 def audio_devices() -> Sequence[DeviceDict]:
     return cast(Sequence[DeviceDict], sounddevice.query_devices())
 
@@ -387,8 +407,9 @@ def find_audio_device(
     raise ValueError('X18 USB audio device not found')
 
 
-def sine_wave(sample_rate: int) -> np.ndarray:
-    frames = round(TONE_SECONDS * sample_rate)
+def sine_wave(sample_rate: int, duration_seconds: float = TONE_SECONDS) -> np.ndarray:
+    validate_duration(duration_seconds)
+    frames = round(duration_seconds * sample_rate)
     times = np.arange(frames, dtype=np.float32) / sample_rate
     tone = (TONE_AMPLITUDE * np.sin(2 * pi * TONE_FREQUENCY * times)).astype(np.float32)
     fade_frames = min(round(0.05 * sample_rate), frames // 2)
@@ -506,7 +527,7 @@ def analyze(
 ) -> CableChannelResult:
     if recorded.shape != sent.shape:
         raise ValueError('X18 recorded an unexpected number of frames')
-    margin = round(0.25 * sample_rate)
+    margin = round(ANALYSIS_MARGIN_SECONDS * sample_rate)
     signal = recorded[margin:-margin].astype(np.float64)
     peak = float(np.max(np.abs(signal)))
     signal -= np.mean(signal)

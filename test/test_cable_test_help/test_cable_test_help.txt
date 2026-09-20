@@ -1,14 +1,15 @@
 $ showco cable-test --help
-usage: showco cable-test [-h] [STR] [STR] [--mixers-config PATH]
+usage: showco cable-test [-h] [STR] [STR] [--duration-seconds FLOAT] [--mixers-config PATH]
 
 Test X18 analog cables between AUX sends and inputs
 
  positional arguments
- ------------------------------------------------------------------------
-  [STR]                 channels (default: 9-14)
-  [STR]                 sends (default: 1-6)
+ ----------------------------------------------------------------------------
+  [STR]                     channels (default: 9-14)
+  [STR]                     sends (default: 1-6)
 
  options
- ------------------------------------------------------------------------
-  -h, --help            show this help message and exit
-  --mixers-config PATH  (default: /Users/tom/.config/showco/mixers.toml)
+ ----------------------------------------------------------------------------
+  -h, --help                show this help message and exit
+  --duration-seconds FLOAT  (default: 3.0)
+  --mixers-config PATH      (default: /Users/tom/.config/showco/mixers.toml)

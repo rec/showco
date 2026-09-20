@@ -67,6 +67,14 @@ def test_validate_channels_and_sends_are_independent() -> None:
     cable_test.validate_sends([1])
 
 
+@pytest.mark.parametrize('seconds', [0.5, 0.0, -1.0, float('inf'), float('nan')])
+def test_cable_test_duration_requires_a_finite_analyzable_signal(
+    seconds: float,
+) -> None:
+    with pytest.raises(ValueError, match='duration'):
+        cable_test.validate_duration(seconds)
+
+
 @pytest.mark.parametrize('last', [16, 17, 18])
 def test_full_input_range_is_rejected_before_recording_is_paused(last: int) -> None:
     recs = mock.Mock()
@@ -246,6 +254,29 @@ def test_cable_test_reports_only_failed_channels() -> None:
         'FAIL: channel 10: no signal',
     ]
     assert [failure.channel for failure in failures] == [10]
+
+
+def test_cable_test_uses_configured_duration() -> None:
+    recs = mock.Mock()
+    recs.pause_recording.return_value = False
+    frames: list[int] = []
+
+    def round_trip(
+        device: str, source_channel: int, sample_rate: int, tone: np.ndarray
+    ) -> np.ndarray:
+        frames.append(tone.size)
+        return np.broadcast_to(tone[:, np.newaxis], (tone.size, 18)).copy()
+
+    tester = cable_test.CableTester(
+        recs,
+        mixer(),
+        osc_factory=lambda host, port: FakeOsc(),
+        query_devices=lambda: [audio_device()],
+        round_trip=round_trip,
+    )
+
+    assert tester.run([9], [1], duration_seconds=5.0).passed
+    assert frames == [240_000]
 
 
 def test_cable_test_leaves_already_paused_recs_paused() -> None:

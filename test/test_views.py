@@ -547,6 +547,8 @@ class ViewsTests(unittest.TestCase):
         self.assertIn('value="cable-test"', html)
         self.assertIn('name="channels" value="9-14"', html)
         self.assertIn('name="sends" value="1-6"', html)
+        self.assertIn('name="duration-seconds"', html)
+        self.assertIn('value="3"', html)
 
     def test_actions_page_shows_action_history_details(self) -> None:
         html = actions_page(

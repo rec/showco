@@ -679,6 +679,9 @@ def cable_test_action() -> str:
       <h2>Test X18 cables</h2>
       <label>channels<input name="channels" value="9-14"></label>
       <label>sends<input name="sends" value="1-6"></label>
+      <label>seconds
+        <input name="duration-seconds" type="number" min="0.6" step="0.1" value="3">
+      </label>
       <button>Test cables</button>
     </form>
     """

@@ -212,7 +212,7 @@ For a small target-side inspection, use:
 showco python 'import sys; print(sys.version)'
 ```
 
-On the target, `showco bundle` writes a timestamped diagnostic bundle below `~/.local/state/showco/bundles`. `showco cable-test` runs the X18 test from the terminal; it accepts optional inclusive channel and AUX-send ranges, for example `showco cable-test 9-14 1-6`.
+On the target, `showco bundle` writes a timestamped diagnostic bundle below `~/.local/state/showco/bundles`. `showco cable-test` runs the X18 test from the terminal; it accepts optional inclusive channel and AUX-send ranges, for example `showco cable-test 9-14 1-6`. Use `--duration-seconds` to set the simultaneous tone and capture length, for example `showco cable-test --duration-seconds 10`.
 
 The Health page samples Pi temperature, aggregate CPU use, memory use, and recs disk state every second. It writes one aggregate record per UTC minute to `~/.local/state/showco/monitoring/YYYY-MM-DD.jsonl`, keeps seven UTC calendar days, and writes the final partial minute during a clean shutdown. Sampling or history-write failures are logged and do not take down the web UI.
 
