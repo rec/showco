@@ -153,6 +153,20 @@ def test_analyze_reports_no_signal() -> None:
     assert result.line() == 'FAIL: channel 9: no signal'
 
 
+def test_analyze_reports_an_intermittent_signal_with_its_time_range() -> None:
+    tone = cable_test.sine_wave(48_000)
+    recorded = tone.copy()
+    recorded[48_000:72_000] = 0
+
+    result = cable_test.analyze(9, tone, recorded, 48_000)
+
+    assert not result.passed
+    assert result.signal_gaps == [
+        cable_test.CableSignalGap(start_seconds=1.0, end_seconds=1.5)
+    ]
+    assert result.line() == 'FAIL: channel 9: intermittent signal at 1.00-1.50s'
+
+
 def test_audio_classification_wav_regression(
     tmp_path: Path, data_regression: DataRegressionFixture
 ) -> None:

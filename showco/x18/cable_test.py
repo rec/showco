@@ -29,6 +29,7 @@ DEFAULT_SENDS = '1-6'
 TONE_FREQUENCY = 110.0
 TONE_SECONDS = 3.0
 ANALYSIS_MARGIN_SECONDS = 0.25
+SIGNAL_WINDOW_SECONDS = 0.25
 TONE_AMPLITUDE = 0.1
 MINIMUM_SIGNAL_RMS = TONE_AMPLITUDE * 0.01
 MINIMUM_SIMILARITY = 0.98
@@ -49,6 +50,14 @@ class CableTestOptions(BaseModel, frozen=True):
     mixers_config: Path = Path.home() / '.config/showco/mixers.toml'
 
 
+class CableSignalGap(BaseModel, frozen=True):
+    start_seconds: float
+    end_seconds: float
+
+    def description(self) -> str:
+        return f'{self.start_seconds:.2f}-{self.end_seconds:.2f}s'
+
+
 class CableChannelResult(BaseModel, frozen=True):
     channel: int
     passed: bool
@@ -56,10 +65,14 @@ class CableChannelResult(BaseModel, frozen=True):
     level_ratio: float
     rms: float
     peak: float
+    signal_gaps: list[CableSignalGap] = Field(default_factory=list)
 
     def line(self) -> str:
         if not self.passed and self.rms < MINIMUM_SIGNAL_RMS:
             return f'FAIL: channel {self.channel}: no signal'
+        if self.signal_gaps:
+            ranges = ', '.join(gap.description() for gap in self.signal_gaps)
+            return f'FAIL: channel {self.channel}: intermittent signal at {ranges}'
         if self.passed:
             state = 'PASS'
         elif self.peak >= 0.99:
@@ -541,10 +554,12 @@ def analyze(
     sent_rms = float(np.sqrt(np.mean(np.square(sent[margin:-margin]))))
     similarity = min(1.0, tone_rms / rms) if rms else 0.0
     level_ratio = tone_rms / sent_rms if sent_rms else 0.0
+    signal_gaps = find_signal_gaps(recorded, sample_rate)
     passed = (
         similarity >= MINIMUM_SIMILARITY
         and MINIMUM_LEVEL_RATIO <= level_ratio <= MAXIMUM_LEVEL_RATIO
         and peak < 0.99
+        and not signal_gaps
     )
     return CableChannelResult(
         channel=channel,
@@ -553,6 +568,34 @@ def analyze(
         level_ratio=level_ratio,
         rms=rms,
         peak=peak,
+        signal_gaps=signal_gaps,
+    )
+
+
+def find_signal_gaps(recorded: np.ndarray, sample_rate: int) -> list[CableSignalGap]:
+    margin = round(ANALYSIS_MARGIN_SECONDS * sample_rate)
+    signal = recorded[margin:-margin]
+    window_frames = round(SIGNAL_WINDOW_SECONDS * sample_rate)
+    start: int | None = None
+    gaps: list[CableSignalGap] = []
+    for index in range(0, signal.size, window_frames):
+        window = signal[index : index + window_frames].astype(np.float64)
+        window -= np.mean(window)
+        rms = float(np.sqrt(np.mean(np.square(window))))
+        if rms < MINIMUM_SIGNAL_RMS:
+            start = index if start is None else start
+        elif start is not None:
+            gaps.append(signal_gap(start, index, margin, sample_rate))
+            start = None
+    if start is not None:
+        gaps.append(signal_gap(start, signal.size, margin, sample_rate))
+    return gaps
+
+
+def signal_gap(start: int, end: int, margin: int, sample_rate: int) -> CableSignalGap:
+    return CableSignalGap(
+        start_seconds=(margin + start) / sample_rate,
+        end_seconds=(margin + end) / sample_rate,
     )
 
 
