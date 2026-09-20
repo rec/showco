@@ -16,7 +16,12 @@ from pydantic import ValidationError
 from reccy.runtime import logging
 
 from ..streamo.client import StreamoClient
-from ..x18.cable_test import CableTester, cable_tester_from_specs, parse_range
+from ..x18.cable_test import (
+    TONE_SECONDS,
+    CableTester,
+    cable_tester_from_specs,
+    parse_range,
+)
 from . import (
     incidents,
     input_check,
@@ -281,6 +286,7 @@ class ShowcoApp:
             report = self.cable_tester.run(
                 parse_range(form.get('channels', ''), 1, 18, 'channels'),
                 parse_range(form.get('sends', ''), 1, 6, 'sends'),
+                duration_seconds=float(form.get('duration-seconds', str(TONE_SECONDS))),
             )
             return models.ActionResult(ok=report.passed, message=report.message())
         if action.startswith('music-'):

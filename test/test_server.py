@@ -275,12 +275,17 @@ class ServerTests(unittest.TestCase):
         )
 
         result = app.run_action(
-            {'action': 'cable-test', 'channels': '9-10', 'sends': '1-2'}
+            {
+                'action': 'cable-test',
+                'channels': '9-10',
+                'sends': '1-2',
+                'duration-seconds': '5',
+            }
         )
 
         self.assertFalse(result.ok)
         self.assertEqual(result.message, 'Cable test: 1/2 passed')
-        tester.run.assert_called_once_with([9, 10], [1, 2])
+        tester.run.assert_called_once_with([9, 10], [1, 2], duration_seconds=5.0)
 
     def test_lyte_light_test_uses_lyte_client(self) -> None:
         app = ShowcoApp(
