@@ -369,9 +369,8 @@ class ShowcoHandler(BaseHTTPRequestHandler):
             workflows.download(self)
             return
         document = gui_schema.current_gui()
-        path = (
-            document.page(document.default_page).path if self.path == '/' else self.path
-        )
+        default_path = f'/{document.page(document.default_page).name}'
+        path = default_path if self.path == '/' else self.path
         page = document.page_at(path)
         if page is None:
             self.send_error(404)
@@ -388,7 +387,7 @@ class ShowcoHandler(BaseHTTPRequestHandler):
             case 'performance':
                 self._html(views.performance_page())
             case 'workflow':
-                self._html(views.workflow_page(page.id))
+                self._html(views.workflow_page(page.name))
             case 'health':
                 self._html(views.health_page(self.app.status()))
             case 'playback':
@@ -412,7 +411,7 @@ class ShowcoHandler(BaseHTTPRequestHandler):
                     )
                 )
             case _:
-                self.send_error(500, f'GUI page {page.id} has unknown renderer')
+                self.send_error(500, f'GUI page {page.name} has unknown renderer')
 
     def _waveforms(self) -> None:
         bridge = self.app.waveforms
