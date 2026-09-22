@@ -1,0 +1,165 @@
+version = 1
+name = "showCo"
+default_page = "channels"
+
+[[navigation]]
+page = "performance"
+label = "Performance"
+[[navigation]]
+page = "setlist"
+label = "Set list"
+[[navigation]]
+page = "lighting"
+label = "Lighting cues"
+[[navigation]]
+page = "soundcheck"
+label = "Soundcheck"
+[[navigation]]
+page = "recovery"
+label = "Recovery"
+[[navigation]]
+page = "channels"
+label = "Channels"
+[[navigation]]
+page = "musicians"
+label = "Musicians"
+[[navigation]]
+page = "health"
+label = "Health"
+[[navigation]]
+page = "playback"
+label = "Playback"
+[[navigation]]
+page = "attributes"
+label = "Attributes"
+[[navigation]]
+page = "actions"
+label = "Actions"
+[[navigation]]
+page = "errors"
+label = "Errors"
+
+[[pages]]
+id = "channels"
+path = "/channels"
+title = "Channels"
+renderer = "channels"
+sources = ["show", "waveforms"]
+components = [
+  { id = "recording-channels", kind = "channel-cards", label = "Recording channels", binding = "show.recs.channels" },
+  { id = "save-track-names", kind = "button", label = "Save", action = "recs.track_names.save" },
+  { id = "revert-track-names", kind = "button", label = "Revert", action = "recs.track_names.revert" },
+]
+
+[[pages]]
+id = "musicians"
+path = "/musicians"
+title = "Musicians"
+renderer = "musicians"
+sources = ["page.musicians", "page.actions"]
+components = [
+  { id = "add-musician", kind = "musician-form", label = "Add musician", action = "musician.add" },
+  { id = "edit-musicians", kind = "repeater", label = "Edit musician", binding = "page.musicians", action = "musician.edit" },
+  { id = "recent-actions", kind = "action-log", label = "Recent actions", binding = "page.actions" },
+]
+
+[[pages]]
+id = "performance"
+path = "/performance"
+title = "Performance"
+renderer = "performance"
+sources = ["show", "workflow"]
+components = [
+  { id = "setlist-controls", kind = "setlist-controls", label = "Set list", binding = "workflow.setlist" },
+  { id = "performance-status", kind = "status", label = "Performance", binding = "show" },
+  { id = "performance-actions", kind = "action-group", action = "performance" },
+  { id = "display-controls", kind = "browser-preferences", label = "Display controls" },
+  { id = "pinned-inputs", kind = "input-pins", label = "Pinned inputs", binding = "show.recs.channels" },
+]
+
+[[pages]]
+id = "setlist"
+path = "/setlist"
+title = "Set list"
+renderer = "workflow"
+sources = ["show", "workflow"]
+components = [{ id = "setlist-editor", kind = "ordered-editor", label = "Prepare the set list", binding = "workflow.setlist.songs", action = "setlist.save" }]
+
+[[pages]]
+id = "lighting"
+path = "/lighting"
+title = "Lighting cues"
+renderer = "workflow"
+sources = ["show", "workflow"]
+components = [{ id = "lighting-cues", kind = "lighting-editor", label = "Lighting cues", binding = "workflow.lighting.cues", action = "lighting.save" }]
+
+[[pages]]
+id = "soundcheck"
+path = "/soundcheck"
+title = "Soundcheck"
+renderer = "workflow"
+sources = ["show", "workflow"]
+components = [{ id = "guided-soundcheck", kind = "soundcheck", label = "Guided soundcheck", binding = "workflow.soundcheck" }]
+
+[[pages]]
+id = "recovery"
+path = "/recovery"
+title = "Recovery"
+renderer = "workflow"
+sources = ["show", "workflow"]
+components = [{ id = "guided-recovery", kind = "recovery", label = "Guided recovery", binding = "workflow.recovery" }]
+
+[[pages]]
+id = "health"
+path = "/health"
+title = "Health"
+renderer = "health"
+sources = ["show"]
+components = [
+  { id = "readiness", kind = "readiness", label = "Service readiness", binding = "show.readiness" },
+  { id = "services", kind = "service-cards", binding = "show" },
+  { id = "performance", kind = "meter-group", label = "Performance", binding = "show.system" },
+  { id = "health", kind = "status-list", label = "Health", binding = "show" },
+  { id = "input-checks", kind = "list", label = "Recording inputs", binding = "show.input_checks" },
+  { id = "recs-errors", kind = "list", label = "recs errors", binding = "show.recs.errors" },
+  { id = "incidents", kind = "list", label = "Observed incidents", binding = "show.incidents" },
+]
+
+[[pages]]
+id = "playback"
+path = "/playback"
+title = "Playback"
+renderer = "playback"
+sources = ["show"]
+components = [{ id = "playback", kind = "transport", label = "Playback", binding = "show.recs.playback", action = "playback" }]
+
+[[pages]]
+id = "attributes"
+path = "/attributes"
+title = "Attributes"
+renderer = "attributes"
+sources = ["page.attributes"]
+components = [{ id = "mutable-attributes", kind = "attribute-fields", label = "recs attributes", binding = "page.attributes", action = "recs.attribute.set" }]
+
+[[pages]]
+id = "actions"
+path = "/actions"
+title = "Actions"
+renderer = "actions"
+sources = ["show", "page.actions"]
+components = [
+  { id = "recs-actions", kind = "action-group", label = "recs", action = "recs" },
+  { id = "lyte-actions", kind = "action-group", label = "lyte", action = "lyte", condition = "feature_enabled:lyte" },
+  { id = "cable-test", kind = "form", label = "Test X18 cables", action = "cable_test.run" },
+  { id = "music-actions", kind = "action-group", label = "Music mode", action = "music", condition = "feature_enabled:music" },
+  { id = "streamo-actions", kind = "action-group", label = "streamO", action = "streamo", condition = "feature_enabled:streamo" },
+  { id = "recent-actions", kind = "action-log", label = "Recent actions", binding = "page.actions" },
+]
+
+[[pages]]
+id = "errors"
+path = "/errors"
+title = "Errors"
+renderer = "errors"
+sources = ["show"]
+components = [{ id = "recs-errors", kind = "list", label = "recs errors", binding = "show.recs.errors" }]

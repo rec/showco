@@ -23,6 +23,7 @@ from ..x18.cable_test import (
     parse_range,
 )
 from . import (
+    gui_schema,
     incidents,
     input_check,
     lighting,
@@ -359,22 +360,6 @@ class ShowcoHandler(BaseHTTPRequestHandler):
         if self.path == '/status':
             self._json(self.app.status())
             return
-        if self.path in {'/', '/channels'}:
-            self._html(views.channels_page(self.app.status()))
-            return
-        if self.path == '/musicians':
-            self._html(
-                views.musicians_page(
-                    self.app.recs.musicians(), self.app.recent_actions()
-                )
-            )
-            return
-        if self.path == '/performance':
-            self._html(views.performance_page())
-            return
-        if self.path in {'/setlist', '/soundcheck', '/recovery', '/lighting'}:
-            self._html(views.workflow_page(self.path[1:]))
-            return
         if self.path == '/workflow-status':
             with self.app.action_lock:
                 payload = workflows.status(self.app)
@@ -383,31 +368,51 @@ class ShowcoHandler(BaseHTTPRequestHandler):
         if self.path == '/diagnostics':
             workflows.download(self)
             return
-        if self.path == '/health':
-            self._html(views.health_page(self.app.status()))
+        document = gui_schema.current_gui()
+        path = (
+            document.page(document.default_page).path if self.path == '/' else self.path
+        )
+        page = document.page_at(path)
+        if page is None:
+            self.send_error(404)
             return
-        if self.path == '/playback':
-            self._html(views.playback_page(self.app.status().recs.playback))
-            return
-        if self.path == '/attributes':
-            self._html(views.attributes_page(self.app.recs.mutable_attributes()))
-            return
-        if self.path == '/errors':
-            self._html(views.errors_page(self.app.status().recs.errors))
-            return
-        if self.path == '/actions':
-            self._html(
-                views.actions_page(
-                    self.app.recent_actions(),
-                    music=(
-                        self.app.music.status() if self.app.music is not None else None
-                    ),
-                    streamo_enabled=self.app.streamo is not None,
-                    lyte_enabled=self.app.lyte is not None and self.app.lyte.enabled,
+        match page.renderer:
+            case 'channels':
+                self._html(views.channels_page(self.app.status()))
+            case 'musicians':
+                self._html(
+                    views.musicians_page(
+                        self.app.recs.musicians(), self.app.recent_actions()
+                    )
                 )
-            )
-            return
-        self.send_error(404)
+            case 'performance':
+                self._html(views.performance_page())
+            case 'workflow':
+                self._html(views.workflow_page(page.id))
+            case 'health':
+                self._html(views.health_page(self.app.status()))
+            case 'playback':
+                self._html(views.playback_page(self.app.status().recs.playback))
+            case 'attributes':
+                self._html(views.attributes_page(self.app.recs.mutable_attributes()))
+            case 'errors':
+                self._html(views.errors_page(self.app.status().recs.errors))
+            case 'actions':
+                self._html(
+                    views.actions_page(
+                        self.app.recent_actions(),
+                        music=(
+                            self.app.music.status()
+                            if self.app.music is not None
+                            else None
+                        ),
+                        streamo_enabled=self.app.streamo is not None,
+                        lyte_enabled=self.app.lyte is not None
+                        and self.app.lyte.enabled,
+                    )
+                )
+            case _:
+                self.send_error(500, f'GUI page {page.id} has unknown renderer')
 
     def _waveforms(self) -> None:
         bridge = self.app.waveforms
