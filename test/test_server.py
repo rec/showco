@@ -571,20 +571,22 @@ if __name__ == '__main__':
         added = app.run_action(
             {
                 'action': 'recs-musician-add',
-                'name': 'mike',
-                'other_names': 'Michael\n',
-                'contacts': 'insta:mike',
+                'nickname': 'mike',
+                'names': 'Michael\n',
+                'copyright_name': 'Michael Jones',
+                'links': 'insta:mike',
             }
         )
         edited = app.run_action(
             {
                 'action': 'recs-musician-edit',
-                'name': 'mike',
+                'nickname': 'mike',
                 'public_keys': 'ssh-ed25519 AAA',
             }
         )
 
         self.assertTrue(added.ok)
         self.assertTrue(edited.ok)
-        self.assertEqual(recs.musicians()['mike'].other_names, [])
+        self.assertEqual(recs.musicians()['mike'].names, [])
+        self.assertEqual(recs.musicians()['mike'].copyright_name, 'Michael Jones')
         self.assertEqual(recs.musicians()['mike'].public_keys, ['ssh-ed25519 AAA'])
