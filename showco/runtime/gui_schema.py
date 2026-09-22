@@ -4,77 +4,51 @@ import tomllib
 from functools import cache
 from pathlib import Path
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, model_validator
 
 DEFAULT_GUI_PATH = Path(__file__).parent.parent / 'gui.toml'
 _gui_path = DEFAULT_GUI_PATH
 
 
-class NavigationItem(BaseModel, frozen=True):
-    page: str
-    label: str
-
-
-class Component(BaseModel, frozen=True):
-    id: str
-    kind: str
-    label: str = ''
-    binding: str = ''
-    action: str = ''
-    condition: str = ''
-    children: list[Component] = Field(default_factory=list)
-
-
 class Page(BaseModel, frozen=True):
-    id: str
-    path: str
-    title: str
-    renderer: str
-    sources: list[str] = Field(default_factory=list)
-    components: list[Component] = Field(default_factory=list)
+    name: str
+    title: str = ''
+    renderer: str = ''
+
+    @model_validator(mode='after')
+    def _defaults(self) -> Page:
+        return self.model_copy(
+            update={
+                'title': self.title or self.name.capitalize(),
+                'renderer': self.renderer or self.name,
+            }
+        )
 
 
 class Gui(BaseModel, frozen=True):
     version: int
     name: str
     default_page: str
-    navigation: list[NavigationItem]
     pages: list[Page]
 
     @model_validator(mode='after')
     def _validate_references(self) -> Gui:
-        pages = {page.id for page in self.pages}
-        if self.default_page not in pages:
+        names = {page.name for page in self.pages}
+        if self.default_page not in names:
             raise ValueError(f'default_page {self.default_page!r} is not declared')
-        if len(pages) != len(self.pages):
-            raise ValueError('page IDs must be unique')
-        paths = {page.path for page in self.pages}
-        if len(paths) != len(self.pages):
-            raise ValueError('page paths must be unique')
-        for item in self.navigation:
-            if item.page not in pages:
-                raise ValueError(f'navigation page {item.page!r} is not declared')
-        for page in self.pages:
-            _validate_components(page.components, page.id, set())
+        if len(names) != len(self.pages):
+            raise ValueError('page names must be unique')
         return self
 
-    def page(self, page_id: str) -> Page:
+    def page(self, name: str) -> Page:
         return next(
             page
             for page in self.pages
-            if page.id == page_id or page.title.casefold() == page_id.casefold()
+            if page.name == name or page.title.casefold() == name.casefold()
         )
 
     def page_at(self, path: str) -> Page | None:
-        return next((page for page in self.pages if page.path == path), None)
-
-
-def _validate_components(components: list[Component], page: str, ids: set[str]) -> None:
-    for component in components:
-        if component.id in ids:
-            raise ValueError(f'page {page!r} repeats component ID {component.id!r}')
-        ids.add(component.id)
-        _validate_components(component.children, page, ids)
+        return next((page for page in self.pages if f'/{page.name}' == path), None)
 
 
 @cache

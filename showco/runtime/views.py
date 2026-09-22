@@ -440,15 +440,14 @@ def page(page_id: str, body: str, *, script: str = '') -> str:
     document = gui_schema.current_gui()
     page_spec = document.page(page_id)
     navigation = ''.join(
-        f'<a href="{document.page(item.page).path}">{html.escape(item.label)}</a>'
-        for item in document.navigation
+        f'<a href="/{item.name}">{html.escape(item.title)}</a>'
+        for item in document.pages
     )
     page_script = (
         f'<script>{site_file("status-connection.js")}</script>'
         f'<script>{site_file("show-controls.js")}</script>'
         f'<script>{script or "pollShowControls();"}</script>'
     )
-    connection = '<p id="connection-status" role="status">Connecting...</p>'
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -462,7 +461,7 @@ def page(page_id: str, body: str, *, script: str = '') -> str:
     <h1>{html.escape(document.name)}</h1>
     <nav>{navigation}</nav>
   </header>
-  <main>{connection}
+  <main><p id="connection-status" role="status">Connecting...</p>
     <section class="show-controls" aria-label="Performance protection">
       <strong id="performance-lock-state">Performance lock: checking</strong>
       <form id="performance-lock-form" method="post" action="/actions">
@@ -472,9 +471,8 @@ def page(page_id: str, body: str, *, script: str = '') -> str:
         <button name="action" value="performance-unlock">
           Unlock protected actions</button>
       </form>
-      <p>Protects web configuration, calibration, tests,
-         session replacement, and shutdown.
-         Separate CLI and deployment commands are not locked.</p>
+      <p>Protects web configuration, calibration, tests, session replacement,
+         and shutdown. Separate CLI and deployment commands are not locked.</p>
       <p id="lock-result" role="status"></p>
     </section>
     <section id="fault-banner" class="failed" aria-live="polite">
