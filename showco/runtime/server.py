@@ -313,15 +313,20 @@ class ShowcoApp:
         return models.ActionResult(ok=False, message=f'unknown action {action}')
 
     def _save_musician(self, action: str, form: dict[str, str]) -> models.ActionResult:
-        name = form.get('name', '').strip()
-        if not name:
-            return models.ActionResult(ok=False, message='Musician name is required')
-        other_names = _text_lines(form.get('other_names', ''))
+        nickname = form.get('nickname', '').strip()
+        if not nickname:
+            return models.ActionResult(
+                ok=False, message='Musician nickname is required'
+            )
+        names = _text_lines(form.get('names', ''))
+        copyright_name = form.get('copyright_name', '').strip() or None
         public_keys = _text_lines(form.get('public_keys', ''))
-        contacts = _text_lines(form.get('contacts', ''))
+        links = _text_lines(form.get('links', ''))
         if action == 'recs-musician-add':
-            return self.recs.add_musician(name, other_names, public_keys, contacts)
-        return self.recs.edit_musician(name, other_names, public_keys, contacts)
+            return self.recs.add_musician(
+                nickname, names, copyright_name, public_keys, links
+            )
+        return self.recs.edit_musician(nickname, names, public_keys, links)
 
     def recent_actions(self) -> list[models.ActionLogEntry]:
         with self.action_log_lock:

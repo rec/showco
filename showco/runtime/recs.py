@@ -106,37 +106,42 @@ class RecsClient:
 
     def add_musician(
         self,
-        name: str,
-        other_names: list[str],
+        nickname: str,
+        names: list[str],
+        copyright_name: str | None,
         public_keys: list[str],
-        contacts: list[str],
+        links: list[str],
     ) -> models.ActionResult:
         return self._save_musician(
             'add_musician',
             {
                 'musician': {
-                    'name': name,
-                    'other_names': other_names,
+                    'nickname': nickname,
+                    'names': names,
+                    'copyright_name': copyright_name,
                     'public_keys': public_keys,
-                    'contacts': contacts,
+                    'links': links,
                 }
             },
         )
 
     def edit_musician(
         self,
-        name: str,
-        other_names: list[str],
+        nickname: str,
+        names: list[str],
         public_keys: list[str],
-        contacts: list[str],
+        links: list[str],
     ) -> models.ActionResult:
         return self._save_musician(
             'edit_musician',
             {
-                'name': name,
-                'other_names': other_names,
-                'public_keys': public_keys,
-                'contacts': contacts,
+                'nickname': nickname,
+                'names': names or None,
+                'public_keys': public_keys or None,
+                'links': links or None,
+                'clear_names': not names,
+                'clear_public_keys': not public_keys,
+                'clear_links': not links,
             },
         )
 
@@ -161,7 +166,7 @@ class RecsClient:
                 ok=False, message=f'recs sent invalid {command} musician'
             )
         return models.ActionResult(
-            ok=True, message=f'recs saved musician {musician.name}'
+            ok=True, message=f'recs saved musician {musician.nickname}'
         )
 
     def set_track_name(

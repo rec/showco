@@ -62,44 +62,54 @@ class RehearsalRecsClient(RecsClient):
 
     def add_musician(
         self,
-        name: str,
-        other_names: list[str],
+        nickname: str,
+        names: list[str],
+        copyright_name: str | None,
         public_keys: list[str],
-        contacts: list[str],
+        links: list[str],
     ) -> models.ActionResult:
-        if name in self.rehearsal_musicians:
+        if nickname in self.rehearsal_musicians:
             return models.ActionResult(
-                ok=False, message=f'Musician already exists: {name}'
+                ok=False, message=f'Musician already exists: {nickname}'
             )
-        return self._save_rehearsal_musician(name, other_names, public_keys, contacts)
+        return self._save_rehearsal_musician(
+            nickname, names, copyright_name, public_keys, links
+        )
 
     def edit_musician(
         self,
-        name: str,
-        other_names: list[str],
+        nickname: str,
+        names: list[str],
         public_keys: list[str],
-        contacts: list[str],
+        links: list[str],
     ) -> models.ActionResult:
-        if name not in self.rehearsal_musicians:
-            return models.ActionResult(ok=False, message=f'Unknown musician: {name}')
-        return self._save_rehearsal_musician(name, other_names, public_keys, contacts)
+        musician = self.rehearsal_musicians.get(nickname)
+        if musician is None:
+            return models.ActionResult(
+                ok=False, message=f'Unknown musician: {nickname}'
+            )
+        return self._save_rehearsal_musician(
+            nickname, names, musician.copyright_name, public_keys, links
+        )
 
     def _save_rehearsal_musician(
         self,
-        name: str,
-        other_names: list[str],
+        nickname: str,
+        names: list[str],
+        copyright_name: str | None,
         public_keys: list[str],
-        contacts: list[str],
+        links: list[str],
     ) -> models.ActionResult:
         musician = Musician(
-            name=name,
-            other_names=other_names,
+            nickname=nickname,
+            names=names,
+            copyright_name=copyright_name,
             public_keys=public_keys,
-            contacts=contacts,
+            links=links,
         )
-        self.rehearsal_musicians[name] = musician
+        self.rehearsal_musicians[nickname] = musician
         return models.ActionResult(
-            ok=True, message=f'rehearsal recs saved musician {name}'
+            ok=True, message=f'rehearsal recs saved musician {nickname}'
         )
 
     def set_track_name(
