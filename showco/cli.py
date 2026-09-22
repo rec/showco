@@ -11,7 +11,7 @@ from reccy.runtime import logging
 
 from .deployment import bundle, card, go, logs, machine_role, python
 from .provision import network
-from .runtime import rehearsal, services
+from .runtime import gui_schema, rehearsal, services
 from .runtime.mixer import MixersMonitor, load_mixer_specs
 from .runtime.server import make_server
 from .streamo import auth, client, config
@@ -24,6 +24,7 @@ class WebUiOptions(BaseModel, frozen=True):
     mixers_config: Path = Path()
     streamo_enabled: bool = False
     lyte_enabled: bool = False
+    gui: Path = gui_schema.DEFAULT_GUI_PATH
     rehearsal_mode: Annotated[
         bool,
         tyro.conf.arg(
@@ -34,6 +35,7 @@ class WebUiOptions(BaseModel, frozen=True):
 
 
 def run_web_ui(options: WebUiOptions) -> int:
+    gui_schema.configure_gui(options.gui)
     if not options.rehearsal_mode:
         machine_role.require_target_machine('showco run')
     if options.rehearsal_mode:
