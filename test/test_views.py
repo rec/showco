@@ -572,10 +572,21 @@ class ViewsTests(unittest.TestCase):
         from showco.runtime.views import musicians_page
 
         html = musicians_page(
-            {'mike': Musician(name='mike', contacts=['insta:mike'])}, []
+            {
+                'mike': Musician(
+                    nickname='mike',
+                    names=['Michael'],
+                    public_keys=['ssh-ed25519 AAA'],
+                    links=['insta:mike'],
+                )
+            },
+            [],
         )
 
         self.assertIn('href="/musicians"', html)
         self.assertIn('value="recs-musician-add"', html)
         self.assertIn('value="recs-musician-edit"', html)
+        self.assertIn('name="nickname"', html)
         self.assertIn('insta:mike', html)
+        self.assertNotIn('name="copyright_name"', html)
+        self.assertNotIn('name="public_keys"', html)

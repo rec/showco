@@ -638,25 +638,27 @@ if __name__ == '__main__':
             {
                 'type': 'musician',
                 'musician': {
-                    'name': 'mike',
-                    'other_names': [],
+                    'nickname': 'mike',
+                    'names': [],
+                    'copyright_name': 'Michael Jones',
                     'public_keys': [],
-                    'contacts': ['insta:mike'],
+                    'links': ['insta:mike'],
                 },
             },
             {
                 'type': 'musician',
                 'musician': {
-                    'name': 'mike',
-                    'other_names': ['Michael'],
+                    'nickname': 'mike',
+                    'names': ['Michael'],
+                    'copyright_name': 'Michael Jones',
                     'public_keys': ['ssh-ed25519 AAA'],
-                    'contacts': ['insta:mike'],
+                    'links': ['insta:mike'],
                 },
             },
         ]
         client = RecsClient(control=control)
 
-        added = client.add_musician('mike', [], [], ['insta:mike'])
+        added = client.add_musician('mike', [], 'Michael Jones', [], ['insta:mike'])
         edited = client.edit_musician(
             'mike', ['Michael'], ['ssh-ed25519 AAA'], ['insta:mike']
         )
@@ -670,20 +672,24 @@ if __name__ == '__main__':
                     'add_musician',
                     {
                         'musician': {
-                            'name': 'mike',
-                            'other_names': [],
+                            'nickname': 'mike',
+                            'names': [],
+                            'copyright_name': 'Michael Jones',
                             'public_keys': [],
-                            'contacts': ['insta:mike'],
+                            'links': ['insta:mike'],
                         }
                     },
                 ),
                 mock.call(
                     'edit_musician',
                     {
-                        'name': 'mike',
-                        'other_names': ['Michael'],
+                        'nickname': 'mike',
+                        'names': ['Michael'],
                         'public_keys': ['ssh-ed25519 AAA'],
-                        'contacts': ['insta:mike'],
+                        'links': ['insta:mike'],
+                        'clear_names': False,
+                        'clear_public_keys': False,
+                        'clear_links': False,
                     },
                 ),
             ],
