@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from functools import cache
 from pathlib import Path
 
-from . import models
+from . import gui_schema, models
 
 ERROR_PAGE_LIMIT = 25
 SITE_DIRECTORY = Path(__file__).parent.parent.parent / 'site'
@@ -24,7 +24,7 @@ def channels_page(status: models.ShowStatus) -> str:
     if not channel_html:
         channel_html = '<p>No channel data from recs.</p>'
     return page(
-        'Channels',
+        'channels',
         f"""
         <section>
           <h2>Recording channels</h2>
@@ -68,7 +68,7 @@ def musicians_page(
             )
             + '</section>'
         )
-    return page('Musicians', content)
+    return page('musicians', content)
 
 
 def musician_form(nickname: str, musician: object | None, *, editing: bool) -> str:
@@ -117,7 +117,7 @@ def health_page(status: models.ShowStatus) -> str:
         ]
     )
     return page(
-        'Health',
+        'health',
         f"""
         {readiness_section(status.readiness)}
         <section class="cards">
@@ -226,7 +226,7 @@ def attributes_page(
     mutable_attributes: list[models.MutableAttribute] | models.ActionResult | None,
 ) -> str:
     return page(
-        'Attributes',
+        'attributes',
         mutable_attributes_section(mutable_attributes),
         script=site_file('channel-controls.js') + site_file('status-script.js'),
     )
@@ -239,7 +239,7 @@ def errors_page(errors: list[models.ErrorRecord]) -> str:
         '</section>'
     )
     return page(
-        'Errors',
+        'errors',
         body,
         script=site_file('channel-controls.js') + site_file('status-script.js'),
     )
@@ -259,7 +259,7 @@ def actions_page(
         ['source', 'channel', 'noise_floor'],
     )
     return page(
-        'Actions',
+        'actions',
         f"""
         <section class="actions">
           {button('recs-calibrate', 'Calibrate noise floor')}
@@ -341,7 +341,7 @@ def playback_page(playback: models.PlaybackStatus) -> str:
         ]
     )
     return page(
-        'Playback',
+        'playback',
         f"""
         <section>
           <h2>Playback</h2>
@@ -391,7 +391,7 @@ def _streamo_actions(title_fields: list[str]) -> str:
 
 def performance_page() -> str:
     return page(
-        'Performance',
+        'performance',
         site_file('setlist-controls.html')
         + """
       <section class="performance" id="performance-screen">
@@ -430,13 +430,19 @@ def performance_page() -> str:
 
 def workflow_page(name: str) -> str:
     return page(
-        name.title(),
+        name,
         site_file(f'{name}.html'),
         script=site_file('lighting.js' if name == 'lighting' else 'workflow.js'),
     )
 
 
-def page(title: str, body: str, *, script: str = '') -> str:
+def page(page_id: str, body: str, *, script: str = '') -> str:
+    document = gui_schema.current_gui()
+    page_spec = document.page(page_id)
+    navigation = ''.join(
+        f'<a href="{document.page(item.page).path}">{html.escape(item.label)}</a>'
+        for item in document.navigation
+    )
     page_script = (
         f'<script>{site_file("status-connection.js")}</script>'
         f'<script>{site_file("show-controls.js")}</script>'
@@ -448,26 +454,13 @@ def page(title: str, body: str, *, script: str = '') -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>showCo {title}</title>
+  <title>{html.escape(document.name)} {html.escape(page_spec.title)}</title>
   <style>{site_file('server.css')}</style>
 </head>
 <body>
   <header>
-    <h1>showCo</h1>
-    <nav>
-      <a href="/performance">Performance</a>
-      <a href="/setlist">Set list</a>
-      <a href="/lighting">Lighting cues</a>
-      <a href="/soundcheck">Soundcheck</a>
-      <a href="/recovery">Recovery</a>
-      <a href="/channels">Channels</a>
-      <a href="/musicians">Musicians</a>
-      <a href="/health">Health</a>
-      <a href="/playback">Playback</a>
-      <a href="/attributes">Attributes</a>
-      <a href="/actions">Actions</a>
-      <a href="/errors">Errors</a>
-    </nav>
+    <h1>{html.escape(document.name)}</h1>
+    <nav>{navigation}</nav>
   </header>
   <main>{connection}
     <section class="show-controls" aria-label="Performance protection">
