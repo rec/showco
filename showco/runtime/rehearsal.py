@@ -80,7 +80,7 @@ class RehearsalRecsClient(RecsClient):
         self,
         nickname: str,
         names: list[str],
-        public_keys: list[str],
+        public_keys: list[str] | None,
         links: list[str],
     ) -> models.ActionResult:
         musician = self.rehearsal_musicians.get(nickname)
@@ -89,7 +89,11 @@ class RehearsalRecsClient(RecsClient):
                 ok=False, message=f'Unknown musician: {nickname}'
             )
         return self._save_rehearsal_musician(
-            nickname, names, musician.copyright_name, public_keys, links
+            nickname,
+            names,
+            musician.copyright_name,
+            musician.public_keys if public_keys is None else public_keys,
+            links,
         )
 
     def _save_rehearsal_musician(

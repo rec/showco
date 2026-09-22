@@ -320,11 +320,13 @@ class ShowcoApp:
             )
         names = _text_lines(form.get('names', ''))
         copyright_name = form.get('copyright_name', '').strip() or None
-        public_keys = _text_lines(form.get('public_keys', ''))
+        public_keys = (
+            _text_lines(form['public_keys']) if 'public_keys' in form else None
+        )
         links = _text_lines(form.get('links', ''))
         if action == 'recs-musician-add':
             return self.recs.add_musician(
-                nickname, names, copyright_name, public_keys, links
+                nickname, names, copyright_name, public_keys or [], links
             )
         return self.recs.edit_musician(nickname, names, public_keys, links)
 

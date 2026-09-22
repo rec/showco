@@ -576,7 +576,7 @@ class ViewsTests(unittest.TestCase):
                 'mike': Musician(
                     nickname='mike',
                     names=['Michael'],
-                    copyright_name='Michael Jones',
+                    public_keys=['ssh-ed25519 AAA'],
                     links=['insta:mike'],
                 )
             },
@@ -587,5 +587,6 @@ class ViewsTests(unittest.TestCase):
         self.assertIn('value="recs-musician-add"', html)
         self.assertIn('value="recs-musician-edit"', html)
         self.assertIn('name="nickname"', html)
-        self.assertIn('name="copyright_name"', html)
         self.assertIn('insta:mike', html)
+        self.assertNotIn('name="copyright_name"', html)
+        self.assertNotIn('name="public_keys"', html)

@@ -129,20 +129,22 @@ class RecsClient:
         self,
         nickname: str,
         names: list[str],
-        public_keys: list[str],
+        public_keys: list[str] | None,
         links: list[str],
     ) -> models.ActionResult:
+        parameters: dict[str, object] = {
+            'nickname': nickname,
+            'names': names or None,
+            'links': links or None,
+            'clear_names': not names,
+            'clear_links': not links,
+        }
+        if public_keys is not None:
+            parameters['public_keys'] = public_keys or None
+            parameters['clear_public_keys'] = not public_keys
         return self._save_musician(
             'edit_musician',
-            {
-                'nickname': nickname,
-                'names': names or None,
-                'public_keys': public_keys or None,
-                'links': links or None,
-                'clear_names': not names,
-                'clear_public_keys': not public_keys,
-                'clear_links': not links,
-            },
+            parameters,
         )
 
     def _save_musician(

@@ -56,7 +56,7 @@ def musicians_page(
         )
         content = (
             '<section><h2>Add musician</h2>'
-            '<p>Names, copyright name, public keys, and links are saved in recs. '
+            '<p>Names and links are saved in recs. '
             'Enter one value per line.</p>'
             + musician_form('', None, editing=False)
             + '</section><section><h2>Edit musician</h2>'
@@ -75,7 +75,6 @@ def musician_form(nickname: str, musician: object | None, *, editing: bool) -> s
     action = 'recs-musician-edit' if editing else 'recs-musician-add'
     title = f'Edit {html.escape(nickname)}' if editing else 'Add musician'
     readonly = ' readonly' if editing else ''
-    copyright_name = str(getattr(musician, 'copyright_name', '') or '')
     return (
         '<form method="post" action="/musicians" class="musician-form">'
         f'<h3>{title}</h3><input type="hidden" name="action" value="{action}">'
@@ -83,10 +82,6 @@ def musician_form(nickname: str, musician: object | None, *, editing: bool) -> s
         f'required{readonly}></label>'
         f'<label>Names <textarea name="names">'
         f'{html.escape(_musician_lines(musician, "names"))}</textarea></label>'
-        f'<label>Copyright name <input name="copyright_name" '
-        f'value="{html.escape(copyright_name)}"{readonly}></label>'
-        f'<label>Public keys <textarea name="public_keys">'
-        f'{html.escape(_musician_lines(musician, "public_keys"))}</textarea></label>'
         f'<label>Links <textarea name="links">'
         f'{html.escape(_musician_lines(musician, "links"))}</textarea></label>'
         '<button type="submit">'
