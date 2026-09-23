@@ -256,6 +256,36 @@ disabled_when = "playback_waiting"
     assert '>Stop</button>' not in html
 
 
+def test_musicians_file_controls_form_labels(tmp_path: Path) -> None:
+    from recs.musicians import Musician
+
+    path = tmp_path / 'gui.toml'
+    path.write_text(
+        gui_schema.DEFAULT_GUI_PATH.read_text().replace(
+            'label = "Save changes"', 'label = "Store musician"'
+        )
+    )
+    status = models.ShowStatus(
+        recs=models.RecsStatus(
+            service=models.ServiceStatus(name='recs', state='connected')
+        ),
+        streamo=models.StreamoStatus(
+            service=models.ServiceStatus(name='streamo', state='disabled')
+        ),
+    )
+
+    html = views.configured_page(
+        gui_schema.load_gui(path).page('musicians'),
+        status,
+        musicians={
+            'mike': Musician(nickname='mike', names=['Michael'], links=['insta:mike'])
+        },
+    )
+
+    assert 'Store musician</button>' in html
+    assert 'Save changes</button>' not in html
+
+
 @pytest.mark.parametrize(
     'old,new',
     [

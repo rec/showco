@@ -385,16 +385,20 @@ class ShowcoHandler(BaseHTTPRequestHandler):
                         if page.uses_source('recs.mutable_attributes')
                         else None
                     ),
+                    musicians=(
+                        self.app.recs.musicians()
+                        if page.uses_source('recs.musicians')
+                        else None
+                    ),
+                    action_log=(
+                        self.app.recent_actions()
+                        if page.uses_source('show.actions')
+                        else None
+                    ),
                 )
             )
             return
         match page.renderer:
-            case 'musicians':
-                self._html(
-                    views.musicians_page(
-                        self.app.recs.musicians(), self.app.recent_actions()
-                    )
-                )
             case 'performance':
                 self._html(views.performance_page())
             case 'workflow':
