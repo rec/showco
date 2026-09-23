@@ -662,10 +662,17 @@ class ViewsTests(unittest.TestCase):
     def test_musicians_page_lists_add_and_edit_forms(self) -> None:
         from recs.musicians import Musician
 
-        from showco.runtime.views import musicians_page
-
-        html = musicians_page(
-            {
+        html = configured_page(
+            gui_schema.current_gui().page('musicians'),
+            models.ShowStatus(
+                recs=models.RecsStatus(
+                    service=models.ServiceStatus(name='recs', state='connected')
+                ),
+                streamo=models.StreamoStatus(
+                    service=models.ServiceStatus(name='streamo', state='disabled')
+                ),
+            ),
+            musicians={
                 'mike': Musician(
                     nickname='mike',
                     names=['Michael'],
@@ -673,7 +680,6 @@ class ViewsTests(unittest.TestCase):
                     links=['insta:mike'],
                 )
             },
-            [],
         )
 
         self.assertIn('href="/musicians"', html)

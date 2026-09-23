@@ -31,11 +31,16 @@ def configured_page(
     mutable_attributes: list[models.MutableAttribute]
     | models.ActionResult
     | None = None,
+    musicians: Mapping[str, object] | models.ActionResult | None = None,
+    action_log: list[models.ActionLogEntry] | None = None,
 ) -> str:
     body = GUI_TEMPLATES.get_template('elements.html.j2').render(
         sections=page_spec.sections,
         status=status,
         bound_value=_gui_value,
+        source_data=lambda source, show: _gui_source_data(
+            source, show, musicians, action_log
+        ),
         row_data=_gui_row,
         is_enabled=_gui_enabled,
         item_text=_gui_item_text,
@@ -48,6 +53,7 @@ def configured_page(
         mutable_attributes=_gui_mutable_attributes(mutable_attributes),
         attribute_field=_gui_attribute_field,
         is_disabled=_gui_disabled,
+        form_value=_gui_form_value,
     )
     script = site_file('channel-controls.js') + site_file('status-script.js')
     if any(
@@ -74,6 +80,38 @@ def _gui_value(path: str, status: models.ShowStatus, item: object | None) -> obj
     for field in fields:
         value = getattr(value, field)
     return value
+
+
+def _gui_source_data(
+    source: str,
+    status: models.ShowStatus,
+    musicians: Mapping[str, object] | models.ActionResult | None,
+    action_log: list[models.ActionLogEntry] | None,
+) -> dict[str, object]:
+    if source == 'recs.musicians':
+        if isinstance(musicians, models.ActionResult):
+            return {'items': [], 'error': musicians.message}
+        return {'items': list((musicians or {}).values()), 'error': ''}
+    if source == 'show.actions':
+        return {'items': action_log or [], 'error': ''}
+    value = _gui_value(source, status, None)
+    if not isinstance(value, list):
+        raise ValueError(f'GUI source {source!r} is not a list')
+    return {'items': value, 'error': ''}
+
+
+def _gui_form_value(element: gui_schema.Element, item: object | None) -> str:
+    if not element.value:
+        return ''
+    _, *fields = element.value.split('.')
+    value = item
+    for field in fields:
+        value = getattr(value, field)
+    if element.format == 'lines':
+        if not isinstance(value, list):
+            raise TypeError(f'{element.name}: form lines value is not a list')
+        return '\n'.join(str(line) for line in value)
+    return str(value)
 
 
 def _gui_row(source: str, item: object | None) -> dict[str, object]:
@@ -245,57 +283,6 @@ def _gui_attribute_field(attribute: models.MutableAttribute) -> dict[str, object
         'checked': False,
         'saved_value': json.dumps(value, separators=(',', ':')),
     }
-
-
-def musicians_page(
-    musicians: Mapping[str, object] | models.ActionResult,
-    action_log: list[models.ActionLogEntry],
-) -> str:
-    if isinstance(musicians, models.ActionResult):
-        content = f'<p class="failed">{html.escape(musicians.message)}</p>'
-    else:
-        forms = ''.join(
-            musician_form(name, musician, editing=True)
-            for name, musician in musicians.items()
-        )
-        content = (
-            '<section><h2>Add musician</h2>'
-            '<p>Names and links are saved in recs. '
-            'Enter one value per line.</p>'
-            + musician_form('', None, editing=False)
-            + '</section><section><h2>Edit musician</h2>'
-            + (forms or '<p>No musicians saved in recs.</p>')
-            + '</section><section><h2>Recent actions</h2>'
-            + (
-                ''.join(action_result(result) for result in action_log)
-                or '<p>No actions yet.</p>'
-            )
-            + '</section>'
-        )
-    return page('musicians', content)
-
-
-def musician_form(nickname: str, musician: object | None, *, editing: bool) -> str:
-    action = 'recs-musician-edit' if editing else 'recs-musician-add'
-    title = f'Edit {html.escape(nickname)}' if editing else 'Add musician'
-    readonly = ' readonly' if editing else ''
-    return (
-        '<form method="post" action="/musicians" class="musician-form">'
-        f'<h3>{title}</h3><input type="hidden" name="action" value="{action}">'
-        f'<label>Nickname <input name="nickname" value="{html.escape(nickname)}" '
-        f'required{readonly}></label>'
-        f'<label>Names <textarea name="names">'
-        f'{html.escape(_musician_lines(musician, "names"))}</textarea></label>'
-        f'<label>Links <textarea name="links">'
-        f'{html.escape(_musician_lines(musician, "links"))}</textarea></label>'
-        '<button type="submit">'
-        f'{"Save changes" if editing else "Add musician"}</button>'
-        '</form>'
-    )
-
-
-def _musician_lines(musician: object | None, field: str) -> str:
-    return '\n'.join(str(value) for value in getattr(musician, field, []))
 
 
 def actions_page(

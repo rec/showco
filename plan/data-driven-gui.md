@@ -8,7 +8,7 @@ links, visibility, and enabled state. Selecting another complete file must
 produce a different useful display for a show or application without editing
 Python or JavaScript.
 
-The Channels, Track names, Errors, Health, and Attributes pages read their sections,
+The Channels, Track names, Musicians, Errors, Health, Attributes, and Playback pages read their sections,
 content, order, and labels from `showco/gui.toml` and render through one shared
 Jinja template. A third edit page can be added to a selected TOML file without
 adding a route, Python renderer, template, or JavaScript page file. Errors and
@@ -169,7 +169,7 @@ prove the migration.
    and repeated rows for readiness checks, service cards, meters, inputs,
    errors, mixers, OSC recorders, and incidents. Verify that changing labels,
    order, visibility, and empty text in TOML changes the page.
-3. **Convert forms and transport:** Attributes and Playback are done. Convert Musicians and
+3. **Convert forms and transport:** Attributes, Playback, and Musicians are done. Convert
    Actions. Add only the field, form, conditional visibility, result, and
    transport behaviour these pages need. Preserve hidden musician data on
    edits, explicit shutdown confirmation, cable-test duration, and feature

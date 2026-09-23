@@ -27,6 +27,9 @@ class Element(BaseModel, frozen=True):
     limit: int = Field(default=0, ge=0)
     format: str = ''
     separator: str = ''
+    field: str = ''
+    required: bool = False
+    readonly: bool = False
     children: list[Element] = Field(default_factory=list)
 
     @model_validator(mode='after')
@@ -49,6 +52,11 @@ class Element(BaseModel, frozen=True):
             },
             'waveform': {'source': 'waveforms'},
             'button': {},
+            'form': {},
+            'input': {},
+            'textarea': {},
+            'submit': {},
+            'action_history': {'source': 'show.actions'},
         }
         if self.kind not in allowed:
             raise ValueError(f'{self.name}: unknown element kind {self.kind!r}')
@@ -77,6 +85,8 @@ class Element(BaseModel, frozen=True):
                 if self.value not in ITEM_VALUES:
                     raise ValueError(f'{self.name}: unknown text value {self.value!r}')
                 continue
+            if self.kind in {'input', 'textarea'} and field == 'value':
+                continue
             if self.kind == 'status' and field == 'value':
                 if self.value not in STATUS_FORMATS:
                     raise ValueError(
@@ -101,10 +111,27 @@ class Element(BaseModel, frozen=True):
         if self.kind == 'repeat':
             if not self.children or not self.empty_text:
                 raise ValueError(f'{self.name}: repeat needs children and empty_text')
-            if self.layout != (
-                'cards' if self.source == 'show.recs.channels' else 'list'
-            ):
+            layouts = {
+                'show.recs.channels': 'cards',
+                'recs.musicians': 'forms',
+            }
+            if self.layout != layouts.get(self.source, 'list'):
                 raise ValueError(f'{self.name}: unsupported source layout')
+        elif self.kind == 'form':
+            if self.action not in MUSICIAN_ACTIONS or not self.children:
+                raise ValueError(f'{self.name}: form needs an action and children')
+        elif self.kind in {'input', 'textarea'}:
+            if self.field not in MUSICIAN_FIELDS or self.value not in {
+                '',
+                *(f'item.{field}' for field in MUSICIAN_FIELDS),
+            }:
+                raise ValueError(f'{self.name}: unsupported form field')
+        elif self.kind == 'submit':
+            if not self.label:
+                raise ValueError(f'{self.name}: submit needs a label')
+        elif self.kind == 'action_history':
+            if not self.empty_text:
+                raise ValueError(f'{self.name}: action history needs empty_text')
         elif (
             self.children
             or (self.parameters and self.kind != 'action_button')
@@ -113,7 +140,7 @@ class Element(BaseModel, frozen=True):
             raise ValueError(
                 f'{self.name}: only repeat and mutable attributes accept empty_text'
             )
-        if self.kind != 'repeat' and (
+        if self.kind not in {'repeat', 'input', 'textarea'} and (
             self.layout != 'cards' or self.limit or self.separator
         ):
             raise ValueError(f'{self.name}: layout, limit and separator need a repeat')
@@ -136,6 +163,9 @@ class Element(BaseModel, frozen=True):
                 raise ValueError(f'{self.name}: unsupported button action')
             if self.parameters not in ACTION_BUTTON_PARAMETERS[self.action]:
                 raise ValueError(f'{self.name}: unsupported button parameters')
+        elif self.kind in {'input', 'textarea'}:
+            if self.format not in {'', 'lines'}:
+                raise ValueError(f'{self.name}: unsupported form format')
         elif self.format:
             raise ValueError(f'{self.name}: unsupported format')
         if self.kind == 'button':
@@ -145,10 +175,14 @@ class Element(BaseModel, frozen=True):
                 ('', 'revert_track_names'),
             }:
                 raise ValueError(f'{self.name}: unsupported button action')
-        elif self.kind != 'action_button' and (
+        elif self.kind not in {'action_button', 'form'} and (
             self.action != allowed[self.kind].get('action', '') or self.operation
         ):
             raise ValueError(f'{self.name}: unsupported action or operation')
+        if self.kind not in {'input', 'textarea'} and (
+            self.field or self.required or self.readonly
+        ):
+            raise ValueError(f'{self.name}: form options need an input')
         return self
 
     model_config = ConfigDict(extra='forbid')
@@ -211,7 +245,6 @@ class Gui(BaseModel, frozen=True):
             raise ValueError('page names must be unique')
         for page in self.pages:
             if not page.sections and page.renderer not in {
-                'musicians',
                 'performance',
                 'workflow',
                 'playback',
@@ -265,6 +298,16 @@ class Gui(BaseModel, frozen=True):
                         has_track_name |= any(
                             child.kind == 'text_field' for child in element.children
                         )
+                        if element.layout == 'forms' and any(
+                            child.kind != 'form' for child in element.children
+                        ):
+                            raise ValueError(f'{page.name}: form rows need forms')
+                    elif element.kind == 'form':
+                        if any(
+                            child.kind not in {'input', 'textarea', 'submit'}
+                            for child in element.children
+                        ):
+                            raise ValueError(f'{page.name}: unsupported form field')
                     elif element.kind in {
                         'indicator',
                         'text_field',
@@ -280,6 +323,7 @@ class Gui(BaseModel, frozen=True):
                         'mutable_attributes',
                         'action_button',
                         'action_result',
+                        'action_history',
                     }:
                         pass
                     else:
@@ -352,7 +396,7 @@ REPEAT_VALUES = {
     'show.mixers': {'item.name', 'item'},
     'show.recs.osc': {'item.name', 'item'},
 }
-REPEAT_SOURCES = {'show.recs.channels', *REPEAT_VALUES}
+REPEAT_SOURCES = {'show.recs.channels', 'recs.musicians', *REPEAT_VALUES}
 ITEM_VALUES = {'', 'item.name', 'item.message', 'item.timestamp', 'item'}
 TEXT_FORMATS = {'', 'bold', 'time', 'mixer_detail', 'osc_detail'}
 TEXT_VALUES_BY_FORMAT = {
@@ -388,3 +432,5 @@ ACTION_BUTTON_PARAMETERS = {
     'recs-playback-pause': [{}],
     'recs-playback-stop': [{}],
 }
+MUSICIAN_ACTIONS = {'recs-musician-add', 'recs-musician-edit'}
+MUSICIAN_FIELDS = {'nickname', 'names', 'links'}

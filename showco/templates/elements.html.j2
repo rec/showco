@@ -1,6 +1,24 @@
+{% macro form(element, item) %}
+<form method="post" action="/musicians" class="musician-form">
+  {% if element.label %}<h3>{{ element.label }}{% if item %} {{ item.nickname }}{% endif %}</h3>{% endif %}
+  <input type="hidden" name="action" value="{{ element.action }}">
+  {% for child in element.children %}
+    {% if child.kind == 'input' %}
+      <label>{{ child.label }} <input name="{{ child.field }}" value="{{ form_value(child, item) }}"{% if child.required %} required{% endif %}{% if child.readonly %} readonly{% endif %}></label>
+    {% elif child.kind == 'textarea' %}
+      <label>{{ child.label }} <textarea name="{{ child.field }}">{{ form_value(child, item) }}</textarea></label>
+    {% elif child.kind == 'submit' %}
+      <button type="submit">{{ child.label }}</button>
+    {% endif %}
+  {% endfor %}
+</form>
+{% endmacro %}
+
 {% macro repeated_item(element, item, items) %}
 {% if element.layout == 'list' %}
 <li class="{{ list_row_class(element.source, item) }}">{% for child in element.children %}{% if not loop.first %}{{ element.separator }}{% endif %}{% if child.format == 'time' %}<time class="error-time" data-value="{{ child.value }}" data-format="time">{{ item_text(child, status, item) }}</time>{% elif child.format == 'bold' %}<b data-value="{{ child.value }}">{{ item_text(child, status, item) }}</b>{% else %}<span data-value="{{ child.value }}" data-format="{{ child.format }}">{{ item_text(child, status, item) }}</span>{% endif %}{% endfor %}</li>
+{% elif element.layout == 'forms' %}
+{% for child in element.children %}{{ form(child, item) }}{% endfor %}
 {% else %}
 {% set row = row_data(element.source, item) %}
 <div class="{{ row.class_name }}"{% for key, value in row.attributes.items() %} data-{{ key }}="{{ value }}"{% endfor %}>
@@ -34,16 +52,18 @@
   {% if section.style in ['performance', 'transport'] %}<div class="{{ section.style }}"{% if section.style == 'transport' %} data-transport{% endif %}>{% endif %}
   {% for element in section.elements %}
     {% if element.kind == 'repeat' %}
-      {% set items = bound_value(element.source, status, none) %}
+      {% set source = source_data(element.source, status) %}
+      {% set items = source['items'] %}
       {% set visible = items[-element.limit:] if element.limit else items %}
       <div{% if element.layout == 'cards' %} class="levels"{% endif %} id="{{ element.name }}" data-source="{{ element.source }}" data-layout="{{ element.layout }}" data-limit="{{ element.limit }}" data-empty-text="{{ element.empty_text }}" data-template="{{ element.name }}-template">
-      {% if visible %}
+      {% if source.error %}<p class="failed">{{ source.error }}</p>
+      {% elif visible %}
         {% if element.layout == 'list' %}<ul>{% endif %}
         {% for item in visible %}{{ repeated_item(element, item, items) }}{% endfor %}
         {% if element.layout == 'list' %}</ul>{% endif %}
       {% else %}<p>{{ element.empty_text }}</p>{% endif %}
       </div>
-      <template id="{{ element.name }}-template">{{ repeated_item(element, none, items) }}</template>
+      {% if element.layout != 'forms' %}<template id="{{ element.name }}-template">{{ repeated_item(element, none, items) }}</template>{% endif %}
     {% elif element.kind == 'button' %}
       {% if loop.first or loop.previtem.kind != 'button' %}<div class="channel-actions">{% endif %}
       <button type="button" data-operation="{{ element.operation }}" data-element="{{ element.name }}" id="{{ 'save-track-names' if element.operation == 'save_track_names' else 'revert-track-names' }}">{{ element.label }}</button>
@@ -88,6 +108,13 @@
       </form>
     {% elif element.kind == 'action_result' %}
       <p id="{{ element.name }}" data-action-result aria-live="polite"></p>
+    {% elif element.kind == 'form' %}
+      {{ form(element, none) }}
+    {% elif element.kind == 'action_history' %}
+      {% set actions = source_data(element.source, status)['items'] %}
+      <div id="{{ element.name }}">
+      {% if actions %}{% for action in actions %}<p class="{{ 'ok' if action.result.ok else 'failed' }}"><time class="error-time">{{ action.timestamp.strftime('%H:%M:%S') }}</time> {{ action.service }} {{ action.command }}: {{ action.result.message }}</p>{% endfor %}{% else %}<p>{{ element.empty_text }}</p>{% endif %}
+      </div>
     {% endif %}
   {% endfor %}
   {% if section.style in ['performance', 'transport'] %}</div>{% endif %}
