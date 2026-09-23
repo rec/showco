@@ -200,7 +200,121 @@ name = "performance"
 [[pages]]
 name = "setlist"
 title = "Set list"
-renderer = "workflow"
+
+[[pages.sections]]
+name = "prepare"
+title = "Prepare the set list"
+
+[[pages.sections.elements]]
+name = "setlist-help"
+kind = "text"
+label = "Saving replaces the list and resets its position. Previous recs markers remain unchanged. Unlock performance protection before editing. Song cues only add recording markers; they do not stop recording or change lights or streaming."
+
+[[pages.sections.elements]]
+name = "setlist-editor"
+kind = "workflow_editor"
+
+[[pages.sections.elements]]
+name = "add-song"
+kind = "workflow_editor"
+label = "Add song"
+
+[[pages.sections.elements]]
+name = "reload-setlist"
+kind = "workflow_editor"
+label = "Discard edits and reload saved list"
+
+[[pages.sections.elements]]
+name = "save-setlist"
+kind = "workflow_button"
+label = "Save set list and reset position"
+action = "setlist-save"
+
+[[pages.sections.elements]]
+name = "workflow-result"
+kind = "workflow_status"
+
+[[pages.sections.elements]]
+name = "perform-setlist"
+kind = "link"
+label = "Perform with this set list"
+value = "/performance"
+
+[[pages.sections]]
+name = "controls"
+title = "Set list"
+
+[[pages.sections.elements]]
+name = "cue-position"
+kind = "workflow_display"
+label = "Loading set list..."
+
+[[pages.sections.elements]]
+name = "cue-notes"
+kind = "workflow_display"
+
+[[pages.sections.elements]]
+name = "cue-elapsed"
+kind = "workflow_display"
+
+[[pages.sections.elements]]
+name = "next-song"
+kind = "workflow_button"
+label = "Start next song"
+action = "setlist-next"
+
+[[pages.sections.elements]]
+name = "alternate-cues"
+kind = "details"
+label = "Skip, repeat, or interval"
+
+[[pages.sections.elements.children]]
+name = "skip-song"
+kind = "workflow_button"
+label = "Skip next song"
+action = "setlist-skip"
+
+[[pages.sections.elements.children]]
+name = "repeat-song"
+kind = "workflow_button"
+label = "Repeat current song"
+action = "setlist-repeat"
+
+[[pages.sections.elements.children]]
+name = "interval"
+kind = "workflow_button"
+label = "Start interval"
+action = "setlist-interval"
+
+[[pages.sections.elements]]
+name = "cue-message"
+kind = "workflow_display"
+
+[[pages.sections.elements]]
+name = "cue-resolution"
+kind = "workflow_display"
+
+[[pages.sections.elements.children]]
+name = "cue-resolution-help"
+kind = "workflow_display"
+label = "Marker delivery is uncertain. Keeping the cue sends nothing. Retrying may create a duplicate marker."
+
+[[pages.sections.elements.children]]
+name = "confirm-cue-resolution"
+kind = "workflow_checkbox"
+label = "I checked the outcome and chose how to proceed"
+
+[[pages.sections.elements.children]]
+name = "accept-cue"
+kind = "workflow_button"
+label = "Keep cue without resending"
+action = "setlist-accept"
+
+[[pages.sections.elements.children]]
+name = "retry-cue"
+kind = "workflow_button"
+label = "Retry marker with duplicate risk"
+action = "setlist-retry"
 
 [[pages]]
 name = "lighting"
