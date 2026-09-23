@@ -55,18 +55,45 @@
       : `${detail}: ${mixer.latency_ms.toFixed(1)} ms`;
   }
 
-  function updateService(identifier, service, detail, healthIdentifier) {
-    const card = document.getElementById(`${identifier}-card`);
-    const state = document.getElementById(`${identifier}-state`);
-    const detailElement = document.getElementById(`${identifier}-detail`);
-    const health = document.getElementById(healthIdentifier);
-    if (card) card.className = `card ${service.state}`;
-    if (state) state.textContent = service.state;
-    if (detailElement) detailElement.textContent = detail;
-    if (health) {
-      health.textContent = `${healthIdentifier.replace("-health", "")}: ${
-        serviceDetail(service)
-      }`;
+  function sourceValue(status, path) {
+    return path.split(".").slice(1).reduce((value, field) => value[field], status);
+  }
+
+  function statusText(format, value) {
+    switch (format) {
+      case "readiness": return value ? "ready" : "not ready";
+      case "service": return serviceDetail(value);
+      case "snapshot": return value || "connected";
+      case "progress": return value;
+      case "lyte": return lyteDetail(value);
+      case "temperature": return value.temperature_c === null
+        ? value.temperature_error || "unknown"
+        : `${value.temperature_c.toFixed(1)} °C`;
+      case "bitrate": return value.output_bitrate_kbps === null
+        ? "unknown"
+        : `${value.output_bitrate_kbps.toFixed(0)} kbps`;
+    }
+    throw new Error(`unknown status format: ${format}`);
+  }
+
+  function updateConfiguredStatus(status) {
+    for (const element of document.querySelectorAll("p[data-value]")) {
+      const value = sourceValue(status, element.dataset.value);
+      const label = element.dataset.label;
+      element.textContent = `${label ? `${label}: ` : ""}${statusText(element.dataset.format, value)}`;
+      if (element.dataset.format === "progress") {
+        element.className = status.recording_progress.ok ? "ok" : "failed";
+      }
+    }
+    for (const section of document.querySelectorAll("section.readiness")) {
+      section.className = `readiness ${status.readiness.ready ? "healthy" : "error"}`;
+    }
+    for (const card of document.querySelectorAll("[data-service]")) {
+      const service = sourceValue(status, card.dataset.service);
+      card.className = `card ${service.state}`;
+      card.querySelector(".state").textContent = service.state;
+      card.querySelector(".service-detail").textContent = card.dataset.format === "recording"
+        ? recordingText(status.recs) : streamingText(status.streamo);
     }
   }
 
@@ -78,37 +105,42 @@
     window.scrollTo(0, document.documentElement.scrollHeight);
   }
 
-  function updateRecsErrors(errors) {
-    const containers = document.querySelectorAll('[data-source="show.recs.errors"]');
-    const legacy = document.getElementById("recs-errors");
-    for (const container of containers.length ? containers : legacy ? [legacy] : []) {
-      const follow = atBottom();
+  function oscRecorderDetail(recorder) {
+    if (recorder.last_error) return `${recorder.state}: ${recorder.last_error}`;
+    return recorder.log_path === null
+      ? recorder.state
+      : `${recorder.state}: ${recorder.log_path} (${recorder.log_size} bytes)`;
+  }
+
+  function updateConfiguredLists(status) {
+    for (const container of document.querySelectorAll('[data-layout="list"]')) {
+      const source = container.dataset.source;
+      const items = sourceValue(status, source);
       const limit = Number(container.dataset.limit);
-      const visible = limit ? errors.slice(-limit) : errors;
+      const visible = limit ? items.slice(-limit) : items;
+      const follow = source === "show.recs.errors" && atBottom();
       if (!visible.length) {
         const message = document.createElement("p");
-        message.textContent = container.dataset.emptyText || "No errors";
+        message.textContent = container.dataset.emptyText;
         container.replaceChildren(message);
         continue;
       }
       const list = document.createElement("ul");
-      for (const error of visible) {
-        const row = container.dataset.template
-          ? document.getElementById(container.dataset.template).content.firstElementChild.cloneNode(true)
-          : document.createElement("li");
-        if (container.dataset.template) {
-          for (const field of row.querySelectorAll("[data-value]")) {
-            const value = error[field.dataset.value.slice("item.".length)];
-            field.textContent = field.dataset.format === "time"
-              ? new Date(value).toLocaleTimeString() : value;
+      const template = document.getElementById(container.dataset.template);
+      for (const item of visible) {
+        const row = template.content.firstElementChild.cloneNode(true);
+        if (source === "show.readiness.checks" || source === "show.input_checks") {
+          row.className = item.ok ? "ok" : "failed";
+        }
+        for (const field of row.querySelectorAll("[data-value]")) {
+          const value = field.dataset.value === "item"
+            ? item : item[field.dataset.value.slice("item.".length)];
+          switch (field.dataset.format) {
+            case "time": field.textContent = new Date(value).toLocaleTimeString(); break;
+            case "mixer_detail": field.textContent = mixerDetail(value); break;
+            case "osc_detail": field.textContent = oscRecorderDetail(value); break;
+            default: field.textContent = value;
           }
-        } else {
-          const timestamp = document.createElement("time");
-          timestamp.className = "error-time";
-          timestamp.textContent = new Date(error.timestamp).toLocaleTimeString();
-          const message = document.createElement("span");
-          message.textContent = error.message;
-          row.append(timestamp, message);
         }
         list.append(row);
       }
@@ -134,20 +166,20 @@
   }
 
   function setPerformance(identifier, percent, text, forceCritical = false) {
-    const row = document.getElementById(`${identifier}-performance`);
-    const meter = document.getElementById(`${identifier}-meter`);
-    const value = document.getElementById(`${identifier}-value`);
-    if (!row || !meter || !value) return;
-    if (percent === null) meter.removeAttribute("value");
-    else meter.value = percent;
-    row.className = `performance-row ${
-      forceCritical || percent !== null && percent >= 95
-        ? "critical"
-        : percent !== null && percent >= 85
-          ? "warning"
-          : "normal"
-    }`;
-    value.textContent = text;
+    for (const row of document.querySelectorAll(`[data-meter="${identifier}"]`)) {
+      const meter = row.querySelector("meter");
+      const value = row.querySelector("span");
+      if (percent === null) meter.removeAttribute("value");
+      else meter.value = percent;
+      row.className = `performance-row ${
+        forceCritical || percent !== null && percent >= 95
+          ? "critical"
+          : percent !== null && percent >= 85
+            ? "warning"
+            : "normal"
+      }`;
+      value.textContent = text;
+    }
   }
 
   function updatePerformance(status) {
@@ -203,116 +235,14 @@
     );
   }
 
-  function updateReadiness(readiness) {
-    const state = document.getElementById("readiness-state");
-    const checks = document.getElementById("readiness-checks");
-    if (!state || !checks) return;
-    state.textContent = readiness.ready ? "ready" : "not ready";
-    checks.replaceChildren(...readiness.checks.map(check => {
-      const item = document.createElement("li");
-      item.className = check.ok ? "ok" : "failed";
-      const name = document.createElement("b");
-      name.textContent = check.name;
-      item.append(name, `: ${check.message}`);
-      return item;
-    }));
-  }
-
-  function updateIncidents(incidents) {
-    const container = document.getElementById("incidents");
-    if (!container) return;
-    if (!incidents.length) {
-      container.textContent = "No incidents.";
-      return;
-    }
-    const list = document.createElement("ul");
-    for (const incident of incidents) {
-      const item = document.createElement("li");
-      item.textContent = `${new Date(incident.timestamp).toLocaleTimeString()} ${incident.message}`;
-      list.append(item);
-    }
-    container.replaceChildren(list);
-  }
-
-  function updateInputChecks(checks) {
-    const container = document.getElementById("input-checks");
-    if (!container) return;
-    if (!checks.length) {
-      container.textContent = "No recording inputs.";
-      return;
-    }
-    const list = document.createElement("ul");
-    for (const check of checks) {
-      const item = document.createElement("li");
-      item.className = check.ok ? "ok" : "failed";
-      item.textContent = `${check.name}: ${check.message}`;
-      list.append(item);
-    }
-    container.replaceChildren(list);
-  }
-
   function updateStatus() {
     return requestStatus()
       .then(status => {
-      updateService(
-        "recording", status.recs.service, recordingText(status.recs), "recs-health",
-      );
-      const recsSnapshot = document.getElementById("recs-snapshot");
-      if (recsSnapshot) {
-        recsSnapshot.textContent = `recs snapshot: ${status.recs.snapshot_error || "connected"}`;
-      }
-      const recordingProgress = document.getElementById("recording-progress");
-      if (recordingProgress) {
-        recordingProgress.className = status.recording_progress.ok ? "ok" : "failed";
-        recordingProgress.textContent = `recording progress: ${status.recording_progress.message}`;
-      }
-      updateService(
-        "streaming", status.streamo.service, streamingText(status.streamo),
-        "streamo-health",
-      );
-      const lyteHealth = document.getElementById("lyte-health");
-      if (lyteHealth) lyteHealth.textContent = `lyte: ${lyteDetail(status.lyte)}`;
-      updateChannels(status.recs.channels);
-      updateRecsErrors(status.recs.errors);
-      updatePerformance(status);
-      updateReadiness(status.readiness);
-      updateIncidents(status.incidents);
-      updateInputChecks(status.input_checks);
-      const temperature = document.getElementById("temperature");
-      if (temperature) {
-        temperature.textContent = status.system.temperature_c === null
-          ? status.system.temperature_error || "unknown"
-          : `${status.system.temperature_c.toFixed(1)} °C`;
-      }
-      const bitrate = document.getElementById("bitrate");
-      if (bitrate) {
-        bitrate.textContent = status.streamo.output_bitrate_kbps === null
-          ? "unknown"
-          : `${status.streamo.output_bitrate_kbps.toFixed(0)} kbps`;
-      }
-      const mixers = document.getElementById("mixers");
-      if (mixers) {
-        mixers.replaceChildren(...status.mixers.map(mixer => {
-          const row = document.createElement("p");
-          row.textContent = `${mixer.name}: ${mixerDetail(mixer)}`;
-          return row;
-        }));
-      }
-      const oscRecorders = document.getElementById("osc-recorders");
-      if (oscRecorders) {
-        oscRecorders.replaceChildren(...status.recs.osc.map(recorder => {
-          const row = document.createElement("p");
-          const detail = recorder.last_error
-            ? `${recorder.state}: ${recorder.last_error}`
-            : recorder.log_path === null
-              ? recorder.state
-              : `${recorder.state}: ${recorder.log_path} (${recorder.log_size} bytes)`;
-          row.textContent = `${recorder.name} OSC recorder: ${detail}`;
-          return row;
-        }));
-        if (!status.recs.osc.length) oscRecorders.textContent = "No OSC recorders.";
-      }
-      statusConnected();
+        updateConfiguredStatus(status);
+        updateChannels(status.recs.channels);
+        updateConfiguredLists(status);
+        updatePerformance(status);
+        statusConnected();
       })
       .catch(statusFailed);
   }
@@ -321,7 +251,7 @@
     updateStatus().then(() => setTimeout(pollStatus, 1000));
   }
 
-  if (document.getElementById("recs-errors")) {
+  if (document.querySelectorAll('[data-source="show.recs.errors"]').length) {
     requestAnimationFrame(scrollToBottom);
   }
   pollStatus();

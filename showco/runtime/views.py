@@ -3,6 +3,7 @@ from __future__ import annotations
 import html
 import json
 from collections.abc import Mapping
+from datetime import datetime
 from functools import cache
 from pathlib import Path
 
@@ -10,7 +11,6 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from . import gui_schema, models
 
-ERROR_PAGE_LIMIT = 25
 SITE_DIRECTORY = Path(__file__).parent.parent.parent / 'site'
 GUI_TEMPLATES = Environment(
     loader=FileSystemLoader(Path(__file__).parent.parent / 'templates'),
@@ -31,6 +31,13 @@ def configured_page(page_spec: gui_schema.Page, status: models.ShowStatus) -> st
         bound_value=_gui_value,
         row_data=_gui_row,
         is_enabled=_gui_enabled,
+        item_text=_gui_item_text,
+        list_row_class=_gui_list_class,
+        section_class=_gui_section_class,
+        status_text=_gui_status_text,
+        status_class=_gui_status_class,
+        service_text=_gui_service_text,
+        metric_data=_gui_metric_data,
     )
     script = site_file('channel-controls.js') + site_file('status-script.js')
     if any(
@@ -91,6 +98,87 @@ def _gui_enabled(
     return True
 
 
+def _gui_item_text(
+    element: gui_schema.Element, status: models.ShowStatus, item: object | None
+) -> str:
+    value = _gui_value(element.value, status, item)
+    if element.format == 'mixer_detail' and isinstance(value, models.MixerStatus):
+        return _mixer_detail(value)
+    if element.format == 'osc_detail' and isinstance(value, models.RecorderStatus):
+        return _osc_recorder_detail(value)
+    if element.format == 'time' and isinstance(value, datetime):
+        return value.strftime('%H:%M:%S')
+    return str(value)
+
+
+def _gui_list_class(source: str, item: object | None) -> str:
+    if source in {'show.readiness.checks', 'show.input_checks'} and isinstance(
+        item, models.ReadinessCheck | models.InputCheck
+    ):
+        return 'ok' if item.ok else 'failed'
+    return ''
+
+
+def _gui_section_class(style: str, status: models.ShowStatus) -> str:
+    if style == 'readiness':
+        return f'readiness {"healthy" if status.readiness.ready else "error"}'
+    return 'cards' if style == 'cards' else ''
+
+
+def _gui_status_text(element: gui_schema.Element, status: models.ShowStatus) -> str:
+    value = _gui_value(element.value, status, None)
+    match element.format:
+        case 'readiness':
+            return 'ready' if value else 'not ready'
+        case 'service' if isinstance(value, models.ServiceStatus):
+            return _service_detail(value.state, value.last_error)
+        case 'snapshot':
+            return str(value or 'connected')
+        case 'progress':
+            return str(value)
+        case 'lyte' if isinstance(value, models.LyteStatus):
+            return _lyte_detail(value)
+        case 'temperature':
+            return _temperature(status)
+        case 'bitrate':
+            return _bitrate(status)
+    raise ValueError(f'unsupported status format {element.format!r}')
+
+
+def _gui_status_class(format: str, status: models.ShowStatus) -> str:
+    if format == 'readiness':
+        return 'state'
+    if format == 'progress':
+        return 'ok' if status.recording_progress.ok else 'failed'
+    return ''
+
+
+def _gui_service_text(format: str, status: models.ShowStatus) -> str:
+    if format == 'recording':
+        return _recording_text(status)
+    if format == 'streaming':
+        return _streaming_text(status)
+    raise ValueError(f'unsupported service format {format!r}')
+
+
+def _gui_metric_data(name: str, status: models.ShowStatus) -> dict[str, object]:
+    if name == 'cpu':
+        percent, detail, critical = _cpu_percent(status), _cpu(status), False
+    elif name == 'memory':
+        percent, detail, critical = _memory_percent(status), _memory(status), False
+    else:
+        percent, detail = _disk_percent(status.recs), _disk(status.recs)
+        disk = status.recs.disk
+        critical = disk is not None and (
+            disk.alert_active or disk.paused_for_disk_space
+        )
+    return {
+        'percent': percent,
+        'detail': detail,
+        'state': _performance_state(percent, force_critical=critical),
+    }
+
+
 def musicians_page(
     musicians: Mapping[str, object] | models.ActionResult,
     action_log: list[models.ActionLogEntry],
@@ -140,134 +228,6 @@ def musician_form(nickname: str, musician: object | None, *, editing: bool) -> s
 
 def _musician_lines(musician: object | None, field: str) -> str:
     return '\n'.join(str(value) for value in getattr(musician, field, []))
-
-
-def health_page(status: models.ShowStatus) -> str:
-    recs = status.recs.service
-    streamo = status.streamo.service
-    progress_class = 'ok' if status.recording_progress.ok else 'failed'
-    disk_critical = status.recs.disk is not None and (
-        status.recs.disk.alert_active or status.recs.disk.paused_for_disk_space
-    )
-    performance = ''.join(
-        [
-            _performance_row('cpu', 'CPU', _cpu_percent(status), _cpu(status)),
-            _performance_row(
-                'memory', 'Memory', _memory_percent(status), _memory(status)
-            ),
-            _performance_row(
-                'disk',
-                'Recording disk',
-                _disk_percent(status.recs),
-                _disk(status.recs),
-                force_critical=disk_critical,
-            ),
-        ]
-    )
-    return page(
-        'health',
-        f"""
-        {readiness_section(status.readiness)}
-        <section class="cards">
-          {service_card('recording', 'Recording', recs.state, _recording_text(status))}
-          {
-            service_card(
-                'streaming', 'Streaming', streamo.state, _streaming_text(status)
-            )
-        }
-        </section>
-        <section>
-          <h2>Performance</h2>
-          <div class="performance">
-            {performance}
-          </div>
-        </section>
-        <section>
-          <h2>Health</h2>
-          <p id="recs-health">recs: {_service_detail(recs.state, recs.last_error)}</p>
-          <p id="recs-snapshot">recs snapshot: {_snapshot_detail(status.recs)}</p>
-          <p id="recording-progress" class="{progress_class}">
-            recording progress: {html.escape(status.recording_progress.message)}
-          </p>
-          <p id="streamo-health">
-            streamo: {_service_detail(streamo.state, streamo.last_error)}
-          </p>
-          <p id="lyte-health">lyte: {html.escape(_lyte_detail(status.lyte))}</p>
-          <p>Pi temperature: <span id="temperature">{_temperature(status)}</span></p>
-          <p>Stream bitrate: <span id="bitrate">{_bitrate(status)}</span></p>
-          <div id="mixers">{_mixers(status)}</div>
-          <div id="osc-recorders">{_osc_recorders(status.recs.osc)}</div>
-        </section>
-        <section>
-          <h2>Recording inputs</h2>
-          <p>Signal checks for channels currently recording, including clipping.</p>
-          <div id="input-checks">{input_checks(status.input_checks)}</div>
-        </section>
-        <section>
-          <h2>recs errors</h2>
-          <div id="recs-errors" data-limit="{ERROR_PAGE_LIMIT}">
-            {_recs_errors(status.recs.errors[-ERROR_PAGE_LIMIT:])}
-          </div>
-        </section>
-        <section>
-          <h2>Observed incidents</h2>
-          <p>The target samples in the background, even without a browser.
-          History retains the latest 100 events across restarts.
-          Transitions between samples may be missed.</p>
-          <div id="incidents">{incident_list(status.incidents)}</div>
-        </section>
-        """,
-        script=site_file('channel-controls.js') + site_file('status-script.js'),
-    )
-
-
-def readiness_section(status: models.ReadinessStatus) -> str:
-    state = 'ready' if status.ready else 'not ready'
-    css_class = 'healthy' if status.ready else 'error'
-    return f"""
-        <section class="readiness {css_class}">
-          <h2>Service readiness</h2>
-          <p>Checks service connections and recording flags.
-          Confirm recorded-audio progress below;
-          silence filtering may legitimately pause file growth.</p>
-          <p class="state" id="readiness-state">{state}</p>
-          <ul id="readiness-checks">
-            {''.join(readiness_check(check) for check in status.checks)}
-          </ul>
-        </section>
-    """
-
-
-def readiness_check(check: models.ReadinessCheck) -> str:
-    state = 'ok' if check.ok else 'failed'
-    return (
-        f'<li class="{state}"><b>{html.escape(check.name)}</b>: '
-        f'{html.escape(check.message)}</li>'
-    )
-
-
-def incident_list(incidents: list[models.Incident]) -> str:
-    if not incidents:
-        return '<p>No incidents.</p>'
-    return '<ul>' + ''.join(incident(value) for value in incidents) + '</ul>'
-
-
-def incident(value: models.Incident) -> str:
-    return (
-        f'<li><time>{value.timestamp.strftime("%H:%M:%S")}</time> '
-        f'{html.escape(value.message)}</li>'
-    )
-
-
-def input_checks(checks: list[models.InputCheck]) -> str:
-    if not checks:
-        return '<p>No recording inputs.</p>'
-    return '<ul>' + ''.join(input_check_item(check) for check in checks) + '</ul>'
-
-
-def input_check_item(check: models.InputCheck) -> str:
-    state = 'ok' if check.ok else 'failed'
-    return f'<li class="{state}"><b>{html.escape(check.name)}</b>: {check.message}</li>'
 
 
 def attributes_page(
@@ -520,16 +480,6 @@ def page(page_id: str, body: str, *, script: str = '') -> str:
 </html>"""
 
 
-def service_card(identifier: str, title: str, state: str, detail: str) -> str:
-    return f"""
-    <article class="card {html.escape(state)}" id="{html.escape(identifier)}-card">
-      <h2>{html.escape(title)}</h2>
-      <div class="state" id="{html.escape(identifier)}-state">{html.escape(state)}</div>
-      <p id="{html.escape(identifier)}-detail">{html.escape(detail)}</p>
-    </article>
-    """
-
-
 def _stereo_enabled(
     channel: models.ChannelLevel, channels: list[models.ChannelLevel]
 ) -> bool:
@@ -709,33 +659,10 @@ def _service_detail(state: str, error: str | None) -> str:
     return f'{state}: {error}' if error else state
 
 
-def _snapshot_detail(status: models.RecsStatus) -> str:
-    return status.snapshot_error or 'connected'
-
-
 def _temperature(status: models.ShowStatus) -> str:
     if status.system.temperature_c is not None:
         return f'{status.system.temperature_c:.1f} °C'
     return status.system.temperature_error or 'unknown'
-
-
-def _performance_row(
-    identifier: str,
-    label: str,
-    percent: float | None,
-    detail: str,
-    *,
-    force_critical: bool = False,
-) -> str:
-    state = _performance_state(percent, force_critical=force_critical)
-    value = f' value="{percent:.2f}"' if percent is not None else ''
-    return f"""
-      <div class="performance-row {state}" id="{identifier}-performance">
-        <b>{html.escape(label)}</b>
-        <meter id="{identifier}-meter" min="0" max="100"{value}></meter>
-        <span id="{identifier}-value">{html.escape(detail)}</span>
-      </div>
-    """
 
 
 def _performance_state(percent: float | None, *, force_critical: bool = False) -> str:
@@ -866,15 +793,6 @@ def _lyte_string_detail(status: models.LyteStringStatus) -> str:
     return ' '.join(details)
 
 
-def _mixers(status: models.ShowStatus) -> str:
-    if not status.mixers:
-        return '<p>No mixers configured.</p>'
-    return ''.join(
-        f'<p>{html.escape(mixer.name)}: {html.escape(_mixer_detail(mixer))}</p>'
-        for mixer in status.mixers
-    )
-
-
 def _mixer_detail(mixer: models.MixerStatus) -> str:
     if mixer.error:
         return f'{mixer.state}: {mixer.error}'
@@ -889,33 +807,12 @@ def _mixer_detail(mixer: models.MixerStatus) -> str:
     return detail
 
 
-def _osc_recorders(statuses: list[models.RecorderStatus]) -> str:
-    if not statuses:
-        return '<p>No OSC recorders.</p>'
-    return ''.join(
-        f'<p>{html.escape(status.name)} OSC recorder: '
-        f'{html.escape(_osc_recorder_detail(status))}</p>'
-        for status in statuses
-    )
-
-
 def _osc_recorder_detail(status: models.RecorderStatus) -> str:
     if status.last_error:
         return f'{status.state}: {status.last_error}'
     if status.log_path and status.log_size is not None:
         return f'{status.state}: {status.log_path} ({status.log_size} bytes)'
     return status.state
-
-
-def _recs_errors(errors: list[models.ErrorRecord]) -> str:
-    if not errors:
-        return '<p>No errors</p>'
-    items = ''.join(
-        f'<li><time class="error-time">{html.escape(e.timestamp)}</time>'
-        f'<span>{html.escape(e.message)}</span></li>'
-        for e in errors
-    )
-    return f'<ul>{items}</ul>'
 
 
 def _duration(seconds: float | None) -> str:

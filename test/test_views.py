@@ -6,11 +6,9 @@ from pathlib import Path
 
 from showco.runtime import gui_schema, models
 from showco.runtime.views import (
-    ERROR_PAGE_LIMIT,
     actions_page,
     attributes_page,
     configured_page,
-    health_page,
     playback_page,
 )
 
@@ -30,6 +28,10 @@ def errors_page(errors: list[models.ErrorRecord]) -> str:
         ),
     )
     return configured_page(gui_schema.current_gui().page('errors'), status)
+
+
+def health_page(status: models.ShowStatus) -> str:
+    return configured_page(gui_schema.current_gui().page('health'), status)
 
 
 class ViewsTests(unittest.TestCase):
@@ -207,7 +209,8 @@ class ViewsTests(unittest.TestCase):
 
         self.assertIn('Service readiness', html)
         self.assertIn('id="readiness-state">not ready', html)
-        self.assertIn('recs</b>: offline', html)
+        self.assertIn('>recs</b>: <span', html)
+        self.assertIn('>offline</span>', html)
 
     def test_health_page_shows_incidents(self) -> None:
         html = health_page(
@@ -282,7 +285,8 @@ class ViewsTests(unittest.TestCase):
 
         self.assertIn('Stream bitrate', html)
         self.assertIn('312 kbps', html)
-        self.assertIn('X18: connected: 4.2 ms', html)
+        self.assertIn('>X18</span>: <span', html)
+        self.assertIn('>connected: 4.2 ms</span>', html)
         self.assertIn('4.2 ms', html)
 
     def test_health_page_shows_named_osc_recorders(self) -> None:
@@ -310,8 +314,10 @@ class ViewsTests(unittest.TestCase):
             )
         )
 
-        self.assertIn('X18 OSC recorder: running: X18.jsonl (12 bytes)', html)
-        self.assertIn('Flow 8 OSC recorder: error: unreachable', html)
+        self.assertIn('>X18</span> OSC recorder: <span', html)
+        self.assertIn('>running: X18.jsonl (12 bytes)</span>', html)
+        self.assertIn('>Flow 8</span> OSC recorder: <span', html)
+        self.assertIn('>error: unreachable</span>', html)
 
     def test_health_page_shows_named_mixer_input_progress(self) -> None:
         html = health_page(
@@ -333,10 +339,12 @@ class ViewsTests(unittest.TestCase):
             )
         )
 
-        self.assertIn('Flow 8: waiting for USB audio and MIDI', html)
+        self.assertIn('>Flow 8</span>: <span', html)
+        self.assertIn('>waiting for USB audio and MIDI</span>', html)
         self.assertIn('function mixerDetail', html)
 
     def test_errors_page_shows_recs_errors_without_controls(self) -> None:
+        limit = gui_schema.current_gui().page('errors').sections[0].elements[0].limit
         html = errors_page(
             [
                 models.ErrorRecord(
@@ -347,7 +355,7 @@ class ViewsTests(unittest.TestCase):
         )
 
         self.assertIn('disk almost full', html)
-        self.assertIn(f'data-limit="{ERROR_PAGE_LIMIT}"', html)
+        self.assertIn(f'data-limit="{limit}"', html)
         self.assertNotIn('Show all errors', html)
         self.assertNotIn('type="checkbox" role="switch"', html)
 
@@ -357,17 +365,18 @@ class ViewsTests(unittest.TestCase):
         self.assertIn('No errors', html)
 
     def test_errors_page_limits_previous_errors(self) -> None:
+        limit = gui_schema.current_gui().page('errors').sections[0].elements[0].limit
         html = errors_page(
             [
                 models.ErrorRecord(
                     timestamp=f'2026-08-13T12:34:{i:02}Z', message=str(i)
                 )
-                for i in range(ERROR_PAGE_LIMIT + 1)
+                for i in range(limit + 1)
             ]
         )
 
         self.assertNotIn('>0</span>', html)
-        self.assertIn(f'>{ERROR_PAGE_LIMIT}</span>', html)
+        self.assertIn(f'>{limit}</span>', html)
 
     def test_channels_page_has_track_name_editor_for_recs_channels(self) -> None:
         html = channels_page(
