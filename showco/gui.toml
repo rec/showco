@@ -61,6 +61,39 @@ label = "Revert"
 operation = "revert_track_names"
 
 [[pages]]
+name = "track-names"
+title = "Track names"
+
+[[pages.sections]]
+name = "names"
+title = "Edit track names"
+
+[[pages.sections.elements]]
+name = "tracks"
+kind = "repeat"
+source = "show.recs.channels"
+empty_text = "No channel data from recs."
+
+[[pages.sections.elements.children]]
+name = "track_name"
+kind = "text_field"
+label = "Track name"
+value = "item.name"
+action = "recs-track-name"
+
+[[pages.sections.elements]]
+name = "save_names"
+kind = "button"
+label = "Save"
+operation = "save_track_names"
+
+[[pages.sections.elements]]
+name = "revert_names"
+kind = "button"
+label = "Revert"
+operation = "revert_track_names"
+
+[[pages]]
 name = "musicians"
 
 [[pages]]

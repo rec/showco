@@ -2,18 +2,73 @@ from __future__ import annotations
 
 import json
 import socket
+import tempfile
 import threading
 import unittest
 from collections.abc import Iterator
 from contextlib import contextmanager
 from http.server import ThreadingHTTPServer
+from pathlib import Path
 from urllib import parse, request
 
+from showco.runtime import gui_schema
 from showco.runtime.rehearsal import RehearsalRecsClient, RehearsalStreamoClient
 from showco.runtime.server import make_server
 
 
 class SmokeTests(unittest.TestCase):
+    def test_toml_alone_adds_an_edit_page(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'gui.toml'
+            path.write_text(
+                gui_schema.DEFAULT_GUI_PATH.read_text()
+                + """
+[[pages]]
+name = "edit-list"
+title = "Edit list"
+
+[[pages.sections]]
+name = "names"
+title = "Musician track labels"
+
+[[pages.sections.elements]]
+name = "tracks"
+kind = "repeat"
+source = "show.recs.channels"
+empty_text = "No tracks available."
+
+[[pages.sections.elements.children]]
+name = "track_name"
+kind = "text_field"
+label = "Track label"
+value = "item.name"
+action = "recs-track-name"
+
+[[pages.sections.elements]]
+name = "save_names"
+kind = "button"
+label = "Store labels"
+operation = "save_track_names"
+"""
+            )
+            try:
+                gui_schema.configure_gui(path)
+                with running_rehearsal_server(
+                    RehearsalRecsClient(), RehearsalStreamoClient()
+                ) as url:
+                    html = read_url(f'{url}/edit-list')
+            finally:
+                gui_schema.configure_gui(gui_schema.DEFAULT_GUI_PATH)
+
+        self.assertIn('href="/edit-list"', html)
+        self.assertIn('Musician track labels', html)
+        self.assertIn('id="tracks"', html)
+        self.assertIn('data-template="tracks-template"', html)
+        self.assertIn('aria-label="Track label"', html)
+        self.assertIn('>Store labels</button>', html)
+        self.assertNotIn('class="calibrate-channel"', html)
+        self.assertNotIn('new EventSource("/waveforms")', html)
+
     def test_rehearsal_server_serves_status_pages_and_accepts_actions(self) -> None:
         recs = RehearsalRecsClient()
         streamo = RehearsalStreamoClient()

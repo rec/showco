@@ -11,9 +11,10 @@ def test_default_gui_declares_all_navigation_pages() -> None:
     document = gui_schema.load_gui(gui_schema.DEFAULT_GUI_PATH)
 
     assert document.page_at('/performance').title == 'Performance'
-    assert document.page('channels').renderer == 'channels'
+    assert document.page('channels').renderer == ''
     assert [page.name for page in document.pages] == [
         'channels',
+        'track-names',
         'musicians',
         'performance',
         'setlist',
@@ -66,9 +67,9 @@ operation = "save_track_names"
 
 """
     assert calibrate in original and save in original
-    updated = original.replace(calibrate, '').replace(save, '')
+    updated = original.replace(calibrate, '').replace(save, '', 1)
     updated = updated.replace(
-        '[[pages]]\nname = "musicians"',
+        '[[pages]]\nname = "track-names"',
         '''[[pages.sections]]
 name = "tools"
 title = "Track tools"
@@ -80,7 +81,7 @@ label = "Store track names"
 operation = "save_track_names"
 
 [[pages]]
-name = "musicians"''',
+name = "track-names"''',
     )
     path = tmp_path / 'gui.toml'
     path.write_text(updated)
@@ -95,7 +96,7 @@ name = "musicians"''',
     )
     try:
         gui_schema.configure_gui(path)
-        html = views.channels_page(status)
+        html = views.configured_page(gui_schema.current_gui().page('channels'), status)
     finally:
         gui_schema.configure_gui(gui_schema.DEFAULT_GUI_PATH)
 

@@ -1,0 +1,46 @@
+{% macro repeated_item(element, item, items) %}
+{% set row = row_data(element.source, item) %}
+<div class="{{ row.class_name }}"{% for key, value in row.attributes.items() %} data-{{ key }}="{{ value }}"{% endfor %}>
+  {% for child in element.children %}
+    {% if child.kind == 'indicator' %}
+      {% set active = bound_value(child.value, status, item) %}
+      <span class="channel-state {{ 'indicator-red' if active else 'indicator-green' }}" data-element="{{ child.name }}" data-label="{{ child.label }}"
+            aria-label="{{ 'recording' if active else 'not recording' }}"
+            title="{{ child.label }}: {{ 'recording' if active else 'not recording' }}">•</span>
+    {% elif child.kind == 'text_field' %}
+      {% set text = bound_value(child.value, status, item) %}
+      <label data-element="{{ child.name }}"><span class="channel-caption"><b>{{ text }}</b></span>
+        <input name="{{ child.name }}" value="{{ text }}" aria-label="{{ child.label }}" data-action="{{ child.action }}">
+      </label>
+    {% elif child.kind == 'checkbox' %}
+      {% set selected = bound_value(child.value, status, item) | length == 2 %}
+      <label class="stereo" data-element="{{ child.name }}"><input type="checkbox" data-action="{{ child.action }}"{% if selected %} checked{% elif item and not is_enabled(child.enabled_when, item, items) %} disabled{% endif %}>{{ child.label }}</label>
+    {% elif child.kind == 'waveform' %}
+      <canvas class="waveform" aria-label="{{ child.label }}" data-element="{{ child.name }}"></canvas>
+    {% elif child.kind == 'button' %}
+      <button class="calibrate-channel" type="button" data-action="{{ child.action }}" data-element="{{ child.name }}">{{ child.label }}</button>
+    {% endif %}
+  {% endfor %}
+</div>
+{% endmacro %}
+
+{% for section in sections %}
+<section data-section="{{ section.name }}">
+  <h2>{{ section.title }}</h2>
+  {% for element in section.elements %}
+    {% if element.kind == 'repeat' %}
+      {% set items = bound_value(element.source, status, none) %}
+      <div class="levels" id="{{ element.name }}" data-source="{{ element.source }}" data-empty-text="{{ element.empty_text }}" data-template="{{ element.name }}-template">
+      {% if items %}
+        {% for item in items %}{{ repeated_item(element, item, items) }}{% endfor %}
+      {% else %}<p>{{ element.empty_text }}</p>{% endif %}
+      </div>
+      <template id="{{ element.name }}-template">{{ repeated_item(element, none, items) }}</template>
+    {% elif element.kind == 'button' %}
+      {% if loop.first or loop.previtem.kind != 'button' %}<div class="channel-actions">{% endif %}
+      <button type="button" data-operation="{{ element.operation }}" data-element="{{ element.name }}" id="{{ 'save-track-names' if element.operation == 'save_track_names' else 'revert-track-names' }}">{{ element.label }}</button>
+      {% if loop.last or loop.nextitem.kind != 'button' %}</div>{% endif %}
+    {% endif %}
+  {% endfor %}
+</section>
+{% endfor %}
