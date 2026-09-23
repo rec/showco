@@ -74,7 +74,15 @@ def configured_page(
         for section in page_spec.sections
         for element in _all_elements(section.elements)
     ):
-        script += site_file('workflow.js')
+        script += (
+            site_file('lighting.js')
+            if any(
+                element.action.startswith('lighting-')
+                for section in page_spec.sections
+                for element in _all_elements(section.elements)
+            )
+            else site_file('workflow.js')
+        )
     return page(
         page_spec.name,
         body,
@@ -375,7 +383,7 @@ def workflow_page(name: str) -> str:
     return page(
         name,
         site_file(f'{name}.html'),
-        script=site_file('lighting.js' if name == 'lighting' else 'workflow.js'),
+        script=site_file('workflow.js'),
     )
 
 

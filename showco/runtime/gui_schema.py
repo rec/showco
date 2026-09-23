@@ -150,13 +150,21 @@ class Element(BaseModel, frozen=True):
             if not self.empty_text:
                 raise ValueError(f'{self.name}: action history needs empty_text')
         elif self.kind == 'workflow_button':
-            if self.action not in SETLIST_ACTIONS:
+            if self.action not in WORKFLOW_ACTIONS:
                 raise ValueError(f'{self.name}: unsupported workflow action')
         elif self.kind == 'workflow_checkbox':
-            if self.name != 'confirm-cue-resolution':
+            if self.name not in {'confirm-cue-resolution', 'confirm-lighting'}:
                 raise ValueError(f'{self.name}: unsupported workflow checkbox')
         elif self.kind == 'workflow_editor':
-            if self.name not in {'setlist-editor', 'add-song', 'reload-setlist'}:
+            if self.name not in {
+                'setlist-editor',
+                'add-song',
+                'reload-setlist',
+                'lighting-editor',
+                'lighting-looks',
+                'add-lighting',
+                'reload-lighting',
+            }:
                 raise ValueError(f'{self.name}: unsupported workflow editor')
         elif self.kind == 'workflow_display':
             if self.name not in {
@@ -166,10 +174,17 @@ class Element(BaseModel, frozen=True):
                 'cue-message',
                 'cue-resolution',
                 'cue-resolution-help',
+                'lighting-position',
+                'lighting-live',
+                'lighting-message',
+                'lighting-resolution',
+                'lighting-pending',
+                'lighting-resolution-help',
+                'lighting-help',
             }:
                 raise ValueError(f'{self.name}: unsupported workflow display')
         elif self.kind == 'workflow_status':
-            if self.name != 'workflow-result':
+            if self.name not in {'workflow-result', 'lighting-result'}:
                 raise ValueError(f'{self.name}: unsupported workflow status')
         elif self.kind == 'details':
             if not self.label or not self.children:
@@ -361,6 +376,7 @@ class Gui(BaseModel, frozen=True):
                                 'workflow_button',
                                 'workflow_checkbox',
                                 'workflow_display',
+                                'workflow_editor',
                             }
                             for child in element.children
                         ):
@@ -551,7 +567,7 @@ FORM_FIELDS = MUSICIAN_FIELDS | {
     'description',
 }
 FEATURE_GATES = {'streamo_enabled', 'lyte_enabled', 'music_enabled'}
-SETLIST_ACTIONS = {
+WORKFLOW_ACTIONS = {
     'setlist-save',
     'setlist-next',
     'setlist-skip',
@@ -559,4 +575,10 @@ SETLIST_ACTIONS = {
     'setlist-interval',
     'setlist-accept',
     'setlist-retry',
+    'lighting-back',
+    'lighting-go',
+    'lighting-accept',
+    'lighting-cancel',
+    'lighting-retry',
+    'lighting-save',
 }

@@ -4,7 +4,7 @@ from unittest import mock
 
 import pytest
 
-from showco.runtime import lighting, models, rehearsal, views, workflows
+from showco.runtime import gui_schema, lighting, models, rehearsal, views, workflows
 from showco.runtime.lyte import LyteClient
 from showco.runtime.server import ShowcoApp
 
@@ -179,7 +179,17 @@ def test_live_state_distinguishes_queued_and_overridden_looks() -> None:
 
 
 def test_lighting_page_has_manual_controls_and_editor() -> None:
-    page = views.workflow_page('lighting')
+    page = views.configured_page(
+        gui_schema.current_gui().page('lighting'),
+        models.ShowStatus(
+            recs=models.RecsStatus(
+                service=models.ServiceStatus(name='recs', state='connected')
+            ),
+            streamo=models.StreamoStatus(
+                service=models.ServiceStatus(name='streamo', state='disabled')
+            ),
+        ),
+    )
     assert 'data-lighting-action="lighting-go"' in page
     assert 'data-lighting-action="lighting-back"' in page
     assert 'id="lighting-editor"' in page

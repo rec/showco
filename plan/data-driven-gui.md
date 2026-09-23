@@ -174,7 +174,7 @@ prove the migration.
    transport behaviour these pages need. Preserve hidden musician data on
    edits, explicit shutdown confirmation, cable-test duration, and feature
    gates for lyte, streamO, and music.
-4. **Convert stateful workflows:** Set list is done. Convert Performance, Lighting cues,
+4. **Convert stateful workflows:** Set list and Lighting cues are done. Convert Performance,
    Soundcheck, and Recovery. Express their controls and sections in TOML.
    Browser adapters may implement ordered editing, pin preferences, and
    confirmation flow, while the existing server controls revisions, pending

@@ -308,6 +308,28 @@ def test_setlist_file_controls_workflow_labels(tmp_path: Path) -> None:
     assert 'Start next song</button>' not in html
 
 
+def test_lighting_file_controls_workflow_labels(tmp_path: Path) -> None:
+    path = tmp_path / 'gui.toml'
+    path.write_text(
+        gui_schema.DEFAULT_GUI_PATH.read_text().replace(
+            'label = "Retry selection"', 'label = "Select again"'
+        )
+    )
+    status = models.ShowStatus(
+        recs=models.RecsStatus(
+            service=models.ServiceStatus(name='recs', state='connected')
+        ),
+        streamo=models.StreamoStatus(
+            service=models.ServiceStatus(name='streamo', state='disabled')
+        ),
+    )
+
+    html = views.configured_page(gui_schema.load_gui(path).page('lighting'), status)
+
+    assert 'Select again</button>' in html
+    assert 'Retry selection</button>' not in html
+
+
 @pytest.mark.parametrize(
     'old,new',
     [
