@@ -395,6 +395,16 @@ class ShowcoHandler(BaseHTTPRequestHandler):
                         if page.uses_source('show.actions')
                         else None
                     ),
+                    features={
+                        feature
+                        for feature, enabled in {
+                            'streamo_enabled': self.app.streamo is not None,
+                            'lyte_enabled': self.app.lyte is not None
+                            and self.app.lyte.enabled,
+                            'music_enabled': self.app.music is not None,
+                        }.items()
+                        if enabled
+                    },
                 )
             )
             return
@@ -403,20 +413,6 @@ class ShowcoHandler(BaseHTTPRequestHandler):
                 self._html(views.performance_page())
             case 'workflow':
                 self._html(views.workflow_page(page.name))
-            case 'actions':
-                self._html(
-                    views.actions_page(
-                        self.app.recent_actions(),
-                        music=(
-                            self.app.music.status()
-                            if self.app.music is not None
-                            else None
-                        ),
-                        streamo_enabled=self.app.streamo is not None,
-                        lyte_enabled=self.app.lyte is not None
-                        and self.app.lyte.enabled,
-                    )
-                )
             case _:
                 self.send_error(500, f'GUI page {page.name} has unknown renderer')
 
