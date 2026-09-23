@@ -50,13 +50,13 @@
 
 {% macro workflow_element(element) %}
 {% if element.kind == 'workflow_editor' %}
-  {% if element.name == 'setlist-editor' %}<div id="{{ element.name }}"></div>{% else %}<button type="button" id="{{ element.name }}" disabled>{{ element.label }}</button>{% endif %}
+  {% if element.name in ['setlist-editor', 'lighting-editor'] %}<div id="{{ element.name }}"></div>{% elif element.name == 'lighting-looks' %}<datalist id="{{ element.name }}"></datalist>{% else %}<button type="button" id="{{ element.name }}" disabled>{{ element.label }}</button>{% endif %}
 {% elif element.kind == 'workflow_button' %}
-  <button type="button" data-workflow-action="{{ element.action }}" disabled>{{ element.label }}</button>
+  <button type="button"{% if element.action.startswith('lighting-') %} data-lighting-action="{{ element.action }}"{% else %} data-workflow-action="{{ element.action }}"{% endif %} disabled>{{ element.label }}</button>
 {% elif element.kind == 'workflow_status' %}
   <p id="{{ element.name }}" role="status"></p>
 {% elif element.kind == 'workflow_display' %}
-  {% if element.name == 'cue-position' %}<div id="{{ element.name }}" aria-live="polite">{{ element.label }}</div>{% elif element.name == 'cue-resolution' %}<div id="{{ element.name }}" hidden>{% for child in element.children %}{{ workflow_element(child) }}{% endfor %}</div>{% else %}<p id="{{ element.name }}"{% if element.name == 'cue-message' %} role="status"{% endif %}>{{ element.label }}</p>{% endif %}
+  {% if element.name == 'cue-position' %}<div id="{{ element.name }}" aria-live="polite">{{ element.label }}</div>{% elif element.name in ['cue-resolution', 'lighting-resolution'] %}<div id="{{ element.name }}" hidden>{% for child in element.children %}{{ workflow_element(child) }}{% endfor %}</div>{% else %}<p id="{{ element.name }}"{% if element.name in ['cue-message', 'lighting-message'] %} role="status"{% endif %}>{{ element.label }}</p>{% endif %}
 {% elif element.kind == 'workflow_checkbox' %}
   <label><input type="checkbox" id="{{ element.name }}"> {{ element.label }}</label>
 {% elif element.kind == 'details' %}
