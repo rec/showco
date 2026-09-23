@@ -598,7 +598,55 @@ label = "Finish by resuming recording if required and checking Performance. A da
 
 [[pages]]
 name = "recovery"
-renderer = "workflow"
+
+[[pages.sections]]
+name = "guided"
+title = "Guided recovery"
+
+[[pages.sections.elements]]
+name = "recovery-help"
+kind = "text"
+label = "Refresh status and collect diagnostics first. No service is restarted automatically. File growth may pause during silence filtering; this alone is not a reason to restart recs."
+
+[[pages.sections.elements]]
+name = "recovery-refresh"
+kind = "workflow_button"
+label = "Refresh and verify recovery"
+action = "recovery-refresh"
+
+[[pages.sections.elements]]
+name = "diagnostics"
+kind = "link"
+label = "Download diagnostic bundle"
+value = "/diagnostics"
+download = true
+
+[[pages.sections.elements]]
+name = "diagnostics-help"
+kind = "text"
+label = "The bundle includes existing service logs and public configuration; review it before sharing."
+
+[[pages.sections.elements]]
+name = "recovery-options"
+kind = "workflow_editor"
+
+[[pages.sections.elements]]
+name = "recovery-heading"
+kind = "text"
+label = "Latest recovery"
+
+[[pages.sections.elements]]
+name = "recovery-state"
+kind = "workflow_editor"
+
+[[pages.sections.elements]]
+name = "workflow-result"
+kind = "workflow_status"
+
+[[pages.sections.elements]]
+name = "recovery-note"
+kind = "text"
+label = "Recovery does not restore missed audio. Recording, storage, and input faults with a connected recorder need inspection on Health; restart is not offered for them."
 
 [[pages]]
 name = "health"
