@@ -120,6 +120,252 @@ renderer = "workflow"
 [[pages]]
 name = "health"
 
+[[pages.sections]]
+name = "readiness"
+title = "Service readiness"
+style = "readiness"
+
+[[pages.sections.elements]]
+name = "readiness-help"
+kind = "text"
+label = "Checks service connections and recording flags. Confirm recorded-audio progress below; silence filtering may legitimately pause file growth."
+
+[[pages.sections.elements]]
+name = "readiness-state"
+kind = "status"
+value = "show.readiness.ready"
+format = "readiness"
+
+[[pages.sections.elements]]
+name = "readiness-checks"
+kind = "repeat"
+source = "show.readiness.checks"
+layout = "list"
+separator = ": "
+empty_text = "No readiness checks."
+
+[[pages.sections.elements.children]]
+name = "check-name"
+kind = "text"
+value = "item.name"
+format = "bold"
+
+[[pages.sections.elements.children]]
+name = "check-message"
+kind = "text"
+value = "item.message"
+
+[[pages.sections]]
+name = "services"
+style = "cards"
+
+[[pages.sections.elements]]
+name = "recording"
+kind = "service_card"
+label = "Recording"
+value = "show.recs.service"
+format = "recording"
+
+[[pages.sections.elements]]
+name = "streaming"
+kind = "service_card"
+label = "Streaming"
+value = "show.streamo.service"
+format = "streaming"
+
+[[pages.sections]]
+name = "performance"
+title = "Performance"
+style = "performance"
+
+[[pages.sections.elements]]
+name = "cpu"
+kind = "meter"
+label = "CPU"
+value = "cpu"
+
+[[pages.sections.elements]]
+name = "memory"
+kind = "meter"
+label = "Memory"
+value = "memory"
+
+[[pages.sections.elements]]
+name = "disk"
+kind = "meter"
+label = "Recording disk"
+value = "disk"
+
+[[pages.sections]]
+name = "status"
+title = "Health"
+
+[[pages.sections.elements]]
+name = "recs-health"
+kind = "status"
+label = "recs"
+value = "show.recs.service"
+format = "service"
+
+[[pages.sections.elements]]
+name = "recs-snapshot"
+kind = "status"
+label = "recs snapshot"
+value = "show.recs.snapshot_error"
+format = "snapshot"
+
+[[pages.sections.elements]]
+name = "recording-progress"
+kind = "status"
+label = "recording progress"
+value = "show.recording_progress.message"
+format = "progress"
+
+[[pages.sections.elements]]
+name = "streamo-health"
+kind = "status"
+label = "streamo"
+value = "show.streamo.service"
+format = "service"
+
+[[pages.sections.elements]]
+name = "lyte-health"
+kind = "status"
+label = "lyte"
+value = "show.lyte"
+format = "lyte"
+
+[[pages.sections.elements]]
+name = "temperature"
+kind = "status"
+label = "Pi temperature"
+value = "show.system"
+format = "temperature"
+
+[[pages.sections.elements]]
+name = "bitrate"
+kind = "status"
+label = "Stream bitrate"
+value = "show.streamo"
+format = "bitrate"
+
+[[pages.sections.elements]]
+name = "mixers"
+kind = "repeat"
+source = "show.mixers"
+layout = "list"
+separator = ": "
+empty_text = "No mixers configured."
+
+[[pages.sections.elements.children]]
+name = "mixer-name"
+kind = "text"
+value = "item.name"
+
+[[pages.sections.elements.children]]
+name = "mixer-detail"
+kind = "text"
+value = "item"
+format = "mixer_detail"
+
+[[pages.sections.elements]]
+name = "osc-recorders"
+kind = "repeat"
+source = "show.recs.osc"
+layout = "list"
+separator = " OSC recorder: "
+empty_text = "No OSC recorders."
+
+[[pages.sections.elements.children]]
+name = "osc-name"
+kind = "text"
+value = "item.name"
+
+[[pages.sections.elements.children]]
+name = "osc-detail"
+kind = "text"
+value = "item"
+format = "osc_detail"
+
+[[pages.sections]]
+name = "recording_inputs"
+title = "Recording inputs"
+
+[[pages.sections.elements]]
+name = "inputs-help"
+kind = "text"
+label = "Signal checks for channels currently recording, including clipping."
+
+[[pages.sections.elements]]
+name = "input-checks"
+kind = "repeat"
+source = "show.input_checks"
+layout = "list"
+separator = ": "
+empty_text = "No recording inputs."
+
+[[pages.sections.elements.children]]
+name = "input-name"
+kind = "text"
+value = "item.name"
+format = "bold"
+
+[[pages.sections.elements.children]]
+name = "input-message"
+kind = "text"
+value = "item.message"
+
+[[pages.sections]]
+name = "recs_errors"
+title = "recs errors"
+
+[[pages.sections.elements]]
+name = "recs-errors"
+kind = "repeat"
+source = "show.recs.errors"
+layout = "list"
+limit = 25
+empty_text = "No errors"
+
+[[pages.sections.elements.children]]
+name = "timestamp"
+kind = "text"
+value = "item.timestamp"
+format = "time"
+
+[[pages.sections.elements.children]]
+name = "message"
+kind = "text"
+value = "item.message"
+
+[[pages.sections]]
+name = "incidents"
+title = "Observed incidents"
+
+[[pages.sections.elements]]
+name = "incidents-help"
+kind = "text"
+label = "The target samples in the background, even without a browser. History retains the latest 100 events across restarts. Transitions between samples may be missed."
+
+[[pages.sections.elements]]
+name = "incident-list"
+kind = "repeat"
+source = "show.incidents"
+layout = "list"
+separator = " "
+empty_text = "No incidents."
+
+[[pages.sections.elements.children]]
+name = "incident-time"
+kind = "text"
+value = "item.timestamp"
+format = "time"
+
+[[pages.sections.elements.children]]
+name = "incident-message"
+kind = "text"
+value = "item.message"
+
 [[pages]]
 name = "playback"
 

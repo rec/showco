@@ -1,12 +1,6 @@
 {% macro repeated_item(element, item, items) %}
 {% if element.layout == 'list' %}
-<li>
-  {% for child in element.children %}
-    {% if child.kind == 'text' %}
-      {% if child.format == 'time' %}<time class="error-time" data-value="{{ child.value }}" data-format="time">{{ bound_value(child.value, status, item) }}</time>{% else %}<span data-value="{{ child.value }}">{{ bound_value(child.value, status, item) }}</span>{% endif %}
-    {% endif %}
-  {% endfor %}
-</li>
+<li class="{{ list_row_class(element.source, item) }}">{% for child in element.children %}{% if not loop.first %}{{ element.separator }}{% endif %}{% if child.format == 'time' %}<time class="error-time" data-value="{{ child.value }}" data-format="time">{{ item_text(child, status, item) }}</time>{% elif child.format == 'bold' %}<b data-value="{{ child.value }}">{{ item_text(child, status, item) }}</b>{% else %}<span data-value="{{ child.value }}" data-format="{{ child.format }}">{{ item_text(child, status, item) }}</span>{% endif %}{% endfor %}</li>
 {% else %}
 {% set row = row_data(element.source, item) %}
 <div class="{{ row.class_name }}"{% for key, value in row.attributes.items() %} data-{{ key }}="{{ value }}"{% endfor %}>
@@ -35,8 +29,9 @@
 {% endmacro %}
 
 {% for section in sections %}
-<section data-section="{{ section.name }}">
+<section data-section="{{ section.name }}"{% if section.style %} class="{{ section_class(section.style, status) }}"{% endif %}>
   {% if section.title %}<h2>{{ section.title }}</h2>{% endif %}
+  {% if section.style == 'performance' %}<div class="performance">{% endif %}
   {% for element in section.elements %}
     {% if element.kind == 'repeat' %}
       {% set items = bound_value(element.source, status, none) %}
@@ -53,7 +48,26 @@
       {% if loop.first or loop.previtem.kind != 'button' %}<div class="channel-actions">{% endif %}
       <button type="button" data-operation="{{ element.operation }}" data-element="{{ element.name }}" id="{{ 'save-track-names' if element.operation == 'save_track_names' else 'revert-track-names' }}">{{ element.label }}</button>
       {% if loop.last or loop.nextitem.kind != 'button' %}</div>{% endif %}
+    {% elif element.kind == 'text' %}
+      <p data-element="{{ element.name }}">{{ element.label }}</p>
+    {% elif element.kind == 'status' %}
+      <p class="{{ status_class(element.format, status) }}" data-value="{{ element.value }}" data-format="{{ element.format }}" data-label="{{ element.label }}" id="{{ element.name }}">{% if element.label %}{{ element.label }}: {% endif %}{{ status_text(element, status) }}</p>
+    {% elif element.kind == 'service_card' %}
+      {% set service = bound_value(element.value, status, none) %}
+      <article class="card {{ service.state }}" data-service="{{ element.value }}" data-format="{{ element.format }}" id="{{ element.name }}-card">
+        <h2>{{ element.label }}</h2>
+        <div class="state" id="{{ element.name }}-state">{{ service.state }}</div>
+        <p class="service-detail" id="{{ element.name }}-detail">{{ service_text(element.format, status) }}</p>
+      </article>
+    {% elif element.kind == 'meter' %}
+      {% set metric = metric_data(element.value, status) %}
+      <div class="performance-row {{ metric.state }}" data-meter="{{ element.value }}" id="{{ element.name }}-performance">
+        <b>{{ element.label }}</b>
+        <meter id="{{ element.name }}-meter" min="0" max="100"{% if metric.percent is not none %} value="{{ '%.2f' | format(metric.percent) }}"{% endif %}></meter>
+        <span id="{{ element.name }}-value">{{ metric.detail }}</span>
+      </div>
     {% endif %}
   {% endfor %}
+  {% if section.style == 'performance' %}</div>{% endif %}
 </section>
 {% endfor %}

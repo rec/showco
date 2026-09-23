@@ -8,13 +8,15 @@ links, visibility, and enabled state. Selecting another complete file must
 produce a different useful display for a show or application without editing
 Python or JavaScript.
 
-The Channels and Track names pages read their sections, control order, labels,
-and actions from `showco/gui.toml` and render through one shared Jinja template.
-A third edit page can be added to a selected TOML file without adding a route,
-Python renderer, template, or JavaScript page file. The remaining page bodies
-still come from `showco/runtime/views.py` and `site/*.html`. Supported data
-sources and actions are currently limited to the registered recs channel
-operations. **The current implementation does not yet meet the overall goal.**
+The Channels, Track names, Errors, and Health pages read their sections,
+content, order, and labels from `showco/gui.toml` and render through one shared
+Jinja template. A third edit page can be added to a selected TOML file without
+adding a route, Python renderer, template, or JavaScript page file. Errors and
+Health also refresh their declared values and repeated rows from live status.
+The remaining page bodies still come from `showco/runtime/views.py` and
+`site/*.html`. Supported actions are currently limited to the registered recs
+channel operations. **The current implementation does not yet meet the overall
+goal.**
 
 The finished file must account for every item in
 [all-gui-elements.md](all-gui-elements.md). Python owns service connections,
@@ -163,7 +165,7 @@ prove the migration.
    Jinja element template, with no page-specific renderer. Add a third edit
    page by changing only TOML and verify it through HTTP. Keep existing recs
    action validation and the browser's unsaved-edit behaviour.
-2. **Convert read-only pages:** Errors, then Health. Define status formatters
+2. **Convert read-only pages (done):** Errors, then Health. Define status formatters
    and repeated rows for readiness checks, service cards, meters, inputs,
    errors, mixers, OSC recorders, and incidents. Verify that changing labels,
    order, visibility, and empty text in TOML changes the page.

@@ -7,10 +7,24 @@ const elements = new Map([
   'streamo-health', 'bitrate', 'temperature', 'readiness-state',
   'readiness-checks', 'incidents', 'input-checks', 'osc-recorders', 'connection-status', 'lyte-health',
 ].map(id => [id, {textContent: '', replaceChildren() {}}]));
+for (const [id, value, format, label] of [
+  ['streamo-health', 'show.streamo.service', 'service', 'streamo'],
+  ['bitrate', 'show.streamo', 'bitrate', 'Stream bitrate'],
+  ['temperature', 'show.system', 'temperature', 'Pi temperature'],
+  ['readiness-state', 'show.readiness.ready', 'readiness', ''],
+  ['lyte-health', 'show.lyte', 'lyte', 'lyte'],
+]) {
+  elements.get(id).dataset = {value, format, label};
+}
+const osc = elements.get('osc-recorders');
+osc.dataset = {source: 'show.recs.osc', layout: 'list', limit: '0', emptyText: 'No OSC recorders.'};
+osc.replaceChildren = (...children) => {osc.textContent = children.map(item => item.textContent).join('');};
 const context = vm.createContext({
   document: {
     getElementById: id => elements.get(id) || null,
-    querySelectorAll: () => [],
+    querySelectorAll: selector => selector === 'p[data-value]'
+      ? [...elements.values()].filter(element => element.dataset?.value)
+      : selector === '[data-layout="list"]' ? [osc] : [],
     createElement: () => ({append() {}}),
   },
   fetch: async () => ({ok: true, json: async () => status}),
@@ -25,12 +39,33 @@ vm.runInContext('updateStatus()', context).then(async () => {
   assert.equal(elements.get('streamo-health').textContent,
     `streamo: ${status.streamo.service.state}`);
   assert.equal(elements.get('bitrate').textContent,
-    status.streamo.output_bitrate_kbps === null ? 'unknown' : '128 kbps');
-  assert.equal(elements.get('temperature').textContent, '42.0 °C');
+    status.streamo.output_bitrate_kbps === null ? 'Stream bitrate: unknown' : 'Stream bitrate: 128 kbps');
+  assert.equal(elements.get('temperature').textContent, 'Pi temperature: 42.0 °C');
   assert.equal(elements.get('readiness-state').textContent, 'not ready');
   assert.equal(elements.get('osc-recorders').textContent, 'No OSC recorders.');
   assert.match(elements.get('connection-status').textContent, /^Connected/);
   assert.ok(!elements.get('lyte-health').textContent.includes('undefined'));
+
+  const fields = [
+    {dataset: {value: 'item.name', format: 'bold'}, textContent: ''},
+    {dataset: {value: 'item.message', format: ''}, textContent: ''},
+  ];
+  const row = {className: '', querySelectorAll: () => fields};
+  const checks = {
+    dataset: {source: 'show.input_checks', limit: '0', template: 'checks-template'},
+    replaceChildren(child) {this.child = child;},
+  };
+  context.document.querySelectorAll = selector => selector === '[data-layout="list"]' ? [checks] : [];
+  context.document.getElementById = id => id === 'checks-template'
+    ? {content: {firstElementChild: {cloneNode: () => row}}}
+    : elements.get(id) || null;
+  context.document.createElement = () => ({append(child) {this.child = child;}});
+  context.checkStatus = {input_checks: [{name: 'X18 input 1', message: 'clipping', ok: false}]};
+  vm.runInContext('updateConfiguredLists(checkStatus)', context);
+  assert.equal(checks.child.child, row);
+  assert.equal(row.className, 'failed');
+  assert.deepEqual(fields.map(field => field.textContent), ['X18 input 1', 'clipping']);
+
   context.fetch = async () => {throw new Error('offline');};
   await vm.runInContext('updateStatus()', context);
   assert.match(elements.get('connection-status').textContent, /offline/);
