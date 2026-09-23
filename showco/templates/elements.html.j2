@@ -1,4 +1,13 @@
 {% macro repeated_item(element, item, items) %}
+{% if element.layout == 'list' %}
+<li>
+  {% for child in element.children %}
+    {% if child.kind == 'text' %}
+      {% if child.format == 'time' %}<time class="error-time" data-value="{{ child.value }}" data-format="time">{{ bound_value(child.value, status, item) }}</time>{% else %}<span data-value="{{ child.value }}">{{ bound_value(child.value, status, item) }}</span>{% endif %}
+    {% endif %}
+  {% endfor %}
+</li>
+{% else %}
 {% set row = row_data(element.source, item) %}
 <div class="{{ row.class_name }}"{% for key, value in row.attributes.items() %} data-{{ key }}="{{ value }}"{% endfor %}>
   {% for child in element.children %}
@@ -22,17 +31,21 @@
     {% endif %}
   {% endfor %}
 </div>
+{% endif %}
 {% endmacro %}
 
 {% for section in sections %}
 <section data-section="{{ section.name }}">
-  <h2>{{ section.title }}</h2>
+  {% if section.title %}<h2>{{ section.title }}</h2>{% endif %}
   {% for element in section.elements %}
     {% if element.kind == 'repeat' %}
       {% set items = bound_value(element.source, status, none) %}
-      <div class="levels" id="{{ element.name }}" data-source="{{ element.source }}" data-empty-text="{{ element.empty_text }}" data-template="{{ element.name }}-template">
-      {% if items %}
-        {% for item in items %}{{ repeated_item(element, item, items) }}{% endfor %}
+      {% set visible = items[-element.limit:] if element.limit else items %}
+      <div{% if element.layout == 'cards' %} class="levels"{% endif %} id="{{ element.name }}" data-source="{{ element.source }}" data-layout="{{ element.layout }}" data-limit="{{ element.limit }}" data-empty-text="{{ element.empty_text }}" data-template="{{ element.name }}-template">
+      {% if visible %}
+        {% if element.layout == 'list' %}<ul>{% endif %}
+        {% for item in visible %}{{ repeated_item(element, item, items) }}{% endfor %}
+        {% if element.layout == 'list' %}</ul>{% endif %}
       {% else %}<p>{{ element.empty_text }}</p>{% endif %}
       </div>
       <template id="{{ element.name }}-template">{{ repeated_item(element, none, items) }}</template>

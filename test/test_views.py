@@ -10,7 +10,6 @@ from showco.runtime.views import (
     actions_page,
     attributes_page,
     configured_page,
-    errors_page,
     health_page,
     playback_page,
 )
@@ -18,6 +17,19 @@ from showco.runtime.views import (
 
 def channels_page(status: models.ShowStatus) -> str:
     return configured_page(gui_schema.current_gui().page('channels'), status)
+
+
+def errors_page(errors: list[models.ErrorRecord]) -> str:
+    status = models.ShowStatus(
+        recs=models.RecsStatus(
+            service=models.ServiceStatus(name='recs', state='connected'),
+            errors=errors,
+        ),
+        streamo=models.StreamoStatus(
+            service=models.ServiceStatus(name='streamo', state='disabled')
+        ),
+    )
+    return configured_page(gui_schema.current_gui().page('errors'), status)
 
 
 class ViewsTests(unittest.TestCase):

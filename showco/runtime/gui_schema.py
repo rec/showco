@@ -21,13 +21,17 @@ class Element(BaseModel, frozen=True):
     enabled_when: str = ''
     action: str = ''
     operation: str = ''
+    layout: str = 'cards'
+    limit: int = Field(default=0, ge=0)
+    format: str = ''
     children: list[Element] = Field(default_factory=list)
 
     @model_validator(mode='after')
     def _valid_element(self) -> Element:
         allowed = {
-            'repeat': {'source': 'show.recs.channels'},
+            'repeat': {},
             'indicator': {'value': 'item.on'},
+            'text': {},
             'text_field': {'value': 'item.name', 'action': 'recs-track-name'},
             'checkbox': {
                 'value': 'item.channels',
@@ -45,14 +49,36 @@ class Element(BaseModel, frozen=True):
         ):
             raise ValueError(f'{self.name}: label is required')
         for field in ('source', 'value', 'enabled_when'):
+            if self.kind == 'repeat' and field == 'source':
+                if self.source not in {'show.recs.channels', 'show.recs.errors'}:
+                    raise ValueError(
+                        f'{self.name}: unknown repeat source {self.source!r}'
+                    )
+                continue
+            if self.kind == 'text' and field == 'value':
+                if self.value not in {'item.timestamp', 'item.message'}:
+                    raise ValueError(f'{self.name}: unknown text value {self.value!r}')
+                continue
             expected = allowed[self.kind].get(field, '')
             if getattr(self, field) != expected:
                 raise ValueError(f'{self.name}: invalid {field} for {self.kind}')
         if self.kind == 'repeat':
             if not self.children or not self.empty_text:
                 raise ValueError(f'{self.name}: repeat needs children and empty_text')
+            if (self.source == 'show.recs.channels' and self.layout != 'cards') or (
+                self.source == 'show.recs.errors' and self.layout != 'list'
+            ):
+                raise ValueError(f'{self.name}: unsupported source layout')
         elif self.children or self.empty_text:
             raise ValueError(f'{self.name}: only repeat accepts children or empty_text')
+        if self.kind != 'repeat' and (self.layout != 'cards' or self.limit):
+            raise ValueError(f'{self.name}: layout and limit need a repeat')
+        if self.format and (
+            self.kind != 'text'
+            or self.value != 'item.timestamp'
+            or self.format != 'time'
+        ):
+            raise ValueError(f'{self.name}: unsupported format')
         if self.kind == 'button':
             if (self.action, self.operation) not in {
                 ('recs-calibrate', ''),
@@ -69,7 +95,7 @@ class Element(BaseModel, frozen=True):
 
 class Section(BaseModel, frozen=True):
     name: str = Field(min_length=1)
-    title: str = Field(min_length=1)
+    title: str = ''
     elements: list[Element]
 
     model_config = ConfigDict(extra='forbid')
@@ -117,7 +143,6 @@ class Gui(BaseModel, frozen=True):
                 'playback',
                 'attributes',
                 'actions',
-                'errors',
             }:
                 raise ValueError(f'{page.name}: page needs sections')
             element_names: set[str] = set()
@@ -135,6 +160,18 @@ class Gui(BaseModel, frozen=True):
                             raise ValueError(
                                 f'{page.name}: nested repeat is unsupported'
                             )
+                        if element.source == 'show.recs.errors' and any(
+                            child.kind != 'text' for child in element.children
+                        ):
+                            raise ValueError(
+                                f'{page.name}: error rows only support text'
+                            )
+                        if element.source == 'show.recs.channels' and any(
+                            child.kind == 'text' for child in element.children
+                        ):
+                            raise ValueError(
+                                f'{page.name}: channel rows do not support text'
+                            )
                         if any(
                             child.kind == 'button' and child.action != 'recs-calibrate'
                             for child in element.children
@@ -150,6 +187,7 @@ class Gui(BaseModel, frozen=True):
                         'text_field',
                         'checkbox',
                         'waveform',
+                        'text',
                     }:
                         raise ValueError(f'{page.name}: {element.kind} needs a repeat')
                     else:
