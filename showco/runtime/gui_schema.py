@@ -24,6 +24,7 @@ class Element(BaseModel, frozen=True):
     layout: str = 'cards'
     limit: int = Field(default=0, ge=0)
     format: str = ''
+    separator: str = ''
     children: list[Element] = Field(default_factory=list)
 
     @model_validator(mode='after')
@@ -32,6 +33,9 @@ class Element(BaseModel, frozen=True):
             'repeat': {},
             'indicator': {'value': 'item.on'},
             'text': {},
+            'status': {},
+            'meter': {},
+            'service_card': {},
             'text_field': {'value': 'item.name', 'action': 'recs-track-name'},
             'checkbox': {
                 'value': 'item.channels',
@@ -44,20 +48,35 @@ class Element(BaseModel, frozen=True):
         if self.kind not in allowed:
             raise ValueError(f'{self.name}: unknown element kind {self.kind!r}')
         if (
-            self.kind in {'button', 'checkbox', 'text_field', 'waveform'}
+            self.kind
+            in {'button', 'checkbox', 'text_field', 'waveform', 'meter', 'service_card'}
             and not self.label
         ):
             raise ValueError(f'{self.name}: label is required')
         for field in ('source', 'value', 'enabled_when'):
             if self.kind == 'repeat' and field == 'source':
-                if self.source not in {'show.recs.channels', 'show.recs.errors'}:
+                if self.source not in REPEAT_SOURCES:
                     raise ValueError(
                         f'{self.name}: unknown repeat source {self.source!r}'
                     )
                 continue
             if self.kind == 'text' and field == 'value':
-                if self.value not in {'item.timestamp', 'item.message'}:
+                if self.value not in ITEM_VALUES:
                     raise ValueError(f'{self.name}: unknown text value {self.value!r}')
+                continue
+            if self.kind == 'status' and field == 'value':
+                if self.value not in STATUS_FORMATS:
+                    raise ValueError(
+                        f'{self.name}: unknown status value {self.value!r}'
+                    )
+                continue
+            if self.kind == 'meter' and field == 'value':
+                if self.value not in {'cpu', 'memory', 'disk'}:
+                    raise ValueError(f'{self.name}: unknown meter {self.value!r}')
+                continue
+            if self.kind == 'service_card' and field == 'value':
+                if self.value not in SERVICE_FORMATS:
+                    raise ValueError(f'{self.name}: unknown service {self.value!r}')
                 continue
             expected = allowed[self.kind].get(field, '')
             if getattr(self, field) != expected:
@@ -65,19 +84,28 @@ class Element(BaseModel, frozen=True):
         if self.kind == 'repeat':
             if not self.children or not self.empty_text:
                 raise ValueError(f'{self.name}: repeat needs children and empty_text')
-            if (self.source == 'show.recs.channels' and self.layout != 'cards') or (
-                self.source == 'show.recs.errors' and self.layout != 'list'
+            if self.layout != (
+                'cards' if self.source == 'show.recs.channels' else 'list'
             ):
                 raise ValueError(f'{self.name}: unsupported source layout')
         elif self.children or self.empty_text:
             raise ValueError(f'{self.name}: only repeat accepts children or empty_text')
-        if self.kind != 'repeat' and (self.layout != 'cards' or self.limit):
-            raise ValueError(f'{self.name}: layout and limit need a repeat')
-        if self.format and (
-            self.kind != 'text'
-            or self.value != 'item.timestamp'
-            or self.format != 'time'
+        if self.kind != 'repeat' and (
+            self.layout != 'cards' or self.limit or self.separator
         ):
+            raise ValueError(f'{self.name}: layout, limit and separator need a repeat')
+        if self.kind == 'text':
+            if self.format not in TEXT_FORMATS:
+                raise ValueError(f'{self.name}: unsupported text format')
+            if bool(self.value) == bool(self.label):
+                raise ValueError(f'{self.name}: text needs either value or label')
+        elif self.kind == 'status':
+            if self.format != STATUS_FORMATS[self.value]:
+                raise ValueError(f'{self.name}: unsupported status format')
+        elif self.kind == 'service_card':
+            if self.format != SERVICE_FORMATS[self.value]:
+                raise ValueError(f'{self.name}: unsupported service format')
+        elif self.format:
             raise ValueError(f'{self.name}: unsupported format')
         if self.kind == 'button':
             if (self.action, self.operation) not in {
@@ -96,7 +124,14 @@ class Element(BaseModel, frozen=True):
 class Section(BaseModel, frozen=True):
     name: str = Field(min_length=1)
     title: str = ''
+    style: str = ''
     elements: list[Element]
+
+    @model_validator(mode='after')
+    def _valid_style(self) -> Section:
+        if self.style not in {'', 'readiness', 'cards', 'performance'}:
+            raise ValueError(f'{self.name}: unknown section style {self.style!r}')
+        return self
 
     model_config = ConfigDict(extra='forbid')
 
@@ -139,7 +174,6 @@ class Gui(BaseModel, frozen=True):
                 'musicians',
                 'performance',
                 'workflow',
-                'health',
                 'playback',
                 'attributes',
                 'actions',
@@ -160,12 +194,21 @@ class Gui(BaseModel, frozen=True):
                             raise ValueError(
                                 f'{page.name}: nested repeat is unsupported'
                             )
-                        if element.source == 'show.recs.errors' and any(
-                            child.kind != 'text' for child in element.children
-                        ):
-                            raise ValueError(
-                                f'{page.name}: error rows only support text'
+                        if element.layout == 'list' and any(
+                            child.kind != 'text'
+                            or child.value not in REPEAT_VALUES[element.source]
+                            or child.value not in TEXT_VALUES_BY_FORMAT[child.format]
+                            or (
+                                child.format == 'mixer_detail'
+                                and element.source != 'show.mixers'
                             )
+                            or (
+                                child.format == 'osc_detail'
+                                and element.source != 'show.recs.osc'
+                            )
+                            for child in element.children
+                        ):
+                            raise ValueError(f'{page.name}: unsupported list row field')
                         if element.source == 'show.recs.channels' and any(
                             child.kind == 'text' for child in element.children
                         ):
@@ -187,9 +230,10 @@ class Gui(BaseModel, frozen=True):
                         'text_field',
                         'checkbox',
                         'waveform',
-                        'text',
                     }:
                         raise ValueError(f'{page.name}: {element.kind} needs a repeat')
+                    elif element.kind in {'text', 'status', 'meter', 'service_card'}:
+                        pass
                     else:
                         if element.action:
                             raise ValueError(
@@ -250,3 +294,37 @@ def configure_gui(path: Path) -> Gui:
 
 def current_gui() -> Gui:
     return load_gui(_gui_path)
+
+
+REPEAT_VALUES = {
+    'show.recs.errors': {'item.timestamp', 'item.message'},
+    'show.readiness.checks': {'item.name', 'item.message'},
+    'show.input_checks': {'item.name', 'item.message'},
+    'show.incidents': {'item.timestamp', 'item.message'},
+    'show.mixers': {'item.name', 'item'},
+    'show.recs.osc': {'item.name', 'item'},
+}
+REPEAT_SOURCES = {'show.recs.channels', *REPEAT_VALUES}
+ITEM_VALUES = {'', 'item.name', 'item.message', 'item.timestamp', 'item'}
+TEXT_FORMATS = {'', 'bold', 'time', 'mixer_detail', 'osc_detail'}
+TEXT_VALUES_BY_FORMAT = {
+    '': {'item.name', 'item.message', 'item.timestamp'},
+    'bold': {'item.name', 'item.message'},
+    'time': {'item.timestamp'},
+    'mixer_detail': {'item'},
+    'osc_detail': {'item'},
+}
+STATUS_FORMATS = {
+    'show.readiness.ready': 'readiness',
+    'show.recs.service': 'service',
+    'show.recs.snapshot_error': 'snapshot',
+    'show.recording_progress.message': 'progress',
+    'show.streamo.service': 'service',
+    'show.lyte': 'lyte',
+    'show.system': 'temperature',
+    'show.streamo': 'bitrate',
+}
+SERVICE_FORMATS = {
+    'show.recs.service': 'recording',
+    'show.streamo.service': 'streaming',
+}
