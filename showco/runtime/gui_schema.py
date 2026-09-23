@@ -76,17 +76,19 @@ class Section(BaseModel, frozen=True):
 
 
 class Page(BaseModel, frozen=True):
-    name: str
+    name: str = Field(pattern=r'^[a-z][a-z0-9-]*$')
     title: str = ''
     renderer: str = ''
     sections: list[Section] = Field(default_factory=list)
 
     @model_validator(mode='after')
     def _defaults(self) -> Page:
+        if self.sections and self.renderer:
+            raise ValueError(f'{self.name}: configured pages cannot select a renderer')
         return self.model_copy(
             update={
                 'title': self.title or self.name.capitalize(),
-                'renderer': self.renderer or self.name,
+                'renderer': self.renderer or ('' if self.sections else self.name),
             }
         )
 
@@ -107,12 +109,18 @@ class Gui(BaseModel, frozen=True):
         if len(names) != len(self.pages):
             raise ValueError('page names must be unique')
         for page in self.pages:
-            if page.name != 'channels' and page.sections:
-                raise ValueError(f'{page.name}: sections are not rendered yet')
-            if page.name == 'channels' and not page.sections:
-                raise ValueError('channels: at least one section is required')
+            if not page.sections and page.renderer not in {
+                'musicians',
+                'performance',
+                'workflow',
+                'health',
+                'playback',
+                'attributes',
+                'actions',
+                'errors',
+            }:
+                raise ValueError(f'{page.name}: page needs sections')
             element_names: set[str] = set()
-            repeats = 0
             operations: set[str] = set()
             has_track_name = False
             for section in page.sections:
@@ -123,14 +131,17 @@ class Gui(BaseModel, frozen=True):
                 element_names.add(section.name)
                 for element in section.elements:
                     if element.kind == 'repeat':
-                        repeats += 1
                         if any(child.kind == 'repeat' for child in element.children):
-                            raise ValueError('channels: nested repeat is unsupported')
+                            raise ValueError(
+                                f'{page.name}: nested repeat is unsupported'
+                            )
                         if any(
                             child.kind == 'button' and child.action != 'recs-calibrate'
                             for child in element.children
                         ):
-                            raise ValueError('channels: repeated button must calibrate')
+                            raise ValueError(
+                                f'{page.name}: repeated button must calibrate'
+                            )
                         has_track_name |= any(
                             child.kind == 'text_field' for child in element.children
                         )
@@ -144,20 +155,18 @@ class Gui(BaseModel, frozen=True):
                     else:
                         if element.action:
                             raise ValueError(
-                                'channels: top-level button needs an operation'
+                                f'{page.name}: top-level button needs an operation'
                             )
                         if element.operation in operations:
                             raise ValueError(
-                                'channels: button operation must be unique'
+                                f'{page.name}: button operation must be unique'
                             )
                         operations.add(element.operation)
                     _validate_element_names(element, element_names, page.name)
-            if page.name == 'channels' and repeats != 1:
-                raise ValueError('channels: exactly one channel repeat is required')
             if not has_track_name and operations.intersection(
                 {'save_track_names', 'revert_track_names'}
             ):
-                raise ValueError('channels: name controls need a track name field')
+                raise ValueError(f'{page.name}: name controls need a track name field')
         return self
 
     def page(self, name: str) -> Page:

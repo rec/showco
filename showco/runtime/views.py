@@ -12,7 +12,7 @@ from . import gui_schema, models
 
 ERROR_PAGE_LIMIT = 25
 SITE_DIRECTORY = Path(__file__).parent.parent.parent / 'site'
-CHANNEL_TEMPLATES = Environment(
+GUI_TEMPLATES = Environment(
     loader=FileSystemLoader(Path(__file__).parent.parent / 'templates'),
     autoescape=True,
     undefined=StrictUndefined,
@@ -24,20 +24,71 @@ def site_file(name: str) -> str:
     return (SITE_DIRECTORY / name).read_text()
 
 
-def channels_page(status: models.ShowStatus) -> str:
-    document = gui_schema.current_gui()
-    body = CHANNEL_TEMPLATES.get_template('channels.html.j2').render(
-        sections=document.page('channels').sections,
-        channels=status.recs.channels,
-        stereo_enabled=_stereo_enabled,
+def configured_page(page_spec: gui_schema.Page, status: models.ShowStatus) -> str:
+    body = GUI_TEMPLATES.get_template('elements.html.j2').render(
+        sections=page_spec.sections,
+        status=status,
+        bound_value=_gui_value,
+        row_data=_gui_row,
+        is_enabled=_gui_enabled,
     )
+    script = site_file('channel-controls.js') + site_file('status-script.js')
+    if any(
+        child.kind == 'waveform'
+        for section in page_spec.sections
+        for element in section.elements
+        for child in element.children
+    ):
+        script += site_file('waveform-script.js')
     return page(
-        'channels',
+        page_spec.name,
         body,
-        script=site_file('channel-controls.js')
-        + site_file('status-script.js')
-        + site_file('waveform-script.js'),
+        script=script,
     )
+
+
+def _gui_value(path: str, status: models.ShowStatus, item: object | None) -> object:
+    root, *fields = path.split('.')
+    value: object = status if root == 'show' else item
+    if value is None:
+        return ''
+    for field in fields:
+        value = getattr(value, field)
+    return value
+
+
+def _gui_row(source: str, item: object | None) -> dict[str, object]:
+    if source != 'show.recs.channels':
+        raise ValueError(f'unknown GUI source {source!r}')
+    if item is None:
+        return {
+            'class_name': 'level',
+            'attributes': {
+                'device': '',
+                'channel': '',
+                'channels': '',
+                'saved-track-name': '',
+            },
+        }
+    if not isinstance(item, models.ChannelLevel):
+        raise TypeError(f'unexpected item in {source!r}')
+    return {
+        'class_name': f'level {item.state}',
+        'attributes': {
+            'device': item.device,
+            'channel': item.name,
+            'channels': ','.join(str(n) for n in item.channels),
+            'saved-track-name': item.name,
+        },
+    }
+
+
+def _gui_enabled(
+    condition: str, item: object, items: list[models.ChannelLevel]
+) -> bool:
+    if condition == 'stereo_pair_available' and isinstance(item, models.ChannelLevel):
+        return len(item.channels) == 2 or _stereo_enabled(item, items)
+    return True
 
 
 def musicians_page(

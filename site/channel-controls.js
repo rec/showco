@@ -3,14 +3,14 @@
   }
 
   function revertTrackName(form) {
-    const input = form.querySelector("[name=track_name]");
+    const input = form.querySelector('[data-action="recs-track-name"]');
     if (!input) return;
     input.value = form.dataset.savedTrackName;
     input.setCustomValidity("");
   }
 
   function saveTrackName(form) {
-    const input = form.querySelector("[name=track_name]");
+    const input = form.querySelector('[data-action="recs-track-name"]');
     if (!input) return Promise.resolve();
     if (input.value === form.dataset.savedTrackName) return Promise.resolve();
     const submittedName = input.value;
@@ -45,7 +45,7 @@
   }
 
   function channelForms() {
-    return [...document.querySelectorAll("#channels .level")];
+    return [...document.querySelectorAll('[data-source="show.recs.channels"] .level')];
   }
 
   function saveTrackNames() {
@@ -184,10 +184,10 @@
       });
   }
 
-  function channelForm(channel, trackName, savedTrackName, channels) {
-    const form = document.getElementById("channel-template").content.firstElementChild.cloneNode(true);
+  function channelForm(channel, trackName, savedTrackName, channels, container) {
+    const form = document.getElementById(container.dataset.template).content.firstElementChild.cloneNode(true);
     form.dataset.savedTrackName = savedTrackName;
-    const input = form.querySelector("[name=track_name]");
+    const input = form.querySelector('[data-action="recs-track-name"]');
     if (input) input.value = trackName;
     const title = form.querySelector(".channel-caption b");
     if (title) title.textContent = channel.name;
@@ -213,27 +213,27 @@
   }
 
   function updateChannels(channels) {
-    const container = document.getElementById("channels");
-    if (!container) return;
-    if (document.activeElement.closest("#channels .level")) return;
-    if (!channels.length) {
-      const message = document.createElement("p");
-      message.textContent = container.dataset.emptyText;
-      container.replaceChildren(message);
-      return;
+    for (const container of document.querySelectorAll('[data-source="show.recs.channels"]')) {
+      if (document.activeElement.closest(".level")) return;
+      if (!channels.length) {
+        const message = document.createElement("p");
+        message.textContent = container.dataset.emptyText;
+        container.replaceChildren(message);
+        continue;
+      }
+      const forms = new Map(
+        [...container.querySelectorAll(".level")].map(form => [trackKey({
+          device: form.dataset.device,
+          channels: form.dataset.channels.split(",").map(Number),
+        }), form]),
+      );
+      container.replaceChildren(...channels.map(channel => {
+        const form = forms.get(trackKey(channel));
+        if (!form) return channelForm(channel, channel.name, channel.name, channels, container);
+        updateChannelForm(form, channel, channels);
+        return form;
+      }));
     }
-    const forms = new Map(
-      [...container.querySelectorAll(".level")].map(form => [trackKey({
-        device: form.dataset.device,
-        channels: form.dataset.channels.split(",").map(Number),
-      }), form]),
-    );
-    container.replaceChildren(...channels.map(channel => {
-      const form = forms.get(trackKey(channel));
-      if (!form) return channelForm(channel, channel.name, channel.name, channels);
-      updateChannelForm(form, channel, channels);
-      return form;
-    }));
   }
 
   function updateChannelForm(form, channel, channels) {
@@ -265,6 +265,6 @@
   for (const input of document.querySelectorAll("#mutable-attributes input")) {
     input.addEventListener("blur", saveMutableAttribute);
   }
-  for (const form of document.querySelectorAll("#channels .level")) {
+  for (const form of channelForms()) {
     bindChannelActions(form);
   }
