@@ -319,7 +319,115 @@ action = "setlist-retry"
 [[pages]]
 name = "lighting"
 title = "Lighting cues"
-renderer = "workflow"
+
+[[pages.sections]]
+name = "cues"
+title = "Lighting cues"
+
+[[pages.sections.elements]]
+name = "lighting-position"
+kind = "workflow_display"
+label = "Loading cues..."
+
+[[pages.sections.elements]]
+name = "lighting-live"
+kind = "workflow_display"
+label = "Live lyte state: checking"
+
+[[pages.sections.elements]]
+name = "lighting-back"
+kind = "workflow_button"
+label = "Back"
+action = "lighting-back"
+
+[[pages.sections.elements]]
+name = "lighting-go"
+kind = "workflow_button"
+label = "Go"
+action = "lighting-go"
+
+[[pages.sections.elements]]
+name = "lighting-message"
+kind = "workflow_display"
+
+[[pages.sections.elements]]
+name = "lighting-resolution"
+kind = "workflow_display"
+
+[[pages.sections.elements.children]]
+name = "lighting-pending"
+kind = "workflow_display"
+
+[[pages.sections.elements.children]]
+name = "lighting-resolution-help"
+kind = "workflow_display"
+label = "Check live lyte state. Keeping or canceling the pending cue sends nothing. Retrying may restart a look that already began."
+
+[[pages.sections.elements.children]]
+name = "confirm-lighting"
+kind = "workflow_checkbox"
+label = "I checked the outcome"
+
+[[pages.sections.elements.children]]
+name = "lighting-accept"
+kind = "workflow_button"
+label = "Keep pending cue"
+action = "lighting-accept"
+
+[[pages.sections.elements.children]]
+name = "lighting-cancel"
+kind = "workflow_button"
+label = "Keep previous position"
+action = "lighting-cancel"
+
+[[pages.sections.elements.children]]
+name = "lighting-retry"
+kind = "workflow_button"
+label = "Retry selection"
+action = "lighting-retry"
+
+[[pages.sections.elements]]
+name = "lighting-result"
+kind = "workflow_status"
+
+[[pages.sections.elements]]
+name = "edit-lighting"
+kind = "details"
+label = "Edit lighting cues"
+
+[[pages.sections.elements.children]]
+name = "lighting-help"
+kind = "workflow_display"
+label = "Choose installation look names in order. Saving resets the cue position and leaves lighting unchanged. Unlock performance protection before editing."
+
+[[pages.sections.elements.children]]
+name = "lighting-editor"
+kind = "workflow_editor"
+
+[[pages.sections.elements.children]]
+name = "lighting-looks"
+kind = "workflow_editor"
+
+[[pages.sections.elements.children]]
+name = "add-lighting"
+kind = "workflow_editor"
+label = "Add cue"
+
+[[pages.sections.elements.children]]
+name = "reload-lighting"
+kind = "workflow_editor"
+label = "Discard edits and reload"
+
+[[pages.sections.elements.children]]
+name = "lighting-save"
+kind = "workflow_button"
+label = "Save cues and reset position"
+action = "lighting-save"
+
+[[pages.sections.elements]]
+name = "lighting-note"
+kind = "text"
+label = "Current cue is the last accepted selection, or an explicitly kept pending cue. Live lyte state shows the active and queued looks, blackout and test overrides. Other clients and MIDI can change the lights without moving this list. Go and Back select immediately, without a fade. Nothing advances automatically."
 
 [[pages]]
 name = "soundcheck"
