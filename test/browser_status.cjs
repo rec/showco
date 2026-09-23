@@ -48,6 +48,34 @@ vm.runInContext('updateStatus()', context).then(async () => {
   await saved;
   assert.equal(form.dataset.savedTrackName, 'A');
   assert.equal(input.value, 'B');
+
+  const title = {textContent: ''};
+  const trackInput = {value: ''};
+  const clonedForm = {
+    dataset: {},
+    querySelector(selector) {
+      if (selector === '[data-action="recs-track-name"]') return trackInput;
+      if (selector === '.channel-caption b') return title;
+      return null;
+    },
+  };
+  const container = {
+    dataset: {template: 'tracks-template', emptyText: 'No tracks available.'},
+    querySelectorAll: () => [],
+    replaceChildren(...children) {this.children = children;},
+  };
+  context.document.querySelectorAll = selector =>
+    selector === '[data-source="show.recs.channels"]' ? [container] : [];
+  context.document.activeElement = {closest: () => null};
+  context.document.getElementById = id => id === 'tracks-template'
+    ? {content: {firstElementChild: {cloneNode: () => clonedForm}}}
+    : elements.get(id) || null;
+  vm.runInContext('updateChannels([{name:"1", state:"healthy", device:"X18", channels:[1], on:true}])', context);
+  assert.equal(container.children[0], clonedForm);
+  assert.equal(title.textContent, '1');
+  assert.equal(trackInput.value, '1');
+  assert.equal(clonedForm.dataset.device, 'X18');
+
   let deadline;
   context.setTimeout = callback => {deadline = callback; return 1;};
   context.fetch = (_url, options) => new Promise((_resolve, reject) => {

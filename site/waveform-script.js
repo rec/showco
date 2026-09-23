@@ -103,7 +103,7 @@
 
   function renderWaveforms() {
     const now = Date.now() / 1000;
-    for (const form of document.querySelectorAll("#channels .level")) {
+    for (const form of document.querySelectorAll('[data-source="show.recs.channels"] .level')) {
       const key = waveformKey(
         form.dataset.device,
         form.dataset.channels.split(",").map(Number),
@@ -115,7 +115,7 @@
     requestAnimationFrame(renderWaveforms);
   }
 
-  if (document.getElementById("channels")) {
+  if (document.querySelector('[data-source="show.recs.channels"] .waveform')) {
     const events = new EventSource("/waveforms");
     events.addEventListener("waveform_layout", event => {
       setWaveformLayout(JSON.parse(event.data));

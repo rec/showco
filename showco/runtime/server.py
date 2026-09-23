@@ -375,9 +375,10 @@ class ShowcoHandler(BaseHTTPRequestHandler):
         if page is None:
             self.send_error(404)
             return
+        if page.sections:
+            self._html(views.configured_page(page, self.app.status()))
+            return
         match page.renderer:
-            case 'channels':
-                self._html(views.channels_page(self.app.status()))
             case 'musicians':
                 self._html(
                     views.musicians_page(

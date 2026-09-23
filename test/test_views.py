@@ -4,16 +4,20 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 
-from showco.runtime import models
+from showco.runtime import gui_schema, models
 from showco.runtime.views import (
     ERROR_PAGE_LIMIT,
     actions_page,
     attributes_page,
-    channels_page,
+    configured_page,
     errors_page,
     health_page,
     playback_page,
 )
+
+
+def channels_page(status: models.ShowStatus) -> str:
+    return configured_page(gui_schema.current_gui().page('channels'), status)
 
 
 class ViewsTests(unittest.TestCase):
@@ -30,6 +34,7 @@ class ViewsTests(unittest.TestCase):
         )
 
         self.assertIn('href="/channels"', html)
+        self.assertIn('href="/track-names"', html)
         self.assertIn('href="/health"', html)
         self.assertIn('href="/attributes"', html)
         self.assertIn('href="/actions"', html)

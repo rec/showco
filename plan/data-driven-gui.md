@@ -8,11 +8,13 @@ links, visibility, and enabled state. Selecting another complete file must
 produce a different useful display for a show or application without editing
 Python or JavaScript.
 
-The Channels page now reads its sections, control order, labels, and actions
-from `showco/gui.toml` and renders them with Jinja. The other page bodies still
-come from `showco/runtime/views.py` and `site/*.html`. The existing
-`showco run --gui` option selects a document, but most pages cannot yet be
-customized. **The current implementation does not yet meet the overall goal.**
+The Channels and Track names pages read their sections, control order, labels,
+and actions from `showco/gui.toml` and render through one shared Jinja template.
+A third edit page can be added to a selected TOML file without adding a route,
+Python renderer, template, or JavaScript page file. The remaining page bodies
+still come from `showco/runtime/views.py` and `site/*.html`. Supported data
+sources and actions are currently limited to the registered recs channel
+operations. **The current implementation does not yet meet the overall goal.**
 
 The finished file must account for every item in
 [all-gui-elements.md](all-gui-elements.md). Python owns service connections,
@@ -20,14 +22,15 @@ data formatting that depends on domain rules, action validation, performance
 protection, and the actual behaviour of recs, streamO, and lyte. It must not
 silently add a control that the selected GUI file omits.
 
-## Prove the design with Channels first
+## Prove the design with a second edit page
 
-The first implementation milestone is **one fully converted Channels page**.
-Its Jinja template renders the controls declared by the document, and the
-browser clones the same template for channels discovered after page load.
+Channels and Track names use the same element template. The browser clones
+the declared repeated-item markup for channels discovered after page load.
+The Track names page demonstrates an edit-focused layout in TOML alone. An
+HTTP test adds a third page in a temporary TOML file and checks its rendered
+route, fields, labels, and controls.
 
-A representative part of the file should look like this; the implementation
-must settle the precise spelling in a schema test before writing the renderer:
+The core of the current Channels declaration is:
 
 ```toml
 version = 1
@@ -58,6 +61,7 @@ name = "track_name"
 kind = "text_field"
 label = "Track name"
 value = "item.name"
+action = "recs-track-name"
 
 [[pages.sections.elements.children]]
 name = "stereo"
@@ -70,6 +74,7 @@ action = "recs-set-stereo"
 [[pages.sections.elements.children]]
 name = "waveform"
 kind = "waveform"
+label = "Live waveform"
 source = "waveforms"
 
 [[pages.sections.elements.children]]
@@ -154,10 +159,10 @@ prove the migration.
 
 ## Migration sequence
 
-1. **Channels vertical slice.** Define and test the Channels schema, render
-   initial and dynamic rows through one Jinja template, and bind existing
-   actions. Validate the file before serving HTTP. Pass the edit, move, and
-   remove test described above, and preserve status refresh and editing.
+1. **Shared edit-page proof.** Render Channels and Track names through one
+   Jinja element template, with no page-specific renderer. Add a third edit
+   page by changing only TOML and verify it through HTTP. Keep existing recs
+   action validation and the browser's unsaved-edit behaviour.
 2. **Convert read-only pages:** Errors, then Health. Define status formatters
    and repeated rows for readiness checks, service cards, meters, inputs,
    errors, mixers, OSC recorders, and incidents. Verify that changing labels,
