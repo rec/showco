@@ -395,8 +395,6 @@ class ShowcoHandler(BaseHTTPRequestHandler):
                 self._html(views.playback_page(self.app.status().recs.playback))
             case 'attributes':
                 self._html(views.attributes_page(self.app.recs.mutable_attributes()))
-            case 'errors':
-                self._html(views.errors_page(self.app.status().recs.errors))
             case 'actions':
                 self._html(
                     views.actions_page(

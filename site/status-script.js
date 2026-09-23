@@ -79,30 +79,42 @@
   }
 
   function updateRecsErrors(errors) {
-    const container = document.getElementById("recs-errors");
-    if (!container) return;
-    const follow = atBottom();
-    container.replaceChildren();
-    const errorsToShow = errors.slice(-Number(container.dataset.limit));
-    if (!errorsToShow.length) {
-      const noErrors = document.createElement("p");
-      noErrors.textContent = "No errors";
-      container.append(noErrors);
-      return;
+    const containers = document.querySelectorAll('[data-source="show.recs.errors"]');
+    const legacy = document.getElementById("recs-errors");
+    for (const container of containers.length ? containers : legacy ? [legacy] : []) {
+      const follow = atBottom();
+      const limit = Number(container.dataset.limit);
+      const visible = limit ? errors.slice(-limit) : errors;
+      if (!visible.length) {
+        const message = document.createElement("p");
+        message.textContent = container.dataset.emptyText || "No errors";
+        container.replaceChildren(message);
+        continue;
+      }
+      const list = document.createElement("ul");
+      for (const error of visible) {
+        const row = container.dataset.template
+          ? document.getElementById(container.dataset.template).content.firstElementChild.cloneNode(true)
+          : document.createElement("li");
+        if (container.dataset.template) {
+          for (const field of row.querySelectorAll("[data-value]")) {
+            const value = error[field.dataset.value.slice("item.".length)];
+            field.textContent = field.dataset.format === "time"
+              ? new Date(value).toLocaleTimeString() : value;
+          }
+        } else {
+          const timestamp = document.createElement("time");
+          timestamp.className = "error-time";
+          timestamp.textContent = new Date(error.timestamp).toLocaleTimeString();
+          const message = document.createElement("span");
+          message.textContent = error.message;
+          row.append(timestamp, message);
+        }
+        list.append(row);
+      }
+      container.replaceChildren(list);
+      if (follow) requestAnimationFrame(scrollToBottom);
     }
-    const list = document.createElement("ul");
-    for (const error of errorsToShow) {
-      const item = document.createElement("li");
-      const timestamp = document.createElement("time");
-      timestamp.className = "error-time";
-      timestamp.textContent = new Date(error.timestamp).toLocaleTimeString();
-      const message = document.createElement("span");
-      message.textContent = error.message;
-      item.append(timestamp, message);
-      list.append(item);
-    }
-    container.append(list);
-    if (follow) requestAnimationFrame(scrollToBottom);
   }
 
   function byteSize(value) {

@@ -131,3 +131,25 @@ name = "actions"
 
 [[pages]]
 name = "errors"
+
+[[pages.sections]]
+name = "recent_errors"
+
+[[pages.sections.elements]]
+name = "recs-errors"
+kind = "repeat"
+source = "show.recs.errors"
+layout = "list"
+limit = 25
+empty_text = "No errors"
+
+[[pages.sections.elements.children]]
+name = "timestamp"
+kind = "text"
+value = "item.timestamp"
+format = "time"
+
+[[pages.sections.elements.children]]
+name = "message"
+kind = "text"
+value = "item.message"
