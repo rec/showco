@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "🎪 Local show control for recs and streamo 🎪"
 requires-python = ">=3.13"
 dependencies = [
+    "jinja2>=3.1.6",
     "numpy",
     "pydantic>=2.13.4",
     "reccy",
