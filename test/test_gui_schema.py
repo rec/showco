@@ -201,6 +201,32 @@ format = "bitrate"
     assert html.index('recs errors</h2>') < html.index('Input signals</h2>')
 
 
+def test_attributes_file_controls_title_and_empty_text(tmp_path: Path) -> None:
+    original = gui_schema.DEFAULT_GUI_PATH.read_text()
+    updated = original.replace(
+        'title = "recs attributes"', 'title = "Recording controls"'
+    )
+    updated = updated.replace(
+        'empty_text = "No mutable recs attributes."',
+        'empty_text = "Nothing to configure."',
+    )
+    path = tmp_path / 'gui.toml'
+    path.write_text(updated)
+    status = models.ShowStatus(
+        recs=models.RecsStatus(
+            service=models.ServiceStatus(name='recs', state='connected')
+        ),
+        streamo=models.StreamoStatus(
+            service=models.ServiceStatus(name='streamo', state='disabled')
+        ),
+    )
+    html = views.configured_page(gui_schema.load_gui(path).page('attributes'), status)
+
+    assert 'Recording controls</h2>' in html
+    assert 'Nothing to configure.' in html
+    assert 'recs attributes</h2>' not in html
+
+
 @pytest.mark.parametrize(
     'old,new',
     [

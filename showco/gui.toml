@@ -372,6 +372,16 @@ name = "playback"
 [[pages]]
 name = "attributes"
 
+[[pages.sections]]
+name = "recs_attributes"
+title = "recs attributes"
+
+[[pages.sections.elements]]
+name = "mutable-attributes"
+kind = "mutable_attributes"
+source = "recs.mutable_attributes"
+empty_text = "No mutable recs attributes."
+
 [[pages]]
 name = "actions"
 

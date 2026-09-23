@@ -66,6 +66,20 @@
         <meter id="{{ element.name }}-meter" min="0" max="100"{% if metric.percent is not none %} value="{{ '%.2f' | format(metric.percent) }}"{% endif %}></meter>
         <span id="{{ element.name }}-value">{{ metric.detail }}</span>
       </div>
+    {% elif element.kind == 'mutable_attributes' %}
+      <div class="attributes" id="{{ element.name }}" data-source="{{ element.source }}">
+      {% if mutable_attributes['error'] %}
+        <p>{{ mutable_attributes['error'] }}</p>
+      {% elif mutable_attributes['items'] %}
+        {% for attribute in mutable_attributes['items'] %}
+          {% set field = attribute_field(attribute) %}
+          <label class="mutable-attribute" data-address="{{ attribute.address }}" data-saved-value="{{ field.saved_value }}">
+            {{ attribute.address }}
+            <input type="{{ field.type }}" data-value-type="{{ field.value_type }}"{% if field.type != 'checkbox' %} value="{{ field.value }}"{% elif field.checked %} checked{% endif %}{% if field.type == 'number' %} step="any"{% endif %}>
+          </label>
+        {% endfor %}
+      {% else %}<p>{{ element.empty_text }}</p>{% endif %}
+      </div>
     {% endif %}
   {% endfor %}
   {% if section.style == 'performance' %}</div>{% endif %}
