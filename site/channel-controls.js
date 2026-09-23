@@ -262,7 +262,7 @@
   if (revertTrackNamesButton) {
     revertTrackNamesButton.addEventListener("click", revertTrackNames);
   }
-  for (const input of document.querySelectorAll("#mutable-attributes input")) {
+  for (const input of document.querySelectorAll('[data-source="recs.mutable_attributes"] input')) {
     input.addEventListener("blur", saveMutableAttribute);
   }
   for (const form of channelForms()) {
