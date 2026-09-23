@@ -32,6 +32,7 @@ class Element(BaseModel, frozen=True):
     readonly: bool = False
     visible_when: str = ''
     options: dict[str, str] = Field(default_factory=dict)
+    download: bool = False
     children: list[Element] = Field(default_factory=list)
 
     @model_validator(mode='after')
@@ -175,6 +176,8 @@ class Element(BaseModel, frozen=True):
                 'check-note',
                 'skip-step',
                 'soundcheck-results',
+                'recovery-options',
+                'recovery-state',
             }:
                 raise ValueError(f'{self.name}: unsupported workflow editor')
         elif self.kind == 'workflow_display':
@@ -202,7 +205,10 @@ class Element(BaseModel, frozen=True):
             if not self.label or not self.children:
                 raise ValueError(f'{self.name}: details needs a label and children')
         elif self.kind == 'link':
-            if self.value != '/performance' or not self.label:
+            if (
+                self.value not in {'/performance', '/health', '/diagnostics'}
+                or not self.label
+            ):
                 raise ValueError(f'{self.name}: unsupported link')
         elif (
             self.children
@@ -254,8 +260,18 @@ class Element(BaseModel, frozen=True):
             self.action != allowed[self.kind].get('action', '') or self.operation
         ):
             raise ValueError(f'{self.name}: unsupported action or operation')
-        if self.kind not in {'input', 'textarea', 'select', 'workflow_editor'} and (
-            self.field or self.required or self.readonly or self.options
+        if self.kind not in {
+            'input',
+            'textarea',
+            'select',
+            'workflow_editor',
+            'link',
+        } and (
+            self.field
+            or self.required
+            or self.readonly
+            or self.options
+            or self.download
         ):
             raise ValueError(f'{self.name}: form options need an input')
         if self.visible_when and self.visible_when not in FEATURE_GATES:
@@ -602,6 +618,7 @@ WORKFLOW_ACTIONS = {
     'soundcheck-pause-recording',
     'soundcheck-lights',
     'soundcheck-skip',
+    'recovery-refresh',
 }
 WORKFLOW_BUTTON_PARAMETERS = {
     'soundcheck-check': [
