@@ -69,11 +69,25 @@ def configured_page(
         script += site_file('waveform-script.js')
     if any(section.style == 'transport' for section in page_spec.sections):
         script += site_file('playback-script.js')
+    if any(
+        element.kind.startswith('workflow_')
+        for section in page_spec.sections
+        for element in _all_elements(section.elements)
+    ):
+        script += site_file('workflow.js')
     return page(
         page_spec.name,
         body,
         script=script,
     )
+
+
+def _all_elements(elements: list[gui_schema.Element]) -> list[gui_schema.Element]:
+    return [
+        element
+        for parent in elements
+        for element in [parent, *_all_elements(parent.children)]
+    ]
 
 
 def _gui_value(path: str, status: models.ShowStatus, item: object | None) -> object:

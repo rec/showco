@@ -60,6 +60,13 @@ class Element(BaseModel, frozen=True):
             'select': {},
             'submit': {},
             'action_history': {'source': 'show.actions'},
+            'workflow_editor': {},
+            'workflow_button': {},
+            'workflow_status': {},
+            'workflow_display': {},
+            'workflow_checkbox': {},
+            'details': {},
+            'link': {},
         }
         if self.kind not in allowed:
             raise ValueError(f'{self.name}: unknown element kind {self.kind!r}')
@@ -89,6 +96,10 @@ class Element(BaseModel, frozen=True):
                     raise ValueError(f'{self.name}: unknown text value {self.value!r}')
                 continue
             if self.kind in {'input', 'textarea'} and field == 'value':
+                continue
+            if self.kind == 'workflow_button' and field == 'action':
+                continue
+            if self.kind == 'link' and field == 'value':
                 continue
             if self.kind == 'status' and field == 'value':
                 if self.value not in STATUS_FORMATS:
@@ -138,6 +149,34 @@ class Element(BaseModel, frozen=True):
         elif self.kind == 'action_history':
             if not self.empty_text:
                 raise ValueError(f'{self.name}: action history needs empty_text')
+        elif self.kind == 'workflow_button':
+            if self.action not in SETLIST_ACTIONS:
+                raise ValueError(f'{self.name}: unsupported workflow action')
+        elif self.kind == 'workflow_checkbox':
+            if self.name != 'confirm-cue-resolution':
+                raise ValueError(f'{self.name}: unsupported workflow checkbox')
+        elif self.kind == 'workflow_editor':
+            if self.name not in {'setlist-editor', 'add-song', 'reload-setlist'}:
+                raise ValueError(f'{self.name}: unsupported workflow editor')
+        elif self.kind == 'workflow_display':
+            if self.name not in {
+                'cue-position',
+                'cue-notes',
+                'cue-elapsed',
+                'cue-message',
+                'cue-resolution',
+                'cue-resolution-help',
+            }:
+                raise ValueError(f'{self.name}: unsupported workflow display')
+        elif self.kind == 'workflow_status':
+            if self.name != 'workflow-result':
+                raise ValueError(f'{self.name}: unsupported workflow status')
+        elif self.kind == 'details':
+            if not self.label or not self.children:
+                raise ValueError(f'{self.name}: details needs a label and children')
+        elif self.kind == 'link':
+            if self.value != '/performance' or not self.label:
+                raise ValueError(f'{self.name}: unsupported link')
         elif (
             self.children
             or (self.parameters and self.kind != 'action_button')
@@ -146,7 +185,7 @@ class Element(BaseModel, frozen=True):
             raise ValueError(
                 f'{self.name}: only repeat and mutable attributes accept empty_text'
             )
-        if self.kind not in {'repeat', 'input', 'textarea', 'select'} and (
+        if self.kind not in {'repeat', 'details', 'input', 'textarea', 'select'} and (
             self.layout != 'cards' or self.limit or self.separator
         ):
             raise ValueError(f'{self.name}: layout, limit and separator need a repeat')
@@ -181,7 +220,7 @@ class Element(BaseModel, frozen=True):
                 ('', 'revert_track_names'),
             }:
                 raise ValueError(f'{self.name}: unsupported button action')
-        elif self.kind not in {'action_button', 'form'} and (
+        elif self.kind not in {'action_button', 'form', 'workflow_button'} and (
             self.action != allowed[self.kind].get('action', '') or self.operation
         ):
             raise ValueError(f'{self.name}: unsupported action or operation')
@@ -315,6 +354,17 @@ class Gui(BaseModel, frozen=True):
                             for child in element.children
                         ):
                             raise ValueError(f'{page.name}: unsupported form field')
+                    elif element.kind == 'details':
+                        if any(
+                            child.kind
+                            not in {
+                                'workflow_button',
+                                'workflow_checkbox',
+                                'workflow_display',
+                            }
+                            for child in element.children
+                        ):
+                            raise ValueError(f'{page.name}: unsupported details field')
                     elif element.kind in {
                         'indicator',
                         'text_field',
@@ -331,6 +381,12 @@ class Gui(BaseModel, frozen=True):
                         'action_button',
                         'action_result',
                         'action_history',
+                        'workflow_editor',
+                        'workflow_button',
+                        'workflow_status',
+                        'workflow_display',
+                        'workflow_checkbox',
+                        'link',
                     }:
                         pass
                     else:
@@ -495,3 +551,12 @@ FORM_FIELDS = MUSICIAN_FIELDS | {
     'description',
 }
 FEATURE_GATES = {'streamo_enabled', 'lyte_enabled', 'music_enabled'}
+SETLIST_ACTIONS = {
+    'setlist-save',
+    'setlist-next',
+    'setlist-skip',
+    'setlist-repeat',
+    'setlist-interval',
+    'setlist-accept',
+    'setlist-retry',
+}
