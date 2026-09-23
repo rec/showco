@@ -376,7 +376,17 @@ class ShowcoHandler(BaseHTTPRequestHandler):
             self.send_error(404)
             return
         if page.sections:
-            self._html(views.configured_page(page, self.app.status()))
+            self._html(
+                views.configured_page(
+                    page,
+                    self.app.status(),
+                    mutable_attributes=(
+                        self.app.recs.mutable_attributes()
+                        if page.uses_source('recs.mutable_attributes')
+                        else None
+                    ),
+                )
+            )
             return
         match page.renderer:
             case 'musicians':
@@ -391,8 +401,6 @@ class ShowcoHandler(BaseHTTPRequestHandler):
                 self._html(views.workflow_page(page.name))
             case 'playback':
                 self._html(views.playback_page(self.app.status().recs.playback))
-            case 'attributes':
-                self._html(views.attributes_page(self.app.recs.mutable_attributes()))
             case 'actions':
                 self._html(
                     views.actions_page(

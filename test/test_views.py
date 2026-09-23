@@ -7,7 +7,6 @@ from pathlib import Path
 from showco.runtime import gui_schema, models
 from showco.runtime.views import (
     actions_page,
-    attributes_page,
     configured_page,
     playback_page,
 )
@@ -517,8 +516,18 @@ class ViewsTests(unittest.TestCase):
         self.assertIn('&lt;img src=x onerror=alert(1)&gt;', html)
 
     def test_attributes_page_has_mutable_recs_attributes(self) -> None:
-        html = attributes_page(
-            [
+        status = models.ShowStatus(
+            recs=models.RecsStatus(
+                service=models.ServiceStatus(name='recs', state='connected')
+            ),
+            streamo=models.StreamoStatus(
+                service=models.ServiceStatus(name='streamo', state='disabled')
+            ),
+        )
+        html = configured_page(
+            gui_schema.current_gui().page('attributes'),
+            status,
+            mutable_attributes=[
                 models.MutableAttribute(
                     address='recording.noise_floor',
                     value=70.0,

@@ -24,7 +24,14 @@ def site_file(name: str) -> str:
     return (SITE_DIRECTORY / name).read_text()
 
 
-def configured_page(page_spec: gui_schema.Page, status: models.ShowStatus) -> str:
+def configured_page(
+    page_spec: gui_schema.Page,
+    status: models.ShowStatus,
+    *,
+    mutable_attributes: list[models.MutableAttribute]
+    | models.ActionResult
+    | None = None,
+) -> str:
     body = GUI_TEMPLATES.get_template('elements.html.j2').render(
         sections=page_spec.sections,
         status=status,
@@ -38,6 +45,8 @@ def configured_page(page_spec: gui_schema.Page, status: models.ShowStatus) -> st
         status_class=_gui_status_class,
         service_text=_gui_service_text,
         metric_data=_gui_metric_data,
+        mutable_attributes=_gui_mutable_attributes(mutable_attributes),
+        attribute_field=_gui_attribute_field,
     )
     script = site_file('channel-controls.js') + site_file('status-script.js')
     if any(
@@ -179,6 +188,49 @@ def _gui_metric_data(name: str, status: models.ShowStatus) -> dict[str, object]:
     }
 
 
+def _gui_mutable_attributes(
+    attributes: list[models.MutableAttribute] | models.ActionResult | None,
+) -> dict[str, object]:
+    if isinstance(attributes, models.ActionResult):
+        return {'items': [], 'error': attributes.message}
+    return {'items': attributes or [], 'error': ''}
+
+
+def _gui_attribute_field(attribute: models.MutableAttribute) -> dict[str, object]:
+    value = attribute.value
+    if isinstance(value, bool):
+        return {
+            'type': 'checkbox',
+            'value_type': 'boolean',
+            'value': '',
+            'checked': value,
+            'saved_value': json.dumps(value, separators=(',', ':')),
+        }
+    if isinstance(value, int | float):
+        return {
+            'type': 'number',
+            'value_type': 'number',
+            'value': str(value),
+            'checked': False,
+            'saved_value': json.dumps(value, separators=(',', ':')),
+        }
+    if isinstance(value, str):
+        return {
+            'type': 'text',
+            'value_type': 'text',
+            'value': value,
+            'checked': False,
+            'saved_value': json.dumps(value, separators=(',', ':')),
+        }
+    return {
+        'type': 'text',
+        'value_type': 'json',
+        'value': json.dumps(value, separators=(',', ':')),
+        'checked': False,
+        'saved_value': json.dumps(value, separators=(',', ':')),
+    }
+
+
 def musicians_page(
     musicians: Mapping[str, object] | models.ActionResult,
     action_log: list[models.ActionLogEntry],
@@ -228,16 +280,6 @@ def musician_form(nickname: str, musician: object | None, *, editing: bool) -> s
 
 def _musician_lines(musician: object | None, field: str) -> str:
     return '\n'.join(str(value) for value in getattr(musician, field, []))
-
-
-def attributes_page(
-    mutable_attributes: list[models.MutableAttribute] | models.ActionResult | None,
-) -> str:
-    return page(
-        'attributes',
-        mutable_attributes_section(mutable_attributes),
-        script=site_file('channel-controls.js') + site_file('status-script.js'),
-    )
 
 
 def actions_page(
@@ -489,55 +531,6 @@ def _stereo_enabled(
         other.device == channel.device and other.channels == [channel.channels[0] + 1]
         for other in channels
     )
-
-
-def mutable_attributes_section(
-    attributes: list[models.MutableAttribute] | models.ActionResult | None,
-) -> str:
-    if isinstance(attributes, models.ActionResult):
-        body = f'<p>{html.escape(attributes.message)}</p>'
-    elif attributes:
-        body = (
-            '<div class="attributes" id="mutable-attributes">'
-            + ''.join(mutable_attribute(a) for a in attributes)
-            + '</div>'
-        )
-    else:
-        body = '<p>No mutable recs attributes.</p>'
-    return f"""
-        <section>
-          <h2>recs attributes</h2>
-          {body}
-        </section>
-    """
-
-
-def mutable_attribute(attribute: models.MutableAttribute) -> str:
-    value = attribute.value
-    input_type = 'text'
-    value_type = 'text'
-    if isinstance(value, bool):
-        input_type = 'checkbox'
-        value_type = 'boolean'
-        value_html = ' checked' if value else ''
-    elif isinstance(value, int | float):
-        input_type = 'number'
-        value_type = 'number'
-        value_html = f' value="{value}" step="any"'
-    elif isinstance(value, str):
-        value_html = f' value="{html.escape(value)}"'
-    else:
-        value_type = 'json'
-        value_html = f' value="{html.escape(json.dumps(value, separators=(",", ":")))}"'
-    saved_value = html.escape(json.dumps(value, separators=(',', ':')))
-    address = html.escape(attribute.address)
-    return f"""
-      <label class="mutable-attribute" data-address="{address}"
-             data-saved-value="{saved_value}">
-        {address}
-        <input type="{input_type}" data-value-type="{value_type}"{value_html}>
-      </label>
-    """
 
 
 def button(action: str, label: str, *, confirm: bool = False) -> str:

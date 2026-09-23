@@ -36,6 +36,7 @@ class Element(BaseModel, frozen=True):
             'status': {},
             'meter': {},
             'service_card': {},
+            'mutable_attributes': {'source': 'recs.mutable_attributes'},
             'text_field': {'value': 'item.name', 'action': 'recs-track-name'},
             'checkbox': {
                 'value': 'item.channels',
@@ -88,8 +89,10 @@ class Element(BaseModel, frozen=True):
                 'cards' if self.source == 'show.recs.channels' else 'list'
             ):
                 raise ValueError(f'{self.name}: unsupported source layout')
-        elif self.children or self.empty_text:
-            raise ValueError(f'{self.name}: only repeat accepts children or empty_text')
+        elif self.children or (self.empty_text and self.kind != 'mutable_attributes'):
+            raise ValueError(
+                f'{self.name}: only repeat and mutable attributes accept empty_text'
+            )
         if self.kind != 'repeat' and (
             self.layout != 'cards' or self.limit or self.separator
         ):
@@ -105,6 +108,9 @@ class Element(BaseModel, frozen=True):
         elif self.kind == 'service_card':
             if self.format != SERVICE_FORMATS[self.value]:
                 raise ValueError(f'{self.name}: unsupported service format')
+        elif self.kind == 'mutable_attributes':
+            if not self.empty_text:
+                raise ValueError(f'{self.name}: mutable attributes need empty_text')
         elif self.format:
             raise ValueError(f'{self.name}: unsupported format')
         if self.kind == 'button':
@@ -151,6 +157,13 @@ class Page(BaseModel, frozen=True):
                 'title': self.title or self.name.capitalize(),
                 'renderer': self.renderer or ('' if self.sections else self.name),
             }
+        )
+
+    def uses_source(self, source: str) -> bool:
+        return any(
+            element.source == source
+            for section in self.sections
+            for element in section.elements
         )
 
     model_config = ConfigDict(extra='forbid')
@@ -232,7 +245,13 @@ class Gui(BaseModel, frozen=True):
                         'waveform',
                     }:
                         raise ValueError(f'{page.name}: {element.kind} needs a repeat')
-                    elif element.kind in {'text', 'status', 'meter', 'service_card'}:
+                    elif element.kind in {
+                        'text',
+                        'status',
+                        'meter',
+                        'service_card',
+                        'mutable_attributes',
+                    }:
                         pass
                     else:
                         if element.action:
