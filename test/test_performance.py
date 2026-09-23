@@ -85,7 +85,7 @@ def test_performance_controls_and_protection_are_present_on_all_pages() -> None:
     assert 'data-performance-action="recs-marker"' in page
     assert 'id="performance-disk"' in page
     assert 'id="input-pins"' in page
-    for content in [page, views.page('Actions', ''), views.errors_page([])]:
+    for content in [page, views.page('Actions', ''), views.page('Errors', '')]:
         assert 'id="performance-lock-state"' in content
         assert 'id="fault-banner"' in content
         assert 'id="connection-status"' in content

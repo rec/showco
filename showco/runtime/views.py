@@ -280,19 +280,6 @@ def attributes_page(
     )
 
 
-def errors_page(errors: list[models.ErrorRecord]) -> str:
-    body = (
-        f'<section id="recs-errors" data-limit="{ERROR_PAGE_LIMIT}">'
-        f'{_recs_errors(errors[-ERROR_PAGE_LIMIT:])}'
-        '</section>'
-    )
-    return page(
-        'errors',
-        body,
-        script=site_file('channel-controls.js') + site_file('status-script.js'),
-    )
-
-
 def actions_page(
     action_log: list[models.ActionLogEntry],
     *,
