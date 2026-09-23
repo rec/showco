@@ -50,9 +50,9 @@
 
 {% macro workflow_element(element) %}
 {% if element.kind == 'workflow_editor' %}
-  {% if element.name in ['setlist-editor', 'lighting-editor'] %}<div id="{{ element.name }}"></div>{% elif element.name == 'lighting-looks' %}<datalist id="{{ element.name }}"></datalist>{% else %}<button type="button" id="{{ element.name }}" disabled>{{ element.label }}</button>{% endif %}
+  {% if element.name in ['setlist-editor', 'lighting-editor', 'expected-inputs', 'soundcheck-results'] %}<div id="{{ element.name }}"></div>{% elif element.name == 'lighting-looks' %}<datalist id="{{ element.name }}"></datalist>{% elif element.name == 'check-note' %}<label>{{ element.label }} <input id="check-note" maxlength="500"></label>{% elif element.name == 'skip-step' %}<label>{{ element.label }} <select id="skip-step">{% for value, label in element.options.items() %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>{% else %}<button type="button" id="{{ element.name }}" disabled>{{ element.label }}</button>{% endif %}
 {% elif element.kind == 'workflow_button' %}
-  <button type="button"{% if element.action.startswith('lighting-') %} data-lighting-action="{{ element.action }}"{% else %} data-workflow-action="{{ element.action }}"{% endif %} disabled>{{ element.label }}</button>
+  <button type="button"{% if element.action.startswith('lighting-') %} data-lighting-action="{{ element.action }}"{% else %} data-workflow-action="{{ element.action }}"{% endif %}{% for name, value in element.parameters.items() %} data-{{ name }}="{{ value }}"{% endfor %} disabled>{{ element.label }}</button>
 {% elif element.kind == 'workflow_status' %}
   <p id="{{ element.name }}" role="status"></p>
 {% elif element.kind == 'workflow_display' %}
