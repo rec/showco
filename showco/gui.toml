@@ -431,7 +431,170 @@ label = "Current cue is the last accepted selection, or an explicitly kept pendi
 
 [[pages]]
 name = "soundcheck"
-renderer = "workflow"
+
+[[pages.sections]]
+name = "guided"
+title = "Guided soundcheck"
+
+[[pages.sections.elements]]
+name = "soundcheck-scope"
+kind = "workflow_display"
+label = "Checking the current equipment..."
+
+[[pages.sections.elements]]
+name = "soundcheck-help"
+kind = "text"
+label = "Select the inputs you expect to record. Beginning soundcheck clears earlier results; it does not start playback, recording, or light output."
+
+[[pages.sections.elements]]
+name = "expected-inputs"
+kind = "workflow_editor"
+
+[[pages.sections.elements]]
+name = "soundcheck-begin"
+kind = "workflow_button"
+label = "Begin a fresh soundcheck"
+action = "soundcheck-begin"
+
+[[pages.sections]]
+name = "inputs"
+title = "1. Disk and inputs"
+
+[[pages.sections.elements]]
+name = "inputs-help"
+kind = "text"
+label = "Confirm the intended disk is mounted. Make sound on every selected input, then check for signal and clipping."
+
+[[pages.sections.elements]]
+name = "confirm-observation"
+kind = "workflow_checkbox"
+label = "I confirmed the intended disk or personally heard/saw the selected output"
+
+[[pages.sections.elements]]
+name = "soundcheck-disk"
+kind = "workflow_button"
+label = "Confirm disk and capacity"
+action = "soundcheck-check"
+parameters = { step = "disk" }
+
+[[pages.sections.elements]]
+name = "soundcheck-inputs"
+kind = "workflow_button"
+label = "Check expected inputs now"
+action = "soundcheck-check"
+parameters = { step = "inputs" }
+
+[[pages.sections]]
+name = "sample"
+title = "2. Record a sample"
+
+[[pages.sections.elements]]
+name = "sample-help"
+kind = "text"
+label = "Resuming records into the current recs session. Make a few seconds of sound, check that recorded audio advanced, then explicitly pause to finish the sample. Recording stays paused until you resume it. No new session is created."
+
+[[pages.sections.elements]]
+name = "confirm-output"
+kind = "workflow_checkbox"
+label = "I intend this recording or lighting change now"
+
+[[pages.sections.elements]]
+name = "soundcheck-start"
+kind = "workflow_button"
+label = "Resume recording and begin sample"
+action = "soundcheck-start-recording"
+
+[[pages.sections.elements]]
+name = "soundcheck-recording"
+kind = "workflow_button"
+label = "Check sample writes"
+action = "soundcheck-check"
+parameters = { step = "recording" }
+
+[[pages.sections.elements]]
+name = "soundcheck-pause"
+kind = "workflow_button"
+label = "Pause recording to finish sample"
+action = "soundcheck-pause-recording"
+
+[[pages.sections]]
+name = "playback-check"
+title = "3. Hear the sample"
+
+[[pages.sections.elements]]
+name = "playback-help"
+kind = "text"
+label = "Open Playback, select the just-recorded sample and listen. Enter the session or file you heard below, then confirm playback. A counter increase alone does not prove playback."
+
+[[pages.sections.elements]]
+name = "check-note"
+kind = "workflow_editor"
+label = "Session/file heard, or reason for skipping"
+
+[[pages.sections.elements]]
+name = "soundcheck-playback"
+kind = "workflow_button"
+label = "Confirm I heard this sample"
+action = "soundcheck-check"
+parameters = { step = "playback" }
+
+[[pages.sections]]
+name = "outputs"
+title = "4. Optional output checks"
+
+[[pages.sections.elements]]
+name = "outputs-help"
+kind = "text"
+label = "Test lights is explicit and leaves lights off. For streaming, inspect the live stream from another device. Use Actions to operate streamO if needed. Disabled outputs may be skipped with a reason. Cable testing remains outside this workflow until hardware validation is complete."
+
+[[pages.sections.elements]]
+name = "soundcheck-lights"
+kind = "workflow_button"
+label = "Test lights now"
+action = "soundcheck-lights"
+
+[[pages.sections.elements]]
+name = "soundcheck-lights-check"
+kind = "workflow_button"
+label = "Confirm I saw the lights"
+action = "soundcheck-check"
+parameters = { step = "lights" }
+
+[[pages.sections.elements]]
+name = "soundcheck-stream-check"
+kind = "workflow_button"
+label = "Confirm I received the stream"
+action = "soundcheck-check"
+parameters = { step = "stream" }
+
+[[pages.sections.elements]]
+name = "skip-step"
+kind = "workflow_editor"
+label = "Skip a step"
+options = { disk = "disk", inputs = "inputs", recording = "recording", playback = "playback", lights = "lights", stream = "stream" }
+
+[[pages.sections.elements]]
+name = "soundcheck-skip"
+kind = "workflow_button"
+label = "Record skip with reason"
+action = "soundcheck-skip"
+
+[[pages.sections.elements]]
+name = "workflow-result"
+kind = "workflow_status"
+
+[[pages.sections]]
+name = "results"
+title = "Results"
+
+[[pages.sections.elements]]
+name = "soundcheck-results"
+kind = "workflow_editor"
+
+[[pages.sections.elements]]
+name = "finish-help"
+kind = "text"
+label = "Finish by resuming recording if required and checking Performance. A day, observed device, mount, service, or saved recs configuration change invalidates checks. Mixer gain changes outside showCo must be followed by a fresh soundcheck."
 
 [[pages]]
 name = "recovery"
