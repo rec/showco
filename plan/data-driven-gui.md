@@ -8,13 +8,11 @@ links, visibility, and enabled state. Selecting another complete file must
 produce a different useful display for a show or application without editing
 Python or JavaScript.
 
-The current `showco/gui.toml` controls only page order, route names, titles,
-and the choice of an existing page renderer. Page bodies still come from
-`showco/runtime/views.py`, `site/*.html`, and page-specific JavaScript. The
-earlier GUI document contained component declarations that no renderer read;
-those declarations were removed. **The current implementation does not meet
-this goal.** The existing `showco run --gui` option selects the minimal page
-document, but cannot yet customize a page body.
+The Channels page now reads its sections, control order, labels, and actions
+from `showco/gui.toml` and renders them with Jinja. The other page bodies still
+come from `showco/runtime/views.py` and `site/*.html`. The existing
+`showco run --gui` option selects a document, but most pages cannot yet be
+customized. **The current implementation does not yet meet the overall goal.**
 
 The finished file must account for every item in
 [all-gui-elements.md](all-gui-elements.md). Python owns service connections,
@@ -25,8 +23,8 @@ silently add a control that the selected GUI file omits.
 ## Prove the design with Channels first
 
 The first implementation milestone is **one fully converted Channels page**.
-Build the schema, renderer, status binding, action binding, and browser
-behaviour needed for this page before declaring any other page converted.
+Its Jinja template renders the controls declared by the document, and the
+browser clones the same template for channels discovered after page load.
 
 A representative part of the file should look like this; the implementation
 must settle the precise spelling in a schema test before writing the renderer:
@@ -84,24 +82,21 @@ action = "recs-calibrate"
 name = "save_names"
 kind = "button"
 label = "Save"
-action = "recs-track-name"
+operation = "save_track_names"
 
 [[pages.sections.elements]]
 name = "revert_names"
 kind = "button"
 label = "Revert"
-operation = "reset_fields"
+operation = "revert_track_names"
 ```
 
-This example is a contract sketch, not configuration to check in unchanged.
-In particular, define exactly how the repeated channel's device and channel
-numbers are passed to each registered action, how Save submits only changed
-track names, how Revert restores the saved values, and how stereo availability
-is calculated. Those rules must be implemented and tested before the Channels
-page is switched over. Keep the present server action names unless changing
-them is actually required.
+The complete current Channels declaration is in `showco/gui.toml`. The browser
+supplies each repeated channel's device and channel numbers to the existing
+server actions. Save submits only changed track names, Revert restores the
+saved values, and stereo availability follows the channel pairing rule.
 
-The decisive test edits only a temporary GUI file and starts a server with
+The decisive test edits only a temporary GUI file and renders Channels from
 that file. Removing **Calibrate** from the file must remove that button from
 the rendered Channels page. Moving **Save** to another section must move it in
 the rendered page. Changing its label must change the visible label. The
@@ -139,7 +134,7 @@ prove the migration.
   them. The server validates the submitted values and enforces its existing
   performance lock. A GUI file cannot define a new endpoint, command, URL, or
   action handler.
-- Server rendering creates the shared shell, sections, labels, and initial
+- Jinja templates render the shared shell, sections, labels, and initial
   content from the selected document. Browser code updates values and repeated
   items from the declared sources with DOM operations, preserving focus and
   unsaved edits. Behaviour adapters implement waveform drawing, ordered-row
@@ -152,40 +147,39 @@ prove the migration.
   come from the GUI file.
 - Escape every text value, never interpolate configured HTML or JavaScript,
   and restrict links to registered showCo routes or approved downloads.
+- Keep user-visible strings in TOML or translation catalogs, not in Python
+  HTML fragments. Use Jinja's i18n extension and message catalogs when a
+  second language is introduced; the first Channels conversion establishes
+  templates and escaping, not translations.
 
 ## Migration sequence
 
-1. **Define and test the Channels schema.** Replace the existing unused page
-   metadata with the concrete section and element schema above. Validate the
-   selected file before the HTTP server begins accepting requests. Keep the
-   current Channels output as the behaviour reference.
-2. **Finish Channels end to end.** Render its initial HTML and dynamic channel
-   rows from TOML, bind its actions, preserve waveform and track-name editing,
-   then remove `channels_page` and its layout decisions. Pass the edit, move,
-   and remove test described above. Verify stale data, empty channels,
-   disabled stereo, action failure, and the performance lock.
-3. **Convert read-only pages:** Errors, then Health. Define status formatters
+1. **Channels vertical slice.** Define and test the Channels schema, render
+   initial and dynamic rows through one Jinja template, and bind existing
+   actions. Validate the file before serving HTTP. Pass the edit, move, and
+   remove test described above, and preserve status refresh and editing.
+2. **Convert read-only pages:** Errors, then Health. Define status formatters
    and repeated rows for readiness checks, service cards, meters, inputs,
    errors, mixers, OSC recorders, and incidents. Verify that changing labels,
    order, visibility, and empty text in TOML changes the page.
-4. **Convert forms and transport:** Musicians, Attributes, Playback, and
+3. **Convert forms and transport:** Musicians, Attributes, Playback, and
    Actions. Add only the field, form, conditional visibility, result, and
    transport behaviour these pages need. Preserve hidden musician data on
    edits, explicit shutdown confirmation, cable-test duration, and feature
    gates for lyte, streamO, and music.
-5. **Convert stateful workflows:** Set list, Performance, Lighting cues,
+4. **Convert stateful workflows:** Set list, Performance, Lighting cues,
    Soundcheck, and Recovery. Express their controls and sections in TOML.
    Browser adapters may implement ordered editing, pin preferences, and
    confirmation flow, while the existing server controls revisions, pending
    outcomes, skip evidence, and protected actions. Remove each `site/*.html`
    fragment and page-specific script only when its page uses the document for
    every displayed element.
-6. **Finish selection and provisioning.** Keep `showco run --gui` for local
+5. **Finish selection and provisioning.** Keep `showco run --gui` for local
    use. Pass an explicitly selected GUI file through service installation and
    provisioning; validate it before replacing a running service. Make changes
    to the selected file part of the target's update decision. Document an
    alternate show file with a genuinely different Performance page.
-7. **Remove the legacy path.** Remove named page renderers, obsolete
+6. **Remove the legacy path.** Remove named page renderers, obsolete
    page-specific scripts, and the `renderer` field. The route handler looks up
    a page by `name` and passes it to the generic renderer. Keep only the
    shared shell, registries, formatters, and behaviour adapters in code.
@@ -220,5 +214,4 @@ entries in advance and count them as progress.
 
 ## Additional work beyond the prompt
 
-None. This revises the plan; it does not perform the remaining GUI
-implementation.
+None.

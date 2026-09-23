@@ -38,7 +38,7 @@ vm.runInContext('updateStatus()', context).then(async () => {
 
   let respond;
   context.fetch = () => new Promise(resolve => {respond = resolve;});
-  const input = {value: 'A', setCustomValidity() {}};
+  const input = {value: 'A', dataset: {action: 'recs-track-name'}, setCustomValidity() {}};
   const form = {dataset: {savedTrackName: 'old'}, querySelector: () => input};
   context.form = form;
   context.URLSearchParams = URLSearchParams;

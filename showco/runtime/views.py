@@ -6,10 +6,17 @@ from collections.abc import Mapping
 from functools import cache
 from pathlib import Path
 
+from jinja2 import Environment, FileSystemLoader, StrictUndefined
+
 from . import gui_schema, models
 
 ERROR_PAGE_LIMIT = 25
 SITE_DIRECTORY = Path(__file__).parent.parent.parent / 'site'
+CHANNEL_TEMPLATES = Environment(
+    loader=FileSystemLoader(Path(__file__).parent.parent / 'templates'),
+    autoescape=True,
+    undefined=StrictUndefined,
+)
 
 
 @cache
@@ -18,25 +25,15 @@ def site_file(name: str) -> str:
 
 
 def channels_page(status: models.ShowStatus) -> str:
-    channel_html = ''.join(
-        level(channel, status.recs.channels) for channel in status.recs.channels
+    document = gui_schema.current_gui()
+    body = CHANNEL_TEMPLATES.get_template('channels.html.j2').render(
+        sections=document.page('channels').sections,
+        channels=status.recs.channels,
+        stereo_enabled=_stereo_enabled,
     )
-    if not channel_html:
-        channel_html = '<p>No channel data from recs.</p>'
     return page(
         'channels',
-        f"""
-        <section>
-          <h2>Recording channels</h2>
-          <div class="levels" id="channels">
-            {channel_html}
-          </div>
-          <div class="channel-actions">
-            <button type="button" id="save-track-names">Save</button>
-            <button type="button" id="revert-track-names">Revert</button>
-          </div>
-        </section>
-        """,
+        body,
         script=site_file('channel-controls.js')
         + site_file('status-script.js')
         + site_file('waveform-script.js'),
@@ -495,35 +492,6 @@ def service_card(identifier: str, title: str, state: str, detail: str) -> str:
     """
 
 
-def level(channel: models.ChannelLevel, channels: list[models.ChannelLevel]) -> str:
-    safe_device = html.escape(channel.device)
-    safe_name = html.escape(channel.name)
-    safe_state = html.escape(channel.state)
-    recording_state = 'recording' if channel.on else 'not recording'
-    stereo = len(channel.channels) == 2
-    enabled = stereo or _stereo_enabled(channel, channels)
-    checked = ' checked' if stereo else ''
-    disabled = '' if enabled else ' disabled'
-    numbers = ','.join(str(number) for number in channel.channels)
-    return f"""
-    <div class="level {safe_state}" data-device="{safe_device}"
-         data-channel="{safe_name}" data-channels="{numbers}"
-         data-saved-track-name="{safe_name}">
-      <label>
-        <span class="channel-caption">
-          <span class="channel-state {channel_indicator(channel.on)}"
-                aria-label="{recording_state}" title="{recording_state}">•</span>
-          <b>{safe_name}</b>
-        </span>
-        <input name="track_name" value="{safe_name}">
-      </label>
-      <label class="stereo"><input type="checkbox"{checked}{disabled}>Stereo</label>
-      <canvas class="waveform" aria-label="Live waveform"></canvas>
-      <button class="calibrate-channel" type="button">Calibrate</button>
-    </div>
-    """
-
-
 def _stereo_enabled(
     channel: models.ChannelLevel, channels: list[models.ChannelLevel]
 ) -> bool:
@@ -533,10 +501,6 @@ def _stereo_enabled(
         other.device == channel.device and other.channels == [channel.channels[0] + 1]
         for other in channels
     )
-
-
-def channel_indicator(on: bool) -> str:
-    return 'indicator-red' if on else 'indicator-green'
 
 
 def mutable_attributes_section(

@@ -381,7 +381,9 @@ class ViewsTests(unittest.TestCase):
         self.assertIn('class="channel-state indicator-red"', html)
         self.assertIn('aria-label="recording"', html)
         self.assertIn(
-            '<canvas class="waveform" aria-label="Live waveform"></canvas>', html
+            '<canvas class="waveform" aria-label="Live waveform" '
+            'data-element="waveform"></canvas>',
+            html,
         )
         self.assertIn('<b>1</b>', html)
         self.assertNotIn('Channel 1', html)
@@ -392,10 +394,13 @@ class ViewsTests(unittest.TestCase):
         self.assertEqual(html.count('>Revert</button>'), 1)
         self.assertNotIn('>healthy</span>', html)
         self.assertIn(
-            '<label class="stereo"><input type="checkbox">Stereo</label>', html
+            '<label class="stereo" data-element="stereo"><input type="checkbox" '
+            'data-action="recs-set-stereo">Stereo</label>',
+            html,
         )
         self.assertIn(
-            '<button class="calibrate-channel" type="button">Calibrate</button>',
+            '<button class="calibrate-channel" type="button" '
+            'data-action="recs-calibrate" data-element="calibrate">Calibrate</button>',
             html,
         )
 
@@ -419,7 +424,8 @@ class ViewsTests(unittest.TestCase):
         )
 
         self.assertIn(
-            '<label class="stereo"><input type="checkbox" disabled>Stereo</label>',
+            '<label class="stereo" data-element="stereo"><input type="checkbox" '
+            'data-action="recs-set-stereo" disabled>Stereo</label>',
             html,
         )
 
@@ -444,7 +450,8 @@ class ViewsTests(unittest.TestCase):
         )
 
         self.assertIn(
-            '<label class="stereo"><input type="checkbox" checked>Stereo</label>',
+            '<label class="stereo" data-element="stereo"><input type="checkbox" '
+            'data-action="recs-set-stereo" checked>Stereo</label>',
             html,
         )
 
@@ -465,6 +472,23 @@ class ViewsTests(unittest.TestCase):
 
         self.assertIn('class="channel-state indicator-green"', html)
         self.assertIn('aria-label="not recording"', html)
+
+    def test_channels_page_escapes_track_names(self) -> None:
+        name = '<img src=x onerror=alert(1)>'
+        html = channels_page(
+            models.ShowStatus(
+                recs=models.RecsStatus(
+                    service=models.ServiceStatus(name='recs', state='connected'),
+                    channels=[models.ChannelLevel(name=name, state='healthy')],
+                ),
+                streamo=models.StreamoStatus(
+                    service=models.ServiceStatus(name='streamo', state='disabled')
+                ),
+            )
+        )
+
+        self.assertNotIn(name, html)
+        self.assertIn('&lt;img src=x onerror=alert(1)&gt;', html)
 
     def test_attributes_page_has_mutable_recs_attributes(self) -> None:
         html = attributes_page(
