@@ -1,282 +1,224 @@
 # Data-driven GUI plan
 
-## Goal
+## Goal and current state
 
-Replace showCo's hand-authored page layouts with one validated GUI data file.
-That file will define every display decision recorded in
-[all-gui-elements.md](all-gui-elements.md): pages, navigation, headings, copy,
-layout, fields, controls, repeated rows, visibility and enabled conditions,
-status displays, and their action or status bindings.
+One TOML file must determine what each showCo page displays: the order and
+grouping of sections, text, status values, repeated rows, fields, buttons,
+links, visibility, and enabled state. Selecting another complete file must
+produce a different useful display for a show or application without editing
+Python or JavaScript.
 
-At runtime, showCo reads that file to provision its web interface. A different
-show or application can use a different GUI file without changing the renderer.
-The file controls the interface; Python continues to own service calls,
-validation, state collection, action authorization, and audio, lighting, and
-streaming behaviour.
+The current `showco/gui.toml` controls only page order, route names, titles,
+and the choice of an existing page renderer. Page bodies still come from
+`showco/runtime/views.py`, `site/*.html`, and page-specific JavaScript. The
+earlier GUI document contained component declarations that no renderer read;
+those declarations were removed. **The current implementation does not meet
+this goal.** The existing `showco run --gui` option selects the minimal page
+document, but cannot yet customize a page body.
 
-## Design constraints
+The finished file must account for every item in
+[all-gui-elements.md](all-gui-elements.md). Python owns service connections,
+data formatting that depends on domain rules, action validation, performance
+protection, and the actual behaviour of recs, streamO, and lyte. It must not
+silently add a control that the selected GUI file omits.
 
-- Use one TOML GUI document. TOML matches the project's existing configuration,
-  is easy to edit during preparation, and can be parsed with the standard
-  library.
-- Do not permit HTML, JavaScript, Python expressions, URLs outside showCo, or
-  arbitrary action names in the document. The document selects only registered
-  widget kinds, data sources, fields, actions, and condition names.
-- Treat the document as configuration, not code. Validate it completely before
-  starting the HTTP server. A bad document must make startup fail with the path
-  and precise invalid entry, rather than serve a partly broken control surface.
-- Keep the document executable only through a small, declarative vocabulary.
-  An action binding names a server-side action already registered by showCo;
-  it cannot run a command or invent a request payload.
-- Keep accessibility in the renderer: labels, headings, focusable native
-  controls, live regions, disabled state, and text alternatives for waveforms
-  are renderer responsibilities, not optional configuration.
-- Preserve the current server-side performance lock. A GUI condition can hide
-  or disable a control, but cannot grant permission to an otherwise protected
-  action.
+## Prove the design with Channels first
 
-## Resulting files and ownership
+The first implementation milestone is **one fully converted Channels page**.
+Build the schema, renderer, status binding, action binding, and browser
+behaviour needed for this page before declaring any other page converted.
 
-1. Add `showco/gui.toml` as the complete shipped GUI specification. It is the
-   only source of page and control decisions for the default showCo interface.
-2. Add `showco/runtime/gui_schema.py` with frozen Pydantic models for the
-   document and a `load_gui(path)` function using `tomllib`.
-3. Add `showco/runtime/gui.py` with the generic HTML renderer and its small
-   registry of supported widget kinds, binding names, and conditions.
-4. Replace page-specific HTML layout in `showco/runtime/views.py` with a small
-   wrapper that asks the GUI renderer for the requested page.
-5. Replace page-specific browser scripts with one `site/gui.js`. It reads a
-   generated page manifest, polls declared sources, applies declared bindings,
-   and submits declared actions. Keep a narrowly scoped renderer adapter for
-   waveform canvases, because their drawing is a browser capability rather than
-   a layout decision.
-6. Add `[gui] path = "showco/gui.toml"` to the provisioned showCo configuration
-   and pass that path into the service. Provisioning therefore installs one
-   selected GUI document with the application, and a show can select a different
-   document deliberately.
-
-The application must never silently fall back to a compiled-in page definition.
-A documented `--gui` CLI override may select a different complete document for
-local rehearsal or another application.
-
-## GUI document model
-
-The top-level document has these sections:
+A representative part of the file should look like this; the implementation
+must settle the precise spelling in a schema test before writing the renderer:
 
 ```toml
 version = 1
 name = "showCo"
-default_page = "performance"
-
-[[navigation]]
-page = "performance"
-label = "Performance"
+default_page = "channels"
 
 [[pages]]
-id = "performance"
-path = "/performance"
-title = "Performance"
-sources = ["show", "workflow"]
-layout = ["global", "setlist", "performance"]
+name = "channels" # route is /channels; page order is navigation order
+
+[[pages.sections]]
+name = "recording"
+title = "Recording channels"
+
+[[pages.sections.elements]]
+name = "channels"
+kind = "repeat"
+source = "show.recs.channels"
+empty_text = "No channel data from recs."
+
+[[pages.sections.elements.children]]
+name = "recording_state"
+kind = "indicator"
+value = "item.on"
+label = "Recording state"
+
+[[pages.sections.elements.children]]
+name = "track_name"
+kind = "text_field"
+label = "Track name"
+value = "item.name"
+
+[[pages.sections.elements.children]]
+name = "stereo"
+kind = "checkbox"
+label = "Stereo"
+value = "item.channels"
+enabled_when = "stereo_pair_available"
+action = "recs-set-stereo"
+
+[[pages.sections.elements.children]]
+name = "waveform"
+kind = "waveform"
+source = "waveforms"
+
+[[pages.sections.elements.children]]
+name = "calibrate"
+kind = "button"
+label = "Calibrate"
+action = "recs-calibrate"
+
+[[pages.sections.elements]]
+name = "save_names"
+kind = "button"
+label = "Save"
+action = "recs-track-name"
+
+[[pages.sections.elements]]
+name = "revert_names"
+kind = "button"
+label = "Revert"
+operation = "reset_fields"
 ```
 
-The actual document uses tables rather than embedded markup. Each `layout`
-entry refers to a named component declared in the same file. A component has a
-`kind`, an optional label, a stable identifier, a binding, and an optional
-condition. Components may contain child components.
+This example is a contract sketch, not configuration to check in unchanged.
+In particular, define exactly how the repeated channel's device and channel
+numbers are passed to each registered action, how Save submits only changed
+track names, how Revert restores the saved values, and how stereo availability
+is calculated. Those rules must be implemented and tested before the Channels
+page is switched over. Keep the present server action names unless changing
+them is actually required.
 
-Supported component kinds should cover the complete existing inventory:
+The decisive test edits only a temporary GUI file and starts a server with
+that file. Removing **Calibrate** from the file must remove that button from
+the rendered Channels page. Moving **Save** to another section must move it in
+the rendered page. Changing its label must change the visible label. The
+server must still reject an invalid or protected calibration request, whether
+or not a page shows the button. A test that only inspects parsed TOML does not
+prove the migration.
 
-| Kind | Existing examples |
-| --- | --- |
-| `section`, `heading`, `text`, `notice`, `details` | page grouping, guidance, result and fault messages |
-| `navigation`, `link` | shared header and page links |
-| `status`, `meter`, `list`, `card` | health, incidents, errors, service cards, readiness, mixer and input values |
-| `form`, `field`, `checkbox`, `select`, `button` | musician, action, streamO, cable-test, lock, and shutdown controls |
-| `repeater` | channels, musicians, songs, lighting cues, inputs, recovery choices, attributes, and pinned inputs |
-| `transport`, `waveform` | playback buttons and channel waveform canvas |
-| `editor` | ordered song and lighting-cue rows with add, remove, and move controls |
+## Schema and rendering contract
 
-A field declares its native type, label, value binding, validation constraints,
-and whether it is read-only. A select declares its static options or an approved
-option binding. A repeater declares the list binding, empty-state message,
-per-item component, and item key. An editor additionally declares its permitted
-row fields and the registered add, remove, and reorder operations.
+- Keep `[[pages]]` in navigation order. Each page has a unique `name`; its
+  route is `/<name>`. `title` defaults to `name.capitalize()`. `/` resolves to
+  `default_page`. Remove the current `renderer` selector when the last named
+  page renderer has been replaced.
+- Each page contains ordered sections; each section contains ordered elements.
+  Nested elements are allowed only for container kinds such as `repeat`,
+  `form`, and `details`. Order in the file is order on screen. Stable element
+  names identify fields and status targets, not a second navigation system.
+- The initial element vocabulary is `text`, `link`, `status`, `indicator`,
+  `meter`, `button`, `text_field`, `number_field`, `textarea`, `checkbox`,
+  `select`, `form`, `repeat`, `details`, and `waveform`. Add a kind only when
+  an inventory item cannot be expressed through these and an existing
+  behaviour adapter. No kind may secretly render an entire legacy page.
+- Every element kind has explicit allowed fields and required fields. For
+  example, a button needs an `action` or a local `operation`; a status needs a
+  registered `value`; a repeat needs a registered list `source` and an
+  `empty_text`. Reject unknown fields, kinds, sources, actions, conditions,
+  and duplicate names at load time, with the GUI file path and element name.
+- Values refer to approved status or page-data paths, including `item.*`
+  within a repeat. Conditions refer to named predicates such as
+  `feature_enabled`, `performance_unlocked`, `pending_resolution`, and
+  `stereo_pair_available`. Do not evaluate expressions from TOML. A predicate
+  may hide or disable a control but never authorizes the action.
+- An action registry states which existing server action each control invokes,
+  which fields it accepts, and how values from a form or repeated item supply
+  them. The server validates the submitted values and enforces its existing
+  performance lock. A GUI file cannot define a new endpoint, command, URL, or
+  action handler.
+- Server rendering creates the shared shell, sections, labels, and initial
+  content from the selected document. Browser code updates values and repeated
+  items from the declared sources with DOM operations, preserving focus and
+  unsaved edits. Behaviour adapters implement waveform drawing, ordered-row
+  editing, screen awake, and similar browser capabilities; they do not choose
+  visible controls, labels, placement, or page membership.
+- Keep connection status, fault banner, and performance protection in the
+  shared shell as the user requested. They are safety and connection controls
+  on every page, so their text and mechanics do not need GUI configuration.
+  Navigation follows the page array. All other items in the inventory must
+  come from the GUI file.
+- Escape every text value, never interpolate configured HTML or JavaScript,
+  and restrict links to registered showCo routes or approved downloads.
 
-`condition` and `enabled_when` use named predicates with explicit arguments,
-not a general expression language. Examples:
+## Migration sequence
 
-```toml
-condition = { predicate = "feature_enabled", feature = "streamo" }
-enabled_when = { predicate = "performance_unlocked" }
-condition = { predicate = "fault_unacknowledged" }
-enabled_when = { predicate = "has_selected_playback" }
-```
+1. **Define and test the Channels schema.** Replace the existing unused page
+   metadata with the concrete section and element schema above. Validate the
+   selected file before the HTTP server begins accepting requests. Keep the
+   current Channels output as the behaviour reference.
+2. **Finish Channels end to end.** Render its initial HTML and dynamic channel
+   rows from TOML, bind its actions, preserve waveform and track-name editing,
+   then remove `channels_page` and its layout decisions. Pass the edit, move,
+   and remove test described above. Verify stale data, empty channels,
+   disabled stereo, action failure, and the performance lock.
+3. **Convert read-only pages:** Errors, then Health. Define status formatters
+   and repeated rows for readiness checks, service cards, meters, inputs,
+   errors, mixers, OSC recorders, and incidents. Verify that changing labels,
+   order, visibility, and empty text in TOML changes the page.
+4. **Convert forms and transport:** Musicians, Attributes, Playback, and
+   Actions. Add only the field, form, conditional visibility, result, and
+   transport behaviour these pages need. Preserve hidden musician data on
+   edits, explicit shutdown confirmation, cable-test duration, and feature
+   gates for lyte, streamO, and music.
+5. **Convert stateful workflows:** Set list, Performance, Lighting cues,
+   Soundcheck, and Recovery. Express their controls and sections in TOML.
+   Browser adapters may implement ordered editing, pin preferences, and
+   confirmation flow, while the existing server controls revisions, pending
+   outcomes, skip evidence, and protected actions. Remove each `site/*.html`
+   fragment and page-specific script only when its page uses the document for
+   every displayed element.
+6. **Finish selection and provisioning.** Keep `showco run --gui` for local
+   use. Pass an explicitly selected GUI file through service installation and
+   provisioning; validate it before replacing a running service. Make changes
+   to the selected file part of the target's update decision. Document an
+   alternate show file with a genuinely different Performance page.
+7. **Remove the legacy path.** Remove named page renderers, obsolete
+   page-specific scripts, and the `renderer` field. The route handler looks up
+   a page by `name` and passes it to the generic renderer. Keep only the
+   shared shell, registries, formatters, and behaviour adapters in code.
 
-The schema rejects unknown predicates, bindings, actions, component kinds, and
-fields. This makes a typo a startup error instead of an inactive button.
+Each stage must leave every already converted page running entirely from the
+document. An old renderer may remain temporarily for pages not yet converted,
+but a converted page must have one rendering path. Do not add unused TOML
+entries in advance and count them as progress.
 
-## Data and action contract
+## Completion checks
 
-### Status sources
-
-Define a source registry in Python:
-
-- `show`: existing `/status` data, including service, lock, fault, health,
-  channels, attributes, playback, and monitoring state.
-- `workflow`: existing `/workflow-status` data for set list, soundcheck,
-  recovery, and lighting.
-- `waveforms`: existing server-sent waveform stream, used only by `waveform`.
-- `page`: static values assembled when the page is rendered, such as musician
-  records and recent actions.
-
-Bindings use a limited dotted path through a named source, for example
-`show.recs.channels`, `workflow.lighting.cues`, and `page.musicians`. The server
-serializes only data that a page has declared. This avoids making configuration
-or private state available merely because it exists in the app object.
-
-### Actions
-
-Create an action registry that maps stable GUI action names to the existing
-server operations and declares:
-
-- required and optional fields;
-- accepted value types and limits;
-- confirmation requirement, if any;
-- performance-lock classification;
-- result target and refresh sources.
-
-For example, `recording.pause`, `recs.marker`, `cable_test.run`,
-`musician.add`, `setlist.save`, and `lighting.go` are registry names. The GUI
-file binds a button or form to one of those names; it never contains the current
-internal POST token such as `recs-pause-recording`.
-
-Retain the existing action endpoints initially behind one generic JSON form
-submission endpoint. The server resolves the registry entry, validates supplied
-fields, checks the performance lock, invokes the current adapter, and returns
-the current `ActionResult`. Remove legacy per-page form dispatch only after all
-specified actions use the registry.
-
-## Rendering and browser behaviour
-
-1. The server loads and validates the document once, then resolves the requested
-   page by path. It renders a standard shell from document components and embeds
-   a JSON manifest containing only that page's component tree, sources,
-   bindings, and actions.
-2. `gui.js` renders dynamic component content using DOM methods, never by
-   interpolating HTML. It subscribes only to the page's declared sources and
-   refreshes only the components whose bindings changed.
-3. The renderer has component adapters for the few interactive patterns that
-   need stateful browser behaviour:
-   - ordered editors for songs and lighting cues;
-   - persistent browser preferences for dimming, screen awake, and pinned inputs;
-   - waveform drawing;
-   - form submission, disabled/busy state, and result messages.
-4. The document declares those adapters and their fields. It does not include
-   custom script. If a future display needs behaviour the registry lacks, add a
-   deliberate reusable component kind with tests instead of adding a page script.
-5. Render the global shell from a `global` component in the document. This
-   includes navigation, connection status, performance lock, fault banner, and
-   monitoring error, so those elements stop being a hard-coded exception.
-
-## Migration phases
-
-### 1. Establish the specification and validation
-
-- Write the complete default `showco/gui.toml` from
-  [all-gui-elements.md](all-gui-elements.md), without changing visible behaviour.
-- Define Pydantic schema models for document version, pages, navigation,
-  components, bindings, predicates, and actions.
-- Validate uniqueness of page IDs, paths, component IDs, action names, and
-  repeater keys; validate that links use declared paths.
-- Add fixture-based schema tests for valid default data and concise errors for
-  invalid paths, components, bindings, predicates, actions, and field types.
-
-### 2. Introduce the shared renderer
-
-- Build the shell, static components, navigation, links, sections, text,
-  notices, forms, fields, buttons, and details from the document.
-- Port the global shell first and compare its output against the present HTML
-  contract, including page title, navigation, lock controls, fault banner, and
-  monitoring message.
-- Switch route dispatch from named view functions to a page lookup. Keep the
-  existing views temporarily only as a test oracle while their pages migrate.
-
-### 3. Port data displays and repeated elements
-
-- Port Channels, Musicians, Health, Errors, Attributes, Actions, and Playback.
-- Add list, card, meter, repeater, waveform, and transport adapters as needed.
-- Move all labels, empty-state wording, headings, action placement, and feature
-  visibility into the TOML document.
-- Remove each corresponding hard-coded layout function only after its page is
-  rendered solely from the document.
-
-### 4. Port workflow pages
-
-- Express Set list, Soundcheck, Lighting cues, Recovery, and the Performance
-  set-list controls using sections, repeaters, editors, conditions, and actions.
-- Move the current workflow page fragments and their layout decisions into the
-  document.
-- Replace `workflow.js` and `lighting.js` with generic editor and action
-  adapters. Preserve revision checks, pending-action resolution, explicit
-  confirmation, and service-state restrictions in Python.
-
-### 5. Consolidate action and status delivery
-
-- Register every control named in `all-gui-elements.md` with its action and
-  validate that every document action resolves.
-- Serve page-specific data manifests from the schema and remove renderer-only
-  status fields that no page declares.
-- Retain existing status and workflow APIs while browser tests migrate. Remove
-  obsolete per-page HTTP paths and JavaScript only after no document component
-  depends on them.
-
-### 6. Provision and document alternate displays
-
-- Teach the service setup and local CLI to pass the selected GUI TOML path.
-- Include the selected document's hash in provisioning state so changing a show
-  layout updates the target without confusing it with application code changes.
-- Document a small alternate GUI example, such as a performance-only tablet
-  display, created by selecting pages and components from the same schema.
-- Verify that provisioning rejects an invalid GUI document before replacing a
-  running service.
-
-## Acceptance criteria
-
-- `showco/gui.toml` is the complete source for every page and element in
-  [all-gui-elements.md](all-gui-elements.md); `views.py`, `site/*.html`, and
-  page-specific scripts contain no page, label, layout, or visibility decision.
-- Starting showCo with a valid alternate GUI file changes the available pages
-  and controls without a Python change.
-- Starting with an invalid document fails before serving HTTP and names the
-  erroneous table and field.
-- A GUI file cannot invoke an undeclared server action, access undeclared data,
-  bypass the performance lock, or inject executable content.
-- Existing behaviour remains intact: channel editing, musician editing,
-  playback, set-list revisions, soundcheck confirmations, recovery
-  confirmation, lighting pending resolution, action history, cable testing,
-  streamO controls, and music modes all work through the registry.
-- Browser tests cover the default complete document, a small alternate document,
-  a broken document, stale status, disabled conditions, and a rejected
-  protected action. Unit tests cover schema validation, page lookup, binding
-  resolution, and action registration.
-- The rendered default pages preserve their current accessible labels and
-  operator-visible messages unless a deliberate GUI-data change changes them.
-
-## Risks and decisions to make during implementation
-
-- A generic renderer should not become a second programming language. Add a
-  component kind only when two pages need the same behaviour; otherwise retain
-  a narrowly defined existing kind.
-- Some existing display values are currently formatted in Python. Keep their
-  trusted formatting functions, but make their placement and label declarative.
-- Browser-only preferences such as dimming and screen awake require component
-  adapters. Their presence and placement are data-driven; browser APIs remain
-  code.
-- The default document must be reviewed like production configuration. Its
-  validation tests and manifest snapshot are the protection against accidental
-  loss of controls during a show-specific edit.
+- Trace every entry in [all-gui-elements.md](all-gui-elements.md) to a
+  specific `showco/gui.toml` section or element, except the agreed shared
+  shell. Record this mapping during implementation and fail a review if an
+  item still comes from a page-specific HTML template or view function.
+- For each page, a test changes a label or section order **in the file only**
+  and observes the corresponding rendered change. At least Channels and an
+  alternate Performance display must also prove that removing a control from
+  the file removes it from the interface.
+- The default file preserves current labels and behaviour across all pages.
+  Browser tests cover status refresh, unsaved edits, disconnection, repeated
+  input, pending workflow outcomes, and partial service failure where relevant.
+- A second valid file produces a materially different but functioning display
+  without editing code. An invalid file fails before serving HTTP and names
+  the offending entry.
+- Hidden controls do not weaken authorization. Requests for unknown actions,
+  invalid fields, and protected actions are rejected by the server regardless
+  of what the selected GUI file contains.
+- The final `showco/gui.toml` has no inert `components`, `sources`, or action
+  declarations: every configurable field it contains is read by the running
+  renderer or its registered behaviour adapter.
 
 ## Additional work beyond the prompt
 
-None. This plan only describes the requested conversion to a data-driven GUI.
+None. This revises the plan; it does not perform the remaining GUI
+implementation.
