@@ -5,6 +5,61 @@ default_page = "channels"
 [[pages]]
 name = "channels"
 
+[[pages.sections]]
+name = "recording"
+title = "Recording channels"
+
+[[pages.sections.elements]]
+name = "channels"
+kind = "repeat"
+source = "show.recs.channels"
+empty_text = "No channel data from recs."
+
+[[pages.sections.elements.children]]
+name = "recording_state"
+kind = "indicator"
+label = "Recording state"
+value = "item.on"
+
+[[pages.sections.elements.children]]
+name = "track_name"
+kind = "text_field"
+label = "Track name"
+value = "item.name"
+action = "recs-track-name"
+
+[[pages.sections.elements.children]]
+name = "stereo"
+kind = "checkbox"
+label = "Stereo"
+value = "item.channels"
+enabled_when = "stereo_pair_available"
+action = "recs-set-stereo"
+
+[[pages.sections.elements.children]]
+name = "waveform"
+kind = "waveform"
+label = "Live waveform"
+source = "waveforms"
+
+[[pages.sections.elements.children]]
+name = "calibrate"
+kind = "button"
+label = "Calibrate"
+action = "recs-calibrate"
+
+[[pages.sections.elements]]
+name = "save_names"
+kind = "button"
+label = "Save"
+operation = "save_track_names"
+
+[[pages.sections.elements]]
+name = "revert_names"
+kind = "button"
+label = "Revert"
+operation = "revert_track_names"
+
 [[pages]]
 name = "musicians"
 

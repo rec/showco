@@ -4,12 +4,14 @@
 
   function revertTrackName(form) {
     const input = form.querySelector("[name=track_name]");
+    if (!input) return;
     input.value = form.dataset.savedTrackName;
     input.setCustomValidity("");
   }
 
   function saveTrackName(form) {
     const input = form.querySelector("[name=track_name]");
+    if (!input) return Promise.resolve();
     if (input.value === form.dataset.savedTrackName) return Promise.resolve();
     const submittedName = input.value;
     input.setCustomValidity("");
@@ -20,7 +22,7 @@
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body: new URLSearchParams({
-        action: "recs-track-name",
+        action: input.dataset.action,
         device: form.dataset.device,
         channel: form.dataset.channel,
         track_name: submittedName,
@@ -66,7 +68,7 @@
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body: new URLSearchParams({
-        action: "recs-set-stereo",
+        action: input.dataset.action,
         device: form.dataset.device,
         channels: form.dataset.channels,
       }),
@@ -103,7 +105,7 @@
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body: new URLSearchParams({
-        action: "recs-calibrate",
+        action: button.dataset.action,
         device: form.dataset.device,
         channels: form.dataset.channels,
       }),
@@ -183,49 +185,22 @@
   }
 
   function channelForm(channel, trackName, savedTrackName, channels) {
-    const form = document.createElement("div");
-    form.className = `level ${channel.state}`;
-    form.dataset.device = channel.device;
-    form.dataset.channel = channel.name;
-    form.dataset.channels = channel.channels.join(",");
+    const form = document.getElementById("channel-template").content.firstElementChild.cloneNode(true);
     form.dataset.savedTrackName = savedTrackName;
-    const label = document.createElement("label");
-    const caption = document.createElement("span");
-    caption.className = "channel-caption";
-    const title = document.createElement("b");
-    title.textContent = channel.name;
-    const input = document.createElement("input");
-    input.name = "track_name";
-    input.value = trackName;
-    label.append(title, input);
-    const state = document.createElement("span");
-    state.className = `channel-state ${
-      channel.on ? "indicator-red" : "indicator-green"
-    }`;
-    const recordingState = channel.on ? "recording" : "not recording";
-    state.setAttribute("aria-label", recordingState);
-    state.title = recordingState;
-    state.textContent = "•";
-    caption.append(state, title);
-    label.append(caption, input);
-    const stereo = document.createElement("label");
-    stereo.className = "stereo";
-    const stereoInput = document.createElement("input");
-    stereoInput.type = "checkbox";
-    stereoInput.checked = channel.channels.length === 2;
-    stereoInput.disabled = !stereoEnabled(channel, channels);
-    stereoInput.addEventListener("change", saveStereo);
-    stereo.append(stereoInput, "Stereo");
-    const waveform = document.createElement("canvas");
-    waveform.className = "waveform";
-    waveform.setAttribute("aria-label", "Live waveform");
-    const calibrate = document.createElement("button");
-    calibrate.className = "calibrate-channel";
-    calibrate.type = "button";
-    calibrate.textContent = "Calibrate";
-    calibrate.addEventListener("click", calibrateChannel);
-    form.append(label, stereo, waveform, calibrate);
+    const input = form.querySelector("[name=track_name]");
+    if (input) input.value = trackName;
+    const title = form.querySelector(".channel-caption b");
+    if (title) title.textContent = channel.name;
+    bindChannelActions(form);
+    updateChannelForm(form, channel, channels);
     return form;
+  }
+
+  function bindChannelActions(form) {
+    const stereo = form.querySelector(".stereo input");
+    if (stereo) stereo.addEventListener("change", saveStereo);
+    const calibrate = form.querySelector(".calibrate-channel");
+    if (calibrate) calibrate.addEventListener("click", calibrateChannel);
   }
 
   function stereoEnabled(channel, channels) {
@@ -241,6 +216,12 @@
     const container = document.getElementById("channels");
     if (!container) return;
     if (document.activeElement.closest("#channels .level")) return;
+    if (!channels.length) {
+      const message = document.createElement("p");
+      message.textContent = container.dataset.emptyText;
+      container.replaceChildren(message);
+      return;
+    }
     const forms = new Map(
       [...container.querySelectorAll(".level")].map(form => [trackKey({
         device: form.dataset.device,
@@ -261,12 +242,16 @@
     form.dataset.channel = channel.name;
     form.dataset.channels = channel.channels.join(",");
     const state = form.querySelector(".channel-state");
-    state.className = `channel-state ${channel.on ? "indicator-red" : "indicator-green"}`;
-    state.setAttribute("aria-label", channel.on ? "recording" : "not recording");
-    state.title = state.getAttribute("aria-label");
+    if (state) {
+      state.className = `channel-state ${channel.on ? "indicator-red" : "indicator-green"}`;
+      state.setAttribute("aria-label", channel.on ? "recording" : "not recording");
+      state.title = `${state.dataset.label}: ${state.getAttribute("aria-label")}`;
+    }
     const stereo = form.querySelector(".stereo input");
-    stereo.checked = channel.channels.length === 2;
-    stereo.disabled = !stereoEnabled(channel, channels);
+    if (stereo) {
+      stereo.checked = channel.channels.length === 2;
+      stereo.disabled = !stereoEnabled(channel, channels);
+    }
   }
 
   const saveTrackNamesButton = document.getElementById("save-track-names");
@@ -280,6 +265,6 @@
   for (const input of document.querySelectorAll("#mutable-attributes input")) {
     input.addEventListener("blur", saveMutableAttribute);
   }
-  for (const button of document.querySelectorAll(".calibrate-channel")) {
-    button.addEventListener("click", calibrateChannel);
+  for (const form of document.querySelectorAll("#channels .level")) {
+    bindChannelActions(form);
   }
