@@ -96,6 +96,104 @@ operation = "revert_track_names"
 [[pages]]
 name = "musicians"
 
+[[pages.sections]]
+name = "add"
+title = "Add musician"
+
+[[pages.sections.elements]]
+name = "help"
+kind = "text"
+label = "Names and links are saved in recs. Enter one value per line."
+
+[[pages.sections.elements]]
+name = "add-musician"
+kind = "form"
+label = "Add musician"
+action = "recs-musician-add"
+
+[[pages.sections.elements.children]]
+name = "nickname"
+kind = "input"
+label = "Nickname"
+field = "nickname"
+required = true
+
+[[pages.sections.elements.children]]
+name = "names"
+kind = "textarea"
+label = "Names"
+field = "names"
+format = "lines"
+
+[[pages.sections.elements.children]]
+name = "links"
+kind = "textarea"
+label = "Links"
+field = "links"
+format = "lines"
+
+[[pages.sections.elements.children]]
+name = "submit-add"
+kind = "submit"
+label = "Add musician"
+
+[[pages.sections]]
+name = "edit"
+title = "Edit musician"
+
+[[pages.sections.elements]]
+name = "musician-forms"
+kind = "repeat"
+source = "recs.musicians"
+layout = "forms"
+empty_text = "No musicians saved in recs."
+
+[[pages.sections.elements.children]]
+name = "edit-musician"
+kind = "form"
+label = "Edit"
+action = "recs-musician-edit"
+
+[[pages.sections.elements.children.children]]
+name = "edit-nickname"
+kind = "input"
+label = "Nickname"
+field = "nickname"
+value = "item.nickname"
+required = true
+readonly = true
+
+[[pages.sections.elements.children.children]]
+name = "edit-names"
+kind = "textarea"
+label = "Names"
+field = "names"
+value = "item.names"
+format = "lines"
+
+[[pages.sections.elements.children.children]]
+name = "edit-links"
+kind = "textarea"
+label = "Links"
+field = "links"
+value = "item.links"
+format = "lines"
+
+[[pages.sections.elements.children.children]]
+name = "submit-edit"
+kind = "submit"
+label = "Save changes"
+
+[[pages.sections]]
+name = "recent-actions"
+title = "Recent actions"
+
+[[pages.sections.elements]]
+name = "musician-actions"
+kind = "action_history"
+source = "show.actions"
+empty_text = "No actions yet."
+
 [[pages]]
 name = "performance"
 
