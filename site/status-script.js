@@ -72,8 +72,24 @@
       case "bitrate": return value.output_bitrate_kbps === null
         ? "unknown"
         : `${value.output_bitrate_kbps.toFixed(0)} kbps`;
+      case "playback_state": return value.state;
+      case "playback_selection": return value.state === "waiting"
+        ? "No session selected"
+        : `Session ${value.session}: ${value.source} channel ${value.channel} to output ${value.output_channel}`;
+      case "playback_position": return value.position_seconds === null
+        || value.duration_seconds === null ? "" : `${playbackDuration(value.position_seconds)} / ${playbackDuration(value.duration_seconds)}`;
     }
     throw new Error(`unknown status format: ${format}`);
+  }
+
+  function playbackDuration(seconds) {
+    const wholeSeconds = Math.floor(seconds);
+    const minutes = Math.floor(wholeSeconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const remainder = wholeSeconds % 60;
+    return hours
+      ? `${hours}:${String(minutes % 60).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`
+      : `${minutes}:${String(remainder).padStart(2, "0")}`;
   }
 
   function updateConfiguredStatus(status) {
@@ -94,6 +110,14 @@
       card.querySelector(".state").textContent = service.state;
       card.querySelector(".service-detail").textContent = card.dataset.format === "recording"
         ? recordingText(status.recs) : streamingText(status.streamo);
+    }
+  }
+
+  function updateConfiguredActions(status) {
+    for (const button of document.querySelectorAll('[data-transport] button')) {
+      const form = button.closest("form");
+      button.disabled = form.dataset.disabledWhen === "playback_waiting"
+        && status.recs.playback.state === "waiting";
     }
   }
 
@@ -239,6 +263,7 @@
     return requestStatus()
       .then(status => {
         updateConfiguredStatus(status);
+        updateConfiguredActions(status);
         updateChannels(status.recs.channels);
         updateConfiguredLists(status);
         updatePerformance(status);
@@ -254,4 +279,5 @@
   if (document.querySelectorAll('[data-source="show.recs.errors"]').length) {
     requestAnimationFrame(scrollToBottom);
   }
+  globalThis.refreshShowStatus = updateStatus;
   pollStatus();

@@ -169,7 +169,7 @@ prove the migration.
    and repeated rows for readiness checks, service cards, meters, inputs,
    errors, mixers, OSC recorders, and incidents. Verify that changing labels,
    order, visibility, and empty text in TOML changes the page.
-3. **Convert forms and transport:** Attributes is done. Convert Musicians, Playback, and
+3. **Convert forms and transport:** Attributes and Playback are done. Convert Musicians and
    Actions. Add only the field, form, conditional visibility, result, and
    transport behaviour these pages need. Preserve hidden musician data on
    edits, explicit shutdown confirmation, cable-test duration, and feature

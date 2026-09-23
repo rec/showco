@@ -19,8 +19,10 @@ class Element(BaseModel, frozen=True):
     value: str = ''
     empty_text: str = ''
     enabled_when: str = ''
+    disabled_when: str = ''
     action: str = ''
     operation: str = ''
+    parameters: dict[str, str] = Field(default_factory=dict)
     layout: str = 'cards'
     limit: int = Field(default=0, ge=0)
     format: str = ''
@@ -37,6 +39,8 @@ class Element(BaseModel, frozen=True):
             'meter': {},
             'service_card': {},
             'mutable_attributes': {'source': 'recs.mutable_attributes'},
+            'action_button': {},
+            'action_result': {},
             'text_field': {'value': 'item.name', 'action': 'recs-track-name'},
             'checkbox': {
                 'value': 'item.channels',
@@ -50,11 +54,19 @@ class Element(BaseModel, frozen=True):
             raise ValueError(f'{self.name}: unknown element kind {self.kind!r}')
         if (
             self.kind
-            in {'button', 'checkbox', 'text_field', 'waveform', 'meter', 'service_card'}
+            in {
+                'button',
+                'checkbox',
+                'text_field',
+                'waveform',
+                'meter',
+                'service_card',
+                'action_button',
+            }
             and not self.label
         ):
             raise ValueError(f'{self.name}: label is required')
-        for field in ('source', 'value', 'enabled_when'):
+        for field in ('source', 'value', 'enabled_when', 'disabled_when'):
             if self.kind == 'repeat' and field == 'source':
                 if self.source not in REPEAT_SOURCES:
                     raise ValueError(
@@ -79,6 +91,10 @@ class Element(BaseModel, frozen=True):
                 if self.value not in SERVICE_FORMATS:
                     raise ValueError(f'{self.name}: unknown service {self.value!r}')
                 continue
+            if self.kind == 'action_button' and field == 'disabled_when':
+                if self.disabled_when not in {'', 'playback_waiting'}:
+                    raise ValueError(f'{self.name}: unsupported disabled condition')
+                continue
             expected = allowed[self.kind].get(field, '')
             if getattr(self, field) != expected:
                 raise ValueError(f'{self.name}: invalid {field} for {self.kind}')
@@ -89,7 +105,11 @@ class Element(BaseModel, frozen=True):
                 'cards' if self.source == 'show.recs.channels' else 'list'
             ):
                 raise ValueError(f'{self.name}: unsupported source layout')
-        elif self.children or (self.empty_text and self.kind != 'mutable_attributes'):
+        elif (
+            self.children
+            or (self.parameters and self.kind != 'action_button')
+            or (self.empty_text and self.kind != 'mutable_attributes')
+        ):
             raise ValueError(
                 f'{self.name}: only repeat and mutable attributes accept empty_text'
             )
@@ -103,7 +123,7 @@ class Element(BaseModel, frozen=True):
             if bool(self.value) == bool(self.label):
                 raise ValueError(f'{self.name}: text needs either value or label')
         elif self.kind == 'status':
-            if self.format != STATUS_FORMATS[self.value]:
+            if self.format not in STATUS_FORMATS[self.value]:
                 raise ValueError(f'{self.name}: unsupported status format')
         elif self.kind == 'service_card':
             if self.format != SERVICE_FORMATS[self.value]:
@@ -111,6 +131,11 @@ class Element(BaseModel, frozen=True):
         elif self.kind == 'mutable_attributes':
             if not self.empty_text:
                 raise ValueError(f'{self.name}: mutable attributes need empty_text')
+        elif self.kind == 'action_button':
+            if self.action not in ACTION_BUTTON_PARAMETERS:
+                raise ValueError(f'{self.name}: unsupported button action')
+            if self.parameters not in ACTION_BUTTON_PARAMETERS[self.action]:
+                raise ValueError(f'{self.name}: unsupported button parameters')
         elif self.format:
             raise ValueError(f'{self.name}: unsupported format')
         if self.kind == 'button':
@@ -120,7 +145,9 @@ class Element(BaseModel, frozen=True):
                 ('', 'revert_track_names'),
             }:
                 raise ValueError(f'{self.name}: unsupported button action')
-        elif self.action != allowed[self.kind].get('action', '') or self.operation:
+        elif self.kind != 'action_button' and (
+            self.action != allowed[self.kind].get('action', '') or self.operation
+        ):
             raise ValueError(f'{self.name}: unsupported action or operation')
         return self
 
@@ -135,7 +162,7 @@ class Section(BaseModel, frozen=True):
 
     @model_validator(mode='after')
     def _valid_style(self) -> Section:
-        if self.style not in {'', 'readiness', 'cards', 'performance'}:
+        if self.style not in {'', 'readiness', 'cards', 'performance', 'transport'}:
             raise ValueError(f'{self.name}: unknown section style {self.style!r}')
         return self
 
@@ -251,6 +278,8 @@ class Gui(BaseModel, frozen=True):
                         'meter',
                         'service_card',
                         'mutable_attributes',
+                        'action_button',
+                        'action_result',
                     }:
                         pass
                     else:
@@ -334,16 +363,28 @@ TEXT_VALUES_BY_FORMAT = {
     'osc_detail': {'item'},
 }
 STATUS_FORMATS = {
-    'show.readiness.ready': 'readiness',
-    'show.recs.service': 'service',
-    'show.recs.snapshot_error': 'snapshot',
-    'show.recording_progress.message': 'progress',
-    'show.streamo.service': 'service',
-    'show.lyte': 'lyte',
-    'show.system': 'temperature',
-    'show.streamo': 'bitrate',
+    'show.readiness.ready': {'readiness'},
+    'show.recs.service': {'service'},
+    'show.recs.snapshot_error': {'snapshot'},
+    'show.recording_progress.message': {'progress'},
+    'show.streamo.service': {'service'},
+    'show.lyte': {'lyte'},
+    'show.system': {'temperature'},
+    'show.streamo': {'bitrate'},
+    'show.recs.playback': {
+        'playback_state',
+        'playback_selection',
+        'playback_position',
+    },
 }
 SERVICE_FORMATS = {
     'show.recs.service': 'recording',
     'show.streamo.service': 'streaming',
+}
+ACTION_BUTTON_PARAMETERS = {
+    'recs-playback-jump-session': [{'offset': '-1'}, {'offset': '1'}],
+    'recs-playback-jump': [{'seconds': '-10'}, {'seconds': '10'}],
+    'recs-playback-play': [{}],
+    'recs-playback-pause': [{}],
+    'recs-playback-stop': [{}],
 }

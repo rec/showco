@@ -1,42 +1,11 @@
 (() => {
-  function duration(seconds) {
-    if (seconds === null) return "unknown time";
-    const wholeSeconds = Math.floor(seconds);
-    const minutes = Math.floor(wholeSeconds / 60);
-    const hours = Math.floor(minutes / 60);
-    const remainder = wholeSeconds % 60;
-    return hours
-      ? `${hours}:${String(minutes % 60).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`
-      : `${minutes}:${String(remainder).padStart(2, "0")}`;
-  }
-
-  function update(playback) {
-    document.getElementById("playback-state").textContent = playback.state;
-    const selected = playback.state !== "waiting";
-    document.getElementById("playback-selection").textContent = selected
-      ? `Session ${playback.session}: ${playback.source} channel ${playback.channel} to output ${playback.output_channel}`
-      : "No session selected";
-    document.getElementById("playback-position").textContent = selected
-      ? `${duration(playback.position_seconds)} / ${duration(playback.duration_seconds)}`
-      : "";
-    for (const form of document.querySelectorAll("#playback-transport form")) {
-      const action = form.querySelector("[name=action]").value;
-      form.querySelector("button").disabled = action !== "recs-playback-play" && !selected;
-    }
-  }
-
-  async function refresh() {
-    update((await requestStatus()).recs.playback);
-    statusConnected();
-  }
-
-  for (const form of document.querySelectorAll("#playback-transport form")) {
+  for (const form of document.querySelectorAll("[data-transport] form")) {
     form.addEventListener("submit", async event => {
       event.preventDefault();
       const button = form.querySelector("button");
       button.disabled = true;
       button.setAttribute("aria-busy", "true");
-      const result = document.getElementById("playback-result");
+      const result = document.querySelector("[data-action-result]");
       try {
         const response = await fetch("/actions", {
           method: "POST",
@@ -48,23 +17,22 @@
         });
         if (!response.ok) throw new Error(`playback request failed: ${response.status}`);
         const action = await response.json();
-        result.textContent = action.message;
-        result.className = action.ok ? "ok" : "failed";
-        await refresh();
+        if (result) {
+          result.textContent = action.message;
+          result.className = action.ok ? "ok" : "failed";
+        }
+        await globalThis.refreshShowStatus();
       } catch (error) {
-        result.textContent = error.message;
-        result.className = "failed";
+        if (result) {
+          result.textContent = error.message;
+          result.className = "failed";
+        }
       } finally {
         button.removeAttribute("aria-busy");
         button.disabled = false;
-        await refresh().catch(statusFailed);
+        await globalThis.refreshShowStatus().catch(statusFailed);
       }
     });
   }
 
-  function poll() {
-    refresh().catch(statusFailed).finally(() => setTimeout(poll, 1000));
-  }
-
-  poll();
 })();

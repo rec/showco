@@ -369,6 +369,88 @@ value = "item.message"
 [[pages]]
 name = "playback"
 
+[[pages.sections]]
+name = "playback"
+title = "Playback"
+
+[[pages.sections.elements]]
+name = "playback-state"
+kind = "status"
+value = "show.recs.playback"
+format = "playback_state"
+
+[[pages.sections.elements]]
+name = "playback-selection"
+kind = "status"
+value = "show.recs.playback"
+format = "playback_selection"
+
+[[pages.sections.elements]]
+name = "playback-position"
+kind = "status"
+value = "show.recs.playback"
+format = "playback_position"
+
+[[pages.sections.elements]]
+name = "playback-result"
+kind = "action_result"
+
+[[pages.sections]]
+name = "transport"
+style = "transport"
+
+[[pages.sections.elements]]
+name = "previous-session"
+kind = "action_button"
+label = "Previous session"
+action = "recs-playback-jump-session"
+parameters = { offset = "-1" }
+disabled_when = "playback_waiting"
+
+[[pages.sections.elements]]
+name = "back-10-seconds"
+kind = "action_button"
+label = "-10 seconds"
+action = "recs-playback-jump"
+parameters = { seconds = "-10" }
+disabled_when = "playback_waiting"
+
+[[pages.sections.elements]]
+name = "play"
+kind = "action_button"
+label = "Play"
+action = "recs-playback-play"
+
+[[pages.sections.elements]]
+name = "pause"
+kind = "action_button"
+label = "Pause"
+action = "recs-playback-pause"
+disabled_when = "playback_waiting"
+
+[[pages.sections.elements]]
+name = "stop"
+kind = "action_button"
+label = "Stop"
+action = "recs-playback-stop"
+disabled_when = "playback_waiting"
+
+[[pages.sections.elements]]
+name = "forward-10-seconds"
+kind = "action_button"
+label = "+10 seconds"
+action = "recs-playback-jump"
+parameters = { seconds = "10" }
+disabled_when = "playback_waiting"
+
+[[pages.sections.elements]]
+name = "next-session"
+kind = "action_button"
+label = "Next session"
+action = "recs-playback-jump-session"
+parameters = { offset = "1" }
+disabled_when = "playback_waiting"
+
 [[pages]]
 name = "attributes"
 
