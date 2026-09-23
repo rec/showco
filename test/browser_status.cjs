@@ -5,7 +5,7 @@ const vm = require('node:vm');
 const status = JSON.parse(fs.readFileSync(0, 'utf8'));
 const elements = new Map([
   'streamo-health', 'bitrate', 'temperature', 'readiness-state',
-  'readiness-checks', 'incidents', 'input-checks', 'osc-recorders', 'connection-status', 'lyte-health',
+  'readiness-checks', 'incidents', 'input-checks', 'osc-recorders', 'connection-status', 'lyte-health', 'playback-state',
 ].map(id => [id, {textContent: '', replaceChildren() {}}]));
 for (const [id, value, format, label] of [
   ['streamo-health', 'show.streamo.service', 'service', 'streamo'],
@@ -13,6 +13,7 @@ for (const [id, value, format, label] of [
   ['temperature', 'show.system', 'temperature', 'Pi temperature'],
   ['readiness-state', 'show.readiness.ready', 'readiness', ''],
   ['lyte-health', 'show.lyte', 'lyte', 'lyte'],
+  ['playback-state', 'show.recs.playback', 'playback_state', ''],
 ]) {
   elements.get(id).dataset = {value, format, label};
 }
@@ -42,6 +43,7 @@ vm.runInContext('updateStatus()', context).then(async () => {
     status.streamo.output_bitrate_kbps === null ? 'Stream bitrate: unknown' : 'Stream bitrate: 128 kbps');
   assert.equal(elements.get('temperature').textContent, 'Pi temperature: 42.0 °C');
   assert.equal(elements.get('readiness-state').textContent, 'not ready');
+  assert.equal(elements.get('playback-state').textContent, status.recs.playback.state);
   assert.equal(elements.get('osc-recorders').textContent, 'No OSC recorders.');
   assert.match(elements.get('connection-status').textContent, /^Connected/);
   assert.ok(!elements.get('lyte-health').textContent.includes('undefined'));

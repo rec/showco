@@ -47,6 +47,7 @@ def configured_page(
         metric_data=_gui_metric_data,
         mutable_attributes=_gui_mutable_attributes(mutable_attributes),
         attribute_field=_gui_attribute_field,
+        is_disabled=_gui_disabled,
     )
     script = site_file('channel-controls.js') + site_file('status-script.js')
     if any(
@@ -56,6 +57,8 @@ def configured_page(
         for child in element.children
     ):
         script += site_file('waveform-script.js')
+    if any(section.style == 'transport' for section in page_spec.sections):
+        script += site_file('playback-script.js')
     return page(
         page_spec.name,
         body,
@@ -107,6 +110,13 @@ def _gui_enabled(
     return True
 
 
+def _gui_disabled(element: gui_schema.Element, status: models.ShowStatus) -> bool:
+    return (
+        element.disabled_when == 'playback_waiting'
+        and status.recs.playback.state == 'waiting'
+    )
+
+
 def _gui_item_text(
     element: gui_schema.Element, status: models.ShowStatus, item: object | None
 ) -> str:
@@ -151,6 +161,12 @@ def _gui_status_text(element: gui_schema.Element, status: models.ShowStatus) -> 
             return _temperature(status)
         case 'bitrate':
             return _bitrate(status)
+        case 'playback_state' if isinstance(value, models.PlaybackStatus):
+            return value.state
+        case 'playback_selection' if isinstance(value, models.PlaybackStatus):
+            return playback_selection(value)
+        case 'playback_position' if isinstance(value, models.PlaybackStatus):
+            return playback_position(value)
     raise ValueError(f'unsupported status format {element.format!r}')
 
 
@@ -344,57 +360,6 @@ def music_actions(status: models.MusicStatus | None) -> str:
     """
 
 
-def playback_page(playback: models.PlaybackStatus) -> str:
-    session_disabled = ' disabled' if playback.state == 'waiting' else ''
-    transport = ''.join(
-        [
-            transport_button(
-                'recs-playback-jump-session',
-                'Previous session',
-                offset=-1,
-                disabled=session_disabled,
-            ),
-            transport_button(
-                'recs-playback-jump',
-                '-10 seconds',
-                seconds=-10,
-                disabled=session_disabled,
-            ),
-            transport_button('recs-playback-play', 'Play'),
-            transport_button('recs-playback-pause', 'Pause', disabled=session_disabled),
-            transport_button('recs-playback-stop', 'Stop', disabled=session_disabled),
-            transport_button(
-                'recs-playback-jump',
-                '+10 seconds',
-                seconds=10,
-                disabled=session_disabled,
-            ),
-            transport_button(
-                'recs-playback-jump-session',
-                'Next session',
-                offset=1,
-                disabled=session_disabled,
-            ),
-        ]
-    )
-    return page(
-        'playback',
-        f"""
-        <section>
-          <h2>Playback</h2>
-          <p id="playback-state" aria-live="polite">{html.escape(playback.state)}</p>
-          <p id="playback-selection">{html.escape(playback_selection(playback))}</p>
-          <p id="playback-position">{html.escape(playback_position(playback))}</p>
-          <p id="playback-result" aria-live="polite"></p>
-          <div class="transport" id="playback-transport">
-            {transport}
-          </div>
-        </section>
-        """,
-        script=site_file('playback-script.js'),
-    )
-
-
 def playback_selection(playback: models.PlaybackStatus) -> str:
     if playback.state == 'waiting':
         return 'No session selected'
@@ -539,28 +504,6 @@ def button(action: str, label: str, *, confirm: bool = False) -> str:
     <form method="post"{confirmation}>
       <input type="hidden" name="action" value="{html.escape(action)}">
       <button>{html.escape(label)}</button>
-    </form>
-    """
-
-
-def transport_button(
-    action: str,
-    label: str,
-    *,
-    seconds: int | None = None,
-    offset: int | None = None,
-    disabled: str = '',
-) -> str:
-    fields = ''
-    if seconds is not None:
-        fields += f'<input type="hidden" name="seconds" value="{seconds}">'
-    if offset is not None:
-        fields += f'<input type="hidden" name="offset" value="{offset}">'
-    return f"""
-    <form method="post">
-      <input type="hidden" name="action" value="{html.escape(action)}">
-      {fields}
-      <button{disabled}>{html.escape(label)}</button>
     </form>
     """
 
