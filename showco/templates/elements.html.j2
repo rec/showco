@@ -7,6 +7,8 @@
       <label>{{ child.label }} <input name="{{ child.field }}" value="{{ form_value(child, item) }}"{% if child.required %} required{% endif %}{% if child.readonly %} readonly{% endif %}></label>
     {% elif child.kind == 'textarea' %}
       <label>{{ child.label }} <textarea name="{{ child.field }}">{{ form_value(child, item) }}</textarea></label>
+    {% elif child.kind == 'select' %}
+      <label>{{ child.label }} <select name="{{ child.field }}">{% for value, label in child.options.items() %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
     {% elif child.kind == 'submit' %}
       <button type="submit">{{ child.label }}</button>
     {% endif %}
@@ -70,7 +72,7 @@
       {% if loop.last or loop.nextitem.kind != 'button' %}</div>{% endif %}
     {% elif element.kind == 'text' %}
       <p data-element="{{ element.name }}">{{ element.label }}</p>
-    {% elif element.kind == 'status' %}
+    {% elif element.kind == 'status' and is_visible(element, features) %}
       <p class="{{ status_class(element.format, status) }}" data-value="{{ element.value }}" data-format="{{ element.format }}" data-label="{{ element.label }}" id="{{ element.name }}">{% if element.label %}{{ element.label }}: {% endif %}{{ status_text(element, status) }}</p>
     {% elif element.kind == 'service_card' %}
       {% set service = bound_value(element.value, status, none) %}
@@ -100,7 +102,7 @@
         {% endfor %}
       {% else %}<p>{{ element.empty_text }}</p>{% endif %}
       </div>
-    {% elif element.kind == 'action_button' %}
+    {% elif element.kind == 'action_button' and is_visible(element, features) %}
       <form method="post" data-disabled-when="{{ element.disabled_when }}">
         <input type="hidden" name="action" value="{{ element.action }}">
         {% for name, value in element.parameters.items() %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
@@ -108,8 +110,17 @@
       </form>
     {% elif element.kind == 'action_result' %}
       <p id="{{ element.name }}" data-action-result aria-live="polite"></p>
-    {% elif element.kind == 'form' %}
-      {{ form(element, none) }}
+    {% elif element.kind == 'form' and is_visible(element, features) %}
+      <form method="post" action="{{ form_action(element.action) }}" class="action-form">
+        <input type="hidden" name="action" value="{{ element.action }}">
+        {% if element.label %}<h3>{{ element.label }}</h3>{% endif %}
+        {% for child in element.children %}
+          {% if child.kind == 'input' %}<label>{{ child.label }} <input name="{{ child.field }}" value="{{ child.value }}"{% if child.required %} required{% endif %}></label>
+          {% elif child.kind == 'textarea' %}<label>{{ child.label }} <textarea name="{{ child.field }}">{{ child.value }}</textarea></label>
+          {% elif child.kind == 'select' %}<label>{{ child.label }} <select name="{{ child.field }}">{% for value, label in child.options.items() %}<option value="{{ value }}"{% if loop.first %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+          {% elif child.kind == 'submit' %}<button type="submit">{{ child.label }}</button>{% endif %}
+        {% endfor %}
+      </form>
     {% elif element.kind == 'action_history' %}
       {% set actions = source_data(element.source, status)['items'] %}
       <div id="{{ element.name }}">

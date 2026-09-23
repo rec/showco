@@ -78,6 +78,9 @@
         : `Session ${value.session}: ${value.source} channel ${value.channel} to output ${value.output_channel}`;
       case "playback_position": return value.position_seconds === null
         || value.duration_seconds === null ? "" : `${playbackDuration(value.position_seconds)} / ${playbackDuration(value.duration_seconds)}`;
+      case "music": return `Mode: ${value.mode}. ${
+        value.track === null ? "No music playing" : value.track
+      }${value.error ? ` ${value.error}` : ""}`;
     }
     throw new Error(`unknown status format: ${format}`);
   }

@@ -565,6 +565,402 @@ empty_text = "No mutable recs attributes."
 [[pages]]
 name = "actions"
 
+[[pages.sections]]
+name = "recording"
+title = "Recording"
+
+[[pages.sections.elements]]
+name = "calibrate"
+kind = "action_button"
+label = "Calibrate noise floor"
+action = "recs-calibrate"
+
+[[pages.sections.elements]]
+name = "reload-profiles"
+kind = "action_button"
+label = "Reload recs profiles"
+action = "recs-reload-profiles"
+
+[[pages.sections.elements]]
+name = "new-session"
+kind = "action_button"
+label = "Start new recording session"
+action = "recs-new-session"
+
+[[pages.sections.elements]]
+name = "pause"
+kind = "action_button"
+label = "Pause recording"
+action = "recs-pause-recording"
+
+[[pages.sections.elements]]
+name = "resume"
+kind = "action_button"
+label = "Resume recording"
+action = "recs-resume-recording"
+
+[[pages.sections.elements]]
+name = "snapshot"
+kind = "action_button"
+label = "recs status snapshot"
+action = "recs-status-snapshot"
+
+[[pages.sections.elements]]
+name = "disk-status"
+kind = "action_button"
+label = "recs disk status"
+action = "recs-disk-status"
+
+[[pages.sections.elements]]
+name = "devices"
+kind = "action_button"
+label = "List recs devices"
+action = "recs-list-devices"
+
+[[pages.sections.elements]]
+name = "capabilities"
+kind = "action_button"
+label = "recs capabilities"
+action = "recs-capabilities"
+
+[[pages.sections.elements]]
+name = "noise-floor"
+kind = "form"
+label = "Set noise floor"
+action = "recs-set-noise-floor"
+
+[[pages.sections.elements.children]]
+name = "noise-source"
+kind = "input"
+label = "source"
+field = "source"
+
+[[pages.sections.elements.children]]
+name = "noise-channel"
+kind = "input"
+label = "channel"
+field = "channel"
+
+[[pages.sections.elements.children]]
+name = "noise-value"
+kind = "input"
+label = "noise floor"
+field = "noise_floor"
+
+[[pages.sections.elements.children]]
+name = "noise-submit"
+kind = "submit"
+label = "Set noise floor"
+
+[[pages.sections]]
+name = "markers"
+title = "Markers"
+
+[[pages.sections.elements]]
+name = "show-start"
+kind = "action_button"
+label = "Show start"
+action = "recs-marker"
+parameters = { label = "Show start" }
+
+[[pages.sections.elements]]
+name = "song-start"
+kind = "action_button"
+label = "Song start"
+action = "recs-marker"
+parameters = { label = "Song start" }
+
+[[pages.sections.elements]]
+name = "interval"
+kind = "action_button"
+label = "Interval"
+action = "recs-marker"
+parameters = { label = "Interval" }
+
+[[pages.sections.elements]]
+name = "show-end"
+kind = "action_button"
+label = "Show end"
+action = "recs-marker"
+parameters = { label = "Show end" }
+
+[[pages.sections.elements]]
+name = "marker"
+kind = "form"
+label = "Create recs marker"
+action = "recs-marker"
+
+[[pages.sections.elements.children]]
+name = "marker-label"
+kind = "input"
+label = "label"
+field = "label"
+
+[[pages.sections.elements.children]]
+name = "marker-submit"
+kind = "submit"
+label = "Create recs marker"
+
+[[pages.sections.elements]]
+name = "key-label"
+kind = "form"
+label = "Set recs key label"
+action = "recs-key-label"
+
+[[pages.sections.elements.children]]
+name = "key"
+kind = "input"
+label = "key"
+field = "key"
+
+[[pages.sections.elements.children]]
+name = "key-label-value"
+kind = "input"
+label = "label"
+field = "label"
+
+[[pages.sections.elements.children]]
+name = "key-label-submit"
+kind = "submit"
+label = "Set recs key label"
+
+[[pages.sections]]
+name = "tests"
+title = "Tests"
+
+[[pages.sections.elements]]
+name = "lights"
+kind = "action_button"
+label = "Test lights"
+action = "lyte-test"
+visible_when = "lyte_enabled"
+
+[[pages.sections.elements]]
+name = "cable-test"
+kind = "form"
+label = "Test X18 cables"
+action = "cable-test"
+
+[[pages.sections.elements.children]]
+name = "cable-channels"
+kind = "input"
+label = "channels"
+field = "channels"
+value = "9-14"
+
+[[pages.sections.elements.children]]
+name = "cable-sends"
+kind = "input"
+label = "sends"
+field = "sends"
+value = "1-6"
+
+[[pages.sections.elements.children]]
+name = "cable-duration"
+kind = "input"
+label = "seconds"
+field = "duration-seconds"
+value = "3"
+
+[[pages.sections.elements.children]]
+name = "cable-submit"
+kind = "submit"
+label = "Test X18 cables"
+
+[[pages.sections]]
+name = "shutdown"
+title = "Shutdown"
+
+[[pages.sections.elements]]
+name = "shutdown-recs"
+kind = "form"
+label = "Shutdown recs daemon"
+action = "recs-shutdown"
+
+[[pages.sections.elements.children]]
+name = "shutdown-confirmation"
+kind = "select"
+label = "confirmation"
+field = "confirmation"
+options = { cancel = "Cancel", shutdown = "Shutdown recs daemon" }
+
+[[pages.sections.elements.children]]
+name = "shutdown-submit"
+kind = "submit"
+label = "Apply shutdown choice"
+
+[[pages.sections]]
+name = "recent-actions"
+title = "Recent actions"
+
+[[pages.sections.elements]]
+name = "actions-history"
+kind = "action_history"
+source = "show.actions"
+empty_text = "No actions yet."
+
+[[pages.sections]]
+name = "stream"
+title = "Stream"
+
+[[pages.sections.elements]]
+name = "restart-stream"
+kind = "action_button"
+label = "Restart Stream"
+action = "streamo-restart"
+visible_when = "streamo_enabled"
+
+[[pages.sections.elements]]
+name = "mute-stream"
+kind = "action_button"
+label = "Mute Stream"
+action = "streamo-mute"
+visible_when = "streamo_enabled"
+
+[[pages.sections.elements]]
+name = "unmute-stream"
+kind = "action_button"
+label = "Unmute Stream"
+action = "streamo-unmute"
+visible_when = "streamo_enabled"
+
+[[pages.sections.elements]]
+name = "stop-stream"
+kind = "action_button"
+label = "Stop Stream"
+action = "streamo-stop"
+visible_when = "streamo_enabled"
+
+[[pages.sections.elements]]
+name = "stream-title"
+kind = "form"
+label = "Update stream info"
+action = "streamo-title"
+visible_when = "streamo_enabled"
+
+[[pages.sections.elements.children]]
+name = "stream-title-value"
+kind = "input"
+label = "title"
+field = "title"
+
+[[pages.sections.elements.children]]
+name = "stream-category"
+kind = "input"
+label = "category"
+field = "category"
+
+[[pages.sections.elements.children]]
+name = "stream-tags"
+kind = "input"
+label = "tags"
+field = "tags"
+
+[[pages.sections.elements.children]]
+name = "stream-title-submit"
+kind = "submit"
+label = "Update stream info"
+
+[[pages.sections.elements]]
+name = "stream-chat"
+kind = "form"
+label = "Send chat message"
+action = "streamo-chat"
+visible_when = "streamo_enabled"
+
+[[pages.sections.elements.children]]
+name = "stream-chat-message"
+kind = "input"
+label = "message"
+field = "message"
+
+[[pages.sections.elements.children]]
+name = "stream-chat-submit"
+kind = "submit"
+label = "Send chat message"
+
+[[pages.sections.elements]]
+name = "stream-announce"
+kind = "form"
+label = "Send announcement"
+action = "streamo-announce"
+visible_when = "streamo_enabled"
+
+[[pages.sections.elements.children]]
+name = "stream-announce-message"
+kind = "input"
+label = "message"
+field = "message"
+
+[[pages.sections.elements.children]]
+name = "stream-announce-submit"
+kind = "submit"
+label = "Send announcement"
+
+[[pages.sections.elements]]
+name = "stream-clip"
+kind = "action_button"
+label = "Create clip"
+action = "streamo-clip"
+visible_when = "streamo_enabled"
+
+[[pages.sections.elements]]
+name = "stream-marker"
+kind = "form"
+label = "Create stream marker"
+action = "streamo-marker"
+visible_when = "streamo_enabled"
+
+[[pages.sections.elements.children]]
+name = "stream-marker-description"
+kind = "input"
+label = "description"
+field = "description"
+
+[[pages.sections.elements.children]]
+name = "stream-marker-submit"
+kind = "submit"
+label = "Create stream marker"
+
+[[pages.sections]]
+name = "music"
+title = "Music mode"
+
+[[pages.sections.elements]]
+name = "music-status"
+kind = "status"
+value = "show.music"
+format = "music"
+visible_when = "music_enabled"
+
+[[pages.sections.elements]]
+name = "music-setup"
+kind = "action_button"
+label = "Setup"
+action = "music-setup"
+visible_when = "music_enabled"
+
+[[pages.sections.elements]]
+name = "music-record"
+kind = "action_button"
+label = "Record"
+action = "music-record"
+visible_when = "music_enabled"
+
+[[pages.sections.elements]]
+name = "music-teardown"
+kind = "action_button"
+label = "Tear down"
+action = "music-teardown"
+visible_when = "music_enabled"
+
+[[pages.sections.elements]]
+name = "music-stop"
+kind = "action_button"
+label = "Stop and shut down"
+action = "music-stop"
+visible_when = "music_enabled"
+
 [[pages]]
 name = "errors"
 
