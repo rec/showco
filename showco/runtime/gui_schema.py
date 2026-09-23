@@ -152,8 +152,15 @@ class Element(BaseModel, frozen=True):
         elif self.kind == 'workflow_button':
             if self.action not in WORKFLOW_ACTIONS:
                 raise ValueError(f'{self.name}: unsupported workflow action')
+            if self.parameters not in WORKFLOW_BUTTON_PARAMETERS.get(self.action, [{}]):
+                raise ValueError(f'{self.name}: unsupported workflow parameters')
         elif self.kind == 'workflow_checkbox':
-            if self.name not in {'confirm-cue-resolution', 'confirm-lighting'}:
+            if self.name not in {
+                'confirm-cue-resolution',
+                'confirm-lighting',
+                'confirm-observation',
+                'confirm-output',
+            }:
                 raise ValueError(f'{self.name}: unsupported workflow checkbox')
         elif self.kind == 'workflow_editor':
             if self.name not in {
@@ -164,6 +171,10 @@ class Element(BaseModel, frozen=True):
                 'lighting-looks',
                 'add-lighting',
                 'reload-lighting',
+                'expected-inputs',
+                'check-note',
+                'skip-step',
+                'soundcheck-results',
             }:
                 raise ValueError(f'{self.name}: unsupported workflow editor')
         elif self.kind == 'workflow_display':
@@ -181,6 +192,7 @@ class Element(BaseModel, frozen=True):
                 'lighting-pending',
                 'lighting-resolution-help',
                 'lighting-help',
+                'soundcheck-scope',
             }:
                 raise ValueError(f'{self.name}: unsupported workflow display')
         elif self.kind == 'workflow_status':
@@ -194,7 +206,10 @@ class Element(BaseModel, frozen=True):
                 raise ValueError(f'{self.name}: unsupported link')
         elif (
             self.children
-            or (self.parameters and self.kind != 'action_button')
+            or (
+                self.parameters
+                and self.kind not in {'action_button', 'workflow_button'}
+            )
             or (self.empty_text and self.kind != 'mutable_attributes')
         ):
             raise ValueError(
@@ -239,7 +254,7 @@ class Element(BaseModel, frozen=True):
             self.action != allowed[self.kind].get('action', '') or self.operation
         ):
             raise ValueError(f'{self.name}: unsupported action or operation')
-        if self.kind not in {'input', 'textarea', 'select'} and (
+        if self.kind not in {'input', 'textarea', 'select', 'workflow_editor'} and (
             self.field or self.required or self.readonly or self.options
         ):
             raise ValueError(f'{self.name}: form options need an input')
@@ -581,4 +596,20 @@ WORKFLOW_ACTIONS = {
     'lighting-cancel',
     'lighting-retry',
     'lighting-save',
+    'soundcheck-begin',
+    'soundcheck-check',
+    'soundcheck-start-recording',
+    'soundcheck-pause-recording',
+    'soundcheck-lights',
+    'soundcheck-skip',
+}
+WORKFLOW_BUTTON_PARAMETERS = {
+    'soundcheck-check': [
+        {'step': 'disk'},
+        {'step': 'inputs'},
+        {'step': 'recording'},
+        {'step': 'playback'},
+        {'step': 'lights'},
+        {'step': 'stream'},
+    ],
 }

@@ -330,6 +330,28 @@ def test_lighting_file_controls_workflow_labels(tmp_path: Path) -> None:
     assert 'Retry selection</button>' not in html
 
 
+def test_soundcheck_file_controls_workflow_labels(tmp_path: Path) -> None:
+    path = tmp_path / 'gui.toml'
+    path.write_text(
+        gui_schema.DEFAULT_GUI_PATH.read_text().replace(
+            'label = "Begin a fresh soundcheck"', 'label = "Start soundcheck"'
+        )
+    )
+    status = models.ShowStatus(
+        recs=models.RecsStatus(
+            service=models.ServiceStatus(name='recs', state='connected')
+        ),
+        streamo=models.StreamoStatus(
+            service=models.ServiceStatus(name='streamo', state='disabled')
+        ),
+    )
+
+    html = views.configured_page(gui_schema.load_gui(path).page('soundcheck'), status)
+
+    assert 'Start soundcheck</button>' in html
+    assert 'Begin a fresh soundcheck</button>' not in html
+
+
 @pytest.mark.parametrize(
     'old,new',
     [
