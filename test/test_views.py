@@ -6,7 +6,6 @@ from pathlib import Path
 
 from showco.runtime import gui_schema, models
 from showco.runtime.views import (
-    actions_page,
     configured_page,
 )
 
@@ -32,6 +31,27 @@ def health_page(status: models.ShowStatus) -> str:
     return configured_page(gui_schema.current_gui().page('health'), status)
 
 
+def actions_page(
+    action_log: list[models.ActionLogEntry], *, features: set[str] | None = None
+) -> str:
+    return configured_page(
+        gui_schema.current_gui().page('actions'),
+        models.ShowStatus(
+            recs=models.RecsStatus(
+                service=models.ServiceStatus(name='recs', state='connected')
+            ),
+            streamo=models.StreamoStatus(
+                service=models.ServiceStatus(name='streamo', state='disabled')
+            ),
+            music=models.MusicStatus(
+                mode='setup', track=Path('/music/setup/intro.mp3')
+            ),
+        ),
+        action_log=action_log,
+        features=features or {'streamo_enabled', 'lyte_enabled', 'music_enabled'},
+    )
+
+
 class ViewsTests(unittest.TestCase):
     def test_status_pages_have_five_page_navigation(self) -> None:
         html = channels_page(
@@ -54,12 +74,7 @@ class ViewsTests(unittest.TestCase):
         self.assertNotIn('href="/home"', html)
 
     def test_actions_page_shows_music_modes_when_x18_music_is_configured(self) -> None:
-        html = actions_page(
-            [],
-            music=models.MusicStatus(
-                mode='setup', track=Path('/music/setup/intro.mp3')
-            ),
-        )
+        html = actions_page([])
 
         self.assertIn('Music mode', html)
         self.assertIn('Mode: setup. /music/setup/intro.mp3', html)
@@ -552,7 +567,7 @@ class ViewsTests(unittest.TestCase):
         self.assertIn('value="streamo-restart"', html)
 
     def test_actions_page_hides_stream_controls_when_disabled(self) -> None:
-        html = actions_page([], streamo_enabled=False)
+        html = actions_page([], features={'lyte_enabled', 'music_enabled'})
 
         self.assertNotIn('Restart Stream', html)
         self.assertNotIn('value="streamo-mute"', html)

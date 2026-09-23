@@ -33,6 +33,7 @@ def configured_page(
     | None = None,
     musicians: Mapping[str, object] | models.ActionResult | None = None,
     action_log: list[models.ActionLogEntry] | None = None,
+    features: set[str] | None = None,
 ) -> str:
     body = GUI_TEMPLATES.get_template('elements.html.j2').render(
         sections=page_spec.sections,
@@ -54,6 +55,9 @@ def configured_page(
         attribute_field=_gui_attribute_field,
         is_disabled=_gui_disabled,
         form_value=_gui_form_value,
+        form_action=_gui_form_action,
+        is_visible=lambda element, values: _gui_visible(element, values or set()),
+        features=features or set(),
     )
     script = site_file('channel-controls.js') + site_file('status-script.js')
     if any(
@@ -112,6 +116,14 @@ def _gui_form_value(element: gui_schema.Element, item: object | None) -> str:
             raise TypeError(f'{element.name}: form lines value is not a list')
         return '\n'.join(str(line) for line in value)
     return str(value)
+
+
+def _gui_form_action(action: str) -> str:
+    return '/musicians' if action in gui_schema.MUSICIAN_ACTIONS else '/actions'
+
+
+def _gui_visible(element: gui_schema.Element, features: set[str]) -> bool:
+    return not element.visible_when or element.visible_when in features
 
 
 def _gui_row(source: str, item: object | None) -> dict[str, object]:
@@ -205,6 +217,10 @@ def _gui_status_text(element: gui_schema.Element, status: models.ShowStatus) -> 
             return playback_selection(value)
         case 'playback_position' if isinstance(value, models.PlaybackStatus):
             return playback_position(value)
+        case 'music' if isinstance(value, models.MusicStatus):
+            track = str(value.track) if value.track is not None else 'No music playing'
+            error = f' {value.error}' if value.error else ''
+            return f'Mode: {value.mode}. {track}{error}'
     raise ValueError(f'unsupported status format {element.format!r}')
 
 
@@ -285,68 +301,6 @@ def _gui_attribute_field(attribute: models.MutableAttribute) -> dict[str, object
     }
 
 
-def actions_page(
-    action_log: list[models.ActionLogEntry],
-    *,
-    music: models.MusicStatus | None = None,
-    streamo_enabled: bool = True,
-    lyte_enabled: bool = True,
-) -> str:
-    title_fields = ['title', 'category', 'tags']
-    noise_floor = field_action(
-        'recs-set-noise-floor',
-        'Set noise floor',
-        ['source', 'channel', 'noise_floor'],
-    )
-    return page(
-        'actions',
-        f"""
-        <section class="actions">
-          {button('recs-calibrate', 'Calibrate noise floor')}
-          {noise_floor}
-          {button('recs-reload-profiles', 'Reload recs profiles')}
-          {''.join(marker_button(label) for label in SHOW_MARKERS)}
-          {field_action('recs-marker', 'Create recs marker', ['label'])}
-          {field_action('recs-key-label', 'Set recs key label', ['key', 'label'])}
-          {button('recs-new-session', 'Start new recording session', confirm=True)}
-          {button('recs-pause-recording', 'Pause recording')}
-          {button('recs-resume-recording', 'Resume recording')}
-          {button('recs-status-snapshot', 'recs status snapshot')}
-          {button('recs-disk-status', 'recs disk status')}
-          {button('recs-list-devices', 'List recs devices')}
-          {button('recs-capabilities', 'recs capabilities')}
-          {shutdown_action()}
-          {button('lyte-test', 'Test lights') if lyte_enabled else ''}
-          {cable_test_action()}
-          {music_actions(music)}
-          {_streamo_actions(title_fields) if streamo_enabled else ''}
-        </section>
-        <section>
-          <h2>Recent actions</h2>
-          {''.join(action_result(r) for r in action_log) or '<p>No actions yet.</p>'}
-        </section>
-        """,
-    )
-
-
-def music_actions(status: models.MusicStatus | None) -> str:
-    if status is None:
-        return ''
-    track = str(status.track) if status.track is not None else 'No music playing'
-    error = f'<p>{html.escape(status.error)}</p>' if status.error else ''
-    return f"""
-      <section>
-        <h2>Music mode</h2>
-        <p>Mode: {html.escape(status.mode)}. {html.escape(track)}</p>
-        {error}
-        {button('music-setup', 'Setup')}
-        {button('music-record', 'Record')}
-        {button('music-teardown', 'Tear down')}
-        {button('music-stop', 'Stop and shut down', confirm=True)}
-      </section>
-    """
-
-
 def playback_selection(playback: models.PlaybackStatus) -> str:
     if playback.state == 'waiting':
         return 'No session selected'
@@ -362,20 +316,6 @@ def playback_position(playback: models.PlaybackStatus) -> str:
     position = _duration(playback.position_seconds)
     duration = _duration(playback.duration_seconds)
     return f'{position} / {duration}'
-
-
-def _streamo_actions(title_fields: list[str]) -> str:
-    return f"""
-          {button('streamo-restart', 'Restart Stream')}
-          {button('streamo-mute', 'Mute Stream')}
-          {button('streamo-unmute', 'Unmute Stream')}
-          {button('streamo-stop', 'Stop Stream', confirm=True)}
-          {field_action('streamo-title', 'Update stream info', title_fields)}
-          {field_action('streamo-chat', 'Send chat message', ['message'])}
-          {field_action('streamo-announce', 'Send announcement', ['message'])}
-          {button('streamo-clip', 'Create clip')}
-          {field_action('streamo-marker', 'Create stream marker', ['description'])}
-    """
 
 
 def performance_page() -> str:
@@ -482,83 +422,6 @@ def _stereo_enabled(
     return any(
         other.device == channel.device and other.channels == [channel.channels[0] + 1]
         for other in channels
-    )
-
-
-def button(action: str, label: str, *, confirm: bool = False) -> str:
-    confirmation = ' data-confirm="true"' if confirm else ''
-    return f"""
-    <form method="post"{confirmation}>
-      <input type="hidden" name="action" value="{html.escape(action)}">
-      <button>{html.escape(label)}</button>
-    </form>
-    """
-
-
-def marker_button(label: str) -> str:
-    return f"""
-    <form method="post">
-      <input type="hidden" name="action" value="recs-marker">
-      <input type="hidden" name="label" value="{html.escape(label)}">
-      <button>{html.escape(label)}</button>
-    </form>
-    """
-
-
-def field_action(action: str, label: str, fields: list[str]) -> str:
-    inputs = ''.join(
-        f'<label>{html.escape(f)}<input name="{html.escape(f)}"></label>'
-        for f in fields
-    )
-    return f"""
-    <form method="post">
-      <input type="hidden" name="action" value="{html.escape(action)}">
-      <h2>{html.escape(label)}</h2>
-      {inputs}
-      <button>{html.escape(label)}</button>
-    </form>
-    """
-
-
-def shutdown_action() -> str:
-    return """
-    <form method="post">
-      <input type="hidden" name="action" value="recs-shutdown">
-      <h2>Shutdown recs daemon</h2>
-      <label>confirmation
-        <select name="confirmation">
-          <option value="cancel" selected>Cancel</option>
-          <option value="shutdown">Shutdown recs daemon</option>
-        </select>
-      </label>
-      <button>Apply shutdown choice</button>
-    </form>
-    """
-
-
-def cable_test_action() -> str:
-    return """
-    <form method="post">
-      <input type="hidden" name="action" value="cable-test">
-      <h2>Test X18 cables</h2>
-      <label>channels<input name="channels" value="9-14"></label>
-      <label>sends<input name="sends" value="1-6"></label>
-      <label>seconds
-        <input name="duration-seconds" type="number" min="0.6" step="0.1" value="3">
-      </label>
-      <button>Test cables</button>
-    </form>
-    """
-
-
-def action_result(entry: models.ActionLogEntry) -> str:
-    result = entry.result
-    state = 'ok' if result.ok else 'failed'
-    timestamp = entry.timestamp.strftime('%H:%M:%S')
-    return (
-        f'<p class="{state}"><time>{timestamp}</time> '
-        f'{html.escape(entry.service)} {html.escape(entry.command)}: '
-        f'{html.escape(result.message)}</p>'
     )
 
 

@@ -30,6 +30,8 @@ class Element(BaseModel, frozen=True):
     field: str = ''
     required: bool = False
     readonly: bool = False
+    visible_when: str = ''
+    options: dict[str, str] = Field(default_factory=dict)
     children: list[Element] = Field(default_factory=list)
 
     @model_validator(mode='after')
@@ -55,6 +57,7 @@ class Element(BaseModel, frozen=True):
             'form': {},
             'input': {},
             'textarea': {},
+            'select': {},
             'submit': {},
             'action_history': {'source': 'show.actions'},
         }
@@ -118,14 +121,17 @@ class Element(BaseModel, frozen=True):
             if self.layout != layouts.get(self.source, 'list'):
                 raise ValueError(f'{self.name}: unsupported source layout')
         elif self.kind == 'form':
-            if self.action not in MUSICIAN_ACTIONS or not self.children:
+            if self.action not in FORM_ACTIONS or not self.children:
                 raise ValueError(f'{self.name}: form needs an action and children')
-        elif self.kind in {'input', 'textarea'}:
-            if self.field not in MUSICIAN_FIELDS or self.value not in {
-                '',
-                *(f'item.{field}' for field in MUSICIAN_FIELDS),
-            }:
+        elif self.kind in {'input', 'textarea', 'select'}:
+            if self.field not in FORM_FIELDS or (
+                self.field in MUSICIAN_FIELDS
+                and self.value
+                not in {'', *(f'item.{field}' for field in MUSICIAN_FIELDS)}
+            ):
                 raise ValueError(f'{self.name}: unsupported form field')
+            if self.kind == 'select' and not self.options:
+                raise ValueError(f'{self.name}: select needs options')
         elif self.kind == 'submit':
             if not self.label:
                 raise ValueError(f'{self.name}: submit needs a label')
@@ -140,7 +146,7 @@ class Element(BaseModel, frozen=True):
             raise ValueError(
                 f'{self.name}: only repeat and mutable attributes accept empty_text'
             )
-        if self.kind not in {'repeat', 'input', 'textarea'} and (
+        if self.kind not in {'repeat', 'input', 'textarea', 'select'} and (
             self.layout != 'cards' or self.limit or self.separator
         ):
             raise ValueError(f'{self.name}: layout, limit and separator need a repeat')
@@ -163,7 +169,7 @@ class Element(BaseModel, frozen=True):
                 raise ValueError(f'{self.name}: unsupported button action')
             if self.parameters not in ACTION_BUTTON_PARAMETERS[self.action]:
                 raise ValueError(f'{self.name}: unsupported button parameters')
-        elif self.kind in {'input', 'textarea'}:
+        elif self.kind in {'input', 'textarea', 'select'}:
             if self.format not in {'', 'lines'}:
                 raise ValueError(f'{self.name}: unsupported form format')
         elif self.format:
@@ -179,10 +185,12 @@ class Element(BaseModel, frozen=True):
             self.action != allowed[self.kind].get('action', '') or self.operation
         ):
             raise ValueError(f'{self.name}: unsupported action or operation')
-        if self.kind not in {'input', 'textarea'} and (
-            self.field or self.required or self.readonly
+        if self.kind not in {'input', 'textarea', 'select'} and (
+            self.field or self.required or self.readonly or self.options
         ):
             raise ValueError(f'{self.name}: form options need an input')
+        if self.visible_when and self.visible_when not in FEATURE_GATES:
+            raise ValueError(f'{self.name}: unsupported visibility condition')
         return self
 
     model_config = ConfigDict(extra='forbid')
@@ -249,7 +257,6 @@ class Gui(BaseModel, frozen=True):
                 'workflow',
                 'playback',
                 'attributes',
-                'actions',
             }:
                 raise ValueError(f'{page.name}: page needs sections')
             element_names: set[str] = set()
@@ -304,7 +311,7 @@ class Gui(BaseModel, frozen=True):
                             raise ValueError(f'{page.name}: form rows need forms')
                     elif element.kind == 'form':
                         if any(
-                            child.kind not in {'input', 'textarea', 'submit'}
+                            child.kind not in {'input', 'textarea', 'select', 'submit'}
                             for child in element.children
                         ):
                             raise ValueError(f'{page.name}: unsupported form field')
@@ -420,6 +427,7 @@ STATUS_FORMATS = {
         'playback_selection',
         'playback_position',
     },
+    'show.music': {'music'},
 }
 SERVICE_FORMATS = {
     'show.recs.service': 'recording',
@@ -431,6 +439,59 @@ ACTION_BUTTON_PARAMETERS = {
     'recs-playback-play': [{}],
     'recs-playback-pause': [{}],
     'recs-playback-stop': [{}],
+    'recs-calibrate': [{}],
+    'recs-reload-profiles': [{}],
+    'recs-new-session': [{}],
+    'recs-pause-recording': [{}],
+    'recs-resume-recording': [{}],
+    'recs-status-snapshot': [{}],
+    'recs-disk-status': [{}],
+    'recs-list-devices': [{}],
+    'recs-capabilities': [{}],
+    'lyte-test': [{}],
+    'music-setup': [{}],
+    'music-record': [{}],
+    'music-teardown': [{}],
+    'music-stop': [{}],
+    'streamo-restart': [{}],
+    'streamo-mute': [{}],
+    'streamo-unmute': [{}],
+    'streamo-stop': [{}],
+    'streamo-clip': [{}],
+    'recs-marker': [
+        {'label': 'Show start'},
+        {'label': 'Song start'},
+        {'label': 'Interval'},
+        {'label': 'Show end'},
+    ],
 }
 MUSICIAN_ACTIONS = {'recs-musician-add', 'recs-musician-edit'}
 MUSICIAN_FIELDS = {'nickname', 'names', 'links'}
+FORM_ACTIONS = MUSICIAN_ACTIONS | {
+    'recs-set-noise-floor',
+    'recs-marker',
+    'recs-key-label',
+    'recs-shutdown',
+    'cable-test',
+    'streamo-title',
+    'streamo-chat',
+    'streamo-announce',
+    'streamo-marker',
+}
+FORM_FIELDS = MUSICIAN_FIELDS | {
+    'source',
+    'channel',
+    'noise_floor',
+    'label',
+    'key',
+    'confirmation',
+    'channels',
+    'sends',
+    'duration-seconds',
+    'title',
+    'category',
+    'tags',
+    'message',
+    'description',
+}
+FEATURE_GATES = {'streamo_enabled', 'lyte_enabled', 'music_enabled'}
