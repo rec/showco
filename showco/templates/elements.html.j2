@@ -31,7 +31,7 @@
 {% for section in sections %}
 <section data-section="{{ section.name }}"{% if section.style %} class="{{ section_class(section.style, status) }}"{% endif %}>
   {% if section.title %}<h2>{{ section.title }}</h2>{% endif %}
-  {% if section.style == 'performance' %}<div class="performance">{% endif %}
+  {% if section.style in ['performance', 'transport'] %}<div class="{{ section.style }}"{% if section.style == 'transport' %} data-transport{% endif %}>{% endif %}
   {% for element in section.elements %}
     {% if element.kind == 'repeat' %}
       {% set items = bound_value(element.source, status, none) %}
@@ -80,8 +80,16 @@
         {% endfor %}
       {% else %}<p>{{ element.empty_text }}</p>{% endif %}
       </div>
+    {% elif element.kind == 'action_button' %}
+      <form method="post" data-disabled-when="{{ element.disabled_when }}">
+        <input type="hidden" name="action" value="{{ element.action }}">
+        {% for name, value in element.parameters.items() %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
+        <button{% if is_disabled(element, status) %} disabled{% endif %}>{{ element.label }}</button>
+      </form>
+    {% elif element.kind == 'action_result' %}
+      <p id="{{ element.name }}" data-action-result aria-live="polite"></p>
     {% endif %}
   {% endfor %}
-  {% if section.style == 'performance' %}</div>{% endif %}
+  {% if section.style in ['performance', 'transport'] %}</div>{% endif %}
 </section>
 {% endfor %}

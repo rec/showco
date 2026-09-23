@@ -8,7 +8,6 @@ from showco.runtime import gui_schema, models
 from showco.runtime.views import (
     actions_page,
     configured_page,
-    playback_page,
 )
 
 
@@ -564,7 +563,17 @@ class ViewsTests(unittest.TestCase):
         self.assertIn('value="recs-disk-status"', html)
 
     def test_playback_page_has_transport_controls(self) -> None:
-        html = playback_page(models.PlaybackStatus())
+        html = configured_page(
+            gui_schema.current_gui().page('playback'),
+            models.ShowStatus(
+                recs=models.RecsStatus(
+                    service=models.ServiceStatus(name='recs', state='connected')
+                ),
+                streamo=models.StreamoStatus(
+                    service=models.ServiceStatus(name='streamo', state='disabled')
+                ),
+            ),
+        )
 
         self.assertIn('href="/playback"', html)
         self.assertIn('value="recs-playback-play"', html)
@@ -575,6 +584,31 @@ class ViewsTests(unittest.TestCase):
         self.assertIn('name="offset" value="-1"', html)
         self.assertIn('name="offset" value="1"', html)
         self.assertIn('script', html)
+
+    def test_playback_page_shows_selected_session(self) -> None:
+        html = configured_page(
+            gui_schema.current_gui().page('playback'),
+            models.ShowStatus(
+                recs=models.RecsStatus(
+                    service=models.ServiceStatus(name='recs', state='connected'),
+                    playback=models.PlaybackStatus(
+                        state='paused',
+                        session=4,
+                        source='X18',
+                        channel='1',
+                        output_channel='2',
+                        position_seconds=65,
+                        duration_seconds=130,
+                    ),
+                ),
+                streamo=models.StreamoStatus(
+                    service=models.ServiceStatus(name='streamo', state='disabled')
+                ),
+            ),
+        )
+
+        self.assertIn('Session 4: X18 channel 1 to output 2', html)
+        self.assertIn('1:05 / 2:10', html)
 
     def test_actions_page_has_show_markers(self) -> None:
         html = actions_page([])

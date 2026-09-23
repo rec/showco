@@ -399,8 +399,6 @@ class ShowcoHandler(BaseHTTPRequestHandler):
                 self._html(views.performance_page())
             case 'workflow':
                 self._html(views.workflow_page(page.name))
-            case 'playback':
-                self._html(views.playback_page(self.app.status().recs.playback))
             case 'actions':
                 self._html(
                     views.actions_page(

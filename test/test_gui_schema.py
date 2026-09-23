@@ -227,6 +227,35 @@ def test_attributes_file_controls_title_and_empty_text(tmp_path: Path) -> None:
     assert 'recs attributes</h2>' not in html
 
 
+def test_playback_file_controls_transport_buttons(tmp_path: Path) -> None:
+    original = gui_schema.DEFAULT_GUI_PATH.read_text()
+    stop = """[[pages.sections.elements]]
+name = "stop"
+kind = "action_button"
+label = "Stop"
+action = "recs-playback-stop"
+disabled_when = "playback_waiting"
+
+"""
+    assert stop in original
+    path = tmp_path / 'gui.toml'
+    path.write_text(
+        original.replace(stop, '').replace('label = "Play"', 'label = "Resume"')
+    )
+    status = models.ShowStatus(
+        recs=models.RecsStatus(
+            service=models.ServiceStatus(name='recs', state='connected')
+        ),
+        streamo=models.StreamoStatus(
+            service=models.ServiceStatus(name='streamo', state='disabled')
+        ),
+    )
+    html = views.configured_page(gui_schema.load_gui(path).page('playback'), status)
+
+    assert 'Resume</button>' in html
+    assert '>Stop</button>' not in html
+
+
 @pytest.mark.parametrize(
     'old,new',
     [
