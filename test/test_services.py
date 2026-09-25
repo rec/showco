@@ -121,6 +121,7 @@ class ServicesTests(unittest.TestCase):
                 'platform': 'linux',
                 'control_endpoint': '/tmp/recs-gui.sock',
                 'event_endpoint': None,
+                'executable': None,
             },
         )
 

@@ -675,7 +675,7 @@ class ViewsTests(unittest.TestCase):
         self.assertIn('class="failed"', html)
 
     def test_musicians_page_lists_add_and_edit_forms(self) -> None:
-        from recs.musicians import Musician
+        from reccy.entities import Musician
 
         html = configured_page(
             gui_schema.current_gui().page('musicians'),
