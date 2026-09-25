@@ -112,17 +112,17 @@ label = "Add musician"
 action = "recs-musician-add"
 
 [[pages.sections.elements.children]]
-name = "nickname"
+name = "name"
 kind = "input"
-label = "Nickname"
-field = "nickname"
+label = "Name"
+field = "name"
 required = true
 
 [[pages.sections.elements.children]]
-name = "names"
+name = "other-names"
 kind = "textarea"
-label = "Names"
-field = "names"
+label = "Other names"
+field = "other_names"
 format = "lines"
 
 [[pages.sections.elements.children]]
@@ -155,20 +155,20 @@ label = "Edit"
 action = "recs-musician-edit"
 
 [[pages.sections.elements.children.children]]
-name = "edit-nickname"
+name = "edit-name"
 kind = "input"
-label = "Nickname"
-field = "nickname"
-value = "item.nickname"
+label = "Name"
+field = "name"
+value = "item.name"
 required = true
 readonly = true
 
 [[pages.sections.elements.children.children]]
-name = "edit-names"
+name = "edit-other-names"
 kind = "textarea"
-label = "Names"
-field = "names"
-value = "item.names"
+label = "Other names"
+field = "other_names"
+value = "item.other_names"
 format = "lines"
 
 [[pages.sections.elements.children.children]]
