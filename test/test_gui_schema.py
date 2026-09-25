@@ -278,7 +278,7 @@ def test_musicians_file_controls_form_labels(tmp_path: Path) -> None:
         gui_schema.load_gui(path).page('musicians'),
         status,
         musicians={
-            'mike': Musician(nickname='mike', names=['Michael'], links=['insta:mike'])
+            'mike': Musician(name='mike', other_names=['Michael'], links=['insta:mike'])
         },
     )
 

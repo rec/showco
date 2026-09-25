@@ -106,8 +106,8 @@ class RecsClient:
 
     def add_musician(
         self,
-        nickname: str,
-        names: list[str],
+        name: str,
+        other_names: list[str],
         copyright_name: str | None,
         public_keys: list[str],
         links: list[str],
@@ -116,8 +116,8 @@ class RecsClient:
             'add_musician',
             {
                 'musician': {
-                    'nickname': nickname,
-                    'names': names,
+                    'name': name,
+                    'other_names': other_names,
                     'copyright_name': copyright_name,
                     'public_keys': public_keys,
                     'links': links,
@@ -127,16 +127,16 @@ class RecsClient:
 
     def edit_musician(
         self,
-        nickname: str,
-        names: list[str],
+        name: str,
+        other_names: list[str],
         public_keys: list[str] | None,
         links: list[str],
     ) -> models.ActionResult:
         parameters: dict[str, object] = {
-            'nickname': nickname,
-            'names': names or None,
+            'name': name,
+            'other_names': other_names or None,
             'links': links or None,
-            'clear_names': not names,
+            'clear_other_names': not other_names,
             'clear_links': not links,
         }
         if public_keys is not None:
@@ -168,7 +168,7 @@ class RecsClient:
                 ok=False, message=f'recs sent invalid {command} musician'
             )
         return models.ActionResult(
-            ok=True, message=f'recs saved musician {musician.nickname}'
+            ok=True, message=f'recs saved musician {musician.name}'
         )
 
     def set_track_name(

@@ -501,6 +501,70 @@ class RecsTests(unittest.TestCase):
             {'Mic': {'Other': 2, 'New': 1}},
         )
 
+    def test_musician_add_and_edit_use_entity_fields(self) -> None:
+        control = mock.Mock(spec=RecsControlClient)
+        control.call.side_effect = [
+            {
+                'type': 'musician',
+                'musician': {
+                    'name': 'mike',
+                    'other_names': [],
+                    'copyright_name': 'Michael Jones',
+                    'public_keys': [],
+                    'links': ['insta:mike'],
+                },
+            },
+            {
+                'type': 'musician',
+                'musician': {
+                    'name': 'mike',
+                    'other_names': ['Michael'],
+                    'copyright_name': 'Michael Jones',
+                    'public_keys': ['ssh-ed25519 AAA'],
+                    'links': ['insta:mike'],
+                },
+            },
+        ]
+        client = RecsClient(control=control)
+
+        self.assertTrue(
+            client.add_musician('mike', [], 'Michael Jones', [], ['insta:mike']).ok
+        )
+        self.assertTrue(
+            client.edit_musician(
+                'mike', ['Michael'], ['ssh-ed25519 AAA'], ['insta:mike']
+            ).ok
+        )
+        self.assertEqual(
+            control.call.call_args_list,
+            [
+                mock.call(
+                    'add_musician',
+                    {
+                        'musician': {
+                            'name': 'mike',
+                            'other_names': [],
+                            'copyright_name': 'Michael Jones',
+                            'public_keys': [],
+                            'links': ['insta:mike'],
+                        }
+                    },
+                ),
+                mock.call(
+                    'edit_musician',
+                    {
+                        'name': 'mike',
+                        'other_names': ['Michael'],
+                        'public_keys': ['ssh-ed25519 AAA'],
+                        'links': ['insta:mike'],
+                        'clear_other_names': False,
+                        'clear_public_keys': False,
+                        'clear_links': False,
+                    },
+                ),
+            ],
+        )
+
 
 def status_snapshot() -> dict[str, object]:
     return {
@@ -631,66 +695,3 @@ def waveform_batch() -> WaveformBatchData:
 
 if __name__ == '__main__':
     unittest.main()
-
-    def test_musician_add_and_edit_use_recs_protocol(self) -> None:
-        control = mock.Mock(spec=RecsControlClient)
-        control.call.side_effect = [
-            {
-                'type': 'musician',
-                'musician': {
-                    'nickname': 'mike',
-                    'names': [],
-                    'copyright_name': 'Michael Jones',
-                    'public_keys': [],
-                    'links': ['insta:mike'],
-                },
-            },
-            {
-                'type': 'musician',
-                'musician': {
-                    'nickname': 'mike',
-                    'names': ['Michael'],
-                    'copyright_name': 'Michael Jones',
-                    'public_keys': ['ssh-ed25519 AAA'],
-                    'links': ['insta:mike'],
-                },
-            },
-        ]
-        client = RecsClient(control=control)
-
-        added = client.add_musician('mike', [], 'Michael Jones', [], ['insta:mike'])
-        edited = client.edit_musician(
-            'mike', ['Michael'], ['ssh-ed25519 AAA'], ['insta:mike']
-        )
-
-        self.assertTrue(added.ok)
-        self.assertTrue(edited.ok)
-        self.assertEqual(
-            control.call.call_args_list,
-            [
-                mock.call(
-                    'add_musician',
-                    {
-                        'musician': {
-                            'nickname': 'mike',
-                            'names': [],
-                            'copyright_name': 'Michael Jones',
-                            'public_keys': [],
-                            'links': ['insta:mike'],
-                        }
-                    },
-                ),
-                mock.call(
-                    'edit_musician',
-                    {
-                        'nickname': 'mike',
-                        'names': ['Michael'],
-                        'public_keys': ['ssh-ed25519 AAA'],
-                        'links': ['insta:mike'],
-                        'clear_names': False,
-                        'clear_public_keys': False,
-                        'clear_links': False,
-                    },
-                ),
-            ],
-        )
