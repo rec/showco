@@ -1,6 +1,6 @@
 {% macro form(element, item) %}
 <form method="post" action="/musicians" class="musician-form">
-  {% if element.label %}<h3>{{ element.label }}{% if item %} {{ item.nickname }}{% endif %}</h3>{% endif %}
+  {% if element.label %}<h3>{{ element.label }}{% if item %} {{ item.name }}{% endif %}</h3>{% endif %}
   <input type="hidden" name="action" value="{{ element.action }}">
   {% for child in element.children %}
     {% if child.kind == 'input' %}

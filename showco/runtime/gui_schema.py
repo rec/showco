@@ -569,7 +569,7 @@ ACTION_BUTTON_PARAMETERS = {
     ],
 }
 MUSICIAN_ACTIONS = {'recs-musician-add', 'recs-musician-edit'}
-MUSICIAN_FIELDS = {'nickname', 'names', 'links'}
+MUSICIAN_FIELDS = {'name', 'other_names', 'links'}
 FORM_ACTIONS = MUSICIAN_ACTIONS | {
     'recs-set-noise-floor',
     'recs-marker',
