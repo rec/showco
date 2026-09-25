@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 import time
 
-from recs.musicians import Musician
+from reccy.entities import Musician
 
 from ..streamo.client import StreamoClient
 from . import models
