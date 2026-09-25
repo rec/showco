@@ -257,7 +257,7 @@ disabled_when = "playback_waiting"
 
 
 def test_musicians_file_controls_form_labels(tmp_path: Path) -> None:
-    from recs.musicians import Musician
+    from reccy.entities import Musician
 
     path = tmp_path / 'gui.toml'
     path.write_text(

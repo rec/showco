@@ -4,7 +4,7 @@ import json
 import threading
 
 from pydantic import ValidationError
-from recs.musicians import Musician
+from reccy.entities import Musician
 
 from . import models, recs_control, recs_snapshot
 
