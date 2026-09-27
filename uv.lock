@@ -7,7 +7,7 @@ resolution-markers = [
 ]
 
 [options]
-exclude-newer = "2026-09-19T18:30:09.675738Z"
+exclude-newer = "2026-09-20T18:06:06.668443Z"
 exclude-newer-span = "P1W"
 
 [[package]]
@@ -972,7 +972,7 @@ dependencies = [
 [[package]]
 name = "recs"
 version = "0.12.5"
-source = { git = "https://github.com/rec/recs.git?branch=main#a4a9844519f737778a91c86289f1319f3bfda243" }
+source = { git = "https://github.com/rec/recs.git?branch=main#c79c072872efc38adbdf417c45afa5ff3ac9ea20" }
 dependencies = [
     { name = "humanfriendly" },
     { name = "mido", extra = ["ports-rtmidi"] },
