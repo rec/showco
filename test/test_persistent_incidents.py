@@ -4,9 +4,9 @@ from unittest import mock
 import pytest
 
 from showco.runtime import incidents, models, readiness, rehearsal
+from showco.runtime.app import ShowcoApp
 from showco.runtime.monitoring import PerformanceMonitor
 from showco.runtime.recs_snapshot import SnapshotStatus
-from showco.runtime.server import ShowcoApp
 
 
 def status(connected: bool = True) -> models.ShowStatus:

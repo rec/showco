@@ -5,8 +5,8 @@ from unittest import mock
 import pytest
 
 from showco.runtime import gui_schema, lighting, models, rehearsal, views, workflows
+from showco.runtime.app import ShowcoApp
 from showco.runtime.lyte import LyteClient
-from showco.runtime.server import ShowcoApp
 
 
 def application(path: Path) -> ShowcoApp:

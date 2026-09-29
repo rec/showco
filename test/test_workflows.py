@@ -16,7 +16,8 @@ from showco.runtime import (
     soundcheck,
     workflows,
 )
-from showco.runtime.server import ShowcoApp, ShowcoHandler
+from showco.runtime.app import ShowcoApp
+from showco.runtime.server import ShowcoHandler
 
 
 def status() -> models.ShowStatus:

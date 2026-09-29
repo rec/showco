@@ -14,8 +14,8 @@ from recs.base.waveform import (
 )
 
 from showco.runtime import models, recs, waveforms
-from showco.runtime.recs import (
-    RecsClient,
+from showco.runtime.recs import RecsClient
+from showco.runtime.recs_channels import (
     channel_levels,
     level_state,
     replace_track_name,
