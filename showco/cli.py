@@ -80,6 +80,7 @@ def run_web_ui(options: WebUiOptions) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    ERROR_LOG_PATH.unlink(missing_ok=True)
     logging.configure()
     arguments = sys.argv[1:] if argv is None else argv
     with tempfile.TemporaryFile(mode='w+t') as record:

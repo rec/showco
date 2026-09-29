@@ -39,12 +39,15 @@ class CliTests(unittest.TestCase):
 
         deploy.assert_called_once_with(['recs'])
 
-    def test_failed_command_displays_and_appends_diagnostics(self) -> None:
+    def test_failed_command_displays_and_saves_only_latest_diagnostics(self) -> None:
         terminal = StringIO()
         errors = StringIO()
+        calls = 0
 
         def fail(arguments: list[str]) -> int:
-            print('recs tests failed')
+            nonlocal calls
+            calls += 1
+            print(f'recs tests failed {calls}')
             print('FAILED test_audio', file=sys.stderr)
             getLogger('showco.test').error('recording stopped unexpectedly')
             return 1
@@ -57,15 +60,24 @@ class CliTests(unittest.TestCase):
             self.assertEqual(cli.main(['deploy']), 1)
             self.assertEqual(cli.main(['deploy']), 1)
 
-        self.assertEqual(terminal.getvalue(), 'recs tests failed\n' * 2)
+        self.assertEqual(
+            terminal.getvalue(), 'recs tests failed 1\nrecs tests failed 2\n'
+        )
         self.assertEqual(errors.getvalue(), 'FAILED test_audio\n' * 2)
         contents = self.error_log.read_text()
-        self.assertEqual(contents.count('recs tests failed'), 2)
-        self.assertEqual(contents.count('FAILED test_audio'), 2)
-        self.assertEqual(contents.count('recording stopped unexpectedly'), 2)
+        self.assertNotIn('recs tests failed 1', contents)
+        self.assertIn('recs tests failed 2', contents)
+        self.assertEqual(contents.count('FAILED test_audio'), 1)
+        self.assertEqual(contents.count('recording stopped unexpectedly'), 1)
 
-    def test_success_does_not_create_error_log(self) -> None:
-        with patch.object(cli.deploy, 'main', return_value=0):
+    def test_success_removes_previous_error_log_before_dispatch(self) -> None:
+        self.error_log.write_text('old failure')
+
+        def succeed(arguments: list[str]) -> int:
+            self.assertFalse(self.error_log.exists())
+            return 0
+
+        with patch.object(cli.deploy, 'main', side_effect=succeed):
             self.assertEqual(cli.main(['deploy']), 0)
 
         self.assertFalse(self.error_log.exists())
