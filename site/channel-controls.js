@@ -11,7 +11,6 @@
 
   function channelAction(fields) {
     return showAction(fields).catch(error => {
-      if (!error.outcomeUnknown) throw error;
       return requestStatus()
         .then(status => {
           updateChannels(status.recs.channels);
@@ -32,8 +31,9 @@
     return channelAction({
       action: input.dataset.action,
       device: form.dataset.device,
-      channel: form.dataset.channel,
+      channel: form.dataset.channels.split(",")[0],
       track_name: submittedName,
+      expected_name: form.dataset.savedTrackName,
     })
       .then(() => {
         form.dataset.savedTrackName = submittedName;

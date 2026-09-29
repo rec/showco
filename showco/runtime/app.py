@@ -347,6 +347,7 @@ class ShowcoApp:
                 form.get('device', ''),
                 form.get('channel', ''),
                 form.get('track_name', ''),
+                form.get('expected_name'),
             )
         if action == 'recs-set-stereo':
             return self.recs.set_stereo(

@@ -173,7 +173,7 @@ class RecsClient:
         )
 
     def set_track_name(
-        self, device: str, channel: str, track_name: str
+        self, device: str, channel: str, track_name: str, expected_name: str | None
     ) -> models.ActionResult:
         device = device.strip()
         channel = channel.strip()
@@ -186,6 +186,10 @@ class RecsClient:
             return models.ActionResult(
                 ok=False, message='recs track name channel is missing'
             )
+        if expected_name is None:
+            return models.ActionResult(
+                ok=False, message='Original track name is missing; reload the page'
+            )
 
         with self.track_name_lock:
             track_names = self.track_names()
@@ -196,6 +200,40 @@ class RecsClient:
                 return models.ActionResult(
                     ok=False,
                     message=f'could not resolve recs channel {channel} for {device}',
+                )
+            current_name = recs_channels.track_name(track_names, device, channel_number)
+            if not current_name:
+                self.snapshot_client.invalidate()
+                status = self.status()
+                if not status.snapshot_available or status.service.state != 'connected':
+                    return models.ActionResult(
+                        ok=False,
+                        message=(
+                            'Cannot verify current track name; '
+                            'retry after recs reconnects'
+                        ),
+                    )
+                reported_name = next(
+                    (
+                        c.name
+                        for c in status.channels
+                        if c.device == device and c.channels[:1] == [channel_number]
+                    ),
+                    None,
+                )
+                if reported_name is None:
+                    return models.ActionResult(
+                        ok=False, message='recs channel is no longer available'
+                    )
+                current_name = reported_name
+            if current_name != expected_name:
+                self.snapshot_client.invalidate()
+                return models.ActionResult(
+                    ok=False,
+                    message=(
+                        'Track name changed in recs; current name is '
+                        f'{current_name or "(unnamed)"}. Review it before saving again'
+                    ),
                 )
 
             updated = recs_channels.replace_track_name(
@@ -208,6 +246,7 @@ class RecsClient:
         if isinstance(response, models.ActionResult):
             return response
         if response == 'ok':
+            self.snapshot_client.invalidate()
             if track_name:
                 return models.ActionResult(
                     ok=True, message=f'recs track name set to {track_name}'

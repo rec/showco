@@ -444,6 +444,7 @@ class ServerTests(unittest.TestCase):
                 'device': 'X18/XR18',
                 'channel': '1',
                 'track_name': 'Lead Vocal',
+                'expected_name': '1',
             }
         )
 
