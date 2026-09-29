@@ -275,6 +275,36 @@ class ProvisionTests(unittest.TestCase):
             fingerprint, state.provisioning_fingerprint(provision_config, 'changed')
         )
 
+    def test_missing_applied_fingerprint_is_distinct_from_ssh_failure(self) -> None:
+        config = make_config(values())
+        with mock.patch(
+            'reccy.runtime.subprocess.run',
+            return_value=subprocess.CompletedProcess(['ssh'], 42, '', ''),
+        ):
+            self.assertIsNone(remote.applied_provisioning_fingerprint(config))
+
+        with (
+            mock.patch(
+                'reccy.runtime.subprocess.run',
+                return_value=subprocess.CompletedProcess(
+                    ['ssh'], 255, '', 'Could not resolve hostname'
+                ),
+            ),
+            self.assertRaisesRegex(SystemExit, 'Could not resolve hostname'),
+        ):
+            remote.applied_provisioning_fingerprint(config)
+
+    def test_invalid_applied_fingerprint_stops_before_provisioning(self) -> None:
+        config = make_config(values())
+        with (
+            mock.patch(
+                'reccy.runtime.subprocess.run',
+                return_value=subprocess.CompletedProcess(['ssh'], 0, 'invalid', ''),
+            ),
+            self.assertRaisesRegex(SystemExit, 'invalid provisioning state'),
+        ):
+            remote.applied_provisioning_fingerprint(config)
+
     def test_provision_waits_for_reboot_and_reports_verification(self) -> None:
         config = make_config(values(networks=networks(x18=False)))
         result = [verify.VerificationResult(name='showco', error='')]
