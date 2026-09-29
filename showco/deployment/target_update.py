@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import TextIO
 
 from ..provision import config
@@ -87,7 +89,14 @@ def update_target(
         except OSError as error:
             print(f'Cannot back up recs settings: {error}', file=output)
             return 1
-    stopped = stop_services(names, run_command)
+    try:
+        stopped = stop_services(names, run_command)
+    except (OSError, KeyboardInterrupt) as error:
+        print(f'Service shutdown interrupted: {error or "Interrupted"}', file=output)
+        update.report_failures(
+            [update.run_service_step(n, 'start', run_command) for n in names], output
+        )
+        return 1
     if not all(r.ok for r in stopped):
         update.report_failures(stopped, output)
         update.report_failures(
@@ -144,7 +153,19 @@ def update_target(
             if saved_settings is None:
                 settings_path.unlink(missing_ok=True)
             else:
-                settings_path.write_bytes(saved_settings)
+                temporary_path: Path | None = None
+                try:
+                    with NamedTemporaryFile(
+                        dir=settings_path.parent, prefix='.settings-', delete=False
+                    ) as temporary:
+                        temporary_path = Path(temporary.name)
+                        temporary.write(saved_settings)
+                        temporary.flush()
+                        os.fsync(temporary.fileno())
+                    temporary_path.replace(settings_path)
+                finally:
+                    if temporary_path is not None:
+                        temporary_path.unlink(missing_ok=True)
         except OSError as error:
             print(
                 f'Rollback incomplete: cannot restore recs settings: {error}',

@@ -172,6 +172,26 @@ def test_failed_stop_does_not_change_revisions(target: Target) -> None:
     assert target.running == {'recs', 'showco', 'streamo', 'lyte'}
 
 
+def test_interrupted_service_stop_restarts_every_selected_service(
+    target: Target,
+) -> None:
+    output = StringIO()
+
+    def interrupted(command: Sequence[str]) -> CompletedProcess[str]:
+        if list(command)[-2:] == ['stop', 'recs.service']:
+            raise KeyboardInterrupt
+        return target.run(command)
+
+    result = target_update.update_target(
+        ['recs'], root=Path('/code'), run_command=interrupted, output=output
+    )
+
+    assert result == 1
+    assert target.running == {'recs', 'showco', 'streamo', 'lyte'}
+    assert not any('reset' in c for c in target.commands)
+    assert 'Service shutdown interrupted' in output.getvalue()
+
+
 def test_failed_recovery_is_reported_and_does_not_start_broken_environments(
     target: Target,
 ) -> None:
@@ -233,6 +253,40 @@ def test_explicit_settings_clear_is_restored_after_failed_update(
     )
     assert path.read_bytes() == original
     assert {'recs', 'showco'} <= target.running
+
+
+def test_failed_settings_restore_never_leaves_partial_final_file(
+    target: Target, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    update.provisioning_config().network.user = str(tmp_path)
+    path = tmp_path / '.config/recs/settings.json'
+    path.parent.mkdir(parents=True)
+    path.write_bytes(b'{"tracks": "operator settings"}\n')
+    target.failure = 'sync'
+
+    def clear(user: str, runner: update.RunCommand) -> update.StepResult:
+        path.unlink()
+        return update.StepResult(
+            program='recs', step='clear', command=[], returncode=0, output=''
+        )
+
+    monkeypatch.setattr(update, 'clear_recs_settings_step', clear)
+    output = StringIO()
+    with mock.patch.object(Path, 'replace', side_effect=OSError('disk full')):
+        result = target_update.update_target(
+            ['recs'],
+            root=Path('/code'),
+            run_command=target.run,
+            output=output,
+            clear_settings=True,
+        )
+
+    assert result == 1
+    assert not path.exists()
+    assert list(path.parent.glob('.settings-*')) == []
+    assert 'Rollback incomplete: cannot restore recs settings: disk full' in (
+        output.getvalue()
+    )
 
 
 def test_unrelated_update_does_not_clear_recs_settings(target: Target) -> None:
