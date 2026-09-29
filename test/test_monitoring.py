@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from threading import Event
+from unittest import mock
 
 from showco.runtime import models
 from showco.runtime.monitoring import PerformanceMonitor
@@ -147,6 +148,36 @@ class MonitoringTests(unittest.TestCase):
                 'Performance sampling failed: sensor failed',
             )
             monitor.close()
+
+    def test_unexpected_sampler_death_is_visible_and_restarts_on_status(self) -> None:
+        recovered = Event()
+
+        class UnstableSystemMonitor(SystemMonitor):
+            calls = 0
+
+            def status(self) -> models.SystemStatus:
+                self.calls += 1
+                if self.calls == 1:
+                    raise AttributeError('broken adapter')
+                recovered.set()
+                return system_status(cpu=20, memory=200)
+
+        with TemporaryDirectory() as directory:
+            monitor = PerformanceMonitor(
+                UnstableSystemMonitor(),
+                lambda: snapshot(free=900),
+                directory=Path(directory),
+                sample_seconds=0.1,
+            )
+            with mock.patch('threading.excepthook'):
+                monitor.start()
+                assert monitor.thread is not None
+                monitor.thread.join(timeout=1)
+                self.assertFalse(monitor.thread.is_alive())
+                monitor.status()
+                self.assertTrue(recovered.wait(1))
+                self.assertTrue(monitor.thread.is_alive())
+                monitor.close()
 
 
 def system_status(*, cpu: float, memory: int) -> models.SystemStatus:
