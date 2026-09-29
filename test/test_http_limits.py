@@ -4,6 +4,7 @@ from unittest import mock
 import pytest
 
 from showco.runtime.server import (
+    ACTION_BODY_TIMEOUT_SECONDS,
     CONNECTION_TIMEOUT_SECONDS,
     ShowcoHandler,
     ShowcoServer,
@@ -69,3 +70,35 @@ def test_cross_origin_actions_are_rejected_before_reading_body(
         handler._do_post()
     assert error.call_args.args[0] == 403
     form.assert_not_called()
+
+
+def test_status_request_uses_reserved_slot_when_ordinary_slots_are_busy() -> None:
+    handler = object.__new__(ShowcoHandler)
+    handler.path = '/status'
+    handler.server = mock.Mock(
+        request_slots=threading.BoundedSemaphore(1),
+        status_slots=threading.BoundedSemaphore(1),
+    )
+    handler.server.request_slots.acquire()
+    with mock.patch.object(handler, '_do_get') as get:
+        handler.do_GET()
+
+    get.assert_called_once_with()
+    assert handler.server.status_slots.acquire(blocking=False)
+
+
+def test_slow_and_truncated_action_bodies_return_clear_errors() -> None:
+    handler = object.__new__(ShowcoHandler)
+    handler.headers = {'Content-Length': '7'}
+    handler.connection = mock.Mock()
+    handler.rfile = mock.Mock()
+    handler.rfile.read.side_effect = TimeoutError
+    with pytest.raises(ValueError, match='timed out'):
+        handler._form()
+    handler.connection.settimeout.assert_any_call(ACTION_BODY_TIMEOUT_SECONDS)
+    handler.connection.settimeout.assert_any_call(CONNECTION_TIMEOUT_SECONDS)
+
+    handler.rfile.read.side_effect = None
+    handler.rfile.read.return_value = b'action'
+    with pytest.raises(ValueError, match='incomplete'):
+        handler._form()

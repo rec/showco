@@ -49,7 +49,9 @@ from .waveforms import WaveformBridge
 MAX_ACTION_BYTES = 65_536
 MAX_CONCURRENT_REQUESTS = 8
 MAX_WAVEFORM_CONNECTIONS = 4
+MAX_STATUS_REQUESTS = 2
 CONNECTION_TIMEOUT_SECONDS = 10
+ACTION_BODY_TIMEOUT_SECONDS = 2
 LOGGER = logging.get_logger(__name__)
 
 
@@ -347,12 +349,18 @@ class ShowcoHandler(BaseHTTPRequestHandler):
         if self.path == '/waveforms':
             self._waveforms()
             return
-        if not self._acquire_request():
+        slots = (
+            cast(ShowcoServer, self.server).status_slots
+            if self.path in {'/status', '/workflow-status'}
+            else cast(ShowcoServer, self.server).request_slots
+        )
+        if not slots.acquire(blocking=False):
+            self.send_error(503, 'showCo is busy')
             return
         try:
             self._do_get()
         finally:
-            cast(ShowcoServer, self.server).request_slots.release()
+            slots.release()
 
     def _do_get(self) -> None:
         if self.path == '/status':
@@ -515,7 +523,17 @@ class ShowcoHandler(BaseHTTPRequestHandler):
         if length < 0 or length > MAX_ACTION_BYTES:
             raise FormError(413, f'action body exceeds {MAX_ACTION_BYTES} bytes')
         try:
-            body = self.rfile.read(length).decode()
+            self.connection.settimeout(ACTION_BODY_TIMEOUT_SECONDS)
+            try:
+                data = self.rfile.read(length)
+            finally:
+                self.connection.settimeout(CONNECTION_TIMEOUT_SECONDS)
+        except TimeoutError:
+            raise FormError(408, 'action body timed out') from None
+        if len(data) != length:
+            raise FormError(400, 'action body is incomplete')
+        try:
+            body = data.decode()
         except UnicodeDecodeError:
             raise FormError(400, 'action body is not valid UTF-8') from None
         try:
@@ -573,13 +591,15 @@ class ShowcoServer(ThreadingHTTPServer):
     performance: PerformanceMonitor | None
     request_slots: threading.BoundedSemaphore
     waveform_slots: threading.BoundedSemaphore
+    status_slots: threading.BoundedSemaphore
 
     def __init__(self, address: tuple[str, int], handler: type[ShowcoHandler]) -> None:
         super().__init__(address, handler)
         self.request_slots = threading.BoundedSemaphore(MAX_CONCURRENT_REQUESTS)
         self.waveform_slots = threading.BoundedSemaphore(MAX_WAVEFORM_CONNECTIONS)
+        self.status_slots = threading.BoundedSemaphore(MAX_STATUS_REQUESTS)
         self.connection_slots = threading.BoundedSemaphore(
-            MAX_CONCURRENT_REQUESTS + MAX_WAVEFORM_CONNECTIONS
+            MAX_CONCURRENT_REQUESTS + MAX_WAVEFORM_CONNECTIONS + MAX_STATUS_REQUESTS
         )
         self.performance = None
         self.daemon_threads = True

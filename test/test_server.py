@@ -173,6 +173,7 @@ class ServerTests(unittest.TestCase):
         handler.path = '/actions'
         handler.headers = {'Content-Length': '1'}
         handler.rfile = BytesIO(b'\xff')
+        handler.connection = mock.Mock()
         handler.send_error = mock.Mock()
 
         handler._do_post()
@@ -186,6 +187,7 @@ class ServerTests(unittest.TestCase):
         handler.path = '/actions'
         handler.headers = {'Content-Length': '6'}
         handler.rfile = BytesIO(b'action')
+        handler.connection = mock.Mock()
         handler.send_error = mock.Mock()
 
         handler._do_post()
