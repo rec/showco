@@ -1395,11 +1395,39 @@ action = "music-teardown"
 visible_when = "music_enabled"
 
 [[pages.sections.elements]]
+name = "shutdown-recs-state"
+kind = "status"
+label = "recs recording"
+value = "show.recs"
+format = "shutdown_recs"
+visible_when = "music_enabled"
+
+[[pages.sections.elements]]
+name = "shutdown-streamo-state"
+kind = "status"
+label = "streamO broadcast"
+value = "show.streamo"
+format = "shutdown_streamo"
+visible_when = "music_enabled"
+
+[[pages.sections.elements]]
 name = "music-stop"
-kind = "action_button"
-label = "Stop and shut down"
+kind = "form"
+label = "Stop music and shut down the Pi; recording and streaming will be interrupted"
 action = "music-stop"
 visible_when = "music_enabled"
+
+[[pages.sections.elements.children]]
+name = "music-stop-confirmation"
+kind = "select"
+label = "choice"
+field = "confirmation"
+options = { cancel = "Cancel", shutdown = "Shut down Pi" }
+
+[[pages.sections.elements.children]]
+name = "music-stop-submit"
+kind = "submit"
+label = "Apply shutdown choice"
 
 [[pages]]
 name = "errors"

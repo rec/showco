@@ -398,6 +398,10 @@ class ShowcoApp:
                 case 'music-teardown':
                     return self.music.teardown()
                 case 'music-stop':
+                    if form.get('confirmation') != 'shutdown':
+                        return models.ActionResult(
+                            ok=True, message='Pi shutdown canceled'
+                        )
                     return self.music.stop()
             return models.ActionResult(
                 ok=False, message=f'unknown music action {action}'

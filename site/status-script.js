@@ -85,6 +85,9 @@
       case "cable_test": return value.state === "running"
         ? `Running: ${Math.floor(value.elapsed_seconds)}s elapsed of ${value.duration_seconds}s requested. ${value.message}`
         : `${value.state}: ${value.message}`;
+      case "shutdown_recs": return value.service.state !== "connected"
+        ? "state unavailable" : value.paused ? "paused" : value.recording ? "recording" : "stopped";
+      case "shutdown_streamo": return value.stream_state;
     }
     throw new Error(`unknown status format: ${format}`);
   }

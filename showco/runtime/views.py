@@ -250,6 +250,18 @@ def _gui_status_text(element: gui_schema.Element, status: models.ShowStatus) -> 
                     f'{value.duration_seconds:g}s requested. {value.message}'
                 )
             return f'{value.state}: {value.message}'
+        case 'shutdown_recs' if isinstance(value, models.RecsStatus):
+            if value.service.state != 'connected':
+                return 'state unavailable'
+            return (
+                'paused'
+                if value.paused
+                else 'recording'
+                if value.recording
+                else 'stopped'
+            )
+        case 'shutdown_streamo' if isinstance(value, models.StreamoStatus):
+            return value.stream_state
     raise ValueError(f'unsupported status format {element.format!r}')
 
 

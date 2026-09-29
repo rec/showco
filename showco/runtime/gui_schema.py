@@ -518,13 +518,14 @@ TEXT_VALUES_BY_FORMAT = {
 }
 STATUS_FORMATS = {
     'show.readiness.ready': {'readiness'},
+    'show.recs': {'shutdown_recs'},
     'show.recs.service': {'service'},
     'show.recs.snapshot_error': {'snapshot'},
     'show.recording_progress.message': {'progress'},
     'show.streamo.service': {'service'},
     'show.lyte': {'lyte'},
     'show.system': {'temperature'},
-    'show.streamo': {'bitrate'},
+    'show.streamo': {'bitrate', 'shutdown_streamo'},
     'show.recs.playback': {
         'playback_state',
         'playback_selection',
@@ -556,7 +557,6 @@ ACTION_BUTTON_PARAMETERS = {
     'music-setup': [{}],
     'music-record': [{}],
     'music-teardown': [{}],
-    'music-stop': [{}],
     'streamo-restart': [{}],
     'streamo-mute': [{}],
     'streamo-unmute': [{}],
@@ -577,6 +577,7 @@ FORM_ACTIONS = MUSICIAN_ACTIONS | {
     'recs-key-label',
     'recs-shutdown',
     'cable-test',
+    'music-stop',
     'streamo-title',
     'streamo-chat',
     'streamo-announce',
