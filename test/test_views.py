@@ -82,6 +82,9 @@ class ViewsTests(unittest.TestCase):
         self.assertIn('value="music-record"', html)
         self.assertIn('value="music-teardown"', html)
         self.assertIn('value="music-stop"', html)
+        self.assertIn('Stops the broadcast, pauses recs, starts setup music', html)
+        self.assertIn('starts a new recs session, and starts the broadcast', html)
+        self.assertIn('starts closing credits while recs', html)
 
     def test_channels_page_has_live_status_elements(self) -> None:
         html = channels_page(

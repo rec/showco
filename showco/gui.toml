@@ -1561,6 +1561,12 @@ action = "music-setup"
 visible_when = "music_enabled"
 
 [[pages.sections.elements]]
+name = "music-setup-effects"
+kind = "text"
+label = "Stops the broadcast, pauses recs, starts setup music, and enables its X18 returns."
+visible_when = "music_enabled"
+
+[[pages.sections.elements]]
 name = "music-record"
 kind = "action_button"
 label = "Record"
@@ -1568,10 +1574,22 @@ action = "music-record"
 visible_when = "music_enabled"
 
 [[pages.sections.elements]]
+name = "music-record-effects"
+kind = "text"
+label = "Fades out setup music, mutes its X18 returns, starts a new recs session, and starts the broadcast."
+visible_when = "music_enabled"
+
+[[pages.sections.elements]]
 name = "music-teardown"
 kind = "action_button"
 label = "Tear down with closing credits"
 action = "music-teardown"
+visible_when = "music_enabled"
+
+[[pages.sections.elements]]
+name = "music-teardown-effects"
+kind = "text"
+label = "With streamO: starts closing credits while recs and the room mix continue; fades the broadcast and then the room mix; after the broadcast stops, pauses recs and fades in teardown music. Without streamO: pauses recs and starts teardown music immediately."
 visible_when = "music_enabled"
 
 [[pages.sections.elements]]
