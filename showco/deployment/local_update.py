@@ -144,6 +144,7 @@ def refresh_local_dependencies(
             )
             if isinstance(refresh, update.StepResult):
                 update.report_failure(refresh, output)
+                report_partial_dependency_publication(updated, output)
                 return False
             if not refresh:
                 unchanged.append(program.name)
@@ -154,6 +155,7 @@ def refresh_local_dependencies(
             )
             progress.update()
             if result == DependencyRefresh.FAILED:
+                report_partial_dependency_publication(updated, output)
                 return False
             (updated if result == DependencyRefresh.UPDATED else unchanged).append(
                 program.name
@@ -167,6 +169,17 @@ def refresh_local_dependencies(
         outcomes.append(f'no GitHub source dependencies {", ".join(skipped)}')
     tqdm.write(f'Dependency synchronization: {"; ".join(outcomes)}.', file=output)
     return True
+
+
+def report_partial_dependency_publication(updated: list[str], output: TextIO) -> None:
+    if updated:
+        tqdm.write(
+            'Dependency synchronization stopped after publishing '
+            f'{", ".join(updated)}. Later repositories may not be updated. '
+            'Fix the error and rerun the same showco command; matching dependency '
+            'revisions will be skipped.',
+            file=output,
+        )
 
 
 def dependency_refresh_needed(
