@@ -79,9 +79,16 @@
         : `Session ${value.session}: ${value.source} channel ${value.channel} to output ${value.output_channel}`;
       case "playback_position": return value.position_seconds === null
         || value.duration_seconds === null ? "" : `${playbackDuration(value.position_seconds)} / ${playbackDuration(value.duration_seconds)}`;
-      case "music": return `Mode: ${value.mode}. ${
-        value.track === null ? "No music playing" : value.track
-      }${value.error ? ` ${value.error}` : ""}`;
+      case "music": {
+        const closing = value.closing?.operation_id
+          ? ` Credits: ${value.closing.state}/${value.closing.phase}${
+              value.closing.page === null ? "" : `, page ${value.closing.page}/${value.closing.page_count}`
+            }, ${Math.round(value.closing.elapsed_seconds)}/${Math.round(value.closing.duration_seconds)}s.`
+          : "";
+        return `Mode: ${value.mode}. ${
+          value.track === null ? "No music playing" : value.track
+        }${closing}${value.error ? ` ${value.error}` : ""}`;
+      }
       case "cable_test": return value.state === "running"
         ? `Running: ${Math.floor(value.elapsed_seconds)}s elapsed of ${value.duration_seconds}s requested. ${value.message}`
         : `${value.state}: ${value.message}`;

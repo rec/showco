@@ -242,7 +242,19 @@ def _gui_status_text(element: gui_schema.Element, status: models.ShowStatus) -> 
         case 'music' if isinstance(value, models.MusicStatus):
             track = str(value.track) if value.track is not None else 'No music playing'
             error = f' {value.error}' if value.error else ''
-            return f'Mode: {value.mode}. {track}{error}'
+            closing = ''
+            if value.closing is not None and value.closing.operation_id is not None:
+                page = (
+                    f', page {value.closing.page}/{value.closing.page_count}'
+                    if value.closing.page is not None
+                    else ''
+                )
+                closing = (
+                    f' Credits: {value.closing.state}/{value.closing.phase}{page}, '
+                    f'{value.closing.elapsed_seconds:.0f}/'
+                    f'{value.closing.duration_seconds:.0f}s.'
+                )
+            return f'Mode: {value.mode}. {track}{closing}{error}'
         case 'cable_test' if isinstance(value, models.CableTestStatus):
             if value.state == 'running':
                 return (

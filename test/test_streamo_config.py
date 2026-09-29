@@ -24,6 +24,8 @@ class StreamoConfigTests(unittest.TestCase):
 
         self.assertEqual(value['device_name'], 'X18')
         self.assertEqual(value['channel'], 17)
+        self.assertEqual(value['overlay_resolution'], '640x360')
+        self.assertEqual(value['overlay_frame_rate'], 10)
         self.assertEqual(value['streaming_service']['service'], 'twitch')
         self.assertEqual(
             value['streaming_service']['ingest'],

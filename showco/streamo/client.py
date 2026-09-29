@@ -11,7 +11,7 @@ from reccy.services import paths
 from streamo.config import STREAMO_SERVICE
 
 from ..deployment import machine_role
-from ..runtime.models import ActionResult, ServiceStatus, StreamoStatus
+from ..runtime.models import ActionResult, ClosingStatus, ServiceStatus, StreamoStatus
 
 AUDIO_STALE_SECONDS = 5.0
 ACTIVE_STREAM_STATES = {'streaming', 'muted'}
@@ -85,7 +85,14 @@ class StreamoClient:
             last_audio_at=_float(status.get('last_audio_at')),
             clipping=bool(status.get('clipping')),
             output_bitrate_kbps=_float(status.get('output_bitrate_kbps')),
+            closing=_closing(status.get('closing')),
         )
+
+    def start_closing(self, operation_id: str) -> str:
+        result = self._call('close_start', operation_id=operation_id)
+        if not isinstance(result, dict) or result.get('operation_id') != operation_id:
+            raise ValueError('streamO sent an invalid close_start response')
+        return operation_id
 
     def action(self, command: str, **fields: object) -> ActionResult:
         try:
@@ -126,6 +133,15 @@ def _dictionary(value: object) -> dict[str, object] | None:
     if not isinstance(value, dict) or not all(isinstance(k, str) for k in value):
         return None
     return value
+
+
+def _closing(value: object) -> ClosingStatus | None:
+    if not isinstance(value, dict):
+        return None
+    try:
+        return ClosingStatus.model_validate(value)
+    except ValueError:
+        return None
 
 
 def _health_error(status: dict[str, object], stream_state: str) -> str | None:

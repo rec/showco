@@ -1390,9 +1390,35 @@ visible_when = "music_enabled"
 [[pages.sections.elements]]
 name = "music-teardown"
 kind = "action_button"
-label = "Tear down"
+label = "Tear down with closing credits"
 action = "music-teardown"
 visible_when = "music_enabled"
+
+[[pages.sections.elements]]
+name = "music-close-cancel"
+kind = "action_button"
+label = "Abandon a failed closing sequence; keep recording"
+action = "music-close-cancel"
+visible_when = "music_enabled"
+
+[[pages.sections.elements]]
+name = "music-close-finish"
+kind = "form"
+label = "Finish a failed closing sequence only after confirming the broadcast ended"
+action = "music-close-finish"
+visible_when = "music_enabled"
+
+[[pages.sections.elements.children]]
+name = "music-close-finish-confirmation"
+kind = "select"
+label = "choice"
+field = "confirmation"
+options = { cancel = "Cancel", broadcast-stopped = "I confirmed the broadcast has stopped" }
+
+[[pages.sections.elements.children]]
+name = "music-close-finish-submit"
+kind = "submit"
+label = "Apply closing recovery choice"
 
 [[pages.sections.elements]]
 name = "shutdown-recs-state"

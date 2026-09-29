@@ -44,8 +44,8 @@ def streamo_toml(values: dict[str, object]) -> str:
     lines.extend(
         [
             assignment('sample_rate', sample_rate),
-            assignment('video_resolution', resolution),
-            assignment('video_frame_rate', frame_rate),
+            assignment('overlay_resolution', resolution),
+            assignment('overlay_frame_rate', frame_rate),
         ]
     )
     for name, default in OVERLAY_DEFAULTS.items():

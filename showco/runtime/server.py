@@ -397,6 +397,14 @@ class ShowcoApp:
                     return self.music.record()
                 case 'music-teardown':
                     return self.music.teardown()
+                case 'music-close-cancel':
+                    return self.music.recover_closing(False)
+                case 'music-close-finish':
+                    if form.get('confirmation') != 'broadcast-stopped':
+                        return models.ActionResult(
+                            ok=True, message='Manual closing recovery canceled'
+                        )
+                    return self.music.recover_closing(True)
                 case 'music-stop':
                     if form.get('confirmation') != 'shutdown':
                         return models.ActionResult(
