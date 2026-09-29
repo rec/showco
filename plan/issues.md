@@ -19,14 +19,6 @@ flow was run for this audit. The existing physical checks remain in
     write. The set-list and lighting editors already reject stale revisions.
     Seek a recs-side conditional update or make the potential overwrite clear.
 
-26. **Some malformed numeric values are accepted as valid status (confirmed).**
-    `_number` in `recs_snapshot.py` accepts positive infinity for disk time
-    and playback position (`showco/runtime/recs_snapshot.py:285-288`);
-    `_float` in `recs.py` accepts booleans and nonfinite floats for levels
-    (`showco/runtime/recs.py:651-654`). This can produce nonsensical browser
-    labels and nonstandard JSON numeric values. Validate finite, typed values
-    at the adapter boundary.
-
 27. **Browser status display logic is duplicated in Python and JavaScript
     (confirmed).** `showco/runtime/views.py:219-281,450-623` and
     `site/status-script.js:1-116,179-263` separately format service, mixer,

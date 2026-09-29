@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import threading
 
 from pydantic import ValidationError
@@ -650,7 +651,11 @@ def track_name(
 
 
 def _float(value: object) -> float | None:
-    if isinstance(value, int | float):
+    if (
+        isinstance(value, int | float)
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+    ):
         return float(value)
     return None
 
