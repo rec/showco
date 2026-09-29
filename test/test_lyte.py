@@ -63,6 +63,20 @@ class LyteClientTests(unittest.TestCase):
         self.assertEqual(result.message, 'lyte light test queued')
         client.call.assert_called_once_with('test', level=30.0, duration=1.0)
 
+    def test_rejected_selection_is_visible_in_service_status(self) -> None:
+        client = mock.Mock()
+        client.call.return_value = {
+            'running': True,
+            'selection_error': 'night: cannot prepare',
+        }
+        with mock.patch('showco.runtime.lyte.rpc.Client', return_value=client):
+            status = LyteClient(enabled=True).status()
+
+        self.assertEqual(status.service.state, 'error')
+        self.assertEqual(
+            status.service.last_error, 'Selection failed: night: cannot prepare'
+        )
+
     def test_invalid_test_reply_is_an_error(self) -> None:
         client = mock.Mock()
         client.call.return_value = {'state': 'running'}

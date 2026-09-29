@@ -100,6 +100,8 @@ class LyteClient:
 def _status_error(
     status: dict[str, object], strings: dict[str, models.LyteStringStatus]
 ) -> str | None:
+    if error := _string(status.get('selection_error')):
+        return f'Selection failed: {error}'
     errors = status.get('errors')
     if isinstance(errors, list) and errors and isinstance(errors[-1], dict):
         if error := _string(errors[-1].get('message')):
