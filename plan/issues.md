@@ -9,20 +9,6 @@ during a show, not implementation effort. No service, deployment, or hardware
 flow was run for this audit. The existing physical checks remain in
 [hardware.md](hardware.md).
 
-## P0: live network verification still required
-
-1. **The private-network ingress policy is implemented but not verified on the Pi.**
-   Provisioning installs a persistent nftables policy when
-   `network.restrict_external_ingress = true`. It admits traffic from the Pi's
-   private hotspot, while the external interface admits only SSH and UDP 5353
-   for `t.local` mDNS discovery. The `public` topology is rejected because it
-   has no private hotspot. The Pi was unavailable for a controlled deployment,
-   so this boundary has not been proven in use. Set a long, random password in
-   the ignored `showco/provision/secrets.toml`, deploy when no show is running,
-   and verify: the UI works on the private network; UI and diagnostics are
-   unreachable on external Wi-Fi; SSH and `t.local` work externally; and the
-   policy survives a reboot. Keep this finding open until those checks pass.
-
 ## P2: operator clarity, edge cases, and maintainability
 
 23. **The generic musician form cannot edit every entity field (confirmed).**
@@ -149,14 +135,26 @@ flow was run for this audit. The existing physical checks remain in
     described in [closing-credits.md](closing-credits.md). Keep this marked as
     planned behavior so an operator does not expect it during a live show.
 
-## Verification gaps and boundaries
+## Additional work beyond the prompt
+
+None.
+
+## Hardware verification required
+
+1. **P0: The private-network ingress policy is implemented but not verified on the Pi.**
+   Provisioning installs a persistent nftables policy when
+   `network.restrict_external_ingress = true`. It admits traffic from the Pi's
+   private hotspot, while the external interface admits only SSH and UDP 5353
+   for `t.local` mDNS discovery. The `public` topology is rejected because it
+   has no private hotspot. The Pi was unavailable for a controlled deployment,
+   so this boundary has not been proven in use. Set a long, random password in
+   the ignored `showco/provision/secrets.toml`, deploy when no show is running,
+   and verify: the UI works on the private network; UI and diagnostics are
+   unreachable on external Wi-Fi; SSH and `t.local` work externally; and the
+   policy survives a reboot. Keep this finding open until those checks pass.
 
 40. **The physical installation remains unverified.**
     [hardware.md](hardware.md) tracks capture timing, routing isolation,
     signal thresholds, and full Pi/X18 acceptance. These should remain open
     until measured on the actual setup. Automated browser, WAV, and fake OSC
     tests cannot close them.
-
-## Additional work beyond the prompt
-
-None.
