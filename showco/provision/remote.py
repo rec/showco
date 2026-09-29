@@ -15,6 +15,7 @@ from . import config, network, script, ssh, verify
 SSH_CLEANUP_TIMEOUT_SECONDS = 15
 REMOTE_PROVISION_TIMEOUT_SECONDS = 1_800
 PROVISIONING_FINGERPRINT_NAME = 'provisioning-fingerprint'
+FINGERPRINT_SSH_TIMEOUTS = (1, 2, 4, 8, 16)
 WIFI_STATUS_COMMAND = 'nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device status'
 PASSWORDLESS_SUDO_COMMAND = (
     'sudo -n true || { '
@@ -110,23 +111,39 @@ def require_passwordless_sudo(provision_config: config.Config) -> None:
 
 def applied_provisioning_fingerprint(provision_config: config.Config) -> str | None:
     path = provisioning_fingerprint_path(provision_config)
-    try:
-        completed = subprocess.run(
-            ssh.ssh_command(
-                provision_config,
-                provision_config.ssh_target,
-                f'if test -f {shlex.quote(str(path))}; then '
-                f'cat {shlex.quote(str(path))}; else exit 42; fi',
-            ),
-            capture_output=True,
-            check=False,
-            text=True,
-            timeout=ssh.SSH_VERIFICATION_TIMEOUT_SECONDS,
-        )
-    except (OSError, TimeoutExpired) as error:
+    command = (
+        f'if test -f {shlex.quote(str(path))}; then '
+        f'cat {shlex.quote(str(path))}; else exit 42; fi'
+    )
+    for timeout in FINGERPRINT_SSH_TIMEOUTS:
+        try:
+            completed = subprocess.run(
+                ssh.ssh_command(
+                    provision_config,
+                    provision_config.ssh_target,
+                    command,
+                    connect_timeout=timeout,
+                ),
+                capture_output=True,
+                check=False,
+                text=True,
+                timeout=timeout,
+            )
+        except TimeoutExpired:
+            if timeout != FINGERPRINT_SSH_TIMEOUTS[-1]:
+                print(f'SSH provisioning check timed out after {timeout}s; retrying...')
+            continue
+        except OSError as error:
+            sys.exit(
+                f'ERROR: cannot check provisioning state on '
+                f'{provision_config.ssh_target}: {error}'
+            )
+        break
+    else:
         sys.exit(
             f'ERROR: cannot check provisioning state on '
-            f'{provision_config.ssh_target}: {error}'
+            f'{provision_config.ssh_target}: SSH timed out on all five attempts '
+            '(1, 2, 4, 8, 16 seconds)'
         )
     if completed.returncode == 42:
         return None
