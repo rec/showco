@@ -109,26 +109,40 @@ def require_passwordless_sudo(provision_config: config.Config) -> None:
 
 
 def applied_provisioning_fingerprint(provision_config: config.Config) -> str | None:
+    path = provisioning_fingerprint_path(provision_config)
     try:
-        path = provisioning_fingerprint_path(provision_config)
         completed = subprocess.run(
             ssh.ssh_command(
                 provision_config,
                 provision_config.ssh_target,
-                f'cat {shlex.quote(str(path))}',
+                f'if test -f {shlex.quote(str(path))}; then '
+                f'cat {shlex.quote(str(path))}; else exit 42; fi',
             ),
             capture_output=True,
             check=False,
             text=True,
             timeout=ssh.SSH_VERIFICATION_TIMEOUT_SECONDS,
         )
-    except TimeoutExpired:
+    except (OSError, TimeoutExpired) as error:
+        sys.exit(
+            f'ERROR: cannot check provisioning state on '
+            f'{provision_config.ssh_target}: {error}'
+        )
+    if completed.returncode == 42:
         return None
+    if completed.returncode != 0:
+        detail = cast(str, completed.stderr).strip() or (
+            f'SSH exit {completed.returncode}'
+        )
+        sys.exit(
+            f'ERROR: cannot check provisioning state on '
+            f'{provision_config.ssh_target}: {detail}'
+        )
     fingerprint = cast(str, completed.stdout).strip()
-    if completed.returncode != 0 or len(fingerprint) != 64:
-        return None
-    if not all(character in string.hexdigits for character in fingerprint):
-        return None
+    if len(fingerprint) != 64 or not all(
+        character in string.hexdigits for character in fingerprint
+    ):
+        sys.exit(f'ERROR: invalid provisioning state on {provision_config.ssh_target}')
     return fingerprint
 
 
