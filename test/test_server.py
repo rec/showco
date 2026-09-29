@@ -332,8 +332,9 @@ class ServerTests(unittest.TestCase):
             self.assertTrue(started.wait(1))
             self.assertEqual(app.cable_test_status().state, 'running')
             self.assertFalse(app.run_action(form).ok)
-            self.assertEqual(
-                app.run_action({'action': 'recs-pause-recording'}).message, 'paused'
+            self.assertIn(
+                'cable test owns the recs pause',
+                app.run_action({'action': 'recs-pause-recording'}).message,
             )
         finally:
             finish.set()
@@ -343,6 +344,31 @@ class ServerTests(unittest.TestCase):
         ):
             time.sleep(0.01)
         self.assertEqual(app.cable_test_status().state, 'passed')
+
+    def test_urgent_recording_pause_does_not_wait_for_unrelated_action(self) -> None:
+        recs = mock.Mock()
+        recs.action.return_value = models.ActionResult(ok=True, message='paused')
+        app = ShowcoApp(
+            recs,
+            None,
+            rehearsal.RehearsalSystemMonitor(),
+            rehearsal.RehearsalMixersMonitor(),
+        )
+        finished = Event()
+
+        def pause() -> None:
+            app.run_action({'action': 'recs-pause-recording'})
+            finished.set()
+
+        app.action_lock.acquire()
+        worker = Thread(target=pause)
+        try:
+            worker.start()
+            self.assertTrue(finished.wait(1))
+        finally:
+            app.action_lock.release()
+            worker.join(timeout=1)
+        recs.action.assert_called_once_with('pause_recording')
 
     def test_lyte_light_test_uses_lyte_client(self) -> None:
         app = ShowcoApp(
