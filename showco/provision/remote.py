@@ -60,8 +60,8 @@ def provision_remote(
 
         if ssh.provisioning_reboot_required(provision_config):
             print(f'Waiting for {provision_config.ssh_target} to reboot...')
-            ssh.schedule_remote_reboot(provision_config)
-            ssh.wait_for_rebooted_ssh(provision_config)
+            boot_id = ssh.schedule_remote_reboot(provision_config)
+            ssh.wait_for_rebooted_ssh(provision_config, boot_id)
         else:
             print(f'No reboot is required for {provision_config.ssh_target}.')
 

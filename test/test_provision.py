@@ -322,7 +322,9 @@ class ProvisionTests(unittest.TestCase):
                 'showco.provision.ssh.provisioning_reboot_required',
                 return_value=True,
             ),
-            mock.patch('showco.provision.ssh.schedule_remote_reboot') as schedule,
+            mock.patch(
+                'showco.provision.ssh.schedule_remote_reboot', return_value='old-boot'
+            ) as schedule,
             mock.patch('showco.provision.ssh.wait_for_rebooted_ssh') as wait,
             mock.patch(
                 'showco.provision.verify.verify_provisioning',
@@ -338,7 +340,7 @@ class ProvisionTests(unittest.TestCase):
 
         initial_wait.assert_called_once_with(config)
         remove_host.assert_called_once_with(config)
-        wait.assert_called_once_with(config)
+        wait.assert_called_once_with(config, 'old-boot')
         schedule.assert_called_once_with(config)
         verification.assert_called_once_with(
             config, network_config.NetworkTopology.PRIVATE
@@ -573,18 +575,26 @@ class ProvisionTests(unittest.TestCase):
             'git -C /srv/show-projects/recs status --short',
         )
 
-    def test_wait_for_rebooted_ssh_waits_for_disconnect_then_connect(self) -> None:
+    def test_wait_for_rebooted_ssh_requires_new_boot_identity(self) -> None:
         config = make_config(values(networks=networks(x18=False)))
         with (
             mock.patch(
-                'showco.provision.ssh.ssh_is_reachable',
-                side_effect=[True, False, False, True],
-            ) as reachable,
+                'showco.provision.ssh.ssh_boot_id',
+                side_effect=['old-boot', None, 'old-boot', 'new-boot'],
+            ) as boot_id,
             mock.patch('showco.provision.ssh.time.sleep'),
         ):
-            ssh.wait_for_rebooted_ssh(config)
+            ssh.wait_for_rebooted_ssh(config, 'old-boot')
 
-        self.assertEqual(reachable.call_count, 4)
+        self.assertEqual(boot_id.call_count, 4)
+
+    def test_boot_identity_is_unavailable_during_network_failure(self) -> None:
+        config = make_config(values(networks=networks(x18=False)))
+        with mock.patch(
+            'reccy.runtime.subprocess.run',
+            return_value=subprocess.CompletedProcess(['ssh'], 255, '', 'offline'),
+        ):
+            self.assertIsNone(ssh.ssh_boot_id(config))
 
     def test_verify_provisioning_checks_projects_and_user_services(self) -> None:
         config = make_config(values())

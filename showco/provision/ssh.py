@@ -16,9 +16,17 @@ SSH_VERIFICATION_TIMEOUT_SECONDS = 15
 SCP_TIMEOUT_SECONDS = 60
 
 
-def wait_for_rebooted_ssh(provision_config: config.Config) -> None:
-    wait_for_ssh_disconnect(provision_config)
-    wait_for_ssh(provision_config, timeout_seconds=REBOOT_WAIT_SECONDS)
+def wait_for_rebooted_ssh(
+    provision_config: config.Config, previous_boot_id: str
+) -> None:
+    deadline = time.monotonic() + REBOOT_WAIT_SECONDS
+    while time.monotonic() < deadline:
+        if (
+            boot_id := ssh_boot_id(provision_config)
+        ) is not None and boot_id != previous_boot_id:
+            return
+        time.sleep(1)
+    sys.exit(f'ERROR: {provision_config.ssh_target} did not complete its reboot')
 
 
 def provisioning_reboot_required(provision_config: config.Config) -> bool:
@@ -31,19 +39,47 @@ def provisioning_reboot_required(provision_config: config.Config) -> bool:
     )
 
 
-def schedule_remote_reboot(provision_config: config.Config) -> None:
+def schedule_remote_reboot(provision_config: config.Config) -> str:
+    boot_id = capture_ssh(provision_config, 'cat /proc/sys/kernel/random/boot_id')
+    if not boot_id:
+        sys.exit(f'ERROR: cannot read boot ID from {provision_config.ssh_target}')
     run_ssh(
         provision_config, 'sudo systemd-run --on-active=2s /usr/bin/systemctl reboot'
     )
+    return boot_id
 
 
-def wait_for_ssh_disconnect(provision_config: config.Config) -> None:
-    deadline = time.monotonic() + 60
-    while time.monotonic() < deadline:
-        if not ssh_is_reachable(provision_config):
-            return
-        time.sleep(1)
-    sys.exit(f'ERROR: {provision_config.ssh_target} did not drop SSH before reboot')
+def ssh_boot_id(provision_config: config.Config) -> str | None:
+    try:
+        completed = cast(
+            CompletedProcess[str],
+            subprocess.run(
+                ssh_command(
+                    provision_config,
+                    provision_config.ssh_target,
+                    'cat /proc/sys/kernel/random/boot_id',
+                    connect_timeout=1,
+                ),
+                capture_output=True,
+                check=False,
+                text=True,
+                timeout=5,
+            ),
+        )
+    except TimeoutExpired:
+        return None
+    if has_changed_host_key(completed):
+        if not provision_config.accept_changed_host_key:
+            sys.exit(
+                'ERROR: SSH host key changed for '
+                f'{provision_config.ssh_target}. Verify the new key and set '
+                'accept_changed_host_key = true after reflashing.'
+            )
+        remove_known_host(provision_config)
+        return None
+    if completed.returncode != 0:
+        return None
+    return completed.stdout.strip() or None
 
 
 def wait_for_ssh(
