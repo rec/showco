@@ -1,8 +1,15 @@
 from __future__ import annotations
 
+import os
+import shutil
 import sys
+import tempfile
+import traceback
+from contextlib import redirect_stderr, redirect_stdout
+from datetime import UTC, datetime
+from logging import StreamHandler, getLogger
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, TextIO
 
 import tyro
 from pydantic import BaseModel
@@ -16,6 +23,8 @@ from .runtime.mixer import MixersMonitor, load_mixer_specs
 from .runtime.server import make_server
 from .streamo import auth, client, config
 from .x18 import cable_test
+
+ERROR_LOG_PATH = Path(__file__).resolve().parents[1] / 'showco-errors.txt'
 
 
 class WebUiOptions(BaseModel, frozen=True):
@@ -65,8 +74,6 @@ def run_web_ui(options: WebUiOptions) -> int:
         print(f'showco listening on http://{options.host}:{options.port}')
     try:
         server.serve_forever()
-    except KeyboardInterrupt:
-        print('Interrupted')
     finally:
         server.server_close()
     return 0
@@ -75,22 +82,42 @@ def run_web_ui(options: WebUiOptions) -> int:
 def main(argv: list[str] | None = None) -> int:
     logging.configure()
     arguments = sys.argv[1:] if argv is None else argv
-    if not arguments or arguments[0].startswith('-'):
-        return deploy.main(arguments)
-    return cli.route_command(
-        {
-            'run': run_command,
-            'bundle': bundle.main,
-            'cable-test': cable_test.main,
-            'prepare-card': card.main,
-            'deploy': deploy.main,
-            'logs': logs.main,
-            'python': python.main,
-            'streamo': streamo_command,
-        },
-        arguments,
-        prog='showco',
-    )
+    with tempfile.TemporaryFile(mode='w+t') as record:
+        with (
+            redirect_stdout(_Tee(sys.stdout, record)),
+            redirect_stderr(_Tee(sys.stderr, record)),
+        ):
+            handler = StreamHandler(record)
+            getLogger().addHandler(handler)
+            status = 0
+            try:
+                if not arguments or arguments[0].startswith('-'):
+                    status = deploy.main(arguments)
+                else:
+                    status = cli.route_command(
+                        {
+                            'run': run_command,
+                            'bundle': bundle.main,
+                            'cable-test': cable_test.main,
+                            'prepare-card': card.main,
+                            'deploy': deploy.main,
+                            'logs': logs.main,
+                            'python': python.main,
+                            'streamo': streamo_command,
+                        },
+                        arguments,
+                        prog='showco',
+                    )
+            except KeyboardInterrupt:
+                print('Interrupted', file=sys.stderr)
+                status = 130
+            finally:
+                getLogger().removeHandler(handler)
+                handler.close()
+                error = sys.exception()
+                if status != 0 or error is not None:
+                    _append_error_report(record, status, error)
+            return status
 
 
 def run_command(arguments: list[str]) -> int:
@@ -115,3 +142,53 @@ def run_command(arguments: list[str]) -> int:
 def streamo_command(arguments: list[str]) -> int:
     machine_role.require_target_machine('showco streamo')
     return auth.main(arguments)
+
+
+class _Tee:
+    def __init__(self, original: TextIO, record: TextIO) -> None:
+        self.original = original
+        self.record = record
+
+    @property
+    def encoding(self) -> str:
+        return self.original.encoding
+
+    def writable(self) -> bool:
+        return True
+
+    def write(self, value: str) -> int:
+        written = self.original.write(value)
+        self.record.write(value)
+        return written
+
+    def flush(self) -> None:
+        self.original.flush()
+        self.record.flush()
+
+    def isatty(self) -> bool:
+        return self.original.isatty()
+
+
+def _append_error_report(
+    record: TextIO, status: int | None, error: BaseException | None
+) -> None:
+    if isinstance(error, SystemExit) and error.code in (None, 0):
+        return
+    try:
+        descriptor = os.open(
+            ERROR_LOG_PATH, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600
+        )
+        with os.fdopen(descriptor, 'a') as output:
+            output.write(f'\n--- showCo failure {datetime.now(UTC).isoformat()} ---\n')
+            record.flush()
+            record.seek(0)
+            shutil.copyfileobj(record, output)
+            if error is not None:
+                output.writelines(traceback.format_exception(error))
+            elif status is not None:
+                output.write(f'showCo exited with status {status}\n')
+    except OSError as failure:
+        print(
+            f'Could not save showCo diagnostics to {ERROR_LOG_PATH}: {failure}',
+            file=sys.stderr,
+        )

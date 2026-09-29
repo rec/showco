@@ -203,6 +203,10 @@ showco --push recs
 showco --sync recs
 ```
 
+If a showCo command fails, its terminal output is also appended to the ignored
+`showco-errors.txt` in the showCo checkout. The file may contain operational
+details, so keep it private.
+
 Updates preserve saved recs settings by default. Pass `--clear-settings` to explicitly clear them when updating recs. Preflight checks run before settings or services are changed. A failed update restores the previous selected revisions, locked environments, and any settings explicitly cleared, then restarts affected services. If restoration fails, services remain stopped and the command reports the failure; a recovered update still exits unsuccessfully.
 
 Repository selection includes dependent applications. All affected services stop before any selected checkout changes, and showCo starts last. Unselected checkouts are not reset. Remote updates require a working installed showCo updater and environment; provisioning is the repair path for a broken installation. Install this updater on older targets before relying on its rollback guarantees. Rollback handles command failures and interruption within the update process; it is not a durable recovery mechanism for power loss or a killed process.
