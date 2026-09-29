@@ -2,9 +2,9 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
-from . import models
+from . import models, workflow_storage
 
 
 class RecoveryState(BaseModel, frozen=True):
@@ -20,11 +20,14 @@ class Recovery:
     def __init__(self, path: Path | None = None) -> None:
         self.path = path
         self.state = RecoveryState()
+        self.load_error: str | None = None
         if path is not None:
             try:
                 self.state = RecoveryState.model_validate_json(path.read_text())
             except FileNotFoundError:
                 pass
+            except (OSError, UnicodeError, ValidationError) as error:
+                self.load_error = workflow_storage.quarantine(path, error)
 
     def save(self, state: RecoveryState) -> None:
         if self.path is not None:

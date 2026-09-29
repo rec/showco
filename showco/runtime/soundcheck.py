@@ -5,9 +5,9 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
-from . import models
+from . import models, workflow_storage
 
 
 class CheckResult(BaseModel, frozen=True):
@@ -33,11 +33,14 @@ class Soundcheck:
         self.identity = identity or mount_identity
         self.state = SoundcheckState()
         self.pending_save = False
+        self.load_error: str | None = None
         if path is not None:
             try:
                 self.state = SoundcheckState.model_validate_json(path.read_text())
             except FileNotFoundError:
                 pass
+            except (OSError, UnicodeError, ValidationError) as error:
+                self.load_error = workflow_storage.quarantine(path, error)
 
     def save(self, state: SoundcheckState) -> None:
         if self.path is not None:

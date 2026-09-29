@@ -11,15 +11,6 @@ flow was run for this audit. The existing physical checks remain in
 
 ## P2: operator clarity, edge cases, and maintainability
 
-24. **A malformed saved workflow file can prevent showCo startup (confirmed).**
-    `SetListController`, `LightingController`, `Soundcheck`, and `Recovery`
-    catch a missing file but let malformed JSON, validation errors, and read
-    errors escape their constructors (`showco/runtime/setlist.py:34-42`,
-    `lighting.py:24-32`, `soundcheck.py:28-40`, `recovery.py:19-27`). The
-    performance lock and incident history already have explicit failure
-    states (`performance.py:10-26`, `incidents.py:17-36`). Define how each
-    persisted workflow fails safely and remains inspectable after corruption.
-
 25. **A stale browser edit can overwrite newer recs track names (risk).**
     `set_track_name()` fetches the current name map and replaces it, but has
     no revision or compare-and-swap with recs
