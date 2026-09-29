@@ -80,6 +80,7 @@ class Config(BaseModel, frozen=True):
     stream: Stream
     lyte: Lyte
     git: Git
+    gui_path: Path = Path('showco/gui.toml')
     argon_one: bool = True
     accept_changed_host_key: bool = True
 
@@ -127,6 +128,11 @@ def config_from_values(
     git = table_value(values, 'git')
     network_values = table_value(values, 'networks')
     mixers = mixer_specs(values.get('mixers', []), internal_subnet(network_values))
+    gui_path = Path(
+        string_value(table_value(values, 'gui'), 'path') or 'showco/gui.toml'
+    )
+    if gui_path.is_absolute() or '..' in gui_path.parts:
+        sys.exit('ERROR: gui.path must be inside the showCo checkout')
     result = Config(
         network=network_config,
         paths=Paths(
@@ -159,6 +165,7 @@ def config_from_values(
             ),
             lyte=git_repo('lyte', table_value(git, 'lyte'), override=lyte_repo),
         ),
+        gui_path=gui_path,
         argon_one=bool_value(values, 'argon_one', default=True),
         accept_changed_host_key=bool_value(
             values, 'accept_changed_host_key', default=True

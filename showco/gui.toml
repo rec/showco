@@ -197,6 +197,186 @@ empty_text = "No actions yet."
 [[pages]]
 name = "performance"
 
+[[pages.sections]]
+name = "setlist-controls"
+title = "Set list"
+
+[[pages.sections.elements]]
+name = "cue-position"
+kind = "workflow_display"
+label = "Loading set list..."
+
+[[pages.sections.elements]]
+name = "cue-notes"
+kind = "workflow_display"
+
+[[pages.sections.elements]]
+name = "cue-elapsed"
+kind = "workflow_display"
+
+[[pages.sections.elements]]
+name = "next-song"
+kind = "workflow_button"
+label = "Start next song"
+action = "setlist-next"
+
+[[pages.sections.elements]]
+name = "alternate-cues"
+kind = "details"
+label = "Skip, repeat, or interval"
+
+[[pages.sections.elements.children]]
+name = "skip-song"
+kind = "workflow_button"
+label = "Skip next song"
+action = "setlist-skip"
+
+[[pages.sections.elements.children]]
+name = "repeat-song"
+kind = "workflow_button"
+label = "Repeat current song"
+action = "setlist-repeat"
+
+[[pages.sections.elements.children]]
+name = "interval"
+kind = "workflow_button"
+label = "Start interval"
+action = "setlist-interval"
+
+[[pages.sections.elements]]
+name = "cue-message"
+kind = "workflow_display"
+
+[[pages.sections.elements]]
+name = "cue-resolution"
+kind = "workflow_display"
+
+[[pages.sections.elements.children]]
+name = "cue-resolution-help"
+kind = "workflow_display"
+label = "Marker delivery is uncertain. Keeping the cue sends nothing. Retrying may create a duplicate marker."
+
+[[pages.sections.elements.children]]
+name = "confirm-cue-resolution"
+kind = "workflow_checkbox"
+label = "I checked the outcome and chose how to proceed"
+
+[[pages.sections.elements.children]]
+name = "accept-cue"
+kind = "workflow_button"
+label = "Keep cue without resending"
+action = "setlist-accept"
+
+[[pages.sections.elements.children]]
+name = "retry-cue"
+kind = "workflow_button"
+label = "Retry marker with duplicate risk"
+action = "setlist-retry"
+
+[[pages.sections.elements]]
+name = "workflow-result"
+kind = "workflow_status"
+
+[[pages.sections]]
+name = "performance-status"
+title = "Performance"
+style = "performance-status"
+
+[[pages.sections.elements]]
+name = "performance-recording"
+kind = "workflow_display"
+label = "Recording: checking"
+
+[[pages.sections.elements]]
+name = "performance-disk"
+kind = "workflow_display"
+label = "Destination and capacity: checking"
+
+[[pages.sections.elements]]
+name = "performance-progress"
+kind = "workflow_display"
+label = "Audio writes: checking"
+
+[[pages.sections.elements]]
+name = "performance-stream"
+kind = "workflow_display"
+label = "Stream: checking"
+
+[[pages.sections]]
+name = "performance-buttons"
+style = "performance-buttons"
+
+[[pages.sections.elements]]
+name = "mark-moment"
+kind = "performance_button"
+label = "Mark this moment"
+action = "recs-marker"
+
+[[pages.sections.elements]]
+name = "pause-recording"
+kind = "performance_button"
+label = "Pause recording"
+action = "recs-pause-recording"
+
+[[pages.sections.elements]]
+name = "resume-recording"
+kind = "performance_button"
+label = "Resume recording"
+action = "recs-resume-recording"
+
+[[pages.sections.elements]]
+name = "inspect-health"
+kind = "link"
+label = "Inspect health"
+value = "/health"
+
+[[pages.sections.elements]]
+name = "performance-result"
+kind = "workflow_status"
+label = "Ready for an explicit action."
+
+[[pages.sections]]
+name = "display-controls"
+style = "display-controls"
+
+[[pages.sections.elements]]
+name = "dim-display"
+kind = "performance_checkbox"
+label = "Dim display"
+
+[[pages.sections.elements]]
+name = "keep-awake"
+kind = "performance_button"
+label = "Keep screen awake"
+operation = "keep_awake"
+
+[[pages.sections.elements]]
+name = "awake-status"
+kind = "workflow_display"
+label = "Screen awake: off"
+
+[[pages.sections]]
+name = "pinned-inputs"
+title = "Pinned inputs"
+
+[[pages.sections.elements]]
+name = "pin-help"
+kind = "text"
+label = "Pins and dimming are saved on this browser. Unpinning never changes recording."
+
+[[pages.sections.elements]]
+name = "performance-inputs"
+kind = "workflow_editor"
+
+[[pages.sections.elements]]
+name = "pin-choices"
+kind = "details"
+label = "Choose inputs to pin"
+
+[[pages.sections.elements.children]]
+name = "input-pins"
+kind = "workflow_editor"
+
 [[pages]]
 name = "setlist"
 title = "Set list"

@@ -267,6 +267,7 @@ class ProvisionScriptTests(unittest.TestCase):
         self.assertIn('X18=false', command)
         self.assertIn("RECS_REFNAME=''", command)
         self.assertIn('SHOWCO_SSH_PORT=22', command)
+        self.assertIn('SHOWCO_GUI_PATH=showco/gui.toml', command)
         self.assertIn('RESTRICT_EXTERNAL_INGRESS=false', command)
 
     def test_remote_command_passes_package_upgrade_request(self) -> None:

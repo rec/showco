@@ -32,6 +32,8 @@ class ServicesTests(unittest.TestCase):
                 '17352',
                 '--mixers-config',
                 '/home/tom/.config/showco/mixers.toml',
+                '--gui',
+                str(services.gui_schema.DEFAULT_GUI_PATH),
                 '--streamo-enabled',
                 '--lyte-enabled',
             ],
@@ -91,6 +93,15 @@ class ServicesTests(unittest.TestCase):
 
         self.assertEqual(result, 0)
 
+    def test_invalid_gui_does_not_install_service(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / 'gui.toml'
+            path.write_text('version = 1\n')
+            with mock.patch.object(services.ShowcoDaemon, 'install_service') as install:
+                with self.assertRaisesRegex(ValueError, 'invalid GUI document'):
+                    services.install_showco_service(root=Path(directory), gui=path)
+                install.assert_not_called()
+
     def test_showco_daemon_uses_reccy_service_lifecycle(self) -> None:
         daemon = services.ShowcoDaemon(platform=Platform.linux)
 
@@ -136,6 +147,21 @@ class ServicesTests(unittest.TestCase):
 
         self.assertNotIn('--streamo-enabled', arguments)
         self.assertNotIn('--lyte-enabled', arguments)
+
+    def test_showco_args_select_configured_gui(self) -> None:
+        arguments = services.showco_args(
+            '0.0.0.0',
+            17352,
+            None,
+            False,
+            False,
+            Path('/home/tom/code/showco/showco/gui-minimal.toml'),
+        )
+
+        self.assertEqual(
+            arguments[-2:],
+            ['--gui', '/home/tom/code/showco/showco/gui-minimal.toml'],
+        )
 
     def test_restart_streamo_service_uses_service_registry(self) -> None:
         registry = mock.Mock()

@@ -59,7 +59,23 @@ def configured_page(
         is_visible=lambda element, values: _gui_visible(element, values or set()),
         features=features or set(),
     )
-    script = site_file('channel-controls.js') + site_file('status-script.js')
+    has_live_status = any(
+        element.kind in {'repeat', 'status', 'service_card', 'meter'}
+        for section in page_spec.sections
+        for element in section.elements
+    )
+    has_mutable_attributes = any(
+        element.kind == 'mutable_attributes'
+        for section in page_spec.sections
+        for element in section.elements
+    )
+    script = (
+        site_file('channel-controls.js')
+        if has_live_status or has_mutable_attributes
+        else ''
+    )
+    if has_live_status:
+        script += site_file('status-script.js')
     if any(
         child.kind == 'waveform'
         for section in page_spec.sections
@@ -69,6 +85,12 @@ def configured_page(
         script += site_file('waveform-script.js')
     if any(section.style == 'transport' for section in page_spec.sections):
         script += site_file('playback-script.js')
+    if any(
+        element.kind in {'performance_button', 'performance_checkbox'}
+        for section in page_spec.sections
+        for element in _all_elements(section.elements)
+    ):
+        script += site_file('performance.js')
     if any(
         element.kind.startswith('workflow_')
         for section in page_spec.sections
@@ -371,53 +393,6 @@ def playback_position(playback: models.PlaybackStatus) -> str:
     position = _duration(playback.position_seconds)
     duration = _duration(playback.duration_seconds)
     return f'{position} / {duration}'
-
-
-def performance_page() -> str:
-    return page(
-        'performance',
-        site_file('setlist-controls.html')
-        + """
-      <section class="performance" id="performance-screen">
-        <h2>Performance</h2>
-        <div class="performance-status" aria-live="polite">
-          <p id="performance-recording">Recording: checking</p>
-          <p id="performance-disk">Destination and capacity: checking</p>
-          <p id="performance-progress">Audio writes: checking</p>
-          <p id="performance-stream">Stream: checking</p>
-        </div>
-        <div class="performance-buttons">
-          <button type="button" data-performance-action="recs-marker">
-            Mark this moment</button>
-          <button type="button" data-performance-action="recs-pause-recording">
-            Pause recording</button>
-          <button type="button" data-performance-action="recs-resume-recording">
-            Resume recording</button>
-          <a href="/health">Inspect health</a>
-        </div>
-        <p id="performance-result" role="status">Ready for an explicit action.</p>
-        <div class="display-controls">
-          <label><input type="checkbox" id="dim-display"> Dim display</label>
-          <button type="button" id="keep-awake">Keep screen awake</button>
-          <span id="awake-status" role="status">Screen awake: off</span>
-        </div>
-        <h3>Pinned inputs</h3>
-        <p>Pins and dimming are saved on this browser.
-          Unpinning never changes recording.</p>
-        <div id="performance-inputs"></div>
-        <details><summary>Choose inputs to pin</summary>
-          <div id="input-pins"></div></details>
-      </section>""",
-        script=site_file('performance.js') + site_file('workflow.js'),
-    )
-
-
-def workflow_page(name: str) -> str:
-    return page(
-        name,
-        site_file(f'{name}.html'),
-        script=site_file('workflow.js'),
-    )
 
 
 def page(page_id: str, body: str, *, script: str = '') -> str:

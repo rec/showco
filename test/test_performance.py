@@ -3,7 +3,7 @@ from unittest import mock
 
 import pytest
 
-from showco.runtime import performance, rehearsal, views
+from showco.runtime import gui_schema, models, performance, rehearsal, views
 from showco.runtime.server import ShowcoApp
 
 
@@ -81,7 +81,17 @@ def test_corrupt_lock_blocks_actions_until_explicit_successful_unlock(
 
 
 def test_performance_controls_and_protection_are_present_on_all_pages() -> None:
-    page = views.performance_page()
+    page = views.configured_page(
+        gui_schema.current_gui().page('performance'),
+        models.ShowStatus(
+            recs=models.RecsStatus(
+                service=models.ServiceStatus(name='recs', state='connected')
+            ),
+            streamo=models.StreamoStatus(
+                service=models.ServiceStatus(name='streamo', state='disabled')
+            ),
+        ),
+    )
     assert 'data-performance-action="recs-marker"' in page
     assert 'id="performance-disk"' in page
     assert 'id="input-pins"' in page

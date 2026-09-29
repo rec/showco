@@ -1,0 +1,99 @@
+version = 1
+name = "showCo"
+default_page = "performance"
+
+[[pages]]
+name = "performance"
+title = "Minimal performance"
+
+[[pages.sections]]
+name = "performance-status"
+title = "Live status"
+style = "performance-status"
+
+[[pages.sections.elements]]
+name = "performance-recording"
+kind = "workflow_display"
+label = "Recording: checking"
+
+[[pages.sections.elements]]
+name = "performance-disk"
+kind = "workflow_display"
+label = "Destination and capacity: checking"
+
+[[pages.sections.elements]]
+name = "performance-progress"
+kind = "workflow_display"
+label = "Audio writes: checking"
+
+[[pages.sections.elements]]
+name = "performance-stream"
+kind = "workflow_display"
+label = "Stream: checking"
+
+[[pages.sections]]
+name = "moment"
+title = "Mark a moment"
+style = "performance-buttons"
+
+[[pages.sections.elements]]
+name = "mark-moment"
+kind = "performance_button"
+label = "Add a recs marker"
+action = "recs-marker"
+
+[[pages.sections.elements]]
+name = "performance-result"
+kind = "workflow_status"
+label = "Ready to mark."
+
+[[pages.sections]]
+name = "display-controls"
+style = "display-controls"
+
+[[pages.sections.elements]]
+name = "dim-display"
+kind = "performance_checkbox"
+label = "Dim display"
+
+[[pages.sections.elements]]
+name = "keep-awake"
+kind = "performance_button"
+label = "Keep screen awake"
+operation = "keep_awake"
+
+[[pages.sections.elements]]
+name = "awake-status"
+kind = "workflow_display"
+label = "Screen awake: off"
+
+[[pages.sections]]
+name = "pinned-inputs"
+title = "Pinned inputs"
+
+[[pages.sections.elements]]
+name = "performance-inputs"
+kind = "workflow_editor"
+
+[[pages.sections.elements]]
+name = "pin-choices"
+kind = "details"
+label = "Choose inputs to pin"
+
+[[pages.sections.elements.children]]
+name = "input-pins"
+kind = "workflow_editor"
+
+[[pages]]
+name = "health"
+
+[[pages.sections]]
+name = "status"
+title = "Health"
+
+[[pages.sections.elements]]
+name = "recs-health"
+kind = "status"
+label = "recs"
+value = "show.recs.service"
+format = "service"

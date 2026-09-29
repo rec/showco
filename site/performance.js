@@ -10,46 +10,53 @@ function inputKey(channel) { return JSON.stringify([channel.device, channel.chan
 function saveDisplaySettings() {
   try {
     localStorage.setItem('showco-performance', JSON.stringify({
-      pins: pinnedInputs, dim: document.getElementById('dim-display').checked,
+      pins: pinnedInputs, dim: document.getElementById('dim-display')?.checked === true,
     }));
   } catch {
-    document.getElementById('performance-result').textContent = 'Browser settings cannot be saved; changes apply only to this page.';
+    const result = document.getElementById('performance-result');
+    if (result) result.textContent = 'Browser settings cannot be saved; changes apply only to this page.';
   }
 }
 
 try {
   const settings = JSON.parse(localStorage.getItem('showco-performance') || '{}');
   pinnedInputs = Array.isArray(settings.pins) ? settings.pins.filter(value => typeof value === 'string') : [];
-  document.getElementById('dim-display').checked = settings.dim === true;
+  const dim = document.getElementById('dim-display');
+  if (dim) dim.checked = settings.dim === true;
   document.body.classList.toggle('dim-display', settings.dim === true);
 } catch {
-  document.getElementById('performance-result').textContent = 'Saved display settings unavailable; using defaults.';
+  const result = document.getElementById('performance-result');
+  if (result) result.textContent = 'Saved display settings unavailable; using defaults.';
 }
 
-document.getElementById('dim-display').addEventListener('change', event => {
+document.getElementById('dim-display')?.addEventListener('change', event => {
   document.body.classList.toggle('dim-display', event.target.checked);
   saveDisplaySettings();
 });
 
 function renderPerformance(status) {
   const recs = status.recs;
-  document.getElementById('performance-recording').textContent =
+  const recording = document.getElementById('performance-recording');
+  if (recording) recording.textContent =
     `recs ${recs.service.state}; recording ${recs.service.state !== 'connected' ? 'state unavailable' : recs.paused ? 'paused' : recs.recording ? 'reported active' : 'stopped'}`;
   const disk = recs.disk;
-  document.getElementById('performance-disk').textContent = disk
+  const destination = document.getElementById('performance-disk');
+  if (destination) destination.textContent = disk
     ? `${disk.path}: ${(disk.free_bytes / 1073741824).toFixed(1)} GiB free; ${disk.estimated_seconds_remaining === null ? 'remaining time unknown' : Math.floor(disk.estimated_seconds_remaining / 60) + ' minutes estimated remaining'}`
     : 'Recording destination and capacity unavailable';
-  document.getElementById('performance-progress').textContent =
+  const progress = document.getElementById('performance-progress');
+  if (progress) progress.textContent =
     `Audio writes: ${status.recording_progress.message}. Silence filtering may pause file growth.`;
-  document.getElementById('performance-stream').textContent =
+  const stream = document.getElementById('performance-stream');
+  if (stream) stream.textContent =
     `streamO ${status.streamo.service.state}; ${status.streamo.stream_state}${status.streamo.muted ? '; muted' : ''}`;
   document.querySelectorAll('[data-performance-action]').forEach(button => {
     button.disabled = performanceBusy || recs.service.state !== 'connected';
   });
   const signature = JSON.stringify(recs.channels.map(channel => [inputKey(channel), channel.name]));
-  if (signature !== pinSignature) {
+  const choices = document.getElementById('input-pins');
+  if (choices && signature !== pinSignature) {
     pinSignature = signature;
-    const choices = document.getElementById('input-pins');
     choices.replaceChildren();
     for (const channel of recs.channels) {
       const label = document.createElement('label');
@@ -66,6 +73,7 @@ function renderPerformance(status) {
     }
   }
   const inputs = document.getElementById('performance-inputs');
+  if (!inputs) return;
   inputs.replaceChildren();
   for (const key of pinnedInputs) {
     const channel = recs.channels.find(value => inputKey(value) === key);
@@ -93,12 +101,13 @@ document.querySelectorAll('[data-performance-action]').forEach(button => {
     performanceBusy = true;
     document.querySelectorAll('[data-performance-action]').forEach(value => {value.disabled = true;});
     const result = document.getElementById('performance-result');
-    result.textContent = 'Sending action...';
+    if (result) result.textContent = 'Sending action...';
     try {
       const fields = {action: button.dataset.performanceAction};
       if (fields.action === 'recs-marker') fields.label = 'performance moment';
-      result.textContent = await showAction(fields);
-    } catch (error) {result.textContent = error.message;}
+      const message = await showAction(fields);
+      if (result) result.textContent = message;
+    } catch (error) {if (result) result.textContent = error.message;}
     finally {performanceBusy = false;}
     // A fresh poll must re-enable controls after an uncertain response.
   });
@@ -107,6 +116,7 @@ document.querySelectorAll('[data-performance-action]').forEach(button => {
 async function requestAwake() {
   if (requestingAwake) return;
   const state = document.getElementById('awake-status');
+  if (!state) return;
   if (!('wakeLock' in navigator)) {state.textContent = 'Screen awake unavailable in this browser or connection.'; return;}
   requestingAwake = true;
   try {
@@ -122,7 +132,7 @@ async function requestAwake() {
   finally {requestingAwake = false;}
 }
 
-document.getElementById('keep-awake').addEventListener('click', async event => {
+document.getElementById('keep-awake')?.addEventListener('click', async event => {
   wantAwake = !wantAwake;
   event.target.textContent = wantAwake ? 'Allow screen sleep' : 'Keep screen awake';
   if (wantAwake) await requestAwake();
@@ -136,7 +146,8 @@ function pollPerformance() {
   requestStatus().then(status => {renderPerformance(status); statusConnected();})
     .catch(error => {
       statusFailed(error);
-      document.getElementById('performance-recording').textContent = 'Recording state unknown: status unavailable';
+      const recording = document.getElementById('performance-recording');
+      if (recording) recording.textContent = 'Recording state unknown: status unavailable';
     }).finally(() => setTimeout(pollPerformance, 1000));
 }
 pollPerformance();

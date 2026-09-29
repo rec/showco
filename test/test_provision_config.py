@@ -11,6 +11,14 @@ from showco.provision import config, provision
 
 
 class ProvisionConfigTests(unittest.TestCase):
+    def test_gui_path_must_be_inside_showco_checkout(self) -> None:
+        parsed = make_config(values(gui={'path': 'showco/gui-minimal.toml'}))
+        self.assertEqual(parsed.gui_path, Path('showco/gui-minimal.toml'))
+        for path in ('/etc/showco/gui.toml', '../other/gui.toml'):
+            with self.subTest(path=path):
+                with self.assertRaisesRegex(SystemExit, 'inside the showCo checkout'):
+                    make_config(values(gui={'path': path}))
+
     def test_lyte_defaults_to_disabled(self) -> None:
         parsed = make_config(values())
 

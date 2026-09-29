@@ -11,7 +11,7 @@ def test_default_gui_declares_all_navigation_pages() -> None:
     document = gui_schema.load_gui(gui_schema.DEFAULT_GUI_PATH)
 
     assert document.page_at('/performance').title == 'Performance'
-    assert document.page('channels').renderer == ''
+    assert document.page('channels').sections
     assert [page.name for page in document.pages] == [
         'channels',
         'track-names',
@@ -27,6 +27,34 @@ def test_default_gui_declares_all_navigation_pages() -> None:
         'actions',
         'errors',
     ]
+
+
+def test_alternate_gui_changes_performance_page_without_code_changes() -> None:
+    path = gui_schema.DEFAULT_GUI_PATH.with_name('gui-minimal.toml')
+    document = gui_schema.load_gui(path)
+    status = models.ShowStatus(
+        recs=models.RecsStatus(
+            service=models.ServiceStatus(name='recs', state='connected')
+        ),
+        streamo=models.StreamoStatus(
+            service=models.ServiceStatus(name='streamo', state='disabled')
+        ),
+    )
+
+    try:
+        gui_schema.configure_gui(path)
+        html = views.configured_page(document.page('performance'), status)
+    finally:
+        gui_schema.configure_gui(gui_schema.DEFAULT_GUI_PATH)
+
+    assert '<title>showCo Minimal performance</title>' in html
+    assert 'href="/health"' in html
+    assert 'href="/channels"' not in html
+    assert 'Add a recs marker' in html
+    assert 'data-performance-action="recs-marker"' in html
+    assert 'data-performance-action="recs-pause-recording"' not in html
+    assert 'data-workflow-action="setlist-next"' not in html
+    assert html.index('Live status') < html.index('Mark a moment')
 
 
 def test_actions_page_shows_cable_test_result_from_status() -> None:
@@ -81,9 +109,21 @@ default_page = "home"
 
 [[pages]]
 name = "home"
+[[pages.sections]]
+name = "main"
+[[pages.sections.elements]]
+name = "intro"
+kind = "text"
+label = "Hello"
 
 [[pages]]
 name = "home"
+[[pages.sections]]
+name = "main"
+[[pages.sections.elements]]
+name = "intro"
+kind = "text"
+label = "Hello"
 """
     )
 

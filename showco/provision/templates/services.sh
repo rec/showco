@@ -4,6 +4,7 @@ showco_args() {
     --port "$SHOWCO_PORT"
   )
   args+=(--mixers-config "/home/$SHOW_USER/.config/showco/mixers.toml")
+  args+=(--gui "$ROOT/showco/$SHOWCO_GUI_PATH")
   if [[ "$STREAMO_ENABLED" == true ]]; then
     args+=(--streamo-enabled)
   fi
@@ -91,6 +92,7 @@ install_showco_service() {
 $SHOWCO_PORT
 $STREAMO_ENABLED
 $LYTE_ENABLED
+$SHOWCO_GUI_PATH
 $SHOWCO_MIXERS_TOML")
   if service_is_current showco "$input"; then
     printf 'showCo service is already installed.\n'

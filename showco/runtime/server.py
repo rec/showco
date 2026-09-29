@@ -495,46 +495,37 @@ class ShowcoHandler(BaseHTTPRequestHandler):
         if page is None:
             self.send_error(404)
             return
-        if page.sections:
-            self._html(
-                views.configured_page(
-                    page,
-                    self.app.status(),
-                    mutable_attributes=(
-                        self.app.recs.mutable_attributes()
-                        if page.uses_source('recs.mutable_attributes')
-                        else None
-                    ),
-                    musicians=(
-                        self.app.recs.musicians()
-                        if page.uses_source('recs.musicians')
-                        else None
-                    ),
-                    action_log=(
-                        self.app.recent_actions()
-                        if page.uses_source('show.actions')
-                        else None
-                    ),
-                    features={
-                        feature
-                        for feature, enabled in {
-                            'streamo_enabled': self.app.streamo is not None,
-                            'lyte_enabled': self.app.lyte is not None
-                            and self.app.lyte.enabled,
-                            'music_enabled': self.app.music is not None,
-                        }.items()
-                        if enabled
-                    },
-                )
+        self._html(
+            views.configured_page(
+                page,
+                self.app.status(),
+                mutable_attributes=(
+                    self.app.recs.mutable_attributes()
+                    if page.uses_source('recs.mutable_attributes')
+                    else None
+                ),
+                musicians=(
+                    self.app.recs.musicians()
+                    if page.uses_source('recs.musicians')
+                    else None
+                ),
+                action_log=(
+                    self.app.recent_actions()
+                    if page.uses_source('show.actions')
+                    else None
+                ),
+                features={
+                    feature
+                    for feature, enabled in {
+                        'streamo_enabled': self.app.streamo is not None,
+                        'lyte_enabled': self.app.lyte is not None
+                        and self.app.lyte.enabled,
+                        'music_enabled': self.app.music is not None,
+                    }.items()
+                    if enabled
+                },
             )
-            return
-        match page.renderer:
-            case 'performance':
-                self._html(views.performance_page())
-            case 'workflow':
-                self._html(views.workflow_page(page.name))
-            case _:
-                self.send_error(500, f'GUI page {page.name} has unknown renderer')
+        )
 
     def _waveforms(self) -> None:
         bridge = self.app.waveforms

@@ -8,15 +8,14 @@ links, visibility, and enabled state. Selecting another complete file must
 produce a different useful display for a show or application without editing
 Python or JavaScript.
 
-The Channels, Track names, Musicians, Errors, Health, Attributes, and Playback pages read their sections,
-content, order, and labels from `showco/gui.toml` and render through one shared
-Jinja template. A third edit page can be added to a selected TOML file without
-adding a route, Python renderer, template, or JavaScript page file. Errors and
-Health also refresh their declared values and repeated rows from live status.
-The remaining page bodies still come from `showco/runtime/views.py` and
-`site/*.html`. Supported actions are currently limited to the registered recs
-channel operations. **The current implementation does not yet meet the overall
-goal.**
+All pages read their sections, content, order, and labels from a selected GUI
+TOML file and render through the shared Jinja element template. A new page
+using registered element kinds needs no route or page-specific renderer.
+Browser adapters still implement domain-specific behavior such as cues, pinned
+inputs, and waveforms. `showco/gui-minimal.toml` is a complete alternate file
+with a materially different Performance page. Provisioning selects a committed
+GUI file within the showCo checkout using `[gui] path`; local runs may use
+`showco run --gui` with another file.
 
 The finished file must account for every item in
 [all-gui-elements.md](all-gui-elements.md). Python owns service connections,
@@ -115,8 +114,7 @@ prove the migration.
 
 - Keep `[[pages]]` in navigation order. Each page has a unique `name`; its
   route is `/<name>`. `title` defaults to `name.capitalize()`. `/` resolves to
-  `default_page`. Remove the current `renderer` selector when the last named
-  page renderer has been replaced.
+  `default_page`. Every page declares at least one section.
 - Each page contains ordered sections; each section contains ordered elements.
   Nested elements are allowed only for container kinds such as `repeat`,
   `form`, and `details`. Order in the file is order on screen. Stable element
@@ -161,7 +159,7 @@ prove the migration.
 
 ## Migration sequence
 
-1. **Shared edit-page proof.** Render Channels and Track names through one
+1. **Shared edit-page proof (done).** Render Channels and Track names through one
    Jinja element template, with no page-specific renderer. Add a third edit
    page by changing only TOML and verify it through HTTP. Keep existing recs
    action validation and the browser's unsaved-edit behaviour.
@@ -174,27 +172,25 @@ prove the migration.
    transport behaviour these pages need. Preserve hidden musician data on
    edits, explicit shutdown confirmation, cable-test duration, and feature
    gates for lyte, streamO, and music.
-4. **Convert stateful workflows:** Set list, Lighting cues, Soundcheck, and Recovery are done.
-   Convert Performance. Express its controls and sections in TOML.
+4. **Convert stateful workflows (done):** Set list, Lighting cues, Soundcheck,
+   Recovery, and Performance express their controls and sections in TOML.
    Browser adapters may implement ordered editing, pin preferences, and
    confirmation flow, while the existing server controls revisions, pending
    outcomes, skip evidence, and protected actions. Remove each `site/*.html`
    fragment and page-specific script only when its page uses the document for
    every displayed element.
-5. **Finish selection and provisioning.** Keep `showco run --gui` for local
+5. **Finish selection and provisioning (done).** Keep `showco run --gui` for local
    use. Pass an explicitly selected GUI file through service installation and
    provisioning; validate it before replacing a running service. Make changes
    to the selected file part of the target's update decision. Document an
    alternate show file with a genuinely different Performance page.
-6. **Remove the legacy path.** Remove named page renderers, obsolete
+6. **Remove the legacy path (done).** Remove named page renderers, obsolete
    page-specific scripts, and the `renderer` field. The route handler looks up
    a page by `name` and passes it to the generic renderer. Keep only the
    shared shell, registries, formatters, and behaviour adapters in code.
 
-Each stage must leave every already converted page running entirely from the
-document. An old renderer may remain temporarily for pages not yet converted,
-but a converted page must have one rendering path. Do not add unused TOML
-entries in advance and count them as progress.
+All pages now use one rendering path. Browser scripts retain behavior adapters;
+they do not add undeclared page controls.
 
 ## Completion checks
 

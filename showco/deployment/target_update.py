@@ -7,6 +7,7 @@ from tempfile import NamedTemporaryFile
 from typing import TextIO
 
 from ..provision import config, verify
+from ..runtime import gui_schema
 from . import update
 
 
@@ -70,6 +71,28 @@ def update_target(
                     print(f'{program.name}: empty {label}', file=output)
                 return 1
             destination[program.name] = result.output.strip()
+
+    if 'showco' in targets:
+        candidate = update.run_step(
+            'showco',
+            'validate GUI',
+            [
+                'git',
+                '-C',
+                str(root / 'showco'),
+                'show',
+                f'{targets["showco"]}:{provision_config.gui_path.as_posix()}',
+            ],
+            run_command,
+        )
+        if not candidate.ok:
+            update.report_failure(candidate, output)
+            return 1
+        try:
+            gui_schema.parse_gui(candidate.output, str(provision_config.gui_path))
+        except ValueError as error:
+            print(error, file=output)
+            return 1
 
     names = update.selected_service_names(programs)
     names = [n for n in names if n != 'showco'] + (

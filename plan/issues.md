@@ -19,15 +19,6 @@ flow was run for this audit. The existing physical checks remain in
     write. The set-list and lighting editors already reject stale revisions.
     Seek a recs-side conditional update or make the potential overwrite clear.
 
-28. **The GUI is not yet entirely driven by the data file (confirmed).**
-    `performance_page()` and `workflow_page()` still build special page bodies
-    (`showco/runtime/views.py:343-387`); `Gui` admits renderer-only pages
-    (`showco/runtime/gui_schema.py:339-346`), and browser scripts use fixed
-    element IDs (`site/workflow.js`, `site/lighting.js`, `site/performance.js`).
-    A new `gui.toml` cannot freely rearrange those controls. Finish the
-    remaining migration contract in [data-driven-gui.md](data-driven-gui.md),
-    or explicitly narrow the promise of interchangeable GUI files.
-
 29. **The large GUI configuration and schema are costly to change together
     (confirmed structural risk).** `showco/gui.toml` has 1,455 lines;
     `gui_schema.py` 634 and `views.py` 659. Element

@@ -50,11 +50,11 @@
 
 {% macro workflow_element(element) %}
 {% if element.kind == 'workflow_editor' %}
-  {% if element.name in ['setlist-editor', 'lighting-editor', 'expected-inputs', 'soundcheck-results', 'recovery-options', 'recovery-state'] %}<div id="{{ element.name }}"></div>{% elif element.name == 'lighting-looks' %}<datalist id="{{ element.name }}"></datalist>{% elif element.name == 'check-note' %}<label>{{ element.label }} <input id="check-note" maxlength="500"></label>{% elif element.name == 'skip-step' %}<label>{{ element.label }} <select id="skip-step">{% for value, label in element.options.items() %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>{% else %}<button type="button" id="{{ element.name }}" disabled>{{ element.label }}</button>{% endif %}
+  {% if element.name in ['setlist-editor', 'lighting-editor', 'expected-inputs', 'soundcheck-results', 'recovery-options', 'recovery-state', 'performance-inputs', 'input-pins'] %}<div id="{{ element.name }}"></div>{% elif element.name == 'lighting-looks' %}<datalist id="{{ element.name }}"></datalist>{% elif element.name == 'check-note' %}<label>{{ element.label }} <input id="check-note" maxlength="500"></label>{% elif element.name == 'skip-step' %}<label>{{ element.label }} <select id="skip-step">{% for value, label in element.options.items() %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>{% else %}<button type="button" id="{{ element.name }}" disabled>{{ element.label }}</button>{% endif %}
 {% elif element.kind == 'workflow_button' %}
   <button type="button"{% if element.action.startswith('lighting-') %} data-lighting-action="{{ element.action }}"{% else %} data-workflow-action="{{ element.action }}"{% endif %}{% for name, value in element.parameters.items() %} data-{{ name }}="{{ value }}"{% endfor %} disabled>{{ element.label }}</button>
 {% elif element.kind == 'workflow_status' %}
-  <p id="{{ element.name }}" role="status"></p>
+  <p id="{{ element.name }}" role="status">{{ element.label }}</p>
 {% elif element.kind == 'workflow_display' %}
   {% if element.name == 'cue-position' %}<div id="{{ element.name }}" aria-live="polite">{{ element.label }}</div>{% elif element.name in ['cue-resolution', 'lighting-resolution'] %}<div id="{{ element.name }}" hidden>{% for child in element.children %}{{ workflow_element(child) }}{% endfor %}</div>{% else %}<p id="{{ element.name }}"{% if element.name in ['cue-message', 'lighting-message'] %} role="status"{% endif %}>{{ element.label }}</p>{% endif %}
 {% elif element.kind == 'workflow_checkbox' %}
@@ -63,13 +63,17 @@
   <details><summary>{{ element.label }}</summary>{% for child in element.children %}{{ workflow_element(child) }}{% endfor %}</details>
 {% elif element.kind == 'link' %}
   <p><a href="{{ element.value }}"{% if element.download %} download{% endif %}>{{ element.label }}</a></p>
+{% elif element.kind == 'performance_button' %}
+  <button type="button"{% if element.action %} data-performance-action="{{ element.action }}"{% else %} id="{{ element.name }}"{% endif %}>{{ element.label }}</button>
+{% elif element.kind == 'performance_checkbox' %}
+  <label><input type="checkbox" id="{{ element.name }}"> {{ element.label }}</label>
 {% endif %}
 {% endmacro %}
 
 {% for section in sections %}
 <section data-section="{{ section.name }}"{% if section.style %} class="{{ section_class(section.style, status) }}"{% endif %}>
   {% if section.title %}<h2>{{ section.title }}</h2>{% endif %}
-  {% if section.style in ['performance', 'transport'] %}<div class="{{ section.style }}"{% if section.style == 'transport' %} data-transport{% endif %}>{% endif %}
+  {% if section.style in ['performance', 'transport', 'performance-status', 'performance-buttons', 'display-controls'] %}<div class="{{ section.style }}"{% if section.style == 'transport' %} data-transport{% endif %}>{% endif %}
   {% for element in section.elements %}
     {% if element.kind == 'repeat' %}
       {% set source = source_data(element.source, status) %}
@@ -144,10 +148,10 @@
       <div id="{{ element.name }}">
       {% if actions %}{% for action in actions %}<p class="{{ 'ok' if action.result.ok else 'failed' }}"><time class="error-time">{{ action.timestamp.strftime('%H:%M:%S') }}</time> {{ action.service }} {{ action.command }}: {{ action.result.message }}</p>{% endfor %}{% else %}<p>{{ element.empty_text }}</p>{% endif %}
       </div>
-    {% elif element.kind in ['workflow_editor', 'workflow_button', 'workflow_status', 'workflow_display', 'workflow_checkbox', 'details', 'link'] %}
+    {% elif element.kind in ['workflow_editor', 'workflow_button', 'workflow_status', 'workflow_display', 'workflow_checkbox', 'performance_button', 'performance_checkbox', 'details', 'link'] %}
       {{ workflow_element(element) }}
     {% endif %}
   {% endfor %}
-  {% if section.style in ['performance', 'transport'] %}</div>{% endif %}
+  {% if section.style in ['performance', 'transport', 'performance-status', 'performance-buttons', 'display-controls'] %}</div>{% endif %}
 </section>
 {% endfor %}
