@@ -870,6 +870,41 @@ class LocalUpdateTests(unittest.TestCase):
             'no GitHub source dependencies reccy.\n',
         )
 
+    def test_refresh_reports_repositories_published_before_later_failure(self) -> None:
+        programs = [
+            update.Program(name=n, directory=Path('/code') / n, service_names=[])
+            for n in ('recs', 'showco')
+        ]
+        output = StringIO()
+        with (
+            mock.patch(
+                'showco.deployment.local_update.dependency_programs',
+                return_value=programs,
+            ),
+            mock.patch(
+                'showco.deployment.local_update.github_source_packages',
+                return_value=['reccy'],
+            ),
+            mock.patch(
+                'showco.deployment.local_update.dependency_refresh_needed',
+                return_value=True,
+            ),
+            mock.patch(
+                'showco.deployment.local_update.refresh_program_dependencies',
+                side_effect=[
+                    local_update.DependencyRefresh.UPDATED,
+                    local_update.DependencyRefresh.FAILED,
+                ],
+            ),
+        ):
+            result = local_update.refresh_local_dependencies(
+                ['recs', 'showco'], Path('/code'), lambda command: None, output
+            )
+
+        self.assertFalse(result)
+        self.assertIn('after publishing recs', output.getvalue())
+        self.assertIn('rerun the same showco command', output.getvalue())
+
     def test_provisioning_update_defaults_to_saved_host(self) -> None:
         with (
             mock.patch(
