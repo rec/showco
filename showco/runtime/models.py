@@ -101,6 +101,20 @@ class RecsStatus(BaseModel, frozen=True):
     midi: list[MidiStatus] = Field(default_factory=list)
 
 
+class ClosingStatus(BaseModel, frozen=True):
+    operation_id: str | None = None
+    state: str = 'idle'
+    phase: str = 'idle'
+    page: int | None = None
+    page_count: int = 0
+    elapsed_seconds: float = 0.0
+    duration_seconds: float = 0.0
+    started_at: float | None = None
+    black_started_at: float | None = None
+    black_at: float | None = None
+    error: str | None = None
+
+
 class StreamoStatus(BaseModel, frozen=True):
     service: ServiceStatus
     stream_state: str = 'unknown'
@@ -114,6 +128,7 @@ class StreamoStatus(BaseModel, frozen=True):
     last_audio_at: float | None = None
     clipping: bool = False
     output_bitrate_kbps: float | None = None
+    closing: ClosingStatus | None = None
 
 
 class LyteStringStatus(BaseModel, frozen=True):
@@ -204,6 +219,7 @@ class MusicStatus(BaseModel, frozen=True):
     directory: Path | None = None
     track: Path | None = None
     error: str | None = None
+    closing: ClosingStatus | None = None
 
 
 class CableTestStatus(BaseModel, frozen=True):

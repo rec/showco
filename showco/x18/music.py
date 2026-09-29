@@ -11,7 +11,7 @@ from pathlib import Path
 
 import numpy as np
 import sounddevice
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from reccy.device import DeviceDict
 
 from .cable_test import X18_CHANNELS, OscControl, X18OscClient, find_audio_device
@@ -26,6 +26,18 @@ class MusicPlayerStatus(BaseModel, frozen=True):
     directory: Path | None = None
     track: Path | None = None
     error: str | None = None
+
+
+class RoomScene(BaseModel, frozen=True):
+    master_fader: float = Field(ge=0, le=1, allow_inf_nan=False)
+    input_lr: list[int] = Field(min_length=X18_CHANNELS, max_length=X18_CHANNELS)
+
+    @field_validator('input_lr')
+    @classmethod
+    def validate_input_lr(cls, value: list[int]) -> list[int]:
+        if any(v not in (0, 1) for v in value):
+            raise ValueError('room LR routing must contain only 0 or 1')
+        return value
 
 
 class X18MusicRouting:
@@ -76,6 +88,51 @@ class X18MusicRouting:
             raise ValueError(
                 'Music returns could not be confirmed muted: ' + '; '.join(errors)
             )
+
+    def capture_room(self) -> RoomScene:
+        with self.osc_factory(self.host, self.port) as osc:
+            master = osc.query('/lr/mix/fader')
+            if not isinstance(master, int | float) or not 0 <= master <= 1:
+                raise ValueError(f'Invalid X18 main LR fader: {master}')
+            routes: list[int] = []
+            for channel in range(1, X18_CHANNELS + 1):
+                value = osc.query(f'/ch/{channel:02}/mix/lr')
+                if value not in (0, 1):
+                    raise ValueError(f'Invalid X18 channel {channel} LR route: {value}')
+                routes.append(int(value))
+        return RoomScene(master_fader=float(master), input_lr=routes)
+
+    def fade_main(self, target: float, seconds: float) -> None:
+        with self.osc_factory(self.host, self.port) as osc:
+            start = osc.query('/lr/mix/fader')
+            if not isinstance(start, int | float) or not 0 <= start <= 1:
+                raise ValueError(f'Invalid X18 main LR fader: {start}')
+            steps = max(1, round(seconds * 20))
+            for step in range(1, steps + 1):
+                osc.set(
+                    '/lr/mix/fader',
+                    float(start) + (target - float(start)) * step / steps,
+                )
+                if step < steps:
+                    time.sleep(seconds / steps)
+            observed = osc.query('/lr/mix/fader')
+            if not isinstance(observed, int | float) or not isclose(
+                observed, target, rel_tol=0, abs_tol=1e-5
+            ):
+                raise ValueError(f'X18 main LR fader did not reach {target}')
+
+    def isolate_instruments(self, scene: RoomScene) -> None:
+        with self.osc_factory(self.host, self.port) as osc:
+            for channel, enabled in enumerate(scene.input_lr, 1):
+                if channel not in self.source_channels and enabled:
+                    self._set_confirmed(osc, f'/ch/{channel:02}/mix/lr', 0)
+
+    def restore_room(self, scene: RoomScene) -> None:
+        with self.osc_factory(self.host, self.port) as osc:
+            for channel, enabled in enumerate(scene.input_lr, 1):
+                if channel not in self.source_channels:
+                    self._set_confirmed(osc, f'/ch/{channel:02}/mix/lr', enabled)
+            self._set_confirmed(osc, '/lr/mix/fader', scene.master_fader)
 
     @staticmethod
     def _set_confirmed(osc: OscControl, path: str, value: int | float) -> None:

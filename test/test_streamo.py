@@ -103,6 +103,36 @@ class StreamoTests(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertEqual(result.message, 'streamo sent an invalid clip response')
 
+    def test_closing_operation_is_read_from_status(self) -> None:
+        client = FakeStreamoClient(
+            {
+                'state': 'streaming',
+                'ffmpeg_alive': True,
+                'last_audio_at': time.time(),
+                'closing': {
+                    'operation_id': 'show-1',
+                    'state': 'running',
+                    'phase': 'page',
+                    'page': 2,
+                    'page_count': 3,
+                },
+            }
+        )
+
+        closing = client.status().closing
+
+        self.assertIsNotNone(closing)
+        self.assertEqual(closing.operation_id, 'show-1')
+        self.assertEqual(closing.page, 2)
+
+    def test_closing_start_requires_matching_operation_id(self) -> None:
+        self.assertEqual(
+            FakeStreamoClient({'operation_id': 'show-1'}).start_closing('show-1'),
+            'show-1',
+        )
+        with self.assertRaisesRegex(ValueError, 'invalid close_start response'):
+            FakeStreamoClient({'operation_id': 'other'}).start_closing('show-1')
+
 
 class FakeStreamoClient(StreamoClient):
     def __init__(self, reply: str | dict[str, object] | ConnectionError) -> None:

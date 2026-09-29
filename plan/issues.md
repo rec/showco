@@ -128,13 +128,6 @@ flow was run for this audit. The existing physical checks remain in
     duplicate or conflicting retry. Route these controls through a shared
     outcome contract and refresh observed state before resubmission.
 
-37. **The closing-credits feature remains a plan (confirmed).** Current
-    `MusicController.teardown()` stops streamO and pauses recs immediately
-    (`showco/runtime/music.py:103-112`). It does not implement the timed
-    credits, delayed Twitch fade, room-master fade, or later teardown music
-    described in [closing-credits.md](closing-credits.md). Keep this marked as
-    planned behavior so an operator does not expect it during a live show.
-
 ## Additional work beyond the prompt
 
 None.
@@ -158,3 +151,10 @@ None.
     signal thresholds, and full Pi/X18 acceptance. These should remain open
     until measured on the actual setup. Automated browser, WAV, and fake OSC
     tests cannot close them.
+
+41. **The closing-credits timing and room routing need live acceptance.**
+    streamO and showCo now implement the sequence in
+    [closing-credits.md](closing-credits.md), but tests with fake OSC and an
+    encoded preview cannot prove Twitch delivery or X18 timing. Follow the
+    target rehearsal in that plan and record the output and room measurements
+    before relying on it during a show.

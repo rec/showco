@@ -24,6 +24,10 @@ Measure the noise floor, level, and waveform quality with the actual gain config
 
 Music-mode transitions now read back their X18 routing changes and mute the music returns when a transition fails or is interrupted. Fake OSC tests verify the commands and failure reporting, but cannot prove what the physical mixer applies. On the Pi, exercise setup, record, and teardown with the intended mixer scene; verify the USB returns and master faders in each mode, then interrupt a transition and confirm the music returns are muted and each completed step is reported.
 
+## Closing credits and room fade
+
+Run the short sample credits on the Pi while capturing the stream and room output. Confirm page fades, Twitch-program audio and video reaching silence and black together, two more seconds of black, and streamO stopping before recs pauses. Confirm the room remains unchanged until the final black interval, X18 main LR fades to zero over that interval, instruments are removed from LR only after streamO stops, and teardown music fades in afterward. Repeat with an interrupted or failed stream and verify recs and the room recovery choices. Record latency and routing evidence before using the sequence live.
+
 ## 25. Installation acceptance
 
 The exact live installation still lacks a recorded end-to-end acceptance result. Browser, subprocess, routing-fake, and WAV regression tests do not prove physical acquisition or show readiness.
