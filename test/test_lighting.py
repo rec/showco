@@ -131,7 +131,10 @@ def test_storage_failure_prevents_selection_and_post_send_failure_keeps_pending(
         return original(path, data)
 
     with mock.patch.object(Path, 'write_text', write):
-        assert not act(app, 'go').ok
+        result = act(app, 'go')
+    assert not result.ok
+    assert 'Lighting selection may have been delivered' in result.message
+    assert 'inspect lyte before retrying' in app.lighting.state.message
     assert app.lighting.state.pending == 0
     assert lighting.LightingController(tmp_path / 'lighting.json').state.pending == 0
     assert app.lyte is not None
