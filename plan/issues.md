@@ -19,15 +19,6 @@ flow was run for this audit. The existing physical checks remain in
     write. The set-list and lighting editors already reject stale revisions.
     Seek a recs-side conditional update or make the potential overwrite clear.
 
-30. **Three large orchestration modules mix unrelated responsibilities
-    (confirmed structural risk).** `server.py` has 915 lines and combines
-    status gathering, action dispatch, HTTP parsing, rendering, and server
-    lifecycle; `recs.py` has 737 lines of status parsing, commands, and
-    presentation conversion; `deployment/local_update.py` has 721 lines of
-    dependency inspection, Git publication, lockfile refresh, and autosquash.
-    These are plausible review and change-collision risks. Split only along
-    existing boundaries when the next related change is made.
-
 31. **Small files are mostly intentional boundaries, but CLI/service routing
     has avoidable indirection (observation).** `showco/runtime/recs_control.py`
     is 37 lines and correctly isolates serialized RPC access; tiny

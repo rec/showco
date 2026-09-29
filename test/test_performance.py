@@ -4,7 +4,7 @@ from unittest import mock
 import pytest
 
 from showco.runtime import gui_schema, models, performance, rehearsal, views
-from showco.runtime.server import ShowcoApp
+from showco.runtime.app import ShowcoApp
 
 
 def app(directory: Path) -> ShowcoApp:

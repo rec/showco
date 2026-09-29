@@ -9,7 +9,8 @@ from ..streamo.client import StreamoClient
 from . import models
 from .lyte import LyteClient
 from .mixer import MixersMonitor
-from .recs import RecsClient, stereo_tracks
+from .recs import RecsClient
+from .recs_channels import stereo_tracks
 from .system import SystemMonitor
 
 

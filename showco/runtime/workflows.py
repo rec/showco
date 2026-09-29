@@ -11,7 +11,8 @@ from ..deployment import bundle
 from . import lighting, models, recovery, setlist, soundcheck
 
 if TYPE_CHECKING:
-    from .server import ShowcoApp, ShowcoHandler
+    from .app import ShowcoApp
+    from .server import ShowcoHandler
 
 DIAGNOSTICS_LOCK = threading.Lock()
 

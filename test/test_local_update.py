@@ -10,7 +10,7 @@ from unittest import mock
 
 from update_helpers import make_config
 
-from showco.deployment import local_update, update
+from showco.deployment import local_update, publication, update
 
 
 class DependencyClosureTests(unittest.TestCase):
@@ -433,7 +433,7 @@ class LocalUpdateTests(unittest.TestCase):
                 '',
             )
 
-        result = local_update.autosquash_program(program, 50, run_command)
+        result = publication.autosquash_program(program, 50, run_command)
 
         self.assertIsNotNone(result)
         assert result is not None
@@ -461,7 +461,7 @@ class LocalUpdateTests(unittest.TestCase):
                 return subprocess.CompletedProcess(command, 0, 'parent\n', '')
             return subprocess.CompletedProcess(command, 0, '', '')
 
-        result = local_update.autosquash_program(program, 50, run_command)
+        result = publication.autosquash_program(program, 50, run_command)
 
         self.assertIsNotNone(result)
         self.assertTrue(result.ok if result else False)
@@ -486,8 +486,8 @@ class LocalUpdateTests(unittest.TestCase):
             return subprocess.CompletedProcess(command, 0, 'forced\n', '')
 
         output = StringIO()
-        result = local_update.push_program(
-            local_update.PublicationState(
+        result = publication.push_program(
+            publication.PublicationState(
                 program=update.Program(
                     name='recs', directory=Path('/code/recs'), service_names=[]
                 ),
@@ -524,7 +524,7 @@ class LocalUpdateTests(unittest.TestCase):
         program = update.Program(
             name='recs', directory=Path('/code/recs'), service_names=[]
         )
-        state = local_update.PublicationState(
+        state = publication.PublicationState(
             program=program,
             remote='origin',
             branch='main',
@@ -536,7 +536,7 @@ class LocalUpdateTests(unittest.TestCase):
             commands.append(list(command))
             return subprocess.CompletedProcess(command, 0, 'same-commit\n', '')
 
-        result = local_update.push_program(state, run_command)
+        result = publication.push_program(state, run_command)
 
         self.assertTrue(result.ok)
         self.assertEqual(result.output, 'already published')
@@ -550,7 +550,7 @@ class LocalUpdateTests(unittest.TestCase):
         program = update.Program(
             name='recs', directory=Path('/code/recs'), service_names=[]
         )
-        state = local_update.PublicationState(
+        state = publication.PublicationState(
             program=program,
             remote='origin',
             branch='main',
@@ -564,7 +564,7 @@ class LocalUpdateTests(unittest.TestCase):
                 return subprocess.CompletedProcess(command, 0, 'local\n', '')
             return subprocess.CompletedProcess(command, 1, '', 'rejected\n')
 
-        result = local_update.push_program(state, run_command)
+        result = publication.push_program(state, run_command)
 
         self.assertFalse(result.ok)
         self.assertEqual(

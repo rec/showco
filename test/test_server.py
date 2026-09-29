@@ -8,16 +8,13 @@ from threading import BoundedSemaphore, Event, Lock, Thread
 from unittest import mock
 
 from showco.runtime import models, rehearsal
+from showco.runtime.app import ShowcoApp
 from showco.runtime.lyte import LyteClient
-from showco.runtime.server import (
-    MAX_WAVEFORM_CONNECTIONS,
-    ShowcoApp,
-    ShowcoHandler,
-)
+from showco.runtime.server import MAX_WAVEFORM_CONNECTIONS, ShowcoHandler
 
 
 class ServerTests(unittest.TestCase):
-    @mock.patch('showco.runtime.server.source_revision', return_value='revision')
+    @mock.patch('showco.runtime.app.source_revision', return_value='revision')
     def test_status_includes_server_revision(self, source_revision: mock.Mock) -> None:
         app = ShowcoApp(
             rehearsal.RehearsalRecsClient(),

@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import json
-import math
 import threading
 
 from pydantic import ValidationError
 from reccy.entities import Musician
 
-from . import models, recs_control, recs_snapshot
+from . import models, recs_channels, recs_control, recs_snapshot
 
 STATUS_CHANGE_WAIT_SECONDS = 4
 STATUS_CHANGE_SAMPLE_COUNT = 3
@@ -44,11 +43,11 @@ class RecsClient:
             snapshot_available=snapshot.has_snapshot,
             recording=snapshot.has_snapshot and snapshot.service_state == 'connected',
             paused=snapshot.paused,
-            elapsed_seconds=_float(totals.get('time')),
-            recorded_seconds=_float(totals.get('recorded')),
-            file_size=_float(totals.get('file_size')),
+            elapsed_seconds=recs_channels._float(totals.get('time')),
+            recorded_seconds=recs_channels._float(totals.get('recorded')),
+            file_size=recs_channels._float(totals.get('file_size')),
             file_count=_int(totals.get('file_count')),
-            channels=channel_levels(rows),
+            channels=recs_channels.channel_levels(rows),
             errors=snapshot.errors,
             snapshot_error=snapshot.error,
             disk=snapshot.disk,
@@ -192,14 +191,14 @@ class RecsClient:
             track_names = self.track_names()
             if isinstance(track_names, models.ActionResult):
                 return track_names
-            channel_number = track_channel(device, channel, track_names)
+            channel_number = recs_channels.track_channel(device, channel, track_names)
             if channel_number is None:
                 return models.ActionResult(
                     ok=False,
                     message=f'could not resolve recs channel {channel} for {device}',
                 )
 
-            updated = replace_track_name(
+            updated = recs_channels.replace_track_name(
                 track_names, device, channel_number, track_name
             )
             response = self._control_command(
@@ -222,7 +221,9 @@ class RecsClient:
 
     def set_stereo(self, device: str, channels: list[int]) -> models.ActionResult:
         with self.track_name_lock:
-            tracks = stereo_tracks(self.status().channels, device, channels)
+            tracks = recs_channels.stereo_tracks(
+                self.status().channels, device, channels
+            )
             if isinstance(tracks, models.ActionResult):
                 return tracks
             track_names = self.track_names()
@@ -235,7 +236,9 @@ class RecsClient:
                     'tracks': [
                         {
                             'channels': track,
-                            'name': track_name(track_names, device, track[0]),
+                            'name': recs_channels.track_name(
+                                track_names, device, track[0]
+                            ),
                         }
                         for track in tracks
                     ],
@@ -251,7 +254,7 @@ class RecsClient:
         response = self._control_command('get_track_names')
         if isinstance(response, models.ActionResult):
             return response
-        if (track_names := track_names_response(response)) is None:
+        if (track_names := recs_channels.track_names_response(response)) is None:
             return models.ActionResult(
                 ok=False, message='recs sent invalid track names'
             )
@@ -442,50 +445,6 @@ def status_failure_summary(output: str) -> str:
     return result
 
 
-def track_channel(
-    device: str, channel: str, track_names: dict[str, dict[str, int]]
-) -> int | None:
-    first, _, _ = channel.partition('-')
-    if first.isdigit():
-        return int(first)
-    value = track_names.get(device, {}).get(channel)
-    if isinstance(value, int):
-        return value
-    return None
-
-
-def replace_track_name(
-    track_names: dict[str, dict[str, int]],
-    device: str,
-    channel: int,
-    track_name: str,
-) -> dict[str, dict[str, int]]:
-    updated = {k: dict(v) for k, v in track_names.items()}
-    names = updated.setdefault(device, {})
-    for name, value in list(names.items()):
-        if value == channel:
-            del names[name]
-    if track_name:
-        names[track_name] = channel
-    return updated
-
-
-def track_names_response(value: object) -> dict[str, dict[str, int]] | None:
-    if not recs_snapshot.object_dict(value) or value.get('type') != 'track_names':
-        return None
-    raw = value.get('track_names')
-    if not recs_snapshot.object_dict(raw):
-        return None
-    result: dict[str, dict[str, int]] = {}
-    for device, names in raw.items():
-        if not recs_snapshot.object_dict(names):
-            return None
-        if any(not isinstance(v, int) or isinstance(v, bool) for v in names.values()):
-            return None
-        result[device] = {k: v for k, v in names.items() if isinstance(v, int)}
-    return result
-
-
 def calibrated_response(value: object) -> bool:
     if not recs_snapshot.object_dict(value) or value.get('type') != 'calibrated':
         return False
@@ -573,102 +532,6 @@ def command_result_message(command: str, response: object) -> str:
     if len(text) > 500:
         text = text[:497] + '...'
     return f'recs {command} succeeded: {text}'
-
-
-def channel_levels(rows: list[dict[str, object]]) -> list[models.ChannelLevel]:
-    channels = []
-    device = ''
-    for row in rows:
-        if isinstance(name := row.get('device'), str):
-            device = name
-        if not isinstance(name := row.get('channel'), str):
-            continue
-        signal = _float(row.get('signal'))
-        channels.append(
-            models.ChannelLevel(
-                name=name,
-                state=level_state(signal),
-                device=device,
-                channels=_channels(row.get('channels')),
-                signal=signal,
-                on=row.get('on') is True,
-            )
-        )
-    return channels
-
-
-def level_state(signal: float | None) -> str:
-    if signal is None or signal < 0.001:
-        return 'silent'
-    if signal < 1 / 3:
-        return 'present'
-    if signal < 0.9:
-        return 'healthy'
-    return 'clipping'
-
-
-def stereo_tracks(
-    channels: list[models.ChannelLevel], device: str, selected: list[int]
-) -> list[list[int]] | models.ActionResult:
-    source_tracks = [
-        channel.channels for channel in channels if channel.device == device
-    ]
-    if selected not in source_tracks:
-        return models.ActionResult(
-            ok=False, message='recs channel is no longer available'
-        )
-    if len(selected) == 2:
-        tracks: list[list[int]] = []
-        for track in source_tracks:
-            if track == selected:
-                tracks.extend([[selected[0]], [selected[1]]])
-            else:
-                tracks.append(track)
-        return tracks
-    if len(selected) != 1:
-        return models.ActionResult(ok=False, message='recs channel layout is invalid')
-    right = [selected[0] + 1]
-    if right not in source_tracks:
-        return models.ActionResult(
-            ok=False, message='recs channel cannot be paired with its right neighbor'
-        )
-    tracks = []
-    for track in source_tracks:
-        if track == selected:
-            tracks.append(selected + right)
-        elif track != right:
-            tracks.append(track)
-    return tracks
-
-
-def track_name(
-    track_names: dict[str, dict[str, int]], device: str, channel: int
-) -> str:
-    for name, first_channel in track_names.get(device, {}).items():
-        if first_channel == channel:
-            return name
-    return ''
-
-
-def _float(value: object) -> float | None:
-    if (
-        isinstance(value, int | float)
-        and not isinstance(value, bool)
-        and math.isfinite(value)
-    ):
-        return float(value)
-    return None
-
-
-def _channels(value: object) -> list[int]:
-    if not isinstance(value, list):
-        return []
-    channels: list[int] = []
-    for channel in value:
-        if not isinstance(channel, int):
-            return []
-        channels.append(channel)
-    return channels
 
 
 def error_message(value: object) -> str:
