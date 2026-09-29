@@ -12,7 +12,7 @@ title = "Recording channels"
 [[pages.sections.elements]]
 name = "track-name-conflicts"
 kind = "text"
-label = "If a track name changes elsewhere, review the current name before saving again. Changes made at almost the same instant may still overwrite one another."
+label = "If track names change elsewhere, review the current names before saving again."
 
 [[pages.sections.elements]]
 name = "channels"
@@ -76,7 +76,7 @@ title = "Edit track names"
 [[pages.sections.elements]]
 name = "track-name-conflicts"
 kind = "text"
-label = "If a track name changes elsewhere, review the current name before saving again. Changes made at almost the same instant may still overwrite one another."
+label = "If track names change elsewhere, review the current names before saving again."
 
 [[pages.sections.elements]]
 name = "tracks"

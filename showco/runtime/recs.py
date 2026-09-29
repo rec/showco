@@ -241,10 +241,25 @@ class RecsClient:
             )
             response = self._control_command(
                 'set_track_names',
-                {'track_names': updated},
+                {
+                    'track_names': updated,
+                    'expected_track_names': track_names,
+                },
             )
         if isinstance(response, models.ActionResult):
             return response
+        if (
+            isinstance(response, dict)
+            and response.get('type') == 'track_names_conflict'
+        ):
+            self.snapshot_client.invalidate()
+            return models.ActionResult(
+                ok=False,
+                message=(
+                    'Track names changed in recs; '
+                    'review the current names before saving again'
+                ),
+            )
         if response == 'ok':
             self.snapshot_client.invalidate()
             if track_name:
