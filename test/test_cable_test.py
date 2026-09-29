@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import wave
+from contextlib import AbstractContextManager, nullcontext
 from pathlib import Path
 from unittest import mock
 
@@ -125,10 +126,58 @@ def test_audio_failure_reaps_the_capture_process(failure: str) -> None:
         mock.patch.object(cable_test.subprocess, 'run', playback),
         pytest.raises((FileNotFoundError, TimeoutError)),
     ):
-        cable_test.audio_round_trip('hw:2,0', 1, 48000, np.zeros(48000))
+        with cable_test.audio_round_trip('hw:2,0', 1, 48000, np.zeros(48000)):
+            pass
     recorder.kill.assert_called_once_with()
     assert recorder.communicate.call_args.kwargs['timeout'] == 5
     assert playback.call_args.kwargs['timeout'] == 6
+
+
+def test_long_cable_test_rejects_insufficient_temporary_space() -> None:
+    tone = np.zeros(48_000, dtype=np.float32)
+    with (
+        mock.patch.object(
+            cable_test.shutil, 'disk_usage', return_value=mock.Mock(free=0)
+        ),
+        mock.patch.object(cable_test.subprocess, 'Popen') as recorder,
+        pytest.raises(OSError, match='needs .* free'),
+        cable_test.audio_round_trip('hw:2,0', 1, 48_000, tone),
+    ):
+        pytest.fail('insufficient space should prevent audio processes')
+    recorder.assert_not_called()
+
+
+def test_audio_round_trip_decodes_one_second_without_loading_all_channels(
+    tmp_path: Path,
+) -> None:
+    tone = cable_test.sine_wave(48_000, 1.0)
+    samples = np.zeros((tone.size, 18), dtype=np.int32)
+    samples[:, 8] = np.rint(tone * ((1 << 23) - 1)).astype(np.int32)
+    recorder = mock.Mock(returncode=0)
+    recorder.poll.return_value = 0
+    recorder.communicate.return_value = ('', '')
+
+    def start_recording(command: list[str], **kwargs: object) -> mock.Mock:
+        Path(command[-1]).write_bytes(cable_test.encode_s24le(samples))
+        return recorder
+
+    playback = mock.Mock(return_value=mock.Mock(returncode=0, stderr=''))
+    with (
+        mock.patch.object(cable_test.subprocess, 'Popen', side_effect=start_recording),
+        mock.patch.object(cable_test.subprocess, 'run', playback),
+        cable_test.audio_round_trip('hw:2,0', 1, 48_000, tone) as recorded,
+    ):
+        assert isinstance(recorded, np.memmap)
+        assert recorded.shape == (48_000, 18)
+        assert cable_test.analyze(9, tone, recorded[:, 8], 48_000).passed
+        wav_path = tmp_path / 'cable-test-capture.wav'
+        with wave.open(str(wav_path), 'wb') as output:
+            output.setnchannels(1)
+            output.setsampwidth(2)
+            output.setframerate(48_000)
+            output.writeframes(np.rint(recorded[:, 8] * 32767).astype('<i2').tobytes())
+        assert wav_path.stat().st_size > 48_000 * 2
+    assert playback.call_args.args[0][-1].endswith('output.raw')
 
 
 def test_analyze_accepts_a_delayed_phase_shifted_tone() -> None:
@@ -223,14 +272,14 @@ def test_cable_test_pauses_audio_and_restores_mixer_settings(master_on: int) -> 
         source_channel: int,
         sample_rate: int,
         tone: np.ndarray,
-    ) -> np.ndarray:
+    ) -> AbstractContextManager[np.ndarray]:
         calls.append((device, source_channel, sample_rate))
         assert all(
             osc.values[f'/ch/{source_channel:02}/mix/{s:02}/level']
             == cable_test.UNITY_FADER
             for s in [1, 2, 3]
         )
-        return np.broadcast_to(tone[:, np.newaxis], (tone.size, 18)).copy()
+        return nullcontext(np.broadcast_to(tone[:, np.newaxis], (tone.size, 18)).copy())
 
     tester = cable_test.CableTester(
         recs,
@@ -268,7 +317,7 @@ def test_cable_test_reports_only_failed_channels() -> None:
         mixer(),
         osc_factory=lambda host, port: FakeOsc(),
         query_devices=lambda: [audio_device()],
-        round_trip=lambda device, source, rate, tone: recorded,
+        round_trip=lambda device, source, rate, tone: nullcontext(recorded),
     )
 
     report = tester.run([9, 10], [1, 2], failures.append)
@@ -287,9 +336,9 @@ def test_cable_test_uses_configured_duration() -> None:
 
     def round_trip(
         device: str, source_channel: int, sample_rate: int, tone: np.ndarray
-    ) -> np.ndarray:
+    ) -> AbstractContextManager[np.ndarray]:
         frames.append(tone.size)
-        return np.broadcast_to(tone[:, np.newaxis], (tone.size, 18)).copy()
+        return nullcontext(np.broadcast_to(tone[:, np.newaxis], (tone.size, 18)).copy())
 
     tester = cable_test.CableTester(
         recs,
@@ -312,9 +361,9 @@ def test_cable_test_leaves_already_paused_recs_paused() -> None:
         mixer(),
         osc_factory=lambda host, port: osc,
         query_devices=lambda: [audio_device()],
-        round_trip=lambda device, source, rate, tone: np.broadcast_to(
-            tone[:, np.newaxis], (tone.size, 18)
-        ).copy(),
+        round_trip=lambda device, source, rate, tone: nullcontext(
+            np.broadcast_to(tone[:, np.newaxis], (tone.size, 18)).copy()
+        ),
     )
 
     assert tester.run([9], [1]).passed

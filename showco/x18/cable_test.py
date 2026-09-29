@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 import re
+import shutil
 import socket
 import subprocess
 import sys
-from collections.abc import Callable, Sequence
-from contextlib import AbstractContextManager
-from math import isfinite, pi
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import AbstractContextManager, contextmanager
+from math import ceil, isfinite, pi
 from pathlib import Path
-from tempfile import TemporaryDirectory
+from tempfile import TemporaryDirectory, gettempdir
 from time import monotonic
 from typing import Annotated, Protocol, cast
 
@@ -40,6 +41,8 @@ OSC_TIMEOUT_SECONDS = 1.0
 UNITY_FADER = 0.75
 X18_CHANNELS = 18
 X18_SAMPLE_FORMAT = 'S24_3LE'
+AUDIO_BLOCK_FRAMES = 4096
+TEMPORARY_STORAGE_RESERVE_BYTES = 512 * 1024 * 1024
 
 
 class CableTestOptions(BaseModel, frozen=True):
@@ -266,7 +269,10 @@ class CableTester:
             [str, int], AbstractContextManager[OscControl]
         ] = X18OscClient,
         query_devices: Callable[[], Sequence[DeviceDict]] | None = None,
-        round_trip: Callable[[str, int, int, np.ndarray], np.ndarray] | None = None,
+        round_trip: Callable[
+            [str, int, int, np.ndarray], AbstractContextManager[np.ndarray]
+        ]
+        | None = None,
     ) -> None:
         self.recs = recs
         self.mixer = mixer
@@ -343,14 +349,16 @@ class CableTester:
         with self.osc_factory(self.mixer.osc.host, self.mixer.osc.port) as osc:
             with X18TestRouting(osc, source_channel, channels, sends) as routing:
                 routing.enable_sends()
-                recorded = self.round_trip(device, source_channel, sample_rate, tone)
-                for channel in channels:
-                    result = analyze(
-                        channel, tone, recorded[:, channel - 1], sample_rate
-                    )
-                    results.append(result)
-                    if not result.passed and progress is not None:
-                        progress(result)
+                with self.round_trip(
+                    device, source_channel, sample_rate, tone
+                ) as recorded:
+                    for channel in channels:
+                        result = analyze(
+                            channel, tone, recorded[:, channel - 1], sample_rate
+                        )
+                        results.append(result)
+                        if not result.passed and progress is not None:
+                            progress(result)
         return results
 
 
@@ -471,19 +479,33 @@ def sine_wave(sample_rate: int, duration_seconds: float = TONE_SECONDS) -> np.nd
     return tone
 
 
+@contextmanager
 def audio_round_trip(
     device: str,
     source_channel: int,
     sample_rate: int,
     tone: np.ndarray,
-) -> np.ndarray:
-    output = np.zeros((tone.size, X18_CHANNELS), dtype=np.int32)
-    output[:, source_channel - 1] = np.rint(tone * ((1 << 23) - 1)).astype(np.int32)
+) -> Iterator[np.ndarray]:
+    required = tone.size * X18_CHANNELS * 10 + TEMPORARY_STORAGE_RESERVE_BYTES
+    temporary_root = Path(gettempdir())
+    free = shutil.disk_usage(temporary_root).free
+    if free < required:
+        raise OSError(
+            f'X18 cable test needs {required / (1024**3):.1f} GiB free '
+            f'in {temporary_root}; found {free / (1024**3):.1f} GiB'
+        )
     with TemporaryDirectory() as directory:
         path = Path(directory)
         output_path = path / 'output.raw'
         recorded_path = path / 'recorded.raw'
-        output_path.write_bytes(encode_s24le(output))
+        with output_path.open('wb') as output:
+            for start in range(0, tone.size, AUDIO_BLOCK_FRAMES):
+                block = tone[start : start + AUDIO_BLOCK_FRAMES]
+                samples = np.zeros((block.size, X18_CHANNELS), dtype=np.int32)
+                samples[:, source_channel - 1] = np.rint(
+                    block * ((1 << 23) - 1)
+                ).astype(np.int32)
+                output.write(encode_s24le(samples))
         recorder = subprocess.Popen(
             [
                 'arecord',
@@ -498,7 +520,7 @@ def audio_round_trip(
                 '-r',
                 str(sample_rate),
                 '-d',
-                str(round(tone.size / sample_rate)),
+                str(ceil(tone.size / sample_rate)),
                 str(recorded_path),
             ],
             stderr=subprocess.PIPE,
@@ -543,10 +565,21 @@ def audio_round_trip(
             raise ValueError(f'X18 playback failed: {playback.stderr.strip()}')
         if recorder.returncode:
             raise ValueError(f'X18 recording failed: {recording_error.strip()}')
-        recorded = decode_s24le(recorded_path.read_bytes())
-    if recorded.shape != output.shape:
-        raise ValueError('X18 recorded an unexpected number of frames')
-    return recorded
+        expected_bytes = tone.size * X18_CHANNELS * 3
+        if recorded_path.stat().st_size < expected_bytes:
+            raise ValueError('X18 recorded fewer frames than requested')
+        decoded = np.memmap(
+            path / 'recorded.f32',
+            dtype=np.float32,
+            mode='w+',
+            shape=(tone.size, X18_CHANNELS),
+        )
+        with recorded_path.open('rb') as recording:
+            for start in range(0, tone.size, AUDIO_BLOCK_FRAMES):
+                count = min(AUDIO_BLOCK_FRAMES, tone.size - start)
+                data = recording.read(count * X18_CHANNELS * 3)
+                decoded[start : start + count] = decode_s24le(data)
+        yield decoded
 
 
 def encode_s24le(samples: np.ndarray) -> bytes:
