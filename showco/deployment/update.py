@@ -266,9 +266,9 @@ def run_service_step(
     spec = services.SERVICES[service_name]
     command = ['systemctl', '--user', step, spec.systemd_unit]
     try:
-        controller = services.service_controller(
-            spec, runner=service_runner(run_command)
-        )
+        controller = services.service_registry(
+            runner=service_runner(run_command)
+        ).controller(service_name)
         if step == 'stop':
             result = controller.stop()
         elif step == 'start':

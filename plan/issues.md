@@ -19,15 +19,6 @@ flow was run for this audit. The existing physical checks remain in
     write. The set-list and lighting editors already reject stale revisions.
     Seek a recs-side conditional update or make the potential overwrite clear.
 
-31. **Small files are mostly intentional boundaries, but CLI/service routing
-    has avoidable indirection (observation).** `showco/runtime/recs_control.py`
-    is 37 lines and correctly isolates serialized RPC access; tiny
-    `__init__.py` files are package markers. In contrast, `showco/cli.py`
-    routes through several single-command modules while
-    `showco/runtime/services.py:123-139` wraps `reccy.services` methods.
-    Evaluate inlining only wrappers that add no policy. Do not merge the
-    adapter boundaries just to reduce file count.
-
 32. **The service integration still carries a protocol compatibility shim
     (confirmed).** `refresh_service_definition()` rewrites old recs metadata
     keys and module arguments before passing them to reccy's installer

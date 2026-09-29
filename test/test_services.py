@@ -117,8 +117,10 @@ class ServicesTests(unittest.TestCase):
             }
         )
         controller.install.return_value = StatusResult(installed=True, running=True)
+        registry = mock.Mock()
+        registry.controller.return_value = controller
         with mock.patch(
-            'showco.runtime.services.service_controller', return_value=controller
+            'showco.runtime.services.service_registry', return_value=registry
         ):
             result = services.refresh_service_definition('recs')
 
@@ -181,10 +183,13 @@ class ServicesTests(unittest.TestCase):
     def test_report_service_status_fails_inactive_service(self) -> None:
         registry = mock.Mock()
         registry.report_status.return_value = 1
-        with mock.patch(
-            'showco.runtime.services.service_registry', return_value=registry
+        with (
+            mock.patch(
+                'showco.runtime.services.service_registry', return_value=registry
+            ),
+            mock.patch('showco.runtime.services.machine_role.require_target_machine'),
         ):
-            self.assertEqual(services.report_service_status(['showco']), 1)
+            self.assertEqual(services.status_main(['showco']), 1)
 
         registry.report_status.assert_called_once_with(['showco'])
 
@@ -193,7 +198,7 @@ class ServicesTests(unittest.TestCase):
             'showco.runtime.services.paths.current_platform',
             return_value=Platform.linux,
         ):
-            controller = services.service_controller(services.RECS_SERVICE)
+            controller = services.service_registry().controller('recs')
 
         self.assertIs(controller.status_model, services.RecsDaemonStatus)
         self.assertEqual(controller.status_error_attribute, 'gui_ipc_error')
