@@ -111,6 +111,25 @@ def test_success_updates_only_selected_repositories_and_consumers(
     assert starts == ['recs.service', 'showco.service']
 
 
+@pytest.mark.parametrize('service', ['lyte', 'streamo'])
+def test_updated_enabled_service_is_checked_and_failure_rolls_back(
+    target: Target, service: str
+) -> None:
+    target.failure = 'is-active' if service == 'lyte' else 'health'
+    output = StringIO()
+
+    assert (
+        target_update.update_target(
+            [service], root=Path('/code'), run_command=target.run, output=output
+        )
+        == 1
+    )
+
+    assert target.revisions[service] == f'old-{service}'
+    assert target.environments[service] == f'old-{service}'
+    assert 'service health: failed' in output.getvalue()
+
+
 @pytest.mark.parametrize('failure', ['reset', 'sync', 'start', 'health'])
 def test_failed_deployment_restores_all_versions_and_environments(
     target: Target, failure: str
