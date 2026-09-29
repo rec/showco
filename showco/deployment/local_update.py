@@ -80,26 +80,40 @@ def prepare_local_repositories(
     except ValueError as error:
         tqdm.write(f'Dependency closure: {error}', file=output)
         return False
-    if not update.check_main_branches(programs, run_command, output):
-        return False
-    clean_results = [update.clean_worktree_step(p, run_command) for p in programs]
-    if failures := [r for r in clean_results if not r.ok]:
-        update.report_failures(failures, output)
-        return False
-    states = []
-    for program in programs:
-        state = publication.publication_state(program, run_command)
-        if isinstance(state, update.StepResult):
-            update.report_failure(state, output)
+    with tqdm(
+        total=3 + bool(autosquash),
+        unit='step',
+        file=output,
+        disable=not output.isatty(),
+    ) as status:
+        status.set_description_str('Checking repository branches')
+        if not update.check_main_branches(programs, run_command, output):
             return False
-        states.append(state)
-    if autosquash:
-        rewritten_states = publication.autosquash_publications(
-            states, autosquash, run_command, output
-        )
-        if rewritten_states is None:
+        status.update()
+        status.set_description_str('Checking repository worktrees')
+        clean_results = [update.clean_worktree_step(p, run_command) for p in programs]
+        if failures := [r for r in clean_results if not r.ok]:
+            update.report_failures(failures, output)
             return False
-        states = rewritten_states
+        status.update()
+        states = []
+        for program in programs:
+            status.set_description_str(f'Checking {program.name} upstream')
+            state = publication.publication_state(program, run_command)
+            if isinstance(state, update.StepResult):
+                update.report_failure(state, output)
+                return False
+            states.append(state)
+        status.update()
+        if autosquash:
+            status.set_description_str('Autosquashing repository commits')
+            rewritten_states = publication.autosquash_publications(
+                states, autosquash, run_command, output
+            )
+            if rewritten_states is None:
+                return False
+            states = rewritten_states
+            status.update()
     with update.progress_bar(len(programs), output) as progress:
         for state in states:
             progress.set_description_str(f'Pushing {state.program.name}')
@@ -125,7 +139,7 @@ def refresh_local_dependencies(
     test_failures: list[update.StepResult] = []
     with update.progress_bar(len(programs), output) as progress:
         for program in programs:
-            progress.set_description_str(f'Synchronizing {program.name}')
+            progress.set_description_str(f'Checking {program.name} dependencies')
             dependencies = github_source_packages(program)
             if not dependencies:
                 skipped.append(program.name)
@@ -144,7 +158,7 @@ def refresh_local_dependencies(
                 progress.update()
                 continue
             result = refresh_program_dependencies(
-                program, dependencies, run_command, output
+                program, dependencies, run_command, output, progress=progress
             )
             progress.update()
             if isinstance(result, update.StepResult):
@@ -219,8 +233,12 @@ def refresh_program_dependencies(
     dependencies: list[str],
     run_command: update.RunCommand,
     output: TextIO,
+    *,
+    progress: tqdm | None = None,
 ) -> DependencyRefresh | update.StepResult:
     before_sources = locked_dependency_sources(program, dependencies)
+    if progress is not None:
+        progress.set_description_str(f'Locking {program.name} dependencies')
     lock = update.run_step(
         program.name,
         'refresh dependencies',
@@ -267,6 +285,8 @@ def refresh_program_dependencies(
         ),
     ]
     for step, command in verification_commands:
+        if progress is not None:
+            progress.set_description_str(f'{program.name}: {step}')
         result = update.run_step(program.name, step, command, run_command)
         if not result.ok:
             if step == 'test' and restore_generated_lockfile(
@@ -284,6 +304,8 @@ def refresh_program_dependencies(
         return DependencyRefresh.FAILED
     if not final_changed:
         return DependencyRefresh.UNCHANGED
+    if progress is not None:
+        progress.set_description_str(f'Staging {program.name} lockfile')
     stage = update.run_step(
         program.name,
         'stage lockfile',
@@ -294,6 +316,8 @@ def refresh_program_dependencies(
         update.report_failure(stage, output)
         restore_generated_lockfile(program, run_command, output)
         return DependencyRefresh.FAILED
+    if progress is not None:
+        progress.set_description_str(f'Committing {program.name} lockfile')
     commit = update.run_step(
         program.name,
         'commit dependencies',
@@ -315,6 +339,8 @@ def refresh_program_dependencies(
     if isinstance(state, update.StepResult):
         update.report_failure(state, output)
         return DependencyRefresh.FAILED
+    if progress is not None:
+        progress.set_description_str(f'Pushing {program.name} lockfile')
     push = publication.normal_push_step(
         program, state.remote, state.branch, run_command
     )
