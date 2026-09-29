@@ -104,7 +104,7 @@ def refresh_service_definition(
     name: str,
     runner: Callable[..., CompletedProcess[str]] | None = None,
 ) -> StatusResult:
-    controller = service_controller(SERVICES[name], runner=runner)
+    controller = service_registry(runner=runner).controller(name)
     data = json.loads(controller.paths.metadata.read_text())
     if name == 'recs' and 'gui_endpoint' in data:
         data['control_endpoint'] = data.pop('gui_endpoint')
@@ -115,21 +115,6 @@ def refresh_service_definition(
             data['argv'] = data['argv'][2:]
     metadata = DaemonMetadata.model_validate(data)
     return controller.install(metadata)
-
-
-def report_service_status(service_names: list[str]) -> int:
-    return service_registry().report_status(service_names)
-
-
-def service_status(name: str) -> StatusResult:
-    return service_registry().status(name)
-
-
-def service_controller(
-    service: ServiceSpec,
-    runner: Callable[..., CompletedProcess[str]] | None = None,
-) -> controller.ServiceController:
-    return service_registry(runner=runner).controller(service.name)
 
 
 def service_registry(
@@ -175,4 +160,4 @@ def status_main(argv: list[str] | None = None) -> int:
     if not arguments or arguments[:1] in (['-h'], ['--help']):
         print('Usage: showco run service-status {lyte,recs,showco,streamo} ...')
         return 0
-    return report_service_status(arguments)
+    return service_registry().report_status(arguments)
