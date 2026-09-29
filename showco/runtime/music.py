@@ -5,6 +5,7 @@ import tomllib
 from collections.abc import Callable
 from pathlib import Path
 
+import sounddevice
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from ..streamo.client import StreamoClient
@@ -71,6 +72,7 @@ class MusicController:
         self.streamo = streamo
         self.streamo_restart = streamo_restart
         self.mode = 'stopped'
+        self.transition_error: str | None = None
 
     def status(self) -> models.MusicStatus:
         player = self.player.status()
@@ -79,37 +81,103 @@ class MusicController:
             state=player.state,
             directory=player.directory,
             track=player.track,
-            error=player.error,
+            error=self.transition_error or player.error,
         )
 
     def setup(self) -> models.ActionResult:
-        self._stop_stream()
-        self._pause_recording()
-        self._start(self.config.setup_directory)
-        self.routing.enable()
-        self.mode = 'setup'
-        return models.ActionResult(ok=True, message='Setup music is playing')
+        return self._transition(
+            'setup',
+            'Setup music is playing',
+            [
+                ('streamO stopped', self._stop_stream),
+                ('recs paused', self._pause_recording),
+                (
+                    'setup music started',
+                    lambda: self._start(self.config.setup_directory),
+                ),
+                ('music returns enabled', self.routing.enable),
+            ],
+        )
 
     def record(self) -> models.ActionResult:
-        self.player.stop(self.config.fade_seconds)
-        self.routing.disable()
-        self._require(self.recs.action('new_session'))
-        self._start_stream()
-        self.mode = 'record'
-        return models.ActionResult(
-            ok=True, message='Music stopped; new recording started'
+        return self._transition(
+            'record',
+            'Music stopped; new recording started',
+            [
+                ('music stopped', lambda: self.player.stop(self.config.fade_seconds)),
+                ('music returns muted', self.routing.disable),
+                (
+                    'new recs session started',
+                    lambda: self._require(self.recs.action('new_session')),
+                ),
+                ('streamO started', self._start_stream),
+            ],
         )
 
     def teardown(self) -> models.ActionResult:
-        self._stop_stream()
-        self._pause_recording()
-        self._require(self.recs.action('stop_playback'))
-        self._start(self.config.teardown_directory)
-        self.routing.enable()
-        self.mode = 'teardown'
-        return models.ActionResult(
-            ok=True, message='Recording stopped; teardown music is playing'
+        return self._transition(
+            'teardown',
+            'Recording stopped; teardown music is playing',
+            [
+                ('streamO stopped', self._stop_stream),
+                ('recs paused', self._pause_recording),
+                (
+                    'playback stopped',
+                    lambda: self._require(self.recs.action('stop_playback')),
+                ),
+                (
+                    'teardown music started',
+                    lambda: self._start(self.config.teardown_directory),
+                ),
+                ('music returns enabled', self.routing.enable),
+            ],
         )
+
+    def _transition(
+        self, mode: str, message: str, steps: list[tuple[str, Callable[[], None]]]
+    ) -> models.ActionResult:
+        completed: list[str] = []
+        step_name = ''
+        try:
+            for step_name, action in steps:
+                action()
+                completed.append(step_name)
+        except (
+            OSError,
+            ValueError,
+            TimeoutError,
+            subprocess.CalledProcessError,
+            sounddevice.PortAudioError,
+        ) as error:
+            recovery_errors: list[str] = []
+            for name, action in [
+                ('mute music returns', self.routing.disable),
+                ('stop music player', lambda: self.player.stop(0)),
+            ]:
+                try:
+                    action()
+                    completed.append(name)
+                except (
+                    OSError,
+                    ValueError,
+                    TimeoutError,
+                    sounddevice.PortAudioError,
+                ) as recovery_error:
+                    recovery_errors.append(f'{name} failed: {recovery_error}')
+            self.mode = 'fault'
+            self.transition_error = (
+                f'{mode} failed at {step_name}: {error}. '
+                f'Completed: {", ".join(completed) or "none"}.'
+                + (
+                    f' Recovery errors: {"; ".join(recovery_errors)}.'
+                    if recovery_errors
+                    else ''
+                )
+            )
+            raise ValueError(self.transition_error) from error
+        self.mode = mode
+        self.transition_error = None
+        return models.ActionResult(ok=True, message=message)
 
     def stop(self) -> models.ActionResult:
         self.close(self.config.fade_seconds)
