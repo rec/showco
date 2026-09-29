@@ -72,7 +72,7 @@ protection to be unlocked. Unsaved edits survive polling; stale saves are reject
 first cue it is unavailable. Neither end wraps. Both controls cut immediately
 and remain available under performance lock. Song markers and lighting cues are
 independent manual actions. There are no timed cues, automatic resends, or changes
-to recording or streaming. This Go button is unrelated to the `showco go`
+to recording or streaming. This Go button is unrelated to the `showco deploy`
 deployment command.
 
 Current cue means the last selection acknowledged by lyte, or a pending cue
@@ -178,7 +178,7 @@ showco prepare-card
 
 It selects an external disk no larger than 256 GiB, requires the exact response `yes`, adds passwordless sudo to its existing cloud-init configuration, and ejects the card. It does not image the card.
 
-Run `showco` or `showco go` from the provisioning machine for ordinary deployment. It compares the resolved configuration and generated provisioning script against the target fingerprint. A missing or changed fingerprint causes provisioning; a match causes an update.
+Run `showco` or `showco deploy` from the provisioning machine for ordinary deployment. It compares the resolved configuration and generated provisioning script against the target fingerprint. A missing or changed fingerprint causes provisioning; a match causes an update.
 
 Provisioning validates local repositories, publishes and synchronizes all five projects, checks SSH and passwordless sudo, configures the target, installs user services, and verifies the web UI, recs progress, enabled services, networking, and configured inputs. It may reboot the target when necessary.
 
@@ -188,13 +188,13 @@ Use these explicit modes only when their effects are intended:
 
 ```bash
 # Provision and run apt-get upgrade.
-showco go --upgrade
+showco deploy --upgrade
 
 # Publish and deploy selected repositories. recs also updates showCo.
-showco go recs
+showco deploy recs
 
 # Update the target from already-published GitHub commits.
-showco go --remote recs showco
+showco deploy --remote recs showco
 
 # Publish local work without contacting the target.
 showco --push recs
@@ -207,7 +207,7 @@ Updates preserve saved recs settings by default. Pass `--clear-settings` to expl
 
 Repository selection includes dependent applications. All affected services stop before any selected checkout changes, and showCo starts last. Unselected checkouts are not reset. Remote updates require a working installed showCo updater and environment; provisioning is the repair path for a broken installation. Install this updater on older targets before relying on its rollback guarantees. Rollback handles command failures and interruption within the update process; it is not a durable recovery mechanism for power loss or a killed process.
 
-Do not use `showco go` as a casual diagnostic: it can publish histories, reset selected target checkouts, restart services, and change network or system configuration during provisioning.
+Do not use `showco deploy` as a casual diagnostic: it can publish histories, reset selected target checkouts, restart services, and change network or system configuration during provisioning.
 
 ## Diagnose a problem
 

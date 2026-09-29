@@ -266,7 +266,7 @@ class LocalUpdateTests(unittest.TestCase):
         self.assertNotIn('git reset', remote_command)
         self.assertNotIn('uv sync', remote_command)
         self.assertIn(
-            'uv run --no-sync showco go --target-machine --root /code '
+            'uv run --no-sync showco deploy --target-machine --root /code '
             'reccy recs streamo lyte showco',
             remote_command,
         )

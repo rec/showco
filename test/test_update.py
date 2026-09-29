@@ -74,7 +74,7 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(environment['GIT_EDITOR'], ':')
 
     def test_remote_step_reports_remote_output(self) -> None:
-        command = ['ssh', 'tom@bertrand.local', 'showco go']
+        command = ['ssh', 'tom@bertrand.local', 'showco deploy']
         with mock.patch(
             'showco.deployment.update.subprocess.run',
             return_value=subprocess.CompletedProcess(

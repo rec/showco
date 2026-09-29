@@ -10,7 +10,7 @@ from . import local_update, machine_role, target_update, update
 
 def main(argv: list[str] | None = None) -> int:
     options = tyro.cli(
-        provision.GoOptions,
+        provision.DeployOptions,
         args=argv,
         description='Provision or update the show-control target',
     )
@@ -20,7 +20,7 @@ def main(argv: list[str] | None = None) -> int:
     return result
 
 
-def run(options: provision.GoOptions) -> int:
+def run(options: provision.DeployOptions) -> int:
     selected = update.selected_repositories(options.repositories or [])
     if options.push and options.sync:
         sys.exit('ERROR: --push and --sync cannot be combined')
@@ -39,7 +39,7 @@ def run(options: provision.GoOptions) -> int:
             clear_settings=options.clear_settings,
         )
 
-    machine_role.require_provisioning_machine('showco go')
+    machine_role.require_provisioning_machine('showco deploy')
     update_requested = (
         options.repositories is not None or options.autosquash is not None
     )

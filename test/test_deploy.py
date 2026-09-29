@@ -6,15 +6,15 @@ from unittest import mock
 
 import tyro
 
-from showco.deployment import go, update
+from showco.deployment import deploy, update
 from showco.provision import provision
 
 
-class GoTests(unittest.TestCase):
+class DeployTests(unittest.TestCase):
     def options(
         self, *, upgrade: bool = False, **kwargs: object
-    ) -> provision.GoOptions:
-        return provision.GoOptions(
+    ) -> provision.DeployOptions:
+        return provision.DeployOptions(
             config_path=Path('config.toml'),
             secrets=Path('secrets.toml'),
             upgrade=upgrade,
@@ -24,11 +24,11 @@ class GoTests(unittest.TestCase):
     def test_main_prints_completion_after_success(self) -> None:
         options = self.options()
         with (
-            mock.patch('showco.deployment.go.tyro.cli', return_value=options),
-            mock.patch('showco.deployment.go.run', return_value=0),
+            mock.patch('showco.deployment.deploy.tyro.cli', return_value=options),
+            mock.patch('showco.deployment.deploy.run', return_value=0),
             mock.patch('builtins.print') as print_message,
         ):
-            result = go.main([])
+            result = deploy.main([])
 
         self.assertEqual(result, 0)
         print_message.assert_called_once_with('Successfully completed')
@@ -36,11 +36,11 @@ class GoTests(unittest.TestCase):
     def test_main_does_not_print_completion_after_failure(self) -> None:
         options = self.options()
         with (
-            mock.patch('showco.deployment.go.tyro.cli', return_value=options),
-            mock.patch('showco.deployment.go.run', return_value=1),
+            mock.patch('showco.deployment.deploy.tyro.cli', return_value=options),
+            mock.patch('showco.deployment.deploy.run', return_value=1),
             mock.patch('builtins.print') as print_message,
         ):
-            result = go.main([])
+            result = deploy.main([])
 
         self.assertEqual(result, 1)
         print_message.assert_not_called()
@@ -66,7 +66,7 @@ class GoTests(unittest.TestCase):
             ) as update_target,
             mock.patch('showco.provision.provision.run') as provision_target,
         ):
-            result = go.run(self.options())
+            result = deploy.run(self.options())
 
         self.assertEqual(result, 0)
         update_target.assert_called_once()
@@ -96,7 +96,7 @@ class GoTests(unittest.TestCase):
                 'showco.deployment.local_update.update_from_provisioning_machine'
             ) as update_target,
         ):
-            result = go.run(self.options())
+            result = deploy.run(self.options())
 
         self.assertEqual(result, 0)
         provision_target.assert_called_once_with(
@@ -118,7 +118,7 @@ class GoTests(unittest.TestCase):
                 'showco.provision.provision.run', return_value=0
             ) as provision_target,
         ):
-            result = go.run(self.options(upgrade=True))
+            result = deploy.run(self.options(upgrade=True))
 
         self.assertEqual(result, 0)
         applied.assert_not_called()
@@ -140,7 +140,7 @@ class GoTests(unittest.TestCase):
             ) as update_target,
             mock.patch('showco.provision.provision.run') as provision_target,
         ):
-            result = go.run(options)
+            result = deploy.run(options)
 
         self.assertEqual(result, 0)
         update_target.assert_called_once_with(
@@ -170,7 +170,7 @@ class GoTests(unittest.TestCase):
             ) as refresh,
             mock.patch('showco.provision.provision.resolved_config') as resolved,
         ):
-            result = go.run(options)
+            result = deploy.run(options)
 
         self.assertEqual(result, 0)
         prepare.assert_called_once_with(
@@ -189,12 +189,12 @@ class GoTests(unittest.TestCase):
             mock.patch(
                 'showco.deployment.local_update.update_from_provisioning_machine',
                 return_value=0,
-            ) as deploy,
+            ) as update_target,
         ):
             self.assertEqual(
-                go.run(self.options(repositories=['recs'], autosquash=0)), 0
+                deploy.run(self.options(repositories=['recs'], autosquash=0)), 0
             )
-        self.assertEqual(deploy.call_args.kwargs['autosquash'], 0)
+        self.assertEqual(update_target.call_args.kwargs['autosquash'], 0)
 
     def test_sync_prepares_and_refreshes_local_repositories(self) -> None:
         options = self.options(sync=True, repositories=['recs'], autosquash=0)
@@ -213,7 +213,7 @@ class GoTests(unittest.TestCase):
             ) as refresh,
             mock.patch('showco.provision.provision.resolved_config') as resolved,
         ):
-            result = go.run(options)
+            result = deploy.run(options)
 
         self.assertEqual(result, 0)
         prepare.assert_called_once_with(
@@ -233,11 +233,11 @@ class GoTests(unittest.TestCase):
 
     def test_push_and_sync_cannot_be_combined(self) -> None:
         with self.assertRaisesRegex(SystemExit, 'cannot be combined'):
-            go.run(self.options(push=True, sync=True))
+            deploy.run(self.options(push=True, sync=True))
 
     def test_remote_and_sync_cannot_be_combined(self) -> None:
         with self.assertRaisesRegex(SystemExit, 'cannot be combined'):
-            go.run(self.options(remote=True, sync=True))
+            deploy.run(self.options(remote=True, sync=True))
 
     def test_remote_update_skips_local_repositories(self) -> None:
         provision_config = mock.Mock(ssh_target='tom@bertrand.local')
@@ -254,7 +254,7 @@ class GoTests(unittest.TestCase):
                 'showco.deployment.local_update.update_from_provisioning_machine'
             ) as local,
         ):
-            result = go.run(options)
+            result = deploy.run(options)
 
         self.assertEqual(result, 0)
         remote.assert_called_once_with(
@@ -271,7 +271,9 @@ class GoTests(unittest.TestCase):
         with mock.patch(
             'showco.deployment.target_update.update_target', return_value=0
         ) as update_target:
-            result = go.run(self.options(target_machine=True, repositories=['recs']))
+            result = deploy.run(
+                self.options(target_machine=True, repositories=['recs'])
+            )
 
         self.assertEqual(result, 0)
         update_target.assert_called_once_with(
@@ -282,7 +284,7 @@ class GoTests(unittest.TestCase):
         with mock.patch(
             'showco.deployment.target_update.update_target', return_value=0
         ) as update_target:
-            result = go.run(
+            result = deploy.run(
                 self.options(
                     target_machine=True,
                     repositories=['recs'],
@@ -296,14 +298,14 @@ class GoTests(unittest.TestCase):
         )
 
     def test_no_clear_settings_option_preserves_recs_settings(self) -> None:
-        options = tyro.cli(provision.GoOptions, args=['--no-clear-settings'])
+        options = tyro.cli(provision.DeployOptions, args=['--no-clear-settings'])
 
         self.assertFalse(options.clear_settings)
 
     def test_upgrade_cannot_be_combined_with_update_options(self) -> None:
         with self.assertRaisesRegex(SystemExit, 'cannot be combined'):
-            go.run(self.options(upgrade=True, repositories=['recs']))
+            deploy.run(self.options(upgrade=True, repositories=['recs']))
 
     def test_remote_is_unavailable_on_target_machine(self) -> None:
         with self.assertRaisesRegex(SystemExit, 'unavailable on the target'):
-            go.run(self.options(target_machine=True, remote=True))
+            deploy.run(self.options(target_machine=True, remote=True))

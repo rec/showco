@@ -13,7 +13,7 @@ client-side tooling unless the user explicitly asks for that direction.
 
 ## Important Modules
 
-- `showco/cli.py`: command routing, `showco go`, and rehearsal mode.
+- `showco/cli.py`: command routing, `showco deploy`, and rehearsal mode.
 - `showco/runtime/server.py`: request handling, app orchestration, and action dispatch.
 - `showco/runtime/views.py`: HTML rendering. Static CSS and JavaScript live in `site/`.
 - `showco/runtime/waveforms.py`: waveform subscriptions and bounded event history.
@@ -75,7 +75,7 @@ uv run pytest test/test_update.py
 
 - Do not launch `uv run showco`, rehearsal mode, system services, streamO flows,
   or hardware-facing checks unless the user explicitly asks.
-- Do not run `showco go` as a verification step. It pushes or pulls sibling
+- Do not run `showco deploy` as a verification step. It pushes or pulls sibling
   repos and stops/restarts user services.
 - reccy, recs, streamO, and lyte are sibling projects. Changes that belong in
   those projects should be made there only when the user scopes the task that
@@ -92,6 +92,6 @@ uv run pytest test/test_update.py
 - Keep dependency/tooling changes in a separate commit from behavior changes.
 - If `uv` updates `uv.lock`, inspect for unrelated `exclude-newer` metadata
   churn before committing.
-- Reject a dirty `uv.lock` before provisioning or updating. `showco go` may
+- Reject a dirty `uv.lock` before provisioning or updating. `showco deploy` may
   stage and commit only lockfile changes it generated while refreshing internal
   dependencies; it must not include any other changed path.

@@ -19,14 +19,6 @@ flow was run for this audit. The existing physical checks remain in
     write. The set-list and lighting editors already reject stale revisions.
     Seek a recs-side conditional update or make the potential overwrite clear.
 
-34. **`showco go` and lighting `Go` share a name for unrelated operations
-    (confirmed UX ambiguity).** The CLI command provisions or deploys while
-    the lighting button advances a cue (`showco/deployment/go.py:11-20`,
-    `showco/gui.toml:319-430`). Documentation explains the distinction, but
-    spoken instructions such as “press Go” remain ambiguous. Give the CLI
-    deployment action a clearer primary name while retaining any necessary
-    compatibility only if users require it.
-
 35. **The browser allows a channel edit to freeze all channel refreshes
     (confirmed).** `updateChannels()` returns for the entire page whenever
     focus is inside any `.level` (`site/channel-controls.js:215-236`). This
