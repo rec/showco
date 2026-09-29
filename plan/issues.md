@@ -19,14 +19,6 @@ flow was run for this audit. The existing physical checks remain in
     write. The set-list and lighting editors already reject stale revisions.
     Seek a recs-side conditional update or make the potential overwrite clear.
 
-32. **The service integration still carries a protocol compatibility shim
-    (confirmed).** `refresh_service_definition()` rewrites old recs metadata
-    keys and module arguments before passing them to reccy's installer
-    (`showco/runtime/services.py:98-112`). This is the only apparent overlap
-    with reccy service handling; showCo otherwise uses reccy's controller and
-    registry. Confirm whether current deployed metadata can still have the
-    old shape, then remove the shim if it cannot.
-
 33. **Music mode names compress several distinct effects (confirmed UX trap).**
     `Setup`, `Record`, and `Tear down` alter streaming, recs, local playback,
     and X18 routing, while `Stop and shut down` powers off the Pi
