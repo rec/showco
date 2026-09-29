@@ -15,7 +15,7 @@ from reccy.services.models import DaemonMetadata, ServiceSpec, StatusResult
 from streamo.config import STREAMO_SERVICE
 
 from ..deployment import machine_role
-from . import models
+from . import gui_schema, models
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 SHOWCO_SERVICE = spec.load(PROJECT_ROOT / 'showco/service.toml')
@@ -49,9 +49,11 @@ def install_showco_service(
     host: str = '0.0.0.0',
     port: int = 17_352,
     mixers_config: Path | None = None,
+    gui: Path = gui_schema.DEFAULT_GUI_PATH,
     streamo_enabled: bool = False,
     lyte_enabled: bool = False,
 ) -> int:
+    gui_schema.load_gui(gui)
     daemon = ShowcoDaemon(platform=paths.current_platform())
     result = daemon.install_service(
         [
@@ -62,6 +64,7 @@ def install_showco_service(
                 mixers_config,
                 streamo_enabled,
                 lyte_enabled,
+                gui,
             ),
         ]
     )
@@ -75,10 +78,12 @@ def showco_args(
     mixers_config: Path | None,
     streamo_enabled: bool,
     lyte_enabled: bool,
+    gui: Path = gui_schema.DEFAULT_GUI_PATH,
 ) -> list[str]:
     result = ['--host', host, '--port', str(port)]
     if mixers_config is not None:
         result.extend(['--mixers-config', str(mixers_config)])
+    result.extend(['--gui', str(gui)])
     if streamo_enabled:
         result.append('--streamo-enabled')
     if lyte_enabled:
@@ -148,6 +153,7 @@ def install_main(argv: list[str] | None = None) -> int:
     parser.add_argument('--host', default='0.0.0.0')
     parser.add_argument('--port', default=17_352, type=int)
     parser.add_argument('--mixers-config', type=Path)
+    parser.add_argument('--gui', type=Path, default=gui_schema.DEFAULT_GUI_PATH)
     parser.add_argument('--streamo-enabled', action='store_true')
     parser.add_argument('--lyte-enabled', action='store_true')
     parser.add_argument('--root', required=True, type=Path)
@@ -156,6 +162,7 @@ def install_main(argv: list[str] | None = None) -> int:
         host=args.host,
         port=args.port,
         mixers_config=args.mixers_config,
+        gui=args.gui,
         streamo_enabled=args.streamo_enabled,
         lyte_enabled=args.lyte_enabled,
         root=args.root,

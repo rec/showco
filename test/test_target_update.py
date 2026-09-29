@@ -7,6 +7,7 @@ from unittest import mock
 import pytest
 
 from showco.deployment import target_update, update
+from showco.runtime import gui_schema
 
 
 class Target:
@@ -21,6 +22,7 @@ class Target:
         self.unloaded_stops = False
         self.dirty = ''
         self.branch = 'main'
+        self.gui_document = gui_schema.DEFAULT_GUI_PATH.read_text()
 
     def run(self, command: Sequence[str]) -> CompletedProcess[str]:
         command = list(command)
@@ -39,6 +41,8 @@ class Target:
                 stdout = (
                     self.revisions[name] if command[-1] == 'HEAD' else f'new-{name}'
                 )
+            elif operation == 'show':
+                stdout = self.gui_document
         elif command[:2] == ['uv', 'sync']:
             operation, name = 'sync', Path(command[-1]).name
         elif command[0] == 'systemctl':
@@ -70,6 +74,7 @@ def target(monkeypatch: pytest.MonkeyPatch) -> Target:
         network=mock.Mock(user='tom', web_port=17352),
         stream=mock.Mock(enabled=True),
         lyte=mock.Mock(enabled=True),
+        gui_path=Path('showco/gui.toml'),
     )
     monkeypatch.setattr(update, 'provisioning_config', lambda: configuration)
 
@@ -109,6 +114,16 @@ def test_success_updates_only_selected_repositories_and_consumers(
     assert last_fetch < first_stop <= last_stop < first_reset
     starts = [c[-1] for c in commands if 'start' in c]
     assert starts == ['recs.service', 'showco.service']
+
+
+def test_invalid_candidate_gui_is_rejected_before_services_stop(target: Target) -> None:
+    target.gui_document = 'version = 1\n'
+    output = StringIO()
+
+    assert deploy(target, output) == 1
+
+    assert 'invalid GUI document' in output.getvalue()
+    assert not any('stop' in command for command in target.commands)
 
 
 @pytest.mark.parametrize('service', ['lyte', 'streamo'])

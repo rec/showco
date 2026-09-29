@@ -44,6 +44,7 @@ def remote_command(
         'LYTE_REPO': provision_config.git.lyte.url,
         'LYTE_REFNAME': provision_config.git.lyte.refname,
         'SHOWCO_PORT': str(provision_config.network.web_port),
+        'SHOWCO_GUI_PATH': str(provision_config.gui_path),
         'SHOWCO_SSH_PORT': str(provision_config.network.ssh_port),
         'RESTRICT_EXTERNAL_INGRESS': shell_bool(
             provision_config.network.restrict_external_ingress

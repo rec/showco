@@ -66,6 +66,8 @@ class Element(BaseModel, frozen=True):
             'workflow_status': {},
             'workflow_display': {},
             'workflow_checkbox': {},
+            'performance_button': {},
+            'performance_checkbox': {},
             'details': {},
             'link': {},
         }
@@ -98,7 +100,10 @@ class Element(BaseModel, frozen=True):
                 continue
             if self.kind in {'input', 'textarea'} and field == 'value':
                 continue
-            if self.kind == 'workflow_button' and field == 'action':
+            if (
+                self.kind in {'workflow_button', 'performance_button'}
+                and field == 'action'
+            ):
                 continue
             if self.kind == 'link' and field == 'value':
                 continue
@@ -155,6 +160,17 @@ class Element(BaseModel, frozen=True):
                 raise ValueError(f'{self.name}: unsupported workflow action')
             if self.parameters not in WORKFLOW_BUTTON_PARAMETERS.get(self.action, [{}]):
                 raise ValueError(f'{self.name}: unsupported workflow parameters')
+        elif self.kind == 'performance_button':
+            if (self.action, self.operation) not in {
+                ('recs-marker', ''),
+                ('recs-pause-recording', ''),
+                ('recs-resume-recording', ''),
+                ('', 'keep_awake'),
+            } or not self.label:
+                raise ValueError(f'{self.name}: unsupported performance button')
+        elif self.kind == 'performance_checkbox':
+            if self.name != 'dim-display' or not self.label:
+                raise ValueError(f'{self.name}: unsupported performance checkbox')
         elif self.kind == 'workflow_checkbox':
             if self.name not in {
                 'confirm-cue-resolution',
@@ -178,6 +194,8 @@ class Element(BaseModel, frozen=True):
                 'soundcheck-results',
                 'recovery-options',
                 'recovery-state',
+                'performance-inputs',
+                'input-pins',
             }:
                 raise ValueError(f'{self.name}: unsupported workflow editor')
         elif self.kind == 'workflow_display':
@@ -196,10 +214,19 @@ class Element(BaseModel, frozen=True):
                 'lighting-resolution-help',
                 'lighting-help',
                 'soundcheck-scope',
+                'performance-recording',
+                'performance-disk',
+                'performance-progress',
+                'performance-stream',
+                'awake-status',
             }:
                 raise ValueError(f'{self.name}: unsupported workflow display')
         elif self.kind == 'workflow_status':
-            if self.name not in {'workflow-result', 'lighting-result'}:
+            if self.name not in {
+                'workflow-result',
+                'lighting-result',
+                'performance-result',
+            }:
                 raise ValueError(f'{self.name}: unsupported workflow status')
         elif self.kind == 'details':
             if not self.label or not self.children:
@@ -256,9 +283,12 @@ class Element(BaseModel, frozen=True):
                 ('', 'revert_track_names'),
             }:
                 raise ValueError(f'{self.name}: unsupported button action')
-        elif self.kind not in {'action_button', 'form', 'workflow_button'} and (
-            self.action != allowed[self.kind].get('action', '') or self.operation
-        ):
+        elif self.kind not in {
+            'action_button',
+            'form',
+            'workflow_button',
+            'performance_button',
+        } and (self.action != allowed[self.kind].get('action', '') or self.operation):
             raise ValueError(f'{self.name}: unsupported action or operation')
         if self.kind not in {
             'input',
@@ -289,7 +319,16 @@ class Section(BaseModel, frozen=True):
 
     @model_validator(mode='after')
     def _valid_style(self) -> Section:
-        if self.style not in {'', 'readiness', 'cards', 'performance', 'transport'}:
+        if self.style not in {
+            '',
+            'readiness',
+            'cards',
+            'performance',
+            'transport',
+            'performance-status',
+            'performance-buttons',
+            'display-controls',
+        }:
             raise ValueError(f'{self.name}: unknown section style {self.style!r}')
         return self
 
@@ -299,19 +338,13 @@ class Section(BaseModel, frozen=True):
 class Page(BaseModel, frozen=True):
     name: str = Field(pattern=r'^[a-z][a-z0-9-]*$')
     title: str = ''
-    renderer: str = ''
     sections: list[Section] = Field(default_factory=list)
 
     @model_validator(mode='after')
     def _defaults(self) -> Page:
-        if self.sections and self.renderer:
-            raise ValueError(f'{self.name}: configured pages cannot select a renderer')
-        return self.model_copy(
-            update={
-                'title': self.title or self.name.capitalize(),
-                'renderer': self.renderer or ('' if self.sections else self.name),
-            }
-        )
+        if not self.sections:
+            raise ValueError(f'{self.name}: page needs sections')
+        return self.model_copy(update={'title': self.title or self.name.capitalize()})
 
     def uses_source(self, source: str) -> bool:
         return any(
@@ -337,13 +370,6 @@ class Gui(BaseModel, frozen=True):
         if len(names) != len(self.pages):
             raise ValueError('page names must be unique')
         for page in self.pages:
-            if not page.sections and page.renderer not in {
-                'performance',
-                'workflow',
-                'playback',
-                'attributes',
-            }:
-                raise ValueError(f'{page.name}: page needs sections')
             element_names: set[str] = set()
             operations: set[str] = set()
             has_track_name = False
@@ -405,6 +431,8 @@ class Gui(BaseModel, frozen=True):
                             child.kind
                             not in {
                                 'workflow_button',
+                                'performance_button',
+                                'performance_checkbox',
                                 'workflow_checkbox',
                                 'workflow_display',
                                 'workflow_editor',
@@ -430,6 +458,8 @@ class Gui(BaseModel, frozen=True):
                         'action_history',
                         'workflow_editor',
                         'workflow_button',
+                        'performance_button',
+                        'performance_checkbox',
                         'workflow_status',
                         'workflow_display',
                         'workflow_checkbox',
@@ -476,14 +506,18 @@ def _validate_element_names(element: Element, names: set[str], page: str) -> Non
 
 @cache
 def load_gui(path: Path) -> Gui:
+    return parse_gui(path.read_text(), str(path))
+
+
+def parse_gui(text: str, source: str) -> Gui:
     try:
-        value = tomllib.loads(path.read_text())
+        value = tomllib.loads(text)
     except tomllib.TOMLDecodeError as error:
-        raise ValueError(f'invalid GUI document {path}: {error}') from error
+        raise ValueError(f'invalid GUI document {source}: {error}') from error
     try:
         return Gui.model_validate(value)
     except ValidationError as error:
-        raise ValueError(f'invalid GUI document {path}: {error}') from error
+        raise ValueError(f'invalid GUI document {source}: {error}') from error
 
 
 def configure_gui(path: Path) -> Gui:

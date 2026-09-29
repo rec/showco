@@ -10,6 +10,7 @@ from typing import Annotated
 import tyro
 from pydantic import BaseModel, Field
 
+from ..runtime import gui_schema
 from . import config, remote, script, state
 
 PROVISION_DIR = Path(__file__).resolve().parent
@@ -61,6 +62,7 @@ def resolved_config(options: GoOptions) -> config.Config:
         lyte_installation_config=options.lyte_installation_config,
     )
     validate_config(provision_config)
+    gui_schema.load_gui(PROVISION_DIR.parent.parent / provision_config.gui_path)
     return provision_config
 
 

@@ -104,5 +104,12 @@ async function test() {
   assert.ok(lockButtons.every(button => button.disabled));
   assert.match(elements.get('performance-recording').textContent, /unknown/);
   assert.match(elements.get('connection-status').textContent, /may be stale/);
+
+  for (const id of ['performance-disk', 'performance-progress', 'performance-stream',
+    'input-pins', 'performance-inputs', 'dim-display', 'keep-awake', 'awake-status']) {
+    elements.delete(id);
+  }
+  context.currentStatus = status;
+  vm.runInContext('renderPerformance(currentStatus)', context);
 }
 test().catch(error => { console.error(error); process.exitCode = 1; });
