@@ -28,17 +28,34 @@
   }
 
   function lyteDetail(lyte) {
-    if (lyte.service.last_error) {
-      return `${lyte.service.state}: ${lyte.service.last_error}`;
-    }
     if (lyte.service.state === "disabled") return "disabled";
-    const details = [lyte.running ? 'running' : 'stopped'];
-    if (lyte.active_animation) details.push(`animation ${lyte.active_animation}`);
+    const details = [lyte.service.last_error
+      ? `${lyte.service.state}: ${lyte.service.last_error}`
+      : lyte.active_animation
+        ? `animation ${lyte.active_animation}` : lyte.service.state];
+    if (lyte.queued_animation) details.push(`queued ${lyte.queued_animation}`);
+    for (const [name, value] of Object.entries(lyte.bindings)) {
+      details.push(`${name}=${value}`);
+    }
     if (lyte.active_test) details.push("test active");
     else if (lyte.queued_test) details.push("test queued");
+    if (lyte.midi_error) details.push("MIDI error");
+    else if (lyte.midi_connected) {
+      let midi = "MIDI connected";
+      if (lyte.note !== null) midi += `, note ${lyte.note}`;
+      if (lyte.breath !== null) midi += `, breath ${lyte.breath}`;
+      if (lyte.pitch_bend !== null) midi += `, bend ${lyte.pitch_bend}`;
+      details.push(midi);
+    }
     for (const [name, string] of Object.entries(lyte.strings)) {
-      details.push(`${name}: ${string.state}, ${string.frame_count} frames${
-        string.last_error ? `: ${string.last_error}` : ''}`);
+      const parts = [string.state];
+      if (string.host) parts.push(string.host);
+      if (string.mac) parts.push(string.mac);
+      if (string.led_count !== null) parts.push(`${string.led_count} LEDs`);
+      parts.push(`${string.frame_count} frames`);
+      if (string.failure_count) parts.push(`${string.failure_count} failures`);
+      if (string.last_error) parts.push(string.last_error);
+      details.push(`${name}: ${parts.join(" ")}`);
     }
     return details.join(", ");
   }
@@ -53,7 +70,17 @@
       : mixer.state;
     return mixer.latency_ms === null
       ? detail
-      : `${detail}: ${mixer.latency_ms.toFixed(1)} ms`;
+      : `${detail}: ${oneDecimal(mixer.latency_ms)} ms`;
+  }
+
+  function oneDecimal(value) {
+    const tenths = value * 10;
+    // Python's one-decimal formatting uses even rounding for exact quarter ties.
+    if (Number.isInteger(value * 4) && tenths % 1 === 0.5
+        && Math.floor(tenths) % 2 === 0) {
+      return (Math.floor(tenths) / 10).toFixed(1);
+    }
+    return value.toFixed(1);
   }
 
   function sourceValue(status, path) {

@@ -19,14 +19,6 @@ flow was run for this audit. The existing physical checks remain in
     write. The set-list and lighting editors already reject stale revisions.
     Seek a recs-side conditional update or make the potential overwrite clear.
 
-27. **Browser status display logic is duplicated in Python and JavaScript
-    (confirmed).** `showco/runtime/views.py:219-281,450-623` and
-    `site/status-script.js:1-116,179-263` separately format service, mixer,
-    playback, temperature, memory, and disk values. Small behavior changes
-    must be implemented twice, and the initial page can disagree with its
-    first refresh. Define one presentation contract or test paired output
-    against the same fixtures.
-
 28. **The GUI is not yet entirely driven by the data file (confirmed).**
     `performance_page()` and `workflow_page()` still build special page bodies
     (`showco/runtime/views.py:343-387`); `Gui` admits renderer-only pages
