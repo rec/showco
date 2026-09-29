@@ -167,14 +167,23 @@ class ShowcoApp:
                     'active_faults': list(self.incidents.faults),
                     'performance_locked': self.performance_lock.locked,
                     'observed_at': datetime.now().astimezone(),
-                    'monitoring_error': self.performance_lock.error
-                    or self.incidents.storage_error
-                    or self.soundcheck_error
-                    or (
-                        self.system.observation_error
-                        if isinstance(self.system, PerformanceMonitor)
-                        else None
-                    ),
+                    'monitoring_error': '; '.join(
+                        error
+                        for error in (
+                            self.performance_lock.error,
+                            self.incidents.storage_error,
+                            self.soundcheck_error,
+                            self.setlist.load_error,
+                            self.lighting.load_error,
+                            self.soundcheck.load_error,
+                            self.recovery.load_error,
+                            self.system.observation_error
+                            if isinstance(self.system, PerformanceMonitor)
+                            else None,
+                        )
+                        if error
+                    )
+                    or None,
                     'input_checks': input_check.checks(recs.channels),
                     'music': self.music.status()
                     if self.music is not None

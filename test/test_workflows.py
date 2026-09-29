@@ -7,7 +7,15 @@ from unittest import mock
 
 import pytest
 
-from showco.runtime import models, recovery, rehearsal, setlist, soundcheck, workflows
+from showco.runtime import (
+    lighting,
+    models,
+    recovery,
+    rehearsal,
+    setlist,
+    soundcheck,
+    workflows,
+)
 from showco.runtime.server import ShowcoApp, ShowcoHandler
 
 
@@ -39,6 +47,60 @@ def application(tmp_path: Path) -> ShowcoApp:
         rehearsal.RehearsalMixersMonitor(),
         state_directory=tmp_path,
     )
+
+
+@pytest.mark.parametrize(
+    ('filename', 'controller', 'empty_state'),
+    [
+        ('setlist.json', setlist.SetListController, setlist.SetList()),
+        ('lighting.json', lighting.LightingController, lighting.LightingState()),
+        ('soundcheck.json', soundcheck.Soundcheck, soundcheck.SoundcheckState()),
+        ('recovery.json', recovery.Recovery, recovery.RecoveryState()),
+    ],
+)
+def test_corrupt_workflow_is_preserved_and_starts_empty(
+    tmp_path: Path, filename: str, controller: type, empty_state: object
+) -> None:
+    path = tmp_path / filename
+    path.write_text('{broken')
+
+    first = controller(path)
+
+    assert first.state == empty_state
+    assert first.load_error is not None
+    assert 'starting empty' in first.load_error
+    backups = list(tmp_path.glob(f'{path.stem}.ERROR-*{path.suffix}'))
+    assert len(backups) == 1
+    assert backups[0].read_text() == '{broken'
+    assert not path.exists()
+
+    path.write_text('{broken again')
+    controller(path)
+    backups = list(tmp_path.glob(f'{path.stem}.ERROR-*{path.suffix}'))
+    assert len(backups) == 2
+
+
+def test_corrupt_workflows_are_reported_in_status(tmp_path: Path) -> None:
+    (tmp_path / 'setlist.json').write_text('{broken')
+    (tmp_path / 'recovery.json').write_text('{broken')
+
+    app = application(tmp_path)
+    message = app.status().monitoring_error
+
+    assert message is not None
+    assert 'setlist.ERROR-' in message
+    assert 'recovery.ERROR-' in message
+
+
+def test_workflow_does_not_start_empty_if_preservation_fails(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / 'setlist.json'
+    path.write_text('{broken')
+    with mock.patch.object(Path, 'rename', side_effect=OSError('read-only')):
+        with pytest.raises(OSError, match='Cannot read .* or preserve it'):
+            setlist.SetListController(path)
+    assert path.read_text() == '{broken'
 
 
 def test_cues_survive_restart_and_stale_requests_do_not_repeat_markers(

@@ -2,8 +2,9 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
+from . import workflow_storage
 from .models import ActionResult
 
 
@@ -35,11 +36,14 @@ class SetListController:
     def __init__(self, path: Path | None = None) -> None:
         self.path = path
         self.state = SetList()
+        self.load_error: str | None = None
         if path is not None:
             try:
                 self.state = SetList.model_validate_json(path.read_text())
             except FileNotFoundError:
                 pass
+            except (OSError, UnicodeError, ValidationError) as error:
+                self.load_error = workflow_storage.quarantine(path, error)
 
     def save(self, state: SetList) -> None:
         if self.path is not None:
