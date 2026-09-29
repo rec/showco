@@ -212,13 +212,28 @@ class X18TestRouting:
                 self._change(f'{bus}/grp/mute', 0)
                 self._change(f'{bus}/mix/on', 1)
                 self._change(f'{bus}/mix/fader', UNITY_FADER)
-        except (OSError, TimeoutError, ValueError):
-            self._restore()
+        except (OSError, TimeoutError, ValueError) as error:
+            try:
+                self._restore()
+            except (OSError, TimeoutError, ValueError) as restore_error:
+                raise ValueError(
+                    f'Cable test setup failed: {error}; '
+                    f'mixer restore failed: {restore_error}'
+                ) from error
             raise
         return self
 
-    def __exit__(self, *args: object) -> None:
-        self._restore()
+    def __exit__(
+        self, _type: object, error: BaseException | None, _traceback: object
+    ) -> None:
+        try:
+            self._restore()
+        except (OSError, TimeoutError, ValueError) as restore_error:
+            if error is not None:
+                raise ValueError(
+                    f'Cable test failed: {error}; mixer restore failed: {restore_error}'
+                ) from error
+            raise
 
     def enable_sends(self) -> None:
         channel = f'/ch/{self.source_channel:02}/mix'
@@ -292,7 +307,23 @@ class CableTester:
             )
         finally:
             if resume:
-                require_action(self.recs.action('resume_recording'), 'resume recording')
+                original_error = sys.exception()
+                try:
+                    require_action(
+                        self.recs.action('resume_recording'), 'resume recording'
+                    )
+                except (
+                    ConnectionError,
+                    OSError,
+                    TimeoutError,
+                    ValueError,
+                ) as resume_error:
+                    if original_error is not None:
+                        raise ValueError(
+                            f'Cable test failed: {original_error}; '
+                            f'recs resume failed: {resume_error}'
+                        ) from original_error
+                    raise
         return CableTestReport(results=results)
 
     def _test_channels(

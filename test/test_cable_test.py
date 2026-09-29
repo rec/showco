@@ -350,6 +350,37 @@ def test_cable_test_restores_state_and_resumes_after_audio_failure(
     )
 
 
+def test_cable_test_reports_audio_mixer_and_recs_cleanup_failures() -> None:
+    recs = mock.Mock()
+    recs.pause_recording.return_value = True
+    recs.action.return_value = models.ActionResult(ok=False, message='recs offline')
+    osc = FakeOsc()
+    original_set = osc.set
+
+    def failing_restore(path: str, value: str | int | float | bool) -> None:
+        if path == '/lr/mix/on' and value == 0.25:
+            raise OSError('X18 offline')
+        original_set(path, value)
+
+    osc.set = failing_restore
+    tester = cable_test.CableTester(
+        recs,
+        mixer(),
+        osc_factory=lambda host, port: osc,
+        query_devices=lambda: [audio_device()],
+        round_trip=mock.Mock(side_effect=OSError('audio failed')),
+    )
+
+    with pytest.raises(ValueError) as error:
+        tester.run([9], [1])
+
+    assert 'audio failed' in str(error.value)
+    assert 'mixer restore failed: X18 offline' in str(error.value)
+    assert 'recs resume failed: could not resume recording: recs offline' in str(
+        error.value
+    )
+
+
 @pytest.mark.parametrize('master_on', [0, 1])
 def test_routing_restores_master_after_setup_failure(master_on: int) -> None:
     osc = FakeOsc()
