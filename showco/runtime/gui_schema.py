@@ -37,41 +37,7 @@ class Element(BaseModel, frozen=True):
 
     @model_validator(mode='after')
     def _valid_element(self) -> Element:
-        allowed = {
-            'repeat': {},
-            'indicator': {'value': 'item.on'},
-            'text': {},
-            'status': {},
-            'meter': {},
-            'service_card': {},
-            'mutable_attributes': {'source': 'recs.mutable_attributes'},
-            'action_button': {},
-            'action_result': {},
-            'text_field': {'value': 'item.name', 'action': 'recs-track-name'},
-            'checkbox': {
-                'value': 'item.channels',
-                'action': 'recs-set-stereo',
-                'enabled_when': 'stereo_pair_available',
-            },
-            'waveform': {'source': 'waveforms'},
-            'button': {},
-            'form': {},
-            'input': {},
-            'textarea': {},
-            'select': {},
-            'submit': {},
-            'action_history': {'source': 'show.actions'},
-            'workflow_editor': {},
-            'workflow_button': {},
-            'workflow_status': {},
-            'workflow_display': {},
-            'workflow_checkbox': {},
-            'performance_button': {},
-            'performance_checkbox': {},
-            'details': {},
-            'link': {},
-        }
-        if self.kind not in allowed:
+        if self.kind not in ELEMENT_FIELDS:
             raise ValueError(f'{self.name}: unknown element kind {self.kind!r}')
         if (
             self.kind
@@ -125,7 +91,7 @@ class Element(BaseModel, frozen=True):
                 if self.disabled_when not in {'', 'playback_waiting'}:
                     raise ValueError(f'{self.name}: unsupported disabled condition')
                 continue
-            expected = allowed[self.kind].get(field, '')
+            expected = ELEMENT_FIELDS[self.kind].get(field, '')
             if getattr(self, field) != expected:
                 raise ValueError(f'{self.name}: invalid {field} for {self.kind}')
         if self.kind == 'repeat':
@@ -288,7 +254,9 @@ class Element(BaseModel, frozen=True):
             'form',
             'workflow_button',
             'performance_button',
-        } and (self.action != allowed[self.kind].get('action', '') or self.operation):
+        } and (
+            self.action != ELEMENT_FIELDS[self.kind].get('action', '') or self.operation
+        ):
             raise ValueError(f'{self.name}: unsupported action or operation')
         if self.kind not in {
             'input',
@@ -370,117 +338,7 @@ class Gui(BaseModel, frozen=True):
         if len(names) != len(self.pages):
             raise ValueError('page names must be unique')
         for page in self.pages:
-            element_names: set[str] = set()
-            operations: set[str] = set()
-            has_track_name = False
-            for section in page.sections:
-                if not section.elements:
-                    raise ValueError(f'{page.name}: section {section.name!r} is empty')
-                if section.name in element_names:
-                    raise ValueError(f'{page.name}: duplicate name {section.name!r}')
-                element_names.add(section.name)
-                for element in section.elements:
-                    if element.kind == 'repeat':
-                        if any(child.kind == 'repeat' for child in element.children):
-                            raise ValueError(
-                                f'{page.name}: nested repeat is unsupported'
-                            )
-                        if element.layout == 'list' and any(
-                            child.kind != 'text'
-                            or child.value not in REPEAT_VALUES[element.source]
-                            or child.value not in TEXT_VALUES_BY_FORMAT[child.format]
-                            or (
-                                child.format == 'mixer_detail'
-                                and element.source != 'show.mixers'
-                            )
-                            or (
-                                child.format == 'osc_detail'
-                                and element.source != 'show.recs.osc'
-                            )
-                            for child in element.children
-                        ):
-                            raise ValueError(f'{page.name}: unsupported list row field')
-                        if element.source == 'show.recs.channels' and any(
-                            child.kind == 'text' for child in element.children
-                        ):
-                            raise ValueError(
-                                f'{page.name}: channel rows do not support text'
-                            )
-                        if any(
-                            child.kind == 'button' and child.action != 'recs-calibrate'
-                            for child in element.children
-                        ):
-                            raise ValueError(
-                                f'{page.name}: repeated button must calibrate'
-                            )
-                        has_track_name |= any(
-                            child.kind == 'text_field' for child in element.children
-                        )
-                        if element.layout == 'forms' and any(
-                            child.kind != 'form' for child in element.children
-                        ):
-                            raise ValueError(f'{page.name}: form rows need forms')
-                    elif element.kind == 'form':
-                        if any(
-                            child.kind not in {'input', 'textarea', 'select', 'submit'}
-                            for child in element.children
-                        ):
-                            raise ValueError(f'{page.name}: unsupported form field')
-                    elif element.kind == 'details':
-                        if any(
-                            child.kind
-                            not in {
-                                'workflow_button',
-                                'performance_button',
-                                'performance_checkbox',
-                                'workflow_checkbox',
-                                'workflow_display',
-                                'workflow_editor',
-                            }
-                            for child in element.children
-                        ):
-                            raise ValueError(f'{page.name}: unsupported details field')
-                    elif element.kind in {
-                        'indicator',
-                        'text_field',
-                        'checkbox',
-                        'waveform',
-                    }:
-                        raise ValueError(f'{page.name}: {element.kind} needs a repeat')
-                    elif element.kind in {
-                        'text',
-                        'status',
-                        'meter',
-                        'service_card',
-                        'mutable_attributes',
-                        'action_button',
-                        'action_result',
-                        'action_history',
-                        'workflow_editor',
-                        'workflow_button',
-                        'performance_button',
-                        'performance_checkbox',
-                        'workflow_status',
-                        'workflow_display',
-                        'workflow_checkbox',
-                        'link',
-                    }:
-                        pass
-                    else:
-                        if element.action:
-                            raise ValueError(
-                                f'{page.name}: top-level button needs an operation'
-                            )
-                        if element.operation in operations:
-                            raise ValueError(
-                                f'{page.name}: button operation must be unique'
-                            )
-                        operations.add(element.operation)
-                    _validate_element_names(element, element_names, page.name)
-            if not has_track_name and operations.intersection(
-                {'save_track_names', 'revert_track_names'}
-            ):
-                raise ValueError(f'{page.name}: name controls need a track name field')
+            _validate_page(page)
         return self
 
     def page(self, name: str) -> Page:
@@ -494,6 +352,75 @@ class Gui(BaseModel, frozen=True):
         return next((page for page in self.pages if f'/{page.name}' == path), None)
 
     model_config = ConfigDict(extra='forbid')
+
+
+def _validate_page(page: Page) -> None:
+    names: set[str] = set()
+    operations: set[str] = set()
+    has_track_name = False
+    for section in page.sections:
+        if not section.elements:
+            raise ValueError(f'{page.name}: section {section.name!r} is empty')
+        if section.name in names:
+            raise ValueError(f'{page.name}: duplicate name {section.name!r}')
+        names.add(section.name)
+        for element in section.elements:
+            if element.kind == 'repeat':
+                _validate_repeat(element, page.name)
+                has_track_name |= any(
+                    child.kind == 'text_field' for child in element.children
+                )
+            elif element.kind == 'form' and any(
+                child.kind not in {'input', 'textarea', 'select', 'submit'}
+                for child in element.children
+            ):
+                raise ValueError(f'{page.name}: unsupported form field')
+            elif element.kind == 'details' and any(
+                child.kind not in DETAIL_KINDS for child in element.children
+            ):
+                raise ValueError(f'{page.name}: unsupported details field')
+            elif element.kind in {'indicator', 'text_field', 'checkbox', 'waveform'}:
+                raise ValueError(f'{page.name}: {element.kind} needs a repeat')
+            elif element.kind == 'button':
+                if element.action:
+                    raise ValueError(
+                        f'{page.name}: top-level button needs an operation'
+                    )
+                if element.operation in operations:
+                    raise ValueError(f'{page.name}: button operation must be unique')
+                operations.add(element.operation)
+            _validate_element_names(element, names, page.name)
+    if not has_track_name and operations.intersection(
+        {'save_track_names', 'revert_track_names'}
+    ):
+        raise ValueError(f'{page.name}: name controls need a track name field')
+
+
+def _validate_repeat(element: Element, page: str) -> None:
+    if any(child.kind == 'repeat' for child in element.children):
+        raise ValueError(f'{page}: nested repeat is unsupported')
+    if element.layout == 'list' and any(
+        child.kind != 'text'
+        or child.value not in REPEAT_VALUES[element.source]
+        or child.value not in TEXT_VALUES_BY_FORMAT[child.format]
+        or (child.format == 'mixer_detail' and element.source != 'show.mixers')
+        or (child.format == 'osc_detail' and element.source != 'show.recs.osc')
+        for child in element.children
+    ):
+        raise ValueError(f'{page}: unsupported list row field')
+    if element.source == 'show.recs.channels' and any(
+        child.kind == 'text' for child in element.children
+    ):
+        raise ValueError(f'{page}: channel rows do not support text')
+    if any(
+        child.kind == 'button' and child.action != 'recs-calibrate'
+        for child in element.children
+    ):
+        raise ValueError(f'{page}: repeated button must calibrate')
+    if element.layout == 'forms' and any(
+        child.kind != 'form' for child in element.children
+    ):
+        raise ValueError(f'{page}: form rows need forms')
 
 
 def _validate_element_names(element: Element, names: set[str], page: str) -> None:
@@ -532,6 +459,48 @@ def current_gui() -> Gui:
     return load_gui(_gui_path)
 
 
+ELEMENT_FIELDS = {
+    'repeat': {},
+    'indicator': {'value': 'item.on'},
+    'text': {},
+    'status': {},
+    'meter': {},
+    'service_card': {},
+    'mutable_attributes': {'source': 'recs.mutable_attributes'},
+    'action_button': {},
+    'action_result': {},
+    'text_field': {'value': 'item.name', 'action': 'recs-track-name'},
+    'checkbox': {
+        'value': 'item.channels',
+        'action': 'recs-set-stereo',
+        'enabled_when': 'stereo_pair_available',
+    },
+    'waveform': {'source': 'waveforms'},
+    'button': {},
+    'form': {},
+    'input': {},
+    'textarea': {},
+    'select': {},
+    'submit': {},
+    'action_history': {'source': 'show.actions'},
+    'workflow_editor': {},
+    'workflow_button': {},
+    'workflow_status': {},
+    'workflow_display': {},
+    'workflow_checkbox': {},
+    'performance_button': {},
+    'performance_checkbox': {},
+    'details': {},
+    'link': {},
+}
+DETAIL_KINDS = {
+    'workflow_button',
+    'performance_button',
+    'performance_checkbox',
+    'workflow_checkbox',
+    'workflow_display',
+    'workflow_editor',
+}
 REPEAT_VALUES = {
     'show.recs.errors': {'item.timestamp', 'item.message'},
     'show.readiness.checks': {'item.name', 'item.message'},
