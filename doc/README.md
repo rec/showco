@@ -203,9 +203,10 @@ showco --push recs
 showco --sync recs
 ```
 
-If a showCo command fails, its terminal output is also appended to the ignored
-`showco-errors.txt` in the showCo checkout. The file may contain operational
-details, so keep it private.
+showCo removes the previous ignored `showco-errors.txt` from its checkout when
+a command starts. If that command fails, it saves the terminal output there as
+well as displaying it. The file may contain operational details, so keep it
+private.
 
 Updates preserve saved recs settings by default. Pass `--clear-settings` to explicitly clear them when updating recs. Preflight checks run before settings or services are changed. A failed update restores the previous selected revisions, locked environments, and any settings explicitly cleared, then restarts affected services. If restoration fails, services remain stopped and the command reports the failure; a recovered update still exits unsuccessfully.
 
