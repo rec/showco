@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import io
+import subprocess
+import threading
 from pathlib import Path
 from unittest import mock
 
@@ -172,6 +175,96 @@ def test_x18_music_routing_uses_usb_returns_on_main_lr_and_mutes_them() -> None:
         ('/ch/18/mix/lr', 0),
         ('/ch/18/mix/on', 0),
     ]
+
+
+def test_music_skips_non_audio_files_and_reports_failed_decoder(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / 'notes.txt').write_text('set list')
+    track = tmp_path / 'broken.flac'
+    track.write_bytes(b'invalid audio')
+    process = mock.Mock()
+    process.stdout = io.BytesIO()
+    process.poll.return_value = 1
+    process.wait.return_value = 1
+    stream = mock.Mock()
+    factory = mock.Mock(return_value=process)
+    player = x18_music.MusicPlayer(
+        [17, 18],
+        ['X18'],
+        query_devices=lambda: [],
+        stream_factory=lambda **kwargs: stream,
+        process_factory=factory,
+    )
+
+    with mock.patch('showco.x18.music.find_audio_device', return_value=(0, 'X18')):
+        player.start(tmp_path, False, 0)
+    assert player.thread is not None
+    player.thread.join(timeout=1)
+
+    assert player.status().state == 'failed'
+    assert 'Skipped broken.flac: ffmpeg exited with status 1' in (
+        player.status().error or ''
+    )
+    assert factory.call_args.kwargs['stderr'] == subprocess.DEVNULL
+    player.stop(0)
+
+
+def test_music_stop_keeps_stream_owned_by_live_worker() -> None:
+    stream = mock.Mock()
+    thread = mock.Mock()
+    thread.is_alive.return_value = True
+    player = x18_music.MusicPlayer([17, 18], ['X18'])
+    player.thread = thread
+    player.stream = stream
+
+    with pytest.raises(TimeoutError, match='did not stop'):
+        player.stop(0)
+
+    assert player.thread is thread
+    assert player.stream is stream
+    stream.close.assert_not_called()
+
+
+def test_music_skips_unreadable_track_and_continues_playing(tmp_path: Path) -> None:
+    for name in ('bad.wav', 'good.wav'):
+        (tmp_path / name).write_bytes(b'audio')
+    reading = threading.Event()
+    release = threading.Event()
+
+    class WaitingOutput:
+        def read(self, size: int) -> bytes:
+            reading.set()
+            release.wait(timeout=2)
+            return b''
+
+    bad = mock.Mock(stdout=io.BytesIO())
+    bad.poll.return_value = 1
+    bad.wait.return_value = 1
+    good = mock.Mock(stdout=WaitingOutput())
+    good.poll.return_value = 0
+    good.wait.return_value = 0
+    factory = mock.Mock(side_effect=[bad, good])
+    player = x18_music.MusicPlayer(
+        [17, 18],
+        ['X18'],
+        query_devices=lambda: [],
+        stream_factory=lambda **kwargs: mock.Mock(),
+        process_factory=factory,
+    )
+
+    with mock.patch('showco.x18.music.find_audio_device', return_value=(0, 'X18')):
+        player.start(tmp_path, False, 0)
+    assert reading.wait(timeout=1)
+    assert player.status().state == 'playing'
+    assert player.status().track == tmp_path / 'good.wav'
+    assert 'Skipped bad.wav' in (player.status().error or '')
+    stopper = threading.Thread(target=player.stop, args=(0,))
+    stopper.start()
+    assert player.stop_requested.wait(timeout=1)
+    release.set()
+    stopper.join(timeout=1)
+    assert not stopper.is_alive()
 
 
 def test_music_configuration_overrides_directories_fade_and_playlist_order(

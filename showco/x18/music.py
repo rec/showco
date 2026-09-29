@@ -115,7 +115,10 @@ class MusicPlayer:
             self.level = 0.0
             self.status_value = MusicPlayerStatus(state='playing', directory=directory)
             self.thread = threading.Thread(
-                target=self._play, args=(tracks, shuffle), name='showco music'
+                target=self._play,
+                args=(tracks, shuffle),
+                name='showco music',
+                daemon=True,
             )
             self.thread.start()
         self.fade_to(1.0, fade_seconds)
@@ -130,6 +133,15 @@ class MusicPlayer:
                 self.process.terminate()
             thread = self.thread
         thread.join(timeout=5)
+        if thread.is_alive():
+            with self.lock:
+                self.status_value = self.status_value.model_copy(
+                    update={
+                        'state': 'failed',
+                        'error': 'Music player did not stop within 5 seconds',
+                    }
+                )
+            raise TimeoutError('Music player did not stop within 5 seconds')
         with self.lock:
             if self.stream is not None:
                 self.stream.stop()
@@ -151,9 +163,12 @@ class MusicPlayer:
 
     def _play(self, tracks: list[Path], shuffle: bool) -> None:
         previous: Path | None = None
+        playable = list(tracks)
         while not self.stop_requested.is_set():
-            playlist = ordered_tracks(tracks, shuffle, previous)
+            playlist = ordered_tracks(playable, shuffle, previous)
             for track in playlist:
+                if track not in playable:
+                    continue
                 if self.stop_requested.is_set():
                     return
                 try:
@@ -165,9 +180,15 @@ class MusicPlayer:
                 ) as error:
                     with self.lock:
                         self.status_value = self.status_value.model_copy(
-                            update={'state': 'failed', 'error': str(error)}
+                            update={
+                                'state': 'playing' if len(playable) > 1 else 'failed',
+                                'error': f'Skipped {track.name}: {error}',
+                            }
                         )
-                    return
+                    playable.remove(track)
+                    if not playable:
+                        return
+                    continue
                 previous = track
 
     def _play_track(self, track: Path) -> None:
@@ -187,7 +208,7 @@ class MusicPlayer:
                 'pipe:1',
             ],
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
         )
         with self.lock:
             self.process = process
@@ -210,16 +231,29 @@ class MusicPlayer:
         finally:
             if process.poll() is None:
                 process.terminate()
-            process.wait(timeout=5)
+            try:
+                returncode = process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
+                raise
             with self.lock:
                 if self.process is process:
                     self.process = None
+        if returncode != 0 and not self.stop_requested.is_set():
+            raise OSError(f'ffmpeg exited with status {returncode}')
 
 
 def music_files(directory: Path) -> list[Path]:
     if not directory.is_dir():
         raise ValueError(f'Music directory does not exist: {directory}')
-    return sorted(path for path in directory.iterdir() if path.is_file())
+    return sorted(
+        path
+        for path in directory.iterdir()
+        if path.is_file()
+        and path.suffix.lower()
+        in {'.aac', '.aif', '.aiff', '.flac', '.m4a', '.mp3', '.ogg', '.opus', '.wav'}
+    )
 
 
 def ordered_tracks(
