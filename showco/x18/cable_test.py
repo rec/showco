@@ -28,6 +28,7 @@ DEFAULT_CHANNELS = '9-14'
 DEFAULT_SENDS = '1-6'
 TONE_FREQUENCY = 110.0
 TONE_SECONDS = 3.0
+MAX_DURATION_SECONDS = 300.0
 ANALYSIS_MARGIN_SECONDS = 0.25
 SIGNAL_WINDOW_SECONDS = 0.25
 TONE_AMPLITUDE = 0.1
@@ -45,7 +46,12 @@ class CableTestOptions(BaseModel, frozen=True):
     channels: Annotated[str, tyro.conf.Positional] = DEFAULT_CHANNELS
     sends: Annotated[str, tyro.conf.Positional] = DEFAULT_SENDS
     duration_seconds: Annotated[
-        float, Field(gt=ANALYSIS_MARGIN_SECONDS * 2, allow_inf_nan=False)
+        float,
+        Field(
+            gt=ANALYSIS_MARGIN_SECONDS * 2,
+            le=MAX_DURATION_SECONDS,
+            allow_inf_nan=False,
+        ),
     ] = TONE_SECONDS
     mixers_config: Path = Path.home() / '.config/showco/mixers.toml'
 
@@ -390,6 +396,8 @@ def validate_duration(seconds: float) -> None:
         raise ValueError(
             f'duration must be greater than {ANALYSIS_MARGIN_SECONDS * 2:g} seconds'
         )
+    if seconds > MAX_DURATION_SECONDS:
+        raise ValueError(f'duration must be at most {MAX_DURATION_SECONDS:g} seconds')
 
 
 def audio_devices() -> Sequence[DeviceDict]:

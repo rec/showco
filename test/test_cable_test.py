@@ -67,12 +67,22 @@ def test_validate_channels_and_sends_are_independent() -> None:
     cable_test.validate_sends([1])
 
 
-@pytest.mark.parametrize('seconds', [0.5, 0.0, -1.0, float('inf'), float('nan')])
+@pytest.mark.parametrize('seconds', [0.5, 0.0, -1.0, 300.1, float('inf'), float('nan')])
 def test_cable_test_duration_requires_a_finite_analyzable_signal(
     seconds: float,
 ) -> None:
     with pytest.raises(ValueError, match='duration'):
         cable_test.validate_duration(seconds)
+
+
+def test_cable_test_rejects_long_duration_before_pausing_recording() -> None:
+    recs = mock.Mock()
+    tester = cable_test.CableTester(recs, mixer())
+
+    with pytest.raises(ValueError, match='at most 300 seconds'):
+        tester.run([9], [1], duration_seconds=301)
+
+    recs.pause_recording.assert_not_called()
 
 
 @pytest.mark.parametrize('last', [16, 17, 18])
