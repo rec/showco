@@ -1162,6 +1162,13 @@ name = "tests"
 title = "Tests"
 
 [[pages.sections.elements]]
+name = "cable-test-status"
+kind = "status"
+label = "X18 cable test"
+value = "show.cable_test"
+format = "cable_test"
+
+[[pages.sections.elements]]
 name = "lights"
 kind = "action_button"
 label = "Test lights"

@@ -243,6 +243,13 @@ def _gui_status_text(element: gui_schema.Element, status: models.ShowStatus) -> 
             track = str(value.track) if value.track is not None else 'No music playing'
             error = f' {value.error}' if value.error else ''
             return f'Mode: {value.mode}. {track}{error}'
+        case 'cable_test' if isinstance(value, models.CableTestStatus):
+            if value.state == 'running':
+                return (
+                    f'Running: {int(value.elapsed_seconds)}s elapsed of '
+                    f'{value.duration_seconds:g}s requested. {value.message}'
+                )
+            return f'{value.state}: {value.message}'
     raise ValueError(f'unsupported status format {element.format!r}')
 
 
@@ -251,6 +258,8 @@ def _gui_status_class(format: str, status: models.ShowStatus) -> str:
         return 'state'
     if format == 'progress':
         return 'ok' if status.recording_progress.ok else 'failed'
+    if format == 'cable_test':
+        return 'failed' if status.cable_test.state == 'failed' else 'ok'
     return ''
 
 

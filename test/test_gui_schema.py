@@ -29,6 +29,25 @@ def test_default_gui_declares_all_navigation_pages() -> None:
     ]
 
 
+def test_actions_page_shows_cable_test_result_from_status() -> None:
+    document = gui_schema.load_gui(gui_schema.DEFAULT_GUI_PATH)
+    status = models.ShowStatus(
+        recs=models.RecsStatus(
+            service=models.ServiceStatus(name='recs', state='connected')
+        ),
+        streamo=models.StreamoStatus(
+            service=models.ServiceStatus(name='streamo', state='disabled')
+        ),
+        cable_test=models.CableTestStatus(
+            state='failed', message='channel 9: no signal'
+        ),
+    )
+
+    html = views.configured_page(document.page('actions'), status)
+
+    assert 'X18 cable test: failed: channel 9: no signal' in html
+
+
 def test_gui_rejects_duplicate_page_name(tmp_path: Path) -> None:
     path = tmp_path / 'gui.toml'
     path.write_text(

@@ -82,6 +82,9 @@
       case "music": return `Mode: ${value.mode}. ${
         value.track === null ? "No music playing" : value.track
       }${value.error ? ` ${value.error}` : ""}`;
+      case "cable_test": return value.state === "running"
+        ? `Running: ${Math.floor(value.elapsed_seconds)}s elapsed of ${value.duration_seconds}s requested. ${value.message}`
+        : `${value.state}: ${value.message}`;
     }
     throw new Error(`unknown status format: ${format}`);
   }
@@ -103,6 +106,8 @@
       element.textContent = `${label ? `${label}: ` : ""}${statusText(element.dataset.format, value)}`;
       if (element.dataset.format === "progress") {
         element.className = status.recording_progress.ok ? "ok" : "failed";
+      } else if (element.dataset.format === "cable_test") {
+        element.className = status.cable_test.state === "failed" ? "failed" : "ok";
       }
     }
     for (const section of document.querySelectorAll("section.readiness")) {

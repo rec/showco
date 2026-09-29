@@ -21,6 +21,9 @@ from ..x18.cable_test import (
     CableTester,
     cable_tester_from_specs,
     parse_range,
+    validate_channels,
+    validate_duration,
+    validate_sends,
 )
 from . import (
     gui_schema,
@@ -88,6 +91,9 @@ class ShowcoApp:
         self.action_log: list[models.ActionLogEntry] = []
         self.action_lock = threading.Lock()
         self.action_log_lock = threading.Lock()
+        self.cable_test_lock = threading.Lock()
+        self.cable_test_value = models.CableTestStatus()
+        self.cable_test_started_at = 0.0
         self.status_lock = threading.Lock()
         self.soundcheck_lock = threading.Lock()
         self.soundcheck_error: str | None = None
@@ -172,8 +178,90 @@ class ShowcoApp:
                     'music': self.music.status()
                     if self.music is not None
                     else models.MusicStatus(),
+                    'cable_test': self.cable_test_status(),
                 }
             )
+
+    def cable_test_status(self) -> models.CableTestStatus:
+        with self.cable_test_lock:
+            value = self.cable_test_value
+            if value.state == 'running':
+                return value.model_copy(
+                    update={
+                        'elapsed_seconds': time.monotonic() - self.cable_test_started_at
+                    }
+                )
+            return value
+
+    def start_cable_test(self, form: dict[str, str]) -> models.ActionResult:
+        if self.cable_tester is None:
+            return models.ActionResult(
+                ok=False, message='X18 cable test is not configured'
+            )
+        channels = parse_range(form.get('channels', ''), 1, 18, 'channels')
+        sends = parse_range(form.get('sends', ''), 1, 6, 'sends')
+        duration = float(form.get('duration-seconds', str(TONE_SECONDS)))
+        validate_channels(channels)
+        validate_sends(sends)
+        validate_duration(duration)
+        with self.cable_test_lock:
+            if self.cable_test_value.state == 'running':
+                return models.ActionResult(
+                    ok=False, message='X18 cable test is already running'
+                )
+            self.cable_test_started_at = time.monotonic()
+            self.cable_test_value = models.CableTestStatus(
+                state='running',
+                message=f'Testing channels {", ".join(str(c) for c in channels)}',
+                duration_seconds=duration,
+            )
+        thread = threading.Thread(
+            target=self._run_cable_test,
+            args=(channels, sends, duration),
+            name='showco-cable-test',
+            daemon=True,
+        )
+        try:
+            thread.start()
+        except RuntimeError as error:
+            with self.cable_test_lock:
+                self.cable_test_value = models.CableTestStatus(
+                    state='failed', message=f'Could not start cable test: {error}'
+                )
+            return models.ActionResult(ok=False, message=str(error))
+        return models.ActionResult(
+            ok=True, message='X18 cable test started; its result appears on Actions'
+        )
+
+    def _run_cable_test(
+        self, channels: list[int], sends: list[int], duration: float
+    ) -> None:
+        assert self.cable_tester is not None
+        try:
+            report = self.cable_tester.run(channels, sends, duration_seconds=duration)
+        except (
+            ConnectionError,
+            OSError,
+            TimeoutError,
+            ValueError,
+            RuntimeError,
+            TypeError,
+            MemoryError,
+        ) as error:
+            state, message = 'failed', str(error)
+        else:
+            state = 'passed' if report.passed else 'failed'
+            message = report.message()
+        with self.cable_test_lock:
+            self.cable_test_value = models.CableTestStatus(
+                state=state,
+                message=message,
+                elapsed_seconds=time.monotonic() - self.cable_test_started_at,
+                duration_seconds=duration,
+            )
+        (LOGGER.info if state == 'passed' else LOGGER.error)(
+            'X18 cable test %s: %s', state, message.replace('\n', '; ')
+        )
 
     def run_action(self, form: dict[str, str]) -> models.ActionResult:
         with self.action_lock:
@@ -282,16 +370,7 @@ class ShowcoApp:
                 else models.ActionResult(ok=False, message='lyte is disabled')
             )
         if action == 'cable-test':
-            if self.cable_tester is None:
-                return models.ActionResult(
-                    ok=False, message='X18 cable test is not configured'
-                )
-            report = self.cable_tester.run(
-                parse_range(form.get('channels', ''), 1, 18, 'channels'),
-                parse_range(form.get('sends', ''), 1, 6, 'sends'),
-                duration_seconds=float(form.get('duration-seconds', str(TONE_SECONDS))),
-            )
-            return models.ActionResult(ok=report.passed, message=report.message())
+            return self.start_cable_test(form)
         if action.startswith('music-'):
             if self.music is None:
                 return models.ActionResult(
