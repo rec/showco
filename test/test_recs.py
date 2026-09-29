@@ -144,9 +144,39 @@ class RecsTests(unittest.TestCase):
                 mock.call('get_track_names'),
                 mock.call(
                     'set_track_names',
-                    {'track_names': {'Mic': {'Lead Vocal': 1}}},
+                    {
+                        'track_names': {'Mic': {'Lead Vocal': 1}},
+                        'expected_track_names': {'Mic': {'Old Name': 1}},
+                    },
                 ),
             ],
+        )
+
+    def test_set_track_name_reports_atomic_conflict(self) -> None:
+        control = mock.Mock(spec=RecsControlClient)
+        control.call.side_effect = [
+            {'type': 'track_names', 'track_names': {'Mic': {'Old Name': 1}}},
+            {
+                'type': 'track_names_conflict',
+                'message': 'Track names changed since they were read',
+            },
+        ]
+
+        result = RecsClient(control=control).set_track_name(
+            'Mic', 'Old Name', 'Lead Vocal', 'Old Name'
+        )
+
+        self.assertFalse(result.ok)
+        self.assertIn('review the current names', result.message)
+        self.assertEqual(
+            control.call.call_args_list[-1],
+            mock.call(
+                'set_track_names',
+                {
+                    'track_names': {'Mic': {'Lead Vocal': 1}},
+                    'expected_track_names': {'Mic': {'Old Name': 1}},
+                },
+            ),
         )
 
     def test_set_track_name_rejects_stale_browser_value(self) -> None:
