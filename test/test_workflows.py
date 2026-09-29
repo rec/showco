@@ -278,9 +278,11 @@ def test_marker_sent_before_final_write_failure_remains_uncertain(
 
     marker = mock.Mock(return_value=models.ActionResult(ok=True, message='ok'))
     with mock.patch.object(Path, 'write_text', fail_second_write):
-        with pytest.raises(OSError):
+        with pytest.raises(OSError, match='Marker may have been delivered'):
             controller.act('setlist-interval', 0, marker)
     marker.assert_called_once_with('interval')
+    assert 'full disk' in controller.state.message
+    assert 'inspect recs before retrying' in controller.state.message
     assert setlist.SetListController(controller.path).state.pending is not None
 
 

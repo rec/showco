@@ -135,17 +135,27 @@ class SetListController:
         cue = self.state.pending
         if cue is None:
             raise ValueError('No pending cue')
-        self.save(
-            self.state.model_copy(
-                update={
-                    'revision': self.state.revision + 1,
-                    'current': cue.current,
-                    'next_index': cue.next_index,
-                    'interval': cue.interval,
-                    'pending': None,
-                    'started_at': self.state.started_at or datetime.now().astimezone(),
-                    'message': message,
-                }
+        try:
+            self.save(
+                self.state.model_copy(
+                    update={
+                        'revision': self.state.revision + 1,
+                        'current': cue.current,
+                        'next_index': cue.next_index,
+                        'interval': cue.interval,
+                        'pending': None,
+                        'started_at': self.state.started_at
+                        or datetime.now().astimezone(),
+                        'message': message,
+                    }
+                )
             )
-        )
+        except OSError as error:
+            detail = (
+                f'Marker may have been delivered, but cue confirmation could not '
+                f'be saved: {error}. Pending cue retained; '
+                'inspect recs before retrying.'
+            )
+            self.state = self.state.model_copy(update={'message': detail})
+            raise OSError(detail) from error
         return ActionResult(ok=True, message=message)

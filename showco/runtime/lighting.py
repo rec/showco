@@ -120,16 +120,26 @@ class LightingController:
                 )
             )
             return ActionResult(ok=False, message=self.state.message)
-        self.save(
-            self.state.model_copy(
-                update={
-                    'revision': self.state.revision + 1,
-                    'current': index,
-                    'pending': None,
-                    'message': (
-                        f'Cue queued: {state.cues[index].name}. Check live lyte state.'
-                    ),
-                }
+        try:
+            self.save(
+                self.state.model_copy(
+                    update={
+                        'revision': self.state.revision + 1,
+                        'current': index,
+                        'pending': None,
+                        'message': (
+                            f'Cue queued: {state.cues[index].name}. '
+                            'Check live lyte state.'
+                        ),
+                    }
+                )
             )
-        )
+        except OSError as error:
+            detail = (
+                f'Lighting selection may have been delivered, but cue confirmation '
+                f'could not be saved: {error}. Pending cue retained; inspect lyte '
+                'before retrying.'
+            )
+            self.state = self.state.model_copy(update={'message': detail})
+            raise OSError(detail) from error
         return ActionResult(ok=True, message=self.state.message)
