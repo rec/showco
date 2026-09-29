@@ -182,11 +182,11 @@ def network_commands(
     topology: NetworkTopology,
 ) -> list[list[str]]:
     if (
-        provision_config.network.external_ssh_only
+        provision_config.network.restrict_external_ingress
         and topology == NetworkTopology.PUBLIC
     ):
         sys.exit(
-            'ERROR: network.external_ssh_only requires a private hotspot; '
+            'ERROR: network.restrict_external_ingress requires a private hotspot; '
             'use private or mixed topology'
         )
     if topology == NetworkTopology.MIXED and assignment.secondary is None:

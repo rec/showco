@@ -58,7 +58,7 @@ def verify_provisioning(
                 f"'wifi:connected:{network.PRIVATE_WIFI_CONNECTION}'",
             )
         )
-    if provision_config.network.external_ssh_only:
+    if provision_config.network.restrict_external_ingress:
         private_wifi_verification.append(
             verify_remote_command(
                 provision_config,

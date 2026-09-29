@@ -632,7 +632,7 @@ class ProvisionTests(unittest.TestCase):
         )
 
     def test_verify_provisioning_checks_configured_ingress_firewall(self) -> None:
-        config = make_config(values(network={'external_ssh_only': True}))
+        config = make_config(values(network={'restrict_external_ingress': True}))
         with mock.patch(
             'reccy.runtime.subprocess.run',
             return_value=subprocess.CompletedProcess(['ssh'], 0, '', ''),

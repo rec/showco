@@ -162,12 +162,13 @@ class ProvisionScriptTests(unittest.TestCase):
         self.assertIn("printf '\\n[git.lyte]\\n'", script.REMOTE_SCRIPT)
         self.assertIn('Skipping network configuration', script.REMOTE_SCRIPT)
 
-    def test_remote_script_limits_external_ingress_to_ssh(self) -> None:
+    def test_remote_script_limits_external_ingress_to_ssh_and_mdns(self) -> None:
         self.assertIn('nftables', script.REMOTE_SCRIPT)
         self.assertIn('phase "restricting inbound connections"', script.REMOTE_SCRIPT)
         self.assertIn('iifname "$private_interface" accept', script.REMOTE_SCRIPT)
         self.assertIn('ct state established,related accept', script.REMOTE_SCRIPT)
         self.assertIn('tcp dport $SHOWCO_SSH_PORT accept', script.REMOTE_SCRIPT)
+        self.assertIn('udp dport 5353 accept', script.REMOTE_SCRIPT)
         self.assertIn('policy drop;', script.REMOTE_SCRIPT)
         self.assertIn('WantedBy=multi-user.target', script.REMOTE_SCRIPT)
 
@@ -266,7 +267,7 @@ class ProvisionScriptTests(unittest.TestCase):
         self.assertIn('X18=false', command)
         self.assertIn("RECS_REFNAME=''", command)
         self.assertIn('SHOWCO_SSH_PORT=22', command)
-        self.assertIn('EXTERNAL_SSH_ONLY=false', command)
+        self.assertIn('RESTRICT_EXTERNAL_INGRESS=false', command)
 
     def test_remote_command_passes_package_upgrade_request(self) -> None:
         default = script.remote_command(

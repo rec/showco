@@ -45,7 +45,9 @@ def remote_command(
         'LYTE_REFNAME': provision_config.git.lyte.refname,
         'SHOWCO_PORT': str(provision_config.network.web_port),
         'SHOWCO_SSH_PORT': str(provision_config.network.ssh_port),
-        'EXTERNAL_SSH_ONLY': shell_bool(provision_config.network.external_ssh_only),
+        'RESTRICT_EXTERNAL_INGRESS': shell_bool(
+            provision_config.network.restrict_external_ingress
+        ),
         'ARGON_ONE': shell_bool(provision_config.argon_one),
         'UPGRADE_PACKAGES': shell_bool(upgrade),
         'X18': shell_bool(x18_network is not None),

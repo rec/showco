@@ -68,8 +68,8 @@ class NetworkConfigTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             network_config.select_topology(config, False)
 
-    def test_external_ssh_only_requires_a_private_hotspot(self) -> None:
-        config = make_network_config(external_ssh_only=True)
+    def test_restricted_external_ingress_requires_a_private_hotspot(self) -> None:
+        config = make_network_config(restrict_external_ingress=True)
         assignment = network_config.WifiAssignment(
             primary=network_config.WifiInterface(name='wlan0'), secondary=None
         )
@@ -480,7 +480,7 @@ def make_network_config(
     private_wifi_password: str = '',
     external_wifi_name: str = '',
     external_wifi_password: str = '',
-    external_ssh_only: bool = False,
+    restrict_external_ingress: bool = False,
     x18_subnet: str = '10.43.0.0/24',
 ) -> Config:
     mixers: list[dict[str, object]] = []
@@ -500,7 +500,7 @@ def make_network_config(
                 'user': 'tom',
                 'swap_wifi': swap_wifi,
                 'topology': topology.value if topology is not None else '',
-                'external_ssh_only': external_ssh_only,
+                'restrict_external_ingress': restrict_external_ingress,
             },
             'networks': {
                 'internal': {

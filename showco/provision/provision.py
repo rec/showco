@@ -165,14 +165,6 @@ def validate_config(provision_config: config.Config) -> None:
 
 def config_errors(provision_config: config.Config) -> list[str]:
     errors = []
-    if (
-        provision_config.network.external_ssh_only
-        and provision_config.network.host.endswith('.local')
-    ):
-        errors.append(
-            '- network.host must use a fixed IP or router DNS name when '
-            'network.external_ssh_only blocks external mDNS'
-        )
     external = config.external_wifi(provision_config)
     private = config.internal_wifi(provision_config)
     if not external.name or external.name == 'TODO':

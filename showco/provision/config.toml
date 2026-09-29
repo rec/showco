@@ -5,6 +5,7 @@ host = "t.local"
 web_port = 10000
 swap_wifi = false
 topology = ""
+restrict_external_ingress = true
 
 [paths]
 root = "/home/tom/code"

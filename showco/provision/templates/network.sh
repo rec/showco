@@ -45,7 +45,7 @@ write_network_config_files() {
     printf 'web_port = %s\n' "$SHOWCO_PORT"
     printf 'ssh_port = %s\n' "$SHOWCO_SSH_PORT"
     printf 'swap_wifi = %s\n' "$SWAP_WIFI"
-    printf 'external_ssh_only = %s\n' "$EXTERNAL_SSH_ONLY"
+    printf 'restrict_external_ingress = %s\n' "$RESTRICT_EXTERNAL_INGRESS"
     write_toml_string topology "$NETWORK_TOPOLOGY"
     if [ "$X18" = true ]; then
       printf '\n[networks.internal.wired.x18]\n'
@@ -106,7 +106,7 @@ configure_network() {
   secrets_file=$(mktemp)
   write_network_config_files "$config_file" "$secrets_file"
   configuration_hash=$(printf '%s\0' \
-    "$NETWORK_TOPOLOGY" "$X18" "$SWAP_WIFI" "$EXTERNAL_SSH_ONLY" \
+    "$NETWORK_TOPOLOGY" "$X18" "$SWAP_WIFI" "$RESTRICT_EXTERNAL_INGRESS" \
     "$SHOWCO_SSH_PORT" "$SHOWCO_PI_X18_SUBNET" \
     "$SHOWCO_X18_HOST" "$PRIVATE_WIFI_SSID" "$PRIVATE_WIFI_PASSWORD" \
     "$EXTERNAL_WIFI_SSID" "$EXTERNAL_WIFI_PASSWORD" "$STREAMO_ENABLED" \
@@ -137,14 +137,14 @@ configure_ingress_firewall() {
   local private_interface
   local temporary
 
-  if [[ "$EXTERNAL_SSH_ONLY" != true ]]; then
+  if [[ "$RESTRICT_EXTERNAL_INGRESS" != true ]]; then
     if sudo test -f "$unit"; then
       sudo systemctl disable --now showco-ingress.service
     fi
     return
   fi
   if [[ "$NETWORK_TOPOLOGY" == public ]]; then
-    printf 'External SSH-only ingress requires a private hotspot.\n' >&2
+    printf 'Restricted external ingress requires a private hotspot.\n' >&2
     return 1
   fi
   if ! nmcli -t -f TYPE,STATE,CONNECTION device status \
@@ -176,6 +176,7 @@ table inet showco_ingress {
     ct state established,related accept
     iifname "$private_interface" accept
     tcp dport $SHOWCO_SSH_PORT accept
+    udp dport 5353 accept
     udp sport 67 udp dport 68 accept
     icmpv6 type { nd-neighbor-solicit, nd-router-advert, nd-neighbor-advert } accept
   }
