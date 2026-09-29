@@ -69,7 +69,7 @@ class PerformanceMonitor:
         self.observation_error: str | None = None
 
     def start(self) -> None:
-        if self.thread is not None:
+        if self.thread is not None and self.thread.is_alive():
             return
         self.thread = threading.Thread(
             target=self._run,
@@ -85,6 +85,16 @@ class PerformanceMonitor:
         self._flush()
 
     def status(self) -> models.SystemStatus:
+        if (
+            self.thread is not None
+            and not self.thread.is_alive()
+            and not self.stopped.is_set()
+        ):
+            self.observation_error = (
+                'Performance monitoring stopped unexpectedly; restarting'
+            )
+            LOGGER.warning('%s', self.observation_error)
+            self.start()
         with self.lock:
             return self.latest
 
@@ -128,6 +138,8 @@ class PerformanceMonitor:
                 self.observation_error = message
             else:
                 self.observation_error = None
+        else:
+            self.observation_error = None
 
     def _run(self) -> None:
         next_sample = time.monotonic()
