@@ -206,6 +206,13 @@ class MusicStatus(BaseModel, frozen=True):
     error: str | None = None
 
 
+class CableTestStatus(BaseModel, frozen=True):
+    state: str = 'idle'
+    message: str = 'No cable test has run'
+    elapsed_seconds: float = 0.0
+    duration_seconds: float = 0.0
+
+
 class ShowStatus(BaseModel, frozen=True):
     recs: RecsStatus
     streamo: StreamoStatus
@@ -221,6 +228,7 @@ class ShowStatus(BaseModel, frozen=True):
     recording_progress: RecordingProgress = Field(default_factory=RecordingProgress)
     input_checks: list[InputCheck] = Field(default_factory=list)
     music: MusicStatus = Field(default_factory=MusicStatus)
+    cable_test: CableTestStatus = Field(default_factory=CableTestStatus)
     revision: str | None = None
     run_started_at: float = 0.0
     performance_locked: bool = False

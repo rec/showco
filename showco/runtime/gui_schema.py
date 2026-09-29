@@ -531,6 +531,7 @@ STATUS_FORMATS = {
         'playback_position',
     },
     'show.music': {'music'},
+    'show.cable_test': {'cable_test'},
 }
 SERVICE_FORMATS = {
     'show.recs.service': 'recording',

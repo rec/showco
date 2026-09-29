@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 import unittest
 from datetime import datetime, timezone
 from io import BytesIO
@@ -285,9 +286,63 @@ class ServerTests(unittest.TestCase):
             }
         )
 
-        self.assertFalse(result.ok)
-        self.assertEqual(result.message, 'Cable test: 1/2 passed')
+        self.assertTrue(result.ok)
+        deadline = time.monotonic() + 1
+        while (
+            app.cable_test_status().state == 'running' and time.monotonic() < deadline
+        ):
+            time.sleep(0.01)
+        self.assertEqual(app.cable_test_status().state, 'failed')
+        self.assertEqual(app.cable_test_status().message, 'Cable test: 1/2 passed')
         tester.run.assert_called_once_with([9, 10], [1, 2], duration_seconds=5.0)
+
+    def test_running_cable_test_reports_progress_and_does_not_hold_action_lock(
+        self,
+    ) -> None:
+        started = Event()
+        finish = Event()
+        tester = mock.Mock()
+
+        def run(
+            channels: list[int], sends: list[int], duration_seconds: float
+        ) -> mock.Mock:
+            started.set()
+            finish.wait(timeout=1)
+            return mock.Mock(passed=True, message=lambda: 'Cable test: 1/1 passed')
+
+        tester.run.side_effect = run
+        recs = mock.Mock()
+        recs.action.return_value = models.ActionResult(ok=True, message='paused')
+        app = ShowcoApp(
+            recs,
+            None,
+            rehearsal.RehearsalSystemMonitor(),
+            rehearsal.RehearsalMixersMonitor(),
+            cable_tester=tester,
+        )
+        form = {
+            'action': 'cable-test',
+            'channels': '9',
+            'sends': '1',
+            'duration-seconds': '5',
+        }
+
+        try:
+            self.assertTrue(app.run_action(form).ok)
+            self.assertTrue(started.wait(1))
+            self.assertEqual(app.cable_test_status().state, 'running')
+            self.assertFalse(app.run_action(form).ok)
+            self.assertEqual(
+                app.run_action({'action': 'recs-pause-recording'}).message, 'paused'
+            )
+        finally:
+            finish.set()
+        deadline = time.monotonic() + 1
+        while (
+            app.cable_test_status().state == 'running' and time.monotonic() < deadline
+        ):
+            time.sleep(0.01)
+        self.assertEqual(app.cable_test_status().state, 'passed')
 
     def test_lyte_light_test_uses_lyte_client(self) -> None:
         app = ShowcoApp(
