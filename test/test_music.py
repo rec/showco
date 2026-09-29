@@ -153,6 +153,21 @@ def test_failed_setup_routing_mutes_music_returns() -> None:
     player.stop.assert_called_once_with(0)
 
 
+def test_interrupted_music_transition_mutes_returns_and_reports_steps() -> None:
+    value, recs, player, routing = controller()
+    recs.pause_recording.side_effect = KeyboardInterrupt
+
+    with pytest.raises(KeyboardInterrupt, match='setup failed at recs paused') as error:
+        value.setup()
+
+    assert 'Completed: streamO stopped, mute music returns, stop music player' in str(
+        error.value
+    )
+    assert value.status().mode == 'fault'
+    routing.disable.assert_called_once_with()
+    player.stop.assert_called_once_with(0)
+
+
 class FakeOsc:
     def __init__(self) -> None:
         self.values: list[tuple[str, object]] = []

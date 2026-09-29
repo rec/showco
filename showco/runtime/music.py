@@ -149,35 +149,46 @@ class MusicController:
             subprocess.CalledProcessError,
             sounddevice.PortAudioError,
         ) as error:
-            recovery_errors: list[str] = []
-            for name, action in [
-                ('mute music returns', self.routing.disable),
-                ('stop music player', lambda: self.player.stop(0)),
-            ]:
-                try:
-                    action()
-                    completed.append(name)
-                except (
-                    OSError,
-                    ValueError,
-                    TimeoutError,
-                    sounddevice.PortAudioError,
-                ) as recovery_error:
-                    recovery_errors.append(f'{name} failed: {recovery_error}')
-            self.mode = 'fault'
-            self.transition_error = (
-                f'{mode} failed at {step_name}: {error}. '
-                f'Completed: {", ".join(completed) or "none"}.'
-                + (
-                    f' Recovery errors: {"; ".join(recovery_errors)}.'
-                    if recovery_errors
-                    else ''
-                )
-            )
-            raise ValueError(self.transition_error) from error
+            raise ValueError(
+                self._recover_transition(mode, step_name, error, completed)
+            ) from error
+        except KeyboardInterrupt as error:
+            raise KeyboardInterrupt(
+                self._recover_transition(mode, step_name, error, completed)
+            ) from error
         self.mode = mode
         self.transition_error = None
         return models.ActionResult(ok=True, message=message)
+
+    def _recover_transition(
+        self, mode: str, step_name: str, error: BaseException, completed: list[str]
+    ) -> str:
+        recovery_errors: list[str] = []
+        for name, action in [
+            ('mute music returns', self.routing.disable),
+            ('stop music player', lambda: self.player.stop(0)),
+        ]:
+            try:
+                action()
+                completed.append(name)
+            except (
+                OSError,
+                ValueError,
+                TimeoutError,
+                sounddevice.PortAudioError,
+            ) as recovery_error:
+                recovery_errors.append(f'{name} failed: {recovery_error}')
+        self.mode = 'fault'
+        self.transition_error = (
+            f'{mode} failed at {step_name}: {error}. '
+            f'Completed: {", ".join(completed) or "none"}.'
+            + (
+                f' Recovery errors: {"; ".join(recovery_errors)}.'
+                if recovery_errors
+                else ''
+            )
+        )
+        return self.transition_error
 
     def stop(self) -> models.ActionResult:
         self.close(self.config.fade_seconds)
