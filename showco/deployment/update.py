@@ -244,7 +244,7 @@ def remote_update_command(
     update_command = (
         f'cd {shlex.quote(str(root / "showco"))} && '
         'PATH="$HOME/.local/bin:$PATH" '
-        f'uv run --no-sync showco go {shlex.join([*arguments, *selected])}'
+        f'uv run --no-sync showco deploy {shlex.join([*arguments, *selected])}'
     )
     return (
         f'if {update_command}; then exit 0; fi; '

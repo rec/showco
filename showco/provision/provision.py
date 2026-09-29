@@ -16,7 +16,7 @@ from . import config, remote, script, state
 PROVISION_DIR = Path(__file__).resolve().parent
 
 
-class GoOptions(BaseModel, frozen=True):
+class DeployOptions(BaseModel, frozen=True):
     config_path: Annotated[Path, tyro.conf.arg(name='config')] = (
         PROVISION_DIR / 'config.toml'
     )
@@ -45,7 +45,7 @@ class GoOptions(BaseModel, frozen=True):
     autosquash: int | None = Field(default=None, ge=0)
 
 
-def resolved_config(options: GoOptions) -> config.Config:
+def resolved_config(options: DeployOptions) -> config.Config:
     env = config.load_values(options.config_path, options.secrets)
     provision_config = config.config_from_values(
         env,
@@ -66,7 +66,9 @@ def resolved_config(options: GoOptions) -> config.Config:
     return provision_config
 
 
-def run(options: GoOptions, *, provision_config: config.Config | None = None) -> int:
+def run(
+    options: DeployOptions, *, provision_config: config.Config | None = None
+) -> int:
     provision_config = provision_config or resolved_config(options)
     from ..deployment import local_update, update
 

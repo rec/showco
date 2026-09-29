@@ -41,7 +41,7 @@ class MachineRoleTests(unittest.TestCase):
                 machine_role.mark_target_machine()
 
                 with self.assertRaisesRegex(SystemExit, 'provisioning machine'):
-                    machine_role.require_provisioning_machine('showco go')
+                    machine_role.require_provisioning_machine('showco deploy')
 
 
 if __name__ == '__main__':

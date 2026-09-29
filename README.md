@@ -37,10 +37,10 @@ Run these on the provisioning machine unless stated otherwise:
 
 ```bash
 showco                         # provision if configuration changed, else update
-showco go                      # same as showco
-showco go recs showco          # update selected repositories and consumers
-showco go --remote             # update the target directly from GitHub
-showco go --upgrade            # provision and run apt-get upgrade
+showco deploy                      # same as showco
+showco deploy recs showco          # update selected repositories and consumers
+showco deploy --remote             # update the target directly from GitHub
+showco deploy --upgrade            # provision and run apt-get upgrade
 showco --push [repository ...] # publish local histories only
 showco --sync [repository ...] # publish and synchronize internal lockfiles
 showco logs [service ...]      # read target service log files

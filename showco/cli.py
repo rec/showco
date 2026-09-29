@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from reccy import cli
 from reccy.runtime import logging
 
-from .deployment import bundle, card, go, logs, machine_role, python
+from .deployment import bundle, card, deploy, logs, machine_role, python
 from .provision import network
 from .runtime import gui_schema, rehearsal, services
 from .runtime.mixer import MixersMonitor, load_mixer_specs
@@ -76,14 +76,14 @@ def main(argv: list[str] | None = None) -> int:
     logging.configure()
     arguments = sys.argv[1:] if argv is None else argv
     if not arguments or arguments[0].startswith('-'):
-        return go.main(arguments)
+        return deploy.main(arguments)
     return cli.route_command(
         {
             'run': run_command,
             'bundle': bundle.main,
             'cable-test': cable_test.main,
             'prepare-card': card.main,
-            'go': go.main,
+            'deploy': deploy.main,
             'logs': logs.main,
             'python': python.main,
             'streamo': streamo_command,

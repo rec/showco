@@ -15,9 +15,9 @@ from showco.provision import network as network_config
 
 
 class ProvisionTests(unittest.TestCase):
-    def test_go_options_accept_provisioning_and_update_flags(self) -> None:
+    def test_deploy_options_accept_provisioning_and_update_flags(self) -> None:
         options = tyro.cli(
-            provision.GoOptions,
+            provision.DeployOptions,
             args=[
                 '--host',
                 'bertrand.local',
@@ -50,9 +50,9 @@ class ProvisionTests(unittest.TestCase):
         self.assertEqual(options.autosquash, 0)
         self.assertEqual(options.repositories, ['recs'])
 
-    def test_go_options_accept_local_update_flags(self) -> None:
-        push = tyro.cli(provision.GoOptions, args=['--push', 'recs'])
-        sync = tyro.cli(provision.GoOptions, args=['--sync', 'reccy'])
+    def test_deploy_options_accept_local_update_flags(self) -> None:
+        push = tyro.cli(provision.DeployOptions, args=['--push', 'recs'])
+        sync = tyro.cli(provision.DeployOptions, args=['--sync', 'reccy'])
 
         self.assertTrue(push.push)
         self.assertEqual(push.repositories, ['recs'])
@@ -60,7 +60,7 @@ class ProvisionTests(unittest.TestCase):
         self.assertEqual(sync.repositories, ['reccy'])
 
     def test_run_finishes_after_successful_provisioning(self) -> None:
-        options = provision.GoOptions(
+        options = provision.DeployOptions(
             config_path=Path('config.toml'),
             secrets=Path('secrets.toml'),
         )
@@ -91,7 +91,7 @@ class ProvisionTests(unittest.TestCase):
         self.assertFalse(provision_remote.call_args.kwargs['upgrade'])
 
     def test_run_prepares_local_repositories_with_update(self) -> None:
-        options = provision.GoOptions(
+        options = provision.DeployOptions(
             config_path=Path('config.toml'), secrets=Path('secrets.toml')
         )
         with (
@@ -116,7 +116,7 @@ class ProvisionTests(unittest.TestCase):
         self.assertEqual(refresh.call_args.args[0], update.REPOSITORY_NAMES)
 
     def test_run_passes_package_upgrade_to_remote_provisioning(self) -> None:
-        options = provision.GoOptions(
+        options = provision.DeployOptions(
             config_path=Path('config.toml'), secrets=Path('secrets.toml'), upgrade=True
         )
         with (
