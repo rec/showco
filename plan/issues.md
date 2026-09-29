@@ -19,15 +19,6 @@ flow was run for this audit. The existing physical checks remain in
     write. The set-list and lighting editors already reject stale revisions.
     Seek a recs-side conditional update or make the potential overwrite clear.
 
-29. **The large GUI configuration and schema are costly to change together
-    (confirmed structural risk).** `showco/gui.toml` has 1,455 lines;
-    `gui_schema.py` 634 and `views.py` 659. Element
-    kinds, allowed fields, source paths, formatting rules, and browser IDs
-    are spread across all four. A simple new control can require coordinated
-    edits in each. Group the schema by element behavior and remove obsolete
-    special cases as the current GUI migration completes. Avoid splitting
-    files merely to lower a line count.
-
 30. **Three large orchestration modules mix unrelated responsibilities
     (confirmed structural risk).** `server.py` has 915 lines and combines
     status gathering, action dispatch, HTTP parsing, rendering, and server
