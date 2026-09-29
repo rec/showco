@@ -88,18 +88,24 @@ vm.runInContext('updateStatus()', context).then(async () => {
 
   const title = {textContent: ''};
   const trackInput = {value: ''};
+  const channelState = {dataset: {label: 'Recording'}, setAttribute(name, value) {this[name] = value;}, getAttribute(name) {return this[name];}};
+  const stereo = {checked: false, disabled: false, addEventListener() {}};
   const clonedForm = {
     dataset: {},
     querySelector(selector) {
       if (selector === '[data-action="recs-track-name"]') return trackInput;
       if (selector === '.channel-caption b') return title;
+      if (selector === '.channel-state') return channelState;
+      if (selector === '.stereo input') return stereo;
       return null;
     },
   };
   const container = {
     dataset: {template: 'tracks-template', emptyText: 'No tracks available.'},
-    querySelectorAll: () => [],
+    querySelectorAll() {return this.children || [];},
+    contains: form => container.children.includes(form),
     replaceChildren(...children) {this.children = children;},
+    append(...children) {this.children.push(...children);},
   };
   context.document.querySelectorAll = selector =>
     selector === '[data-source="show.recs.channels"]' ? [container] : [];
@@ -112,6 +118,14 @@ vm.runInContext('updateStatus()', context).then(async () => {
   assert.equal(title.textContent, '1');
   assert.equal(trackInput.value, '1');
   assert.equal(clonedForm.dataset.device, 'X18');
+  trackInput.value = 'Editing';
+  context.document.activeElement = {closest: () => clonedForm};
+  container.replaceChildren = () => {throw new Error('focused channel was replaced');};
+  vm.runInContext('updateChannels([{name:"1", state:"clipping", device:"X18", channels:[1], on:false}])', context);
+  assert.equal(trackInput.value, 'Editing');
+  assert.equal(clonedForm.className, 'level clipping');
+  assert.equal(channelState['aria-label'], 'not recording');
+  assert.equal(container.children[0], clonedForm);
 
   let deadline;
   context.setTimeout = callback => {deadline = callback; return 1;};

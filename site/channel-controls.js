@@ -214,8 +214,9 @@
 
   function updateChannels(channels) {
     for (const container of document.querySelectorAll('[data-source="show.recs.channels"]')) {
-      if (document.activeElement.closest(".level")) return;
-      if (!channels.length) {
+      const focused = document.activeElement?.closest(".level");
+      const editing = focused && container.contains(focused);
+      if (!channels.length && !editing) {
         const message = document.createElement("p");
         message.textContent = container.dataset.emptyText;
         container.replaceChildren(message);
@@ -227,12 +228,25 @@
           channels: form.dataset.channels.split(",").map(Number),
         }), form]),
       );
-      container.replaceChildren(...channels.map(channel => {
+      const added = [];
+      const current = channels.map(channel => {
         const form = forms.get(trackKey(channel));
-        if (!form) return channelForm(channel, channel.name, channel.name, channels, container);
+        if (!form) {
+          const created = channelForm(channel, channel.name, channel.name, channels, container);
+          added.push(created);
+          return created;
+        }
         updateChannelForm(form, channel, channels);
         return form;
-      }));
+      });
+      if (editing) {
+        for (const form of forms.values()) {
+          if (form !== focused && !current.includes(form)) form.remove();
+        }
+        container.append(...added);
+      } else {
+        container.replaceChildren(...current);
+      }
     }
   }
 

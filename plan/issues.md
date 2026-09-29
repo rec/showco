@@ -19,13 +19,6 @@ flow was run for this audit. The existing physical checks remain in
     write. The set-list and lighting editors already reject stale revisions.
     Seek a recs-side conditional update or make the potential overwrite clear.
 
-35. **The browser allows a channel edit to freeze all channel refreshes
-    (confirmed).** `updateChannels()` returns for the entire page whenever
-    focus is inside any `.level` (`site/channel-controls.js:215-236`). This
-    preserves an active text edit, but also freezes level, recording, and
-    stereo indicators on every channel until focus moves. Preserve only the
-    edited field while refreshing the rest.
-
 36. **Unknown outcomes are handled inconsistently between controls
     (confirmed).** `showAction()` warns on aborted or lost requests
     (`site/show-controls.js:13-35`), but track names, stereo changes,
