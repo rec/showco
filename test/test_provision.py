@@ -601,6 +601,21 @@ class ProvisionTests(unittest.TestCase):
             any('systemd-cat --identifier=showco-provisioning' in c for c in commands)
         )
 
+    def test_verify_provisioning_checks_configured_ingress_firewall(self) -> None:
+        config = make_config(values(network={'external_ssh_only': True}))
+        with mock.patch(
+            'reccy.runtime.subprocess.run',
+            return_value=subprocess.CompletedProcess(['ssh'], 0, '', ''),
+        ) as run:
+            verify.verify_provisioning(config, network_config.NetworkTopology.PRIVATE)
+
+        commands = [c.args[0][-1] for c in run.call_args_list]
+        self.assertIn(
+            'sudo -n systemctl is-active --quiet showco-ingress.service '
+            '&& sudo -n nft list table inet showco_ingress >/dev/null',
+            commands,
+        )
+
     def test_missing_mixer_devices_are_notes_not_errors(self) -> None:
         config = make_config(values())
         with mock.patch(

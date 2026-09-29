@@ -162,6 +162,15 @@ class ProvisionScriptTests(unittest.TestCase):
         self.assertIn("printf '\\n[git.lyte]\\n'", script.REMOTE_SCRIPT)
         self.assertIn('Skipping network configuration', script.REMOTE_SCRIPT)
 
+    def test_remote_script_limits_external_ingress_to_ssh(self) -> None:
+        self.assertIn('nftables', script.REMOTE_SCRIPT)
+        self.assertIn('phase "restricting inbound connections"', script.REMOTE_SCRIPT)
+        self.assertIn('iifname "$private_interface" accept', script.REMOTE_SCRIPT)
+        self.assertIn('ct state established,related accept', script.REMOTE_SCRIPT)
+        self.assertIn('tcp dport $SHOWCO_SSH_PORT accept', script.REMOTE_SCRIPT)
+        self.assertIn('policy drop;', script.REMOTE_SCRIPT)
+        self.assertIn('WantedBy=multi-user.target', script.REMOTE_SCRIPT)
+
     def test_remote_script_installs_showco_service_through_showco(self) -> None:
         self.assertIn(
             'uv run --locked showco run install-service', script.REMOTE_SCRIPT
@@ -256,6 +265,8 @@ class ProvisionScriptTests(unittest.TestCase):
         self.assertIn("PRIVATE_WIFI_PASSWORD='private password'", command)
         self.assertIn('X18=false', command)
         self.assertIn("RECS_REFNAME=''", command)
+        self.assertIn('SHOWCO_SSH_PORT=22', command)
+        self.assertIn('EXTERNAL_SSH_ONLY=false', command)
 
     def test_remote_command_passes_package_upgrade_request(self) -> None:
         default = script.remote_command(

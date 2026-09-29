@@ -112,6 +112,25 @@ class ProvisionConfigTests(unittest.TestCase):
 
         self.assertEqual(config.network.ssh_port, 22)
 
+    def test_external_ssh_only_is_configurable(self) -> None:
+        parsed = make_config(values(network={'external_ssh_only': True}))
+
+        self.assertTrue(parsed.network.external_ssh_only)
+
+    def test_external_ssh_only_requires_unicast_target_address(self) -> None:
+        parsed = make_config(
+            values(
+                network={'external_ssh_only': True},
+                networks=networks(
+                    internal_wifi={'password': 'private password'},
+                    external_wifi={'name': 'Venue'},
+                ),
+            )
+        )
+
+        with self.assertRaisesRegex(SystemExit, 'fixed IP or router DNS name'):
+            provision.validate_config(parsed)
+
     def test_web_port_is_integer(self) -> None:
         config = make_config(
             values(

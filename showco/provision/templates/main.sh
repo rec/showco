@@ -178,6 +178,9 @@ TEXT
   phase "configuring network"
   configure_network
 
+  phase "restricting inbound connections"
+  configure_ingress_firewall
+
   phase "rebooting"
   if [[ -f /var/run/reboot-required ]]; then
     sudo touch /run/showco-provision-reboot-required

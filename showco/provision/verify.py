@@ -58,6 +58,15 @@ def verify_provisioning(
                 f"'wifi:connected:{network.PRIVATE_WIFI_CONNECTION}'",
             )
         )
+    if provision_config.network.external_ssh_only:
+        private_wifi_verification.append(
+            verify_remote_command(
+                provision_config,
+                'private-network ingress firewall is active',
+                'sudo -n systemctl is-active --quiet showco-ingress.service '
+                '&& sudo -n nft list table inet showco_ingress >/dev/null',
+            )
+        )
     return [
         verify_remote_command(
             provision_config,
