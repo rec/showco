@@ -10,10 +10,12 @@ def status(value: models.ShowStatus) -> models.ReadinessStatus:
             name='Recording',
             ok=value.recs.recording and not value.recs.paused,
             message=(
-                'recording'
+                'recording reported; check audio writes separately'
                 if value.recs.recording and not value.recs.paused
                 else 'recording is paused'
-                if value.recs.paused
+                if value.recs.recording and value.recs.paused
+                else 'recording state unavailable'
+                if value.recs.service.state != 'connected'
                 else 'not recording'
             ),
         ),

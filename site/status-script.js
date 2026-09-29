@@ -5,6 +5,7 @@
   }
 
   function recordingText(recs) {
+    if (recs.service.state !== "connected") return "recording state unavailable";
     if (!recs.recording) return "stopped";
     const seconds = recs.elapsed_seconds;
     if (seconds === null) return recs.paused

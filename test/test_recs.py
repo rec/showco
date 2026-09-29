@@ -57,6 +57,20 @@ class RecsTests(unittest.TestCase):
 
         control.call.assert_called_once_with('status_snapshot', timeout=0.25)
 
+    def test_stale_snapshot_does_not_claim_live_recording(self) -> None:
+        control = mock.Mock(spec=RecsControlClient)
+        control.call.side_effect = [status_snapshot(), TimeoutError('offline')]
+        client = RecsClient(control=control, snapshot_cache_seconds=0)
+
+        live = client.status()
+        stale = client.status()
+
+        self.assertTrue(live.snapshot_available)
+        self.assertTrue(live.recording)
+        self.assertTrue(stale.snapshot_available)
+        self.assertFalse(stale.recording)
+        self.assertEqual(stale.service.state, 'stale')
+
     def test_pause_recording_reports_whether_showco_must_resume(self) -> None:
         control = mock.Mock(spec=RecsControlClient)
         control.call.return_value = {
