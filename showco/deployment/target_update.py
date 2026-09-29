@@ -6,7 +6,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import TextIO
 
-from ..provision import config
+from ..provision import config, verify
 from . import update
 
 
@@ -259,4 +259,22 @@ def check_updated_services(
         )
     if 'recs' in names:
         results.append(update.recs_status_changes_step(run_command))
+    if 'lyte' in names and provision_config.lyte.enabled:
+        results.append(
+            update.run_step(
+                'lyte',
+                'service health',
+                ['systemctl', '--user', 'is-active', '--quiet', 'lyte.service'],
+                run_command,
+            )
+        )
+    if 'streamo' in names and provision_config.stream.enabled:
+        results.append(
+            update.run_step(
+                'streamo',
+                'service health',
+                ['sh', '-c', verify.showco_streamo_health_command(root)],
+                run_command,
+            )
+        )
     return results
