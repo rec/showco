@@ -84,6 +84,7 @@ main() {
     libsndfile1
     locales
     network-manager
+    nftables
     openssh-client
     rsync
     sudo
