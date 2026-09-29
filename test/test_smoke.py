@@ -110,6 +110,7 @@ operation = "save_track_names"
                     'device': 'X18/XR18',
                     'channel': '1',
                     'track_name': 'Lead Vocal',
+                    'expected_name': '1',
                 },
             )
 

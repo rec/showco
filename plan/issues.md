@@ -11,13 +11,14 @@ flow was run for this audit. The existing physical checks remain in
 
 ## P2: operator clarity, edge cases, and maintainability
 
-25. **A stale browser edit can overwrite newer recs track names (risk).**
-    `set_track_name()` fetches the current name map and replaces it, but has
-    no revision or compare-and-swap with recs
-    (`showco/runtime/recs.py:174-218`). Its local lock protects only this
-    showCo process; another client can change names between the read and
-    write. The set-list and lighting editors already reject stale revisions.
-    Seek a recs-side conditional update or make the potential overwrite clear.
+25. **A simultaneous external edit can still overwrite recs track names (risk).**
+    showCo now sends the name the browser originally saw, rejects a stale edit
+    when the latest recs read differs, and refreshes the displayed name after
+    a conflict. This narrows the window but cannot make the read and write
+    atomic: another client can change the complete map after `get_track_names`
+    and before `set_track_names`. The GUI warns about this remaining risk.
+    Replace the check with a recs-side conditional update when its protocol
+    supports one; do not claim this issue fully fixed before then.
 
 ## Additional work beyond the prompt
 

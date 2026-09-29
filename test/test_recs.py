@@ -126,7 +126,7 @@ class RecsTests(unittest.TestCase):
         self.assertTrue(result.ok)
         control.call.assert_called_once_with('calibrate', {'channels': {'Mic': [1, 2]}})
 
-    def test_set_track_name_uses_atomic_public_read_modify_write(self) -> None:
+    def test_set_track_name_preserves_other_names_in_latest_read(self) -> None:
         control = mock.Mock(spec=RecsControlClient)
         control.call.side_effect = [
             {'type': 'track_names', 'track_names': {'Mic': {'Old Name': 1}}},
@@ -134,7 +134,7 @@ class RecsTests(unittest.TestCase):
         ]
 
         result = RecsClient(control=control).set_track_name(
-            'Mic', 'Old Name', 'Lead Vocal'
+            'Mic', 'Old Name', 'Lead Vocal', 'Old Name'
         )
 
         self.assertTrue(result.ok)
@@ -148,6 +148,66 @@ class RecsTests(unittest.TestCase):
                 ),
             ],
         )
+
+    def test_set_track_name_rejects_stale_browser_value(self) -> None:
+        control = mock.Mock(spec=RecsControlClient)
+        control.call.return_value = {
+            'type': 'track_names',
+            'track_names': {'Mic': {'Newer Name': 1}},
+        }
+
+        result = RecsClient(control=control).set_track_name(
+            'Mic', '1', 'Lead Vocal', 'Old Name'
+        )
+
+        self.assertFalse(result.ok)
+        self.assertIn('Newer Name', result.message)
+        control.call.assert_called_once_with('get_track_names')
+
+    def test_set_track_name_requires_original_browser_value(self) -> None:
+        control = mock.Mock(spec=RecsControlClient)
+
+        result = RecsClient(control=control).set_track_name(
+            'Mic', '1', 'Lead Vocal', None
+        )
+
+        self.assertFalse(result.ok)
+        self.assertIn('reload', result.message)
+        control.call.assert_not_called()
+
+    def test_conflict_invalidates_cached_channel_name(self) -> None:
+        control = mock.Mock(spec=RecsControlClient)
+        newer = status_snapshot()
+        rows = newer['rows']
+        assert isinstance(rows, list)
+        rows[2]['channel'] = 'Newer Name'
+        control.call.side_effect = [
+            status_snapshot(),
+            {'type': 'track_names', 'track_names': {'Mic': {'Newer Name': 1}}},
+            newer,
+        ]
+        client = RecsClient(control=control)
+        self.assertEqual(client.status().channels[0].name, 'Lead')
+
+        result = client.set_track_name('Mic', '1', 'Mine', 'Lead')
+
+        self.assertFalse(result.ok)
+        self.assertEqual(client.status().channels[0].name, 'Newer Name')
+
+    def test_set_track_name_accepts_unnamed_channel_display_label(self) -> None:
+        control = mock.Mock(spec=RecsControlClient)
+        control.call.side_effect = [
+            {'type': 'track_names', 'track_names': {'Mic': {}}},
+            status_snapshot(),
+            'ok',
+        ]
+
+        result = RecsClient(control=control).set_track_name(
+            'Mic', '1', 'Lead Vocal', 'Lead'
+        )
+
+        self.assertTrue(result.ok)
+        self.assertEqual(control.call.call_args_list[-1].args[0], 'set_track_names')
 
     def test_set_stereo_sends_complete_track_payload(self) -> None:
         control = mock.Mock(spec=RecsControlClient)

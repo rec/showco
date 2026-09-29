@@ -75,12 +75,18 @@ vm.runInContext('updateStatus()', context).then(async () => {
   assert.equal(elements.get('readiness-state').textContent, 'unknown (status unavailable)');
 
   let respond;
-  context.fetch = () => new Promise(resolve => {respond = resolve;});
+  let submitted;
+  context.fetch = (_url, options) => {
+    submitted = new URLSearchParams(options.body);
+    return new Promise(resolve => {respond = resolve;});
+  };
   const input = {value: 'A', dataset: {action: 'recs-track-name'}, setCustomValidity() {}};
-  const form = {dataset: {savedTrackName: 'old'}, querySelector: () => input};
+  const form = {dataset: {savedTrackName: 'old', channels: '1', device: 'X18'}, querySelector: () => input};
   context.form = form;
   context.URLSearchParams = URLSearchParams;
   const saved = vm.runInContext('saveTrackName(form)', context);
+  assert.equal(submitted.get('expected_name'), 'old');
+  assert.equal(submitted.get('channel'), '1');
   input.value = 'B';
   respond({ok: true, json: async () => ({ok: true})});
   await saved;
@@ -146,6 +152,16 @@ vm.runInContext('updateStatus()', context).then(async () => {
   await vm.runInContext('saveTrackName(editedForm)', context);
   assert.match(edited.error, /outcome unknown/);
   assert.equal(editedForm.dataset.savedTrackName, 'Old name');
+
+  context.requestStatus = () => Promise.resolve({recs: {channels: [
+    {name: 'Newer name', state: 'healthy', device: 'X18', channels: [1], on: true},
+  ]}});
+  context.fetch = () => Promise.resolve({ok: true, json: () => Promise.resolve({
+    ok: false, message: 'Track name changed in recs; current name is Newer name',
+  })});
+  await vm.runInContext('saveTrackName(editedForm)', context);
+  assert.equal(editedForm.dataset.savedTrackName, 'Newer name');
+  assert.match(edited.error, /current name is Newer name/);
   context.requestStatus = realRequestStatus;
 
   let deadline;

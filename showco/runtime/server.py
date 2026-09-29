@@ -232,7 +232,7 @@ class ShowcoHandler(BaseHTTPRequestHandler):
         except UnicodeDecodeError:
             raise FormError(400, 'action body is not valid UTF-8') from None
         try:
-            pairs = parse.parse_qsl(body, strict_parsing=True)
+            pairs = parse.parse_qsl(body, strict_parsing=True, keep_blank_values=True)
         except ValueError:
             raise FormError(400, 'action body is malformed') from None
         return {key: value for key, value in pairs}

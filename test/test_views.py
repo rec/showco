@@ -102,6 +102,7 @@ class ViewsTests(unittest.TestCase):
         self.assertIn('new EventSource("/waveforms")', html)
         self.assertIn('function serviceDetail(service)', html)
         self.assertIn('function saveTrackName(form)', html)
+        self.assertIn('may still overwrite one another', html)
         self.assertIn('  const WAVEFORM_SECONDS = 8', html)
         self.assertIn(
             '.levels {\n  grid-template-columns: repeat(3, minmax(0, 1fr));', html

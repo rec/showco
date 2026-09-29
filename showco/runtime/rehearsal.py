@@ -10,7 +10,7 @@ from . import models
 from .lyte import LyteClient
 from .mixer import MixersMonitor
 from .recs import RecsClient
-from .recs_channels import stereo_tracks
+from .recs_channels import stereo_tracks, track_name
 from .system import SystemMonitor
 
 
@@ -38,7 +38,17 @@ class RehearsalRecsClient(RecsClient):
             recorded_seconds=max(0.0, elapsed - 0.2),
             file_size=elapsed * 9_000_000,
             file_count=18,
-            channels=rehearsal_channels(elapsed, self.rehearsal_tracks),
+            channels=[
+                c.model_copy(
+                    update={
+                        'name': track_name(
+                            self.rehearsal_track_names, c.device, c.channels[0]
+                        )
+                        or c.name
+                    }
+                )
+                for c in rehearsal_channels(elapsed, self.rehearsal_tracks)
+            ],
             errors=[],
             disk=models.RecordingDiskStatus(
                 path='/media/showco/recordings',
@@ -116,7 +126,7 @@ class RehearsalRecsClient(RecsClient):
         )
 
     def set_track_name(
-        self, device: str, channel: str, track_name: str
+        self, device: str, channel: str, track_name: str, expected_name: str | None
     ) -> models.ActionResult:
         device = device.strip()
         channel = channel.strip()
@@ -127,6 +137,24 @@ class RehearsalRecsClient(RecsClient):
             )
         channel_number = int(channel.partition('-')[0])
         names = self.rehearsal_track_names.setdefault(device, {})
+        current_name = next((n for n, i in names.items() if i == channel_number), '')
+        if not current_name:
+            current_name = next(
+                (
+                    c.name
+                    for c in self.status().channels
+                    if c.device == device and c.channels[:1] == [channel_number]
+                ),
+                '',
+            )
+        if expected_name != current_name:
+            return models.ActionResult(
+                ok=False,
+                message=(
+                    'Track name changed in recs; '
+                    'review the current name before saving again'
+                ),
+            )
         for name, value in list(names.items()):
             if value == channel_number:
                 del names[name]

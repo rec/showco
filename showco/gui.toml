@@ -10,6 +10,11 @@ name = "recording"
 title = "Recording channels"
 
 [[pages.sections.elements]]
+name = "track-name-conflicts"
+kind = "text"
+label = "If a track name changes elsewhere, review the current name before saving again. Changes made at almost the same instant may still overwrite one another."
+
+[[pages.sections.elements]]
 name = "channels"
 kind = "repeat"
 source = "show.recs.channels"
@@ -67,6 +72,11 @@ title = "Track names"
 [[pages.sections]]
 name = "names"
 title = "Edit track names"
+
+[[pages.sections.elements]]
+name = "track-name-conflicts"
+kind = "text"
+label = "If a track name changes elsewhere, review the current name before saving again. Changes made at almost the same instant may still overwrite one another."
 
 [[pages.sections.elements]]
 name = "tracks"
