@@ -477,6 +477,17 @@ class RecsTests(unittest.TestCase):
 
         self.assertEqual([c.device for c in channels], ['Mic', 'X18'])
 
+    def test_invalid_levels_are_not_reported_as_signal(self) -> None:
+        channels = channel_levels(
+            [
+                {'channel': str(i), 'signal': value}
+                for i, value in enumerate(
+                    (True, float('inf'), float('-inf'), float('nan')), 1
+                )
+            ]
+        )
+        self.assertTrue(all(c.signal is None and c.state == 'silent' for c in channels))
+
     def test_stereo_tracks_pairs_right_hand_mono_channel(self) -> None:
         tracks = stereo_tracks(
             [

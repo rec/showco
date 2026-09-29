@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import threading
 import time
 from typing import TypeIs
@@ -283,6 +284,11 @@ def _int(value: object) -> int | None:
 
 
 def _number(value: object) -> float | None:
-    if isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0:
+    if (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+        and value >= 0
+    ):
         return float(value)
     return None

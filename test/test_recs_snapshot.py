@@ -92,6 +92,31 @@ class RecsSnapshotTests(unittest.TestCase):
         self.assertEqual(statuses[0].log_path, 'X18.jsonl')
         self.assertEqual(statuses[0].log_size, 12)
 
+    def test_nonfinite_disk_and_playback_values_are_rejected(self) -> None:
+        for field, value, expected in (
+            ('disk', float('inf'), 'recs disk status is invalid'),
+            ('playback', float('inf'), 'recs playback state is invalid'),
+        ):
+            with self.subTest(field=field):
+                data = snapshot()
+                if field == 'disk':
+                    data['disk']['estimated_seconds_remaining'] = value
+                else:
+                    data['playback'] = {
+                        'state': 'playing',
+                        'session': -1,
+                        'path': '/recordings/example.wav',
+                        'source': 'Mic',
+                        'channel': '1',
+                        'output_channel': '1',
+                        'position_seconds': value,
+                        'duration_seconds': value,
+                    }
+                control = mock.Mock(spec=RecsControlClient)
+                control.call.return_value = data
+                status = RecsSnapshotClient(control, cache_seconds=0).status()
+                self.assertEqual(status.error, expected)
+
 
 def snapshot() -> dict[str, object]:
     return {
