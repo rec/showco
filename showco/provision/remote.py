@@ -8,6 +8,7 @@ from subprocess import CalledProcessError, TimeoutExpired
 from typing import cast
 
 from reccy.runtime import subprocess
+from tqdm import tqdm
 
 from ..deployment import repositories
 from . import config, network, script, ssh, verify
@@ -115,36 +116,49 @@ def applied_provisioning_fingerprint(provision_config: config.Config) -> str | N
         f'if test -f {shlex.quote(str(path))}; then '
         f'cat {shlex.quote(str(path))}; else exit 42; fi'
     )
-    for timeout in FINGERPRINT_SSH_TIMEOUTS:
-        try:
-            completed = subprocess.run(
-                ssh.ssh_command(
-                    provision_config,
-                    provision_config.ssh_target,
-                    command,
-                    connect_timeout=timeout,
-                ),
-                capture_output=True,
-                check=False,
-                text=True,
-                timeout=timeout,
+    with tqdm(
+        bar_format='{desc} [{elapsed}]',
+        file=sys.stdout,
+        disable=not sys.stdout.isatty(),
+    ) as progress:
+        for timeout in FINGERPRINT_SSH_TIMEOUTS:
+            progress.set_description_str(
+                f'Checking {provision_config.ssh_target} provisioning state '
+                f'({timeout}s)'
             )
-        except TimeoutExpired:
-            if timeout != FINGERPRINT_SSH_TIMEOUTS[-1]:
-                print(f'SSH provisioning check timed out after {timeout}s; retrying...')
-            continue
-        except OSError as error:
+            try:
+                completed = subprocess.run(
+                    ssh.ssh_command(
+                        provision_config,
+                        provision_config.ssh_target,
+                        command,
+                        connect_timeout=timeout,
+                    ),
+                    capture_output=True,
+                    check=False,
+                    text=True,
+                    timeout=timeout,
+                )
+            except TimeoutExpired:
+                if timeout != FINGERPRINT_SSH_TIMEOUTS[-1]:
+                    tqdm.write(
+                        f'SSH provisioning check timed out after {timeout}s; '
+                        'retrying...',
+                        file=sys.stdout,
+                    )
+                continue
+            except OSError as error:
+                sys.exit(
+                    f'ERROR: cannot check provisioning state on '
+                    f'{provision_config.ssh_target}: {error}'
+                )
+            break
+        else:
             sys.exit(
                 f'ERROR: cannot check provisioning state on '
-                f'{provision_config.ssh_target}: {error}'
+                f'{provision_config.ssh_target}: SSH timed out on all five attempts '
+                '(1, 2, 4, 8, 16 seconds)'
             )
-        break
-    else:
-        sys.exit(
-            f'ERROR: cannot check provisioning state on '
-            f'{provision_config.ssh_target}: SSH timed out on all five attempts '
-            '(1, 2, 4, 8, 16 seconds)'
-        )
     if completed.returncode == 42:
         return None
     if completed.returncode != 0:

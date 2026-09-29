@@ -13,6 +13,11 @@ from update_helpers import make_config
 from showco.deployment import local_update, publication, update
 
 
+class TerminalOutput(StringIO):
+    def isatty(self) -> bool:
+        return True
+
+
 class DependencyClosureTests(unittest.TestCase):
     def write_project(
         self, root: Path, name: str, sources: dict[str, str] | None = None
@@ -600,11 +605,15 @@ class LocalUpdateTests(unittest.TestCase):
                 return subprocess.CompletedProcess(command, 1, '', 'rejected\n')
             return subprocess.CompletedProcess(command, 0, '', '')
 
+        output = TerminalOutput()
         result = local_update.prepare_local_repositories(
-            ['recs'], Path('/code'), run_command, StringIO()
+            ['recs'], Path('/code'), run_command, output
         )
 
         self.assertTrue(result)
+        self.assertIn('Checking repository branches', output.getvalue())
+        self.assertIn('Checking recs upstream', output.getvalue())
+        self.assertIn('Autosquashing repository commits', output.getvalue())
         capture = ['git', '-C', '/code/recs', 'rev-parse', '@{upstream}']
         rebase = [
             'git',
@@ -639,11 +648,16 @@ class LocalUpdateTests(unittest.TestCase):
             commands.append(list(command))
             return subprocess.CompletedProcess(command, 0, '', '')
 
-        result = local_update.refresh_program_dependencies(
-            program, ['reccy'], run_command, StringIO()
-        )
+        output = TerminalOutput()
+        with update.progress_bar(1, output) as progress:
+            result = local_update.refresh_program_dependencies(
+                program, ['reccy'], run_command, output, progress=progress
+            )
 
         self.assertEqual(result, local_update.DependencyRefresh.UNCHANGED)
+        self.assertIn('Locking recs dependencies', output.getvalue())
+        self.assertIn('recs: check lockfile', output.getvalue())
+        self.assertIn('recs: test', output.getvalue())
         self.assertIn(
             [
                 'git',

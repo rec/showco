@@ -3,6 +3,7 @@ from __future__ import annotations
 import shlex
 import subprocess
 import unittest
+from io import StringIO
 from pathlib import Path
 from unittest import mock
 
@@ -311,6 +312,28 @@ class ProvisionTests(unittest.TestCase):
         )
         for call, timeout in zip(run.call_args_list, timeouts, strict=True):
             self.assertIn(f'ConnectTimeout={timeout}', call.args[0])
+
+    def test_fingerprint_check_displays_active_ssh_attempt(self) -> None:
+        config = make_config(values())
+
+        class TerminalOutput(StringIO):
+            def isatty(self) -> bool:
+                return True
+
+        output = TerminalOutput()
+        with (
+            mock.patch('sys.stdout', output),
+            mock.patch(
+                'reccy.runtime.subprocess.run',
+                return_value=subprocess.CompletedProcess(['ssh'], 42, '', ''),
+            ),
+        ):
+            self.assertIsNone(remote.applied_provisioning_fingerprint(config))
+
+        self.assertIn(
+            f'Checking {config.ssh_target} provisioning state (1s)',
+            output.getvalue(),
+        )
 
     def test_fingerprint_check_reports_all_timeout_attempts(self) -> None:
         config = make_config(values())
