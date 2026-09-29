@@ -5,8 +5,9 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest import mock
 
-from showco.deployment.bundle import create_bundle
+from showco.deployment import bundle
 
 
 class BundleTests(unittest.TestCase):
@@ -14,7 +15,7 @@ class BundleTests(unittest.TestCase):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             destinations = [
-                create_bundle(
+                bundle.create_bundle(
                     root / 'bundles',
                     state_directory=root / 'state',
                     config_directory=root / 'config',
@@ -46,7 +47,7 @@ class BundleTests(unittest.TestCase):
             (config / 'config.toml').write_text('[network]\n')
             (config / 'secrets.toml').write_text("secret = 'no'\n")
 
-            destination = create_bundle(
+            destination = bundle.create_bundle(
                 root / 'bundles',
                 state_directory=state,
                 config_directory=config,
@@ -61,3 +62,43 @@ class BundleTests(unittest.TestCase):
             self.assertIn('state/showco/incidents.json', files)
             self.assertIn('state/showco/recovery.json', files)
             self.assertFalse(any('setlist' in path for path in files))
+
+    def test_bundle_caps_files_and_total_size_and_records_truncation(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            state = root / 'state'
+            config = root / 'config'
+            journal = root / 'recordings/session.jsonl'
+            journal.parent.mkdir(parents=True)
+            journal.write_bytes(b'j' * 299 + b'Z')
+            (state / 'recs').mkdir(parents=True)
+            (state / 'recs/status.json').write_text(
+                json.dumps({'record_path': str(journal)})
+            )
+            (state / 'showco').mkdir(parents=True)
+            (state / 'showco/showco.log').write_bytes(b'l' * 299 + b'Z')
+            config.mkdir()
+            (config / 'config.toml').write_bytes(b'c' * 300)
+
+            with (
+                mock.patch.object(bundle, 'MAX_FILE_BYTES', 256),
+                mock.patch.object(bundle, 'MAX_BUNDLE_BYTES', 600),
+            ):
+                destination = bundle.create_bundle(
+                    root / 'bundles', state_directory=state, config_directory=config
+                )
+
+            manifest = json.loads((destination / 'bundle.json').read_text())
+            self.assertEqual((destination / 'config/config.toml').stat().st_size, 256)
+            self.assertEqual(
+                (destination / 'recordings/session.jsonl').read_bytes(),
+                b'j' * 255 + b'Z',
+            )
+            self.assertEqual(
+                (destination / 'state/showco/showco.log').stat().st_size, 88
+            )
+            self.assertEqual(
+                sum((destination / f).stat().st_size for f in manifest['files']), 600
+            )
+            self.assertIn('recordings/session.jsonl', manifest['truncated'])
+            self.assertIn('state/recs/status.json', manifest['omitted'])

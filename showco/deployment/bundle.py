@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import shutil
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -14,6 +13,8 @@ from . import machine_role
 
 STATE_DIRECTORY = Path.home() / '.local/state'
 CONFIG_DIRECTORY = Path.home() / '.config/showco'
+MAX_FILE_BYTES = 2 * 1024 * 1024
+MAX_BUNDLE_BYTES = 16 * 1024 * 1024
 
 
 class BundleOptions(BaseModel, frozen=True):
@@ -40,13 +41,33 @@ def create_bundle(
     destination = Path(
         mkdtemp(prefix=now.strftime('%Y%m%dT%H%M%SZ-'), dir=output_directory)
     )
-    copied = []
+    copied: list[str] = []
+    truncated: list[str] = []
+    omitted: list[str] = []
+    remaining = MAX_BUNDLE_BYTES
     for source in sources(state_directory, config_directory):
-        target = destination / bundle_path(source, state_directory, config_directory)
+        relative = str(bundle_path(source, state_directory, config_directory))
+        if remaining == 0:
+            omitted.append(relative)
+            continue
+        size = source.stat().st_size
+        limit = min(size, MAX_FILE_BYTES, remaining)
+        target = destination / relative
         target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, target)
-        copied.append(str(target.relative_to(destination)))
-    manifest = {'created_at': now.isoformat(), 'files': copied}
+        with source.open('rb') as original, target.open('wb') as copy:
+            if size > limit and source.suffix in {'.log', '.jsonl'}:
+                original.seek(-limit, 2)
+            copy.write(original.read(limit))
+        remaining -= limit
+        copied.append(relative)
+        if size > limit:
+            truncated.append(relative)
+    manifest = {
+        'created_at': now.isoformat(),
+        'files': copied,
+        'truncated': truncated,
+        'omitted': omitted,
+    }
     (destination / 'bundle.json').write_text(json.dumps(manifest, indent=2) + '\n')
     return destination
 
@@ -62,9 +83,16 @@ def bundle_path(source: Path, state_directory: Path, config_directory: Path) -> 
 def sources(state_directory: Path, config_directory: Path) -> list[Path]:
     result = [
         path
+        for path in [config_directory / 'config.toml', config_directory / 'mixers.toml']
+        if path.is_file()
+    ]
+    if (status := recording_status(state_directory / 'recs/status.json')) is not None:
+        result.append(status)
+    result.extend(
+        path
         for service in ['showco', 'recs', 'lyte', 'streamo']
         if (path := state_directory / service / f'{service}.log').is_file()
-    ]
+    )
     result.extend(sorted((state_directory / 'showco/monitoring').glob('*.jsonl')))
     result.extend(
         path
@@ -72,13 +100,9 @@ def sources(state_directory: Path, config_directory: Path) -> list[Path]:
             state_directory / 'recs/status.json',
             state_directory / 'showco/incidents.json',
             state_directory / 'showco/recovery.json',
-            config_directory / 'config.toml',
-            config_directory / 'mixers.toml',
         ]
         if path.is_file()
     )
-    if (status := recording_status(state_directory / 'recs/status.json')) is not None:
-        result.append(status)
     return result
 
 
@@ -86,6 +110,8 @@ def recording_status(path: Path) -> Path | None:
     if not path.is_file():
         return None
     try:
+        if path.stat().st_size > MAX_FILE_BYTES:
+            return None
         value = json.loads(path.read_text())
     except json.JSONDecodeError:
         return None

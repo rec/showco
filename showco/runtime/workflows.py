@@ -1,5 +1,6 @@
 import hashlib
 import shutil
+import threading
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING
@@ -11,6 +12,8 @@ from . import lighting, models, recovery, setlist, soundcheck
 
 if TYPE_CHECKING:
     from .server import ShowcoApp, ShowcoHandler
+
+DIAGNOSTICS_LOCK = threading.Lock()
 
 
 class ExpectedInput(BaseModel, frozen=True):
@@ -174,6 +177,16 @@ def run_soundcheck(
 
 
 def download(handler: 'ShowcoHandler') -> None:
+    if not DIAGNOSTICS_LOCK.acquire(blocking=False):
+        handler.send_error(429, 'A diagnostic download is already in progress')
+        return
+    try:
+        _download(handler)
+    finally:
+        DIAGNOSTICS_LOCK.release()
+
+
+def _download(handler: 'ShowcoHandler') -> None:
     with TemporaryDirectory() as directory:
         root = Path(directory)
         destination = bundle.create_bundle(root / 'bundle')
