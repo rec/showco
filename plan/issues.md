@@ -11,14 +11,6 @@ flow was run for this audit. The existing physical checks remain in
 
 ## P2: operator clarity, edge cases, and maintainability
 
-23. **The generic musician form cannot edit every entity field (confirmed).**
-    The current add form exposes `name`, `other_names`, and `links`; the edit
-    form excludes `copyright_name` and `public_keys`
-    (`showco/gui.toml:96-185`, `showco/runtime/server.py:334-352`). Hiding
-    those fields was an explicit UI choice, so do not simply reveal them.
-    Document which values are preserved on edit and provide an intentional
-    route for maintaining them when that becomes necessary.
-
 24. **A malformed saved workflow file can prevent showCo startup (confirmed).**
     `SetListController`, `LightingController`, `Soundcheck`, and `Recovery`
     catch a missing file but let malformed JSON, validation errors, and read
@@ -154,7 +146,7 @@ None.
 
 41. **The closing-credits timing and room routing need live acceptance.**
     streamO and showCo now implement the sequence in
-    [closing-credits.md](closing-credits.md), but tests with fake OSC and an
-    encoded preview cannot prove Twitch delivery or X18 timing. Follow the
+    [closing-credits.md](closing-credits.md), but tests with fake OSC and
+    rendered frames cannot prove Twitch delivery or X18 timing. Follow the
     target rehearsal in that plan and record the output and room measurements
     before relying on it during a show.
