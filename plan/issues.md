@@ -19,14 +19,6 @@ flow was run for this audit. The existing physical checks remain in
     write. The set-list and lighting editors already reject stale revisions.
     Seek a recs-side conditional update or make the potential overwrite clear.
 
-33. **Music mode names compress several distinct effects (confirmed UX trap).**
-    `Setup`, `Record`, and `Tear down` alter streaming, recs, local playback,
-    and X18 routing, while `Stop and shut down` powers off the Pi
-    (`showco/gui.toml`, `showco/runtime/music.py`). The current mode and
-    completed transition steps are now reported, and poweroff has an explicit
-    confirmation. The mode buttons still do not explain their effects before
-    an operator presses them. Put the concrete effects next to each control.
-
 34. **`showco go` and lighting `Go` share a name for unrelated operations
     (confirmed UX ambiguity).** The CLI command provisions or deploys while
     the lighting button advances a cue (`showco/deployment/go.py:11-20`,
