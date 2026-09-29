@@ -543,6 +543,27 @@ class ServerTests(unittest.TestCase):
         self.assertTrue(result.ok)
         self.assertEqual(result.message, 'recs shutdown canceled')
 
+    def test_pi_shutdown_requires_explicit_choice(self) -> None:
+        music = mock.Mock()
+        music.stop.return_value = models.ActionResult(
+            ok=True, message='Pi is shutting down'
+        )
+        app = ShowcoApp(
+            rehearsal.RehearsalRecsClient(),
+            None,
+            rehearsal.RehearsalSystemMonitor(),
+            rehearsal.RehearsalMixersMonitor(),
+            music_controller=music,
+        )
+
+        canceled = app.run_action({'action': 'music-stop'})
+        self.assertEqual(canceled.message, 'Pi shutdown canceled')
+        music.stop.assert_not_called()
+
+        confirmed = app.run_action({'action': 'music-stop', 'confirmation': 'shutdown'})
+        self.assertTrue(confirmed.ok)
+        music.stop.assert_called_once_with()
+
     def test_action_log_keeps_ten_most_recent_results(self) -> None:
         app = ShowcoApp(
             rehearsal.RehearsalRecsClient(),

@@ -48,6 +48,29 @@ def test_actions_page_shows_cable_test_result_from_status() -> None:
     assert 'X18 cable test: failed: channel 9: no signal' in html
 
 
+def test_actions_page_shows_shutdown_impact_and_defaults_to_cancel() -> None:
+    document = gui_schema.load_gui(gui_schema.DEFAULT_GUI_PATH)
+    status = models.ShowStatus(
+        recs=models.RecsStatus(
+            service=models.ServiceStatus(name='recs', state='connected'),
+            recording=True,
+        ),
+        streamo=models.StreamoStatus(
+            service=models.ServiceStatus(name='streamo', state='connected'),
+            stream_state='live',
+        ),
+    )
+
+    html = views.configured_page(
+        document.page('actions'), status, features={'music_enabled'}
+    )
+
+    assert 'recs recording: recording' in html
+    assert 'streamO broadcast: live' in html
+    assert 'recording and streaming will be interrupted' in html
+    assert html.index('value="cancel"') < html.index('value="shutdown"')
+
+
 def test_gui_rejects_duplicate_page_name(tmp_path: Path) -> None:
     path = tmp_path / 'gui.toml'
     path.write_text(
