@@ -122,6 +122,7 @@ def refresh_local_dependencies(
     updated: list[str] = []
     unchanged: list[str] = []
     skipped: list[str] = []
+    test_failures: list[update.StepResult] = []
     with update.progress_bar(len(programs), output) as progress:
         for program in programs:
             progress.set_description_str(f'Synchronizing {program.name}')
@@ -135,6 +136,7 @@ def refresh_local_dependencies(
             )
             if isinstance(refresh, update.StepResult):
                 update.report_failure(refresh, output)
+                update.report_failures(test_failures, output)
                 report_partial_dependency_publication(updated, output)
                 return False
             if not refresh:
@@ -145,12 +147,20 @@ def refresh_local_dependencies(
                 program, dependencies, run_command, output
             )
             progress.update()
+            if isinstance(result, update.StepResult):
+                test_failures.append(result)
+                continue
             if result == DependencyRefresh.FAILED:
+                update.report_failures(test_failures, output)
                 report_partial_dependency_publication(updated, output)
                 return False
             (updated if result == DependencyRefresh.UPDATED else unchanged).append(
                 program.name
             )
+    if test_failures:
+        update.report_failures(test_failures, output)
+        report_partial_dependency_publication(updated, output)
+        return False
     outcomes: list[str] = []
     if updated:
         outcomes.append(f'updated {", ".join(updated)}')
@@ -209,7 +219,7 @@ def refresh_program_dependencies(
     dependencies: list[str],
     run_command: update.RunCommand,
     output: TextIO,
-) -> DependencyRefresh:
+) -> DependencyRefresh | update.StepResult:
     before_sources = locked_dependency_sources(program, dependencies)
     lock = update.run_step(
         program.name,
@@ -259,8 +269,13 @@ def refresh_program_dependencies(
     for step, command in verification_commands:
         result = update.run_step(program.name, step, command, run_command)
         if not result.ok:
+            if step == 'test' and restore_generated_lockfile(
+                program, run_command, output
+            ):
+                return result
             update.report_failure(result, output)
-            restore_generated_lockfile(program, run_command, output)
+            if step != 'test':
+                restore_generated_lockfile(program, run_command, output)
             return DependencyRefresh.FAILED
     final_status, final_changed = lockfile_status_step(program, run_command)
     if not final_status.ok:

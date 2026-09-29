@@ -798,6 +798,43 @@ class LocalUpdateTests(unittest.TestCase):
         self.assertFalse(any(c[:3] == ['uv', 'run', '--locked'] for c in commands))
         self.assertFalse(any('commit' in c for c in commands))
 
+    def test_failed_repo_test_is_not_published(self) -> None:
+        program = update.Program(
+            name='recs', directory=Path('/code/recs'), service_names=[]
+        )
+        commands: list[list[str]] = []
+
+        def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+            commands.append(list(command))
+            if command[:3] == ['uv', 'run', '--locked']:
+                return subprocess.CompletedProcess(
+                    command, 1, 'FAILED test/test_audio.py::test_capture\n', ''
+                )
+            return subprocess.CompletedProcess(command, 0, '', '')
+
+        result = local_update.refresh_program_dependencies(
+            program, ['reccy'], run_command, StringIO()
+        )
+
+        self.assertIsInstance(result, update.StepResult)
+        assert isinstance(result, update.StepResult)
+        self.assertEqual(result.step, 'test')
+        self.assertIn('test_capture', result.output)
+        self.assertIn(
+            [
+                'git',
+                '-C',
+                '/code/recs',
+                'restore',
+                '--staged',
+                '--worktree',
+                '--',
+                'uv.lock',
+            ],
+            commands,
+        )
+        self.assertFalse(any('commit' in c or 'push' in c for c in commands))
+
     def test_refresh_publishes_recs_before_locking_showco(self) -> None:
         commands: list[list[str]] = []
         self.locked_sources.side_effect = [
@@ -904,6 +941,49 @@ class LocalUpdateTests(unittest.TestCase):
         self.assertFalse(result)
         self.assertIn('after publishing recs', output.getvalue())
         self.assertIn('rerun the same showco command', output.getvalue())
+
+    def test_refresh_reports_all_repository_test_failures(self) -> None:
+        programs = [
+            update.Program(name=n, directory=Path('/code') / n, service_names=[])
+            for n in ('recs', 'lyte', 'showco')
+        ]
+        failures = [
+            update.StepResult(
+                program=n,
+                step='test',
+                command=['pytest'],
+                returncode=1,
+                output=f'FAILED test/test_{n}.py::test_example\n',
+            )
+            for n in ('recs', 'lyte')
+        ]
+        output = StringIO()
+        with (
+            mock.patch(
+                'showco.deployment.local_update.dependency_programs',
+                return_value=programs,
+            ),
+            mock.patch(
+                'showco.deployment.local_update.github_source_packages',
+                return_value=['reccy'],
+            ),
+            mock.patch(
+                'showco.deployment.local_update.dependency_refresh_needed',
+                return_value=True,
+            ),
+            mock.patch(
+                'showco.deployment.local_update.refresh_program_dependencies',
+                side_effect=[*failures, local_update.DependencyRefresh.UNCHANGED],
+            ) as refresh,
+        ):
+            result = local_update.refresh_local_dependencies(
+                ['recs', 'lyte', 'showco'], Path('/code'), lambda command: None, output
+            )
+
+        self.assertFalse(result)
+        self.assertEqual(refresh.call_count, 3)
+        self.assertIn('FAILED test/test_recs.py::test_example', output.getvalue())
+        self.assertIn('FAILED test/test_lyte.py::test_example', output.getvalue())
 
     def test_provisioning_update_defaults_to_saved_host(self) -> None:
         with (
