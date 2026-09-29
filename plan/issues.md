@@ -9,204 +9,19 @@ during a show, not implementation effort. No service, deployment, or hardware
 flow was run for this audit. The existing physical checks remain in
 [hardware.md](hardware.md).
 
-## P0: protect the running show and its data
+## P0: live network verification still required
 
-1. **The web controls are reachable on every Pi network interface
-   (confirmed).** Provisioning binds showCo to `0.0.0.0`
-   (`showco/provision/templates/services.sh:3`). `ShowcoHandler._do_post` checks
-   browser origin hints but has no authentication or operator authorization
-   (`showco/runtime/server.py:474-499`); `/diagnostics` likewise has no access
-   check (`server.py:359-380`). The performance lock is an accident guard and
-   can itself be unlocked over that same endpoint (`server.py:183-201`). The
-   intended trust boundary is the Pi's password-protected, self-generated
-   private network: the Pi should accept inbound connections only from that
-   network, even when it joins external Wi-Fi for outbound traffic. The
-   `public` topology has no private hotspot and cannot satisfy this policy;
-   streaming and a private hotspot require `mixed` topology with two Wi-Fi
-   interfaces. This would address exposure to clients on external Wi-Fi
-   without adding web
-   authentication. Provisioning now has a `restrict_external_ingress` policy
-   that allows external SSH and mDNS plus private-network access, but the Pi has not been
-   updated or tested with it. Verify that the UI works from the private
-   network but is unreachable from the external network, while SSH works from
-   both. Confirm `t.local` still resolves over the external network through
-   the narrow mDNS exception.
-
-2. **The diagnostics endpoint can consume recording disk space and disclose
-   show data (confirmed).** Each `GET /diagnostics` copies logs, monitoring
-   history, configuration, and the current recs recording journal into a new
-   temporary directory, then creates a second compressed archive
-   (`showco/runtime/workflows.py:176-192`,
-   `showco/deployment/bundle.py:31-94`). There is no size limit, admission
-   control beyond the general request slots, or redaction of log contents.
-   Two requests can double this I/O while recs is recording. Bound the bundle,
-   avoid unnecessary copies, and make the operator aware of its contents.
-
-3. **The background music player can deadlock on ffmpeg output (confirmed
-   pipe arrangement, untested failure).** `MusicPlayer._play_track` opens both
-   stdout and stderr as pipes, reads only stdout, and waits for the process
-   (`showco/x18/music.py:173-216`). If ffmpeg writes enough errors to fill
-   stderr, it blocks; the reader then blocks on stdout. `stop()` joins only
-   five seconds before closing the stream underneath the worker
-   (`music.py:123-140`). Drain stderr concurrently or route it to a bounded
-   file, and test a decoder that writes sustained errors.
-
-4. **A failed or interrupted music transition can leave audio and routing in
-   different modes (confirmed).** `setup()` starts playback before enabling
-   routing; `record()` stops music and disables routing before it requests a
-   new recs session; `teardown()` stops the stream and pauses recording before
-   starting music (`showco/runtime/music.py:85-110`). Each later call can
-   raise, while `mode` changes only at the end. Report the completed steps and
-   define recovery for each boundary; cover partial failures with tests.
-
-5. **A cable test can keep running after the browser reports an unknown
-   outcome (confirmed).** Browser actions abort after ten seconds
-   (`site/show-controls.js:13-35`), but the server holds `action_lock` across
-   the whole synchronous test (`showco/runtime/server.py:173-178,298-312`).
-   The test may spend time on many OSC queries and can run for an arbitrary
-   requested duration (`showco/x18/cable_test.py:256-317,388-392`). A browser
-   timeout does not cancel it, and later operator actions queue behind it.
-   Give tests a bounded duration, explicit running/progress state, and a safe
-   way to determine completion before another action is submitted.
-
-6. **The web cable-test duration has no practical maximum (confirmed).** The
-   CLI validates only that it is finite and above half a second, and the web
-   route converts arbitrary text to `float` (`showco/x18/cable_test.py:44-50,
-   388-392`; `showco/runtime/server.py:303-308`). The audio path allocates an
-   18-channel array and writes a raw playback file, then an equally wide
-   recording (`cable_test.py:435-509`). An hour at 48 kHz is over 12 GB per
-   18-channel 32-bit array before additional copies. Set a tested upper bound
-   for both entry points, and reject the request before pausing recs.
-
-## P1: failures, concurrency, and recovery
-
-7. **Music playback shutdown can outlive its owner (confirmed).** The player
-   thread is non-daemon; `stop()` sets the stop event, terminates ffmpeg, waits
-   at most five seconds, and then closes the audio stream and sets
-   `self.thread = None` regardless of whether the worker exited
-   (`showco/x18/music.py:117-140`). A blocked worker can keep the process
-   alive or write to a closed stream. Make worker termination observable and
-   avoid declaring the player stopped while it is still running.
-
-8. **The music playlist treats every regular file as playable and stops on
-   the first bad one (confirmed).** `music_files()` includes every file in the
-   directory (`showco/x18/music.py:219-223`); one README, image, or damaged
-   audio file makes `_play` mark the entire player failed and return
-   (`music.py:152-170`). Filter supported audio types and decide whether a bad
-   track should be skipped with an error instead of ending all setup or
-   teardown music.
-
-9. **X18 music routing has no readback or rollback (confirmed).** `enable()`
-   and `disable()` send several UDP OSC writes without querying their applied
-   values or restoring a prior scene (`showco/x18/music.py:46-64`,
-   `showco/x18/cable_test.py:134-156`). Lost packets or a failure halfway
-   through can leave USB returns in the room mix despite a reported mode.
-   Confirm the final routing state and define what to do on a partial change.
-
-10. **A cable-test cleanup error can conceal the original failure (confirmed).**
-    `CableTester.run()` resumes recs in `finally`, and
-    `X18TestRouting.__exit__()` raises if restoration fails
-    (`showco/x18/cable_test.py:268-290,214-235`). If capture or analysis also
-    failed, only the later resume or restoration error reaches the operator.
-    Preserve and report both failures, especially whether recording resumed
-    and mixer routing was restored.
-
-11. **A paused or stale recs snapshot can be presented as recording
-    (confirmed).** `RecsClient.status()` sets `recording` from
-    `snapshot.has_snapshot` (`showco/runtime/recs.py:33-56`); transport failure
-    retains the old snapshot data (`showco/runtime/recs_snapshot.py:72-83`).
-    The readiness and browser text then reason from that flag
-    (`showco/runtime/readiness.py:7-26`, `site/status-script.js:7-22`). The
-    separate service state does show staleness, but the name and recording
-    message invite a false inference. Distinguish daemon snapshot availability,
-    recording request, and observed audio progress in the model and UI.
-
-12. **The background observer can die without restarting (risk).**
-    `PerformanceMonitor._run` calls `sample()` in a loop without a top-level
-    failure boundary (`showco/runtime/monitoring.py:132-137`). Only the
-    `observe()` call and history writes catch selected exceptions
-    (`monitoring.py:115-160`); an unexpected failure in sampling, model
-    creation, or an adapter ends the thread and therefore incident collection.
-    Add a focused test for an unexpected sample failure and expose a stopped
-    monitor as a visible fault.
-
-13. **Slow clients can occupy all web request slots (confirmed).** The server
-    has eight ordinary request slots and twelve total connection slots
-    (`showco/runtime/server.py:571-585`). `_form()` blocks while reading the
-    declared body length, up to the ten-second socket timeout
-    (`server.py:510-532,592-612`). A few stalled clients can make the operator
-    receive 503 responses. Test slow and truncated bodies, and consider a
-    shorter body deadline or reserving status capacity.
-
-14. **Long operations serialize unrelated actions (confirmed).**
-    `ShowcoApp.run_action()` holds one lock while a cable test, music fade,
-    service restart, or recs RPC completes (`showco/runtime/server.py:173-186,
-    286-329`). This prevents conflicting changes, but an unrelated urgent
-    pause/resume can wait behind a slow operation. Separate resource conflict
-    rules from a single global action queue and test prioritization of urgent
-    controls.
-
-15. **System shutdown can be triggered by one ordinary action once unlocked
-    (confirmed).** The Actions page has a `Stop and shut down` button
-    (`showco/gui.toml:1382-1387`); `MusicController.stop()` powers off the Pi
-    after stopping playback (`showco/runtime/music.py:114-120`). The
-    performance lock blocks it while enabled, but there is no second explicit
-    shutdown confirmation. Require confirmation and show which recording and
-    streaming states will be interrupted.
-
-16. **A write failure can make a completed cue look unconfirmed (confirmed
-    failure window).** Set-list and lighting controllers persist a pending
-    operation, send recs/lyte the command, then persist the success
-    (`showco/runtime/setlist.py:115-149`, `showco/runtime/lighting.py:102-134`).
-    If the final state write fails, the command may have succeeded while the
-    pending state remains. This is safer than automatic retry, but the UI should
-    explicitly distinguish storage failure from remote delivery uncertainty
-    and retain both pieces of evidence.
-
-17. **Partial target service stops are not covered by the transaction's
-    interruption handler (confirmed).** `update_target()` stops services
-    before entering its `try` block (`showco/deployment/target_update.py:90-99,
-    122-169`). `KeyboardInterrupt` or an unexpected error during the stop
-    sequence can leave some services stopped without executing rollback.
-    Include service stops in the recovery boundary and test interruption at
-    each stop.
-
-18. **A successful target update verifies only recs and showCo (confirmed).**
-    `check_updated_services()` checks showCo's web revision and recs status
-    advancement; streamO and lyte are only started/refreshed
-    (`showco/deployment/target_update.py:226-241`). A successful update can
-    therefore leave an enabled stream or lighting service unhealthy. Add
-    enabled-service health checks that match their actual startup contracts.
-
-19. **Rollback settings restoration is not atomic (risk).** When
-    `--clear-settings` is used, rollback writes the saved recs settings
-    directly to the final path (`showco/deployment/target_update.py:77-89,
-    140-153`). An interruption or full disk can leave a partial settings file.
-    Restore through a temporary file and rename only after the write succeeds.
-
-20. **A failed dependency refresh can leave earlier repositories published
-    (confirmed).** `refresh_local_dependencies()` processes projects in order,
-    and each changed lockfile is committed and pushed immediately
-    (`showco/deployment/local_update.py:123-169,203-303`). If a later project
-    fails, the earlier GitHub states remain advanced although the overall
-    command fails. Report the published subset and give a precise resume path;
-    do not imply the multi-repository operation is atomic.
-
-21. **SSH availability and provisioning state are conflated (confirmed).**
-    `applied_provisioning_fingerprint()` returns `None` on timeout and on any
-    nonzero SSH exit (`showco/provision/remote.py:111-132`); `showco go` treats
-    `None` as absent state and starts provisioning
-    (`showco/deployment/go.py:96-108`). A temporary DNS or SSH failure thus
-    becomes a misleading provision attempt. Distinguish unavailable target,
-    missing fingerprint, and malformed fingerprint before choosing an action.
-
-22. **SSH reboot detection can mistake a transient network loss for a reboot
-    (risk).** `wait_for_ssh_disconnect()` accepts one failed reachability
-    probe as evidence of shutdown (`showco/provision/ssh.py:40-46`), then
-    `wait_for_ssh()` accepts a single successful probe as return
-    (`ssh.py:49-64`). On intermittent Wi-Fi, both can occur without a reboot.
-    Verify boot identity or sustained state transition before declaring the
-    reboot complete.
+1. **The private-network ingress policy is implemented but not verified on the Pi.**
+   Provisioning installs a persistent nftables policy when
+   `network.restrict_external_ingress = true`. It admits traffic from the Pi's
+   private hotspot, while the external interface admits only SSH and UDP 5353
+   for `t.local` mDNS discovery. The `public` topology is rejected because it
+   has no private hotspot. The Pi was unavailable for a controlled deployment,
+   so this boundary has not been proven in use. Set a long, random password in
+   the ignored `showco/provision/secrets.toml`, deploy when no show is running,
+   and verify: the UI works on the private network; UI and diagnostics are
+   unreachable on external Wi-Fi; SSH and `t.local` work externally; and the
+   policy survives a reboot. Keep this finding open until those checks pass.
 
 ## P2: operator clarity, edge cases, and maintainability
 
@@ -261,8 +76,8 @@ flow was run for this audit. The existing physical checks remain in
     or explicitly narrow the promise of interchangeable GUI files.
 
 29. **The large GUI configuration and schema are costly to change together
-    (confirmed structural risk).** `showco/gui.toml` has 1,420 lines;
-    `gui_schema.py` 632, `views.py` 636, and the shared template 153. Element
+    (confirmed structural risk).** `showco/gui.toml` has 1,455 lines;
+    `gui_schema.py` 634 and `views.py` 659. Element
     kinds, allowed fields, source paths, formatting rules, and browser IDs
     are spread across all four. A simple new control can require coordinated
     edits in each. Group the schema by element behavior and remove obsolete
@@ -270,10 +85,10 @@ flow was run for this audit. The existing physical checks remain in
     files merely to lower a line count.
 
 30. **Three large orchestration modules mix unrelated responsibilities
-    (confirmed structural risk).** `server.py` has 798 lines and combines
+    (confirmed structural risk).** `server.py` has 915 lines and combines
     status gathering, action dispatch, HTTP parsing, rendering, and server
-    lifecycle; `recs.py` has 736 lines of status parsing, commands, and
-    presentation conversion; `deployment/local_update.py` has 708 lines of
+    lifecycle; `recs.py` has 737 lines of status parsing, commands, and
+    presentation conversion; `deployment/local_update.py` has 721 lines of
     dependency inspection, Git publication, lockfile refresh, and autosquash.
     These are plausible review and change-collision risks. Split only along
     existing boundaries when the next related change is made.
@@ -298,10 +113,10 @@ flow was run for this audit. The existing physical checks remain in
 33. **Music mode names compress several distinct effects (confirmed UX trap).**
     `Setup`, `Record`, and `Tear down` alter streaming, recs, local playback,
     and X18 routing, while `Stop and shut down` powers off the Pi
-    (`showco/gui.toml:1369-1387`, `showco/runtime/music.py:85-120`). The
-    buttons and result strings do not enumerate the effects or partial state
-    after a failure. Put the concrete effect and current mode next to each
-    control; use a confirmation for poweroff.
+    (`showco/gui.toml`, `showco/runtime/music.py`). The current mode and
+    completed transition steps are now reported, and poweroff has an explicit
+    confirmation. The mode buttons still do not explain their effects before
+    an operator presses them. Put the concrete effects next to each control.
 
 34. **`showco go` and lighting `Go` share a name for unrelated operations
     (confirmed UX ambiguity).** The CLI command provisions or deploys while
@@ -335,20 +150,6 @@ flow was run for this audit. The existing physical checks remain in
     planned behavior so an operator does not expect it during a live show.
 
 ## Verification gaps and boundaries
-
-38. **MusicPlayer's process, stream, and thread lifetime lacks direct tests
-    (confirmed gap).** `test/test_music.py` uses mocked `player` and `routing`
-    for mode sequencing and checks OSC command lists, but does not drive
-    `_play_track`, ffmpeg stderr, blocked writes, worker stop timeout, or
-    `MusicPlayer.start()` cleanup. Add a few focused fake-process/stream tests
-    for the failure windows in issues 3, 7, and 8.
-
-39. **HTTP resource-limit tests cover connection counts but not slow bodies
-    or large diagnostics (confirmed gap).** `test/test_http_limits.py` tests
-    semaphore release and cross-origin rejection. It does not test truncated
-    request bodies, an occupied action slot, concurrent diagnostics downloads,
-    or disk exhaustion. Cover the bounded failure behavior for issues 2, 5,
-    and 13 without starting hardware services.
 
 40. **The physical installation remains unverified.**
     [hardware.md](hardware.md) tracks capture timing, routing isolation,

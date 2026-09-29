@@ -20,6 +20,10 @@ Signal classification is fixed, but the thresholds have not been validated with 
 
 Measure the noise floor, level, and waveform quality with the actual gain configuration and known-good cables. Include disconnected, attenuated, and distorted signals. Use the results to confirm or adjust thresholds and record the calibration conditions.
 
+## X18 music-return routing
+
+Music-mode transitions now read back their X18 routing changes and mute the music returns when a transition fails or is interrupted. Fake OSC tests verify the commands and failure reporting, but cannot prove what the physical mixer applies. On the Pi, exercise setup, record, and teardown with the intended mixer scene; verify the USB returns and master faders in each mode, then interrupt a transition and confirm the music returns are muted and each completed step is reported.
+
 ## 25. Installation acceptance
 
 The exact live installation still lacks a recorded end-to-end acceptance result. Browser, subprocess, routing-fake, and WAV regression tests do not prove physical acquisition or show readiness.
