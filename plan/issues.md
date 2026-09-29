@@ -19,15 +19,6 @@ flow was run for this audit. The existing physical checks remain in
     write. The set-list and lighting editors already reject stale revisions.
     Seek a recs-side conditional update or make the potential overwrite clear.
 
-36. **Unknown outcomes are handled inconsistently between controls
-    (confirmed).** `showAction()` warns on aborted or lost requests
-    (`site/show-controls.js:13-35`), but track names, stereo changes,
-    calibration, and mutable attributes use direct `fetch()` calls without
-    that uncertainty message (`site/channel-controls.js:12-185`). A lost
-    response can therefore be shown as a definite failure, prompting a
-    duplicate or conflicting retry. Route these controls through a shared
-    outcome contract and refresh observed state before resubmission.
-
 ## Additional work beyond the prompt
 
 None.

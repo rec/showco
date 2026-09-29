@@ -24,10 +24,14 @@ async function showAction(fields) {
     return result.message;
   } catch (error) {
     if (error.name === 'AbortError') {
-      throw new Error('Action response timed out; outcome unknown. Check state before submitting again.');
+      const uncertain = new Error('Action response timed out; outcome unknown. Check state before submitting again.');
+      uncertain.outcomeUnknown = true;
+      throw uncertain;
     }
     if (error instanceof TypeError) {
-      throw new Error('Connection lost; action outcome unknown. Check state before submitting again.');
+      const uncertain = new Error('Connection lost; action outcome unknown. Check state before submitting again.');
+      uncertain.outcomeUnknown = true;
+      throw uncertain;
     }
     throw error;
   } finally {

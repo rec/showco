@@ -34,6 +34,7 @@ const context = vm.createContext({
   AbortController,
 });
 vm.runInContext(fs.readFileSync('site/status-connection.js', 'utf8'), context);
+vm.runInContext(fs.readFileSync('site/show-controls.js', 'utf8'), context);
 vm.runInContext(fs.readFileSync('site/channel-controls.js', 'utf8'), context);
 vm.runInContext(fs.readFileSync('site/status-script.js', 'utf8'), context);
 vm.runInContext('updateStatus()', context).then(async () => {
@@ -126,6 +127,26 @@ vm.runInContext('updateStatus()', context).then(async () => {
   assert.equal(clonedForm.className, 'level clipping');
   assert.equal(channelState['aria-label'], 'not recording');
   assert.equal(container.children[0], clonedForm);
+
+  const edited = {
+    value: 'New name', dataset: {action: 'recs-track-name'},
+    setCustomValidity(message) {this.error = message;}, reportValidity() {},
+  };
+  const editedForm = {
+    dataset: {device: 'X18', channel: '1', channels: '1', savedTrackName: 'Old name'},
+    querySelector: () => edited,
+  };
+  context.editedForm = editedForm;
+  const realRequestStatus = context.requestStatus;
+  context.requestStatus = () => Promise.resolve({recs: {channels: [
+    {name: 'Old name', state: 'healthy', device: 'X18', channels: [1], on: true},
+  ]}});
+  const lost = vm.runInContext('new TypeError("connection lost")', context);
+  context.fetch = () => Promise.reject(lost);
+  await vm.runInContext('saveTrackName(editedForm)', context);
+  assert.match(edited.error, /outcome unknown/);
+  assert.equal(editedForm.dataset.savedTrackName, 'Old name');
+  context.requestStatus = realRequestStatus;
 
   let deadline;
   context.setTimeout = callback => {deadline = callback; return 1;};
