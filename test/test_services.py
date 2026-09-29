@@ -107,13 +107,14 @@ class ServicesTests(unittest.TestCase):
 
         self.assertEqual(daemon.name, 'showco')
 
-    def test_refreshes_legacy_recs_service_metadata(self) -> None:
+    def test_refreshes_current_recs_service_metadata(self) -> None:
         controller = mock.Mock()
         controller.paths.metadata.read_text.return_value = json.dumps(
             {
                 'argv': ['--silent', '--include', 'Mic'],
+                'module': 'recs',
                 'platform': 'linux',
-                'gui_endpoint': '/tmp/recs-gui.sock',
+                'control_endpoint': '/tmp/recs-gui.sock',
             }
         )
         controller.install.return_value = StatusResult(installed=True, running=True)
