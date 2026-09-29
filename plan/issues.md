@@ -25,11 +25,12 @@ flow was run for this audit. The existing physical checks remain in
    streaming and a private hotspot require `mixed` topology with two Wi-Fi
    interfaces. This would address exposure to clients on external Wi-Fi
    without adding web
-   authentication, but the inbound restriction is not yet implemented or
-   verified. Apply it to all Pi interfaces, preserve loopback and established
-   outbound replies, and test that the UI and SSH work from the private
-   network but are unreachable from the external network. Provisioning access
-   must be moved to the private network before enforcing the restriction.
+   authentication. Provisioning now has a `restrict_external_ingress` policy
+   that allows external SSH and mDNS plus private-network access, but the Pi has not been
+   updated or tested with it. Verify that the UI works from the private
+   network but is unreachable from the external network, while SSH works from
+   both. Confirm `t.local` still resolves over the external network through
+   the narrow mDNS exception.
 
 2. **The diagnostics endpoint can consume recording disk space and disclose
    show data (confirmed).** Each `GET /diagnostics` copies logs, monitoring

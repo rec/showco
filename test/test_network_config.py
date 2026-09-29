@@ -68,6 +68,17 @@ class NetworkConfigTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             network_config.select_topology(config, False)
 
+    def test_restricted_external_ingress_requires_a_private_hotspot(self) -> None:
+        config = make_network_config(restrict_external_ingress=True)
+        assignment = network_config.WifiAssignment(
+            primary=network_config.WifiInterface(name='wlan0'), secondary=None
+        )
+
+        with self.assertRaisesRegex(SystemExit, 'requires a private hotspot'):
+            network_config.network_commands(
+                config, assignment, network_config.NetworkTopology.PUBLIC
+            )
+
     def test_swap_wifi_makes_second_interface_primary(self) -> None:
         assignment = network_config.assign_wifi(
             [
@@ -469,6 +480,7 @@ def make_network_config(
     private_wifi_password: str = '',
     external_wifi_name: str = '',
     external_wifi_password: str = '',
+    restrict_external_ingress: bool = False,
     x18_subnet: str = '10.43.0.0/24',
 ) -> Config:
     mixers: list[dict[str, object]] = []
@@ -488,6 +500,7 @@ def make_network_config(
                 'user': 'tom',
                 'swap_wifi': swap_wifi,
                 'topology': topology.value if topology is not None else '',
+                'restrict_external_ingress': restrict_external_ingress,
             },
             'networks': {
                 'internal': {

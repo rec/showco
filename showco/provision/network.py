@@ -181,6 +181,14 @@ def network_commands(
     assignment: WifiAssignment,
     topology: NetworkTopology,
 ) -> list[list[str]]:
+    if (
+        provision_config.network.restrict_external_ingress
+        and topology == NetworkTopology.PUBLIC
+    ):
+        sys.exit(
+            'ERROR: network.restrict_external_ingress requires a private hotspot; '
+            'use private or mixed topology'
+        )
     if topology == NetworkTopology.MIXED and assignment.secondary is None:
         sys.exit('ERROR: mixed network topology requires a secondary Wi-Fi interface')
     if (

@@ -112,6 +112,11 @@ class ProvisionConfigTests(unittest.TestCase):
 
         self.assertEqual(config.network.ssh_port, 22)
 
+    def test_restricted_external_ingress_is_configurable(self) -> None:
+        parsed = make_config(values(network={'restrict_external_ingress': True}))
+
+        self.assertTrue(parsed.network.restrict_external_ingress)
+
     def test_web_port_is_integer(self) -> None:
         config = make_config(
             values(

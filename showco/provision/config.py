@@ -32,6 +32,7 @@ class NetworkConfig(BaseModel, frozen=True):
     web_port: int = 17352
     swap_wifi: bool = False
     topology: str = ''
+    restrict_external_ingress: bool = False
 
 
 class Paths(BaseModel, frozen=True):
@@ -118,6 +119,9 @@ def config_from_values(
         web_port=int_value(network, 'web_port', default=17352),
         swap_wifi=bool_value(network, 'swap_wifi', default=False),
         topology=string_value(network, 'topology'),
+        restrict_external_ingress=bool_value(
+            network, 'restrict_external_ingress', default=False
+        ),
     )
     paths = table_value(values, 'paths')
     git = table_value(values, 'git')
