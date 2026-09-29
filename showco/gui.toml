@@ -624,7 +624,7 @@ download = true
 [[pages.sections.elements]]
 name = "diagnostics-help"
 kind = "text"
-label = "The bundle includes existing service logs and public configuration; review it before sharing."
+label = "The bundle includes service logs, configuration, and the current recording journal. It may reveal private show details or credentials. Each file is capped at 2 MiB and the bundle contents at 16 MiB; check bundle.json for truncated or omitted files, and review the bundle before sharing."
 
 [[pages.sections.elements]]
 name = "recovery-options"

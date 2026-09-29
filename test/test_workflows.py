@@ -367,3 +367,17 @@ def test_diagnostics_download_uses_existing_collector(tmp_path: Path) -> None:
         fileobj=BytesIO(handler.wfile.getvalue()), mode='r:gz'
     ) as archive:
         assert './bundle.json' in archive.getnames()
+
+
+def test_second_diagnostics_download_is_rejected() -> None:
+    handler = object.__new__(ShowcoHandler)
+    handler.send_error = mock.Mock()
+    workflows.DIAGNOSTICS_LOCK.acquire()
+    try:
+        workflows.download(handler)
+    finally:
+        workflows.DIAGNOSTICS_LOCK.release()
+
+    handler.send_error.assert_called_once_with(
+        429, 'A diagnostic download is already in progress'
+    )
