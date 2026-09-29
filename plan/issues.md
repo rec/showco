@@ -11,16 +11,25 @@ flow was run for this audit. The existing physical checks remain in
 
 ## P0: protect the running show and its data
 
-1. **Anyone who can reach the Pi's web port can control the show and download
-   diagnostics (confirmed).** Provisioning binds showCo to `0.0.0.0`
+1. **The web controls are reachable on every Pi network interface
+   (confirmed).** Provisioning binds showCo to `0.0.0.0`
    (`showco/provision/templates/services.sh:3`). `ShowcoHandler._do_post` checks
    browser origin hints but has no authentication or operator authorization
    (`showco/runtime/server.py:474-499`); `/diagnostics` likewise has no access
    check (`server.py:359-380`). The performance lock is an accident guard and
-   can itself be unlocked over that same endpoint (`server.py:183-201`). Decide
-   the trust boundary, then require operator authentication or restrict network
-   access before exposing the port to a shared venue network. Test direct HTTP
-   clients as well as browsers.
+   can itself be unlocked over that same endpoint (`server.py:183-201`). The
+   intended trust boundary is the Pi's password-protected, self-generated
+   private network: the Pi should accept inbound connections only from that
+   network, even when it joins external Wi-Fi for outbound traffic. The
+   `public` topology has no private hotspot and cannot satisfy this policy;
+   streaming and a private hotspot require `mixed` topology with two Wi-Fi
+   interfaces. This would address exposure to clients on external Wi-Fi
+   without adding web
+   authentication, but the inbound restriction is not yet implemented or
+   verified. Apply it to all Pi interfaces, preserve loopback and established
+   outbound replies, and test that the UI and SSH work from the private
+   network but are unreachable from the external network. Provisioning access
+   must be moved to the private network before enforcing the restriction.
 
 2. **The diagnostics endpoint can consume recording disk space and disclose
    show data (confirmed).** Each `GET /diagnostics` copies logs, monitoring
