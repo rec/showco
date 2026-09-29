@@ -6,6 +6,7 @@ import subprocess
 import threading
 import time
 from collections.abc import Callable
+from contextlib import nullcontext
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -264,8 +265,13 @@ class ShowcoApp:
         )
 
     def run_action(self, form: dict[str, str]) -> models.ActionResult:
-        with self.action_lock:
-            action = form.get('action', '')
+        action = form.get('action', '')
+        lock = (
+            nullcontext()
+            if action in {'recs-pause-recording', 'recs-resume-recording'}
+            else self.action_lock
+        )
+        with lock:
             try:
                 result = self._dispatch_action(action, form)
             except (
@@ -303,6 +309,14 @@ class ShowcoApp:
                 ok=False,
                 message='Performance lock blocks this action. '
                 'Unlock explicitly, then submit it again.',
+            )
+        if action in {'recs-pause-recording', 'recs-resume-recording'} and (
+            self.cable_test_status().state == 'running'
+        ):
+            return models.ActionResult(
+                ok=False,
+                message='X18 cable test owns the recs pause; wait for its result '
+                'before changing recording',
             )
         if action == 'acknowledge-fault':
             with self.status_lock:
