@@ -294,6 +294,36 @@ class ProvisionTests(unittest.TestCase):
         ):
             remote.applied_provisioning_fingerprint(config)
 
+    def test_fingerprint_check_retries_with_increasing_ssh_timeouts(self) -> None:
+        config = make_config(values())
+        timeouts = remote.FINGERPRINT_SSH_TIMEOUTS
+        failures = [subprocess.TimeoutExpired(['ssh'], n) for n in timeouts[:-1]]
+        success = subprocess.CompletedProcess(['ssh'], 0, 'a' * 64, '')
+        with mock.patch(
+            'reccy.runtime.subprocess.run', side_effect=[*failures, success]
+        ) as run:
+            fingerprint = remote.applied_provisioning_fingerprint(config)
+
+        self.assertEqual(fingerprint, 'a' * 64)
+        self.assertEqual(
+            [c.kwargs['timeout'] for c in run.call_args_list],
+            list(timeouts),
+        )
+        for call, timeout in zip(run.call_args_list, timeouts, strict=True):
+            self.assertIn(f'ConnectTimeout={timeout}', call.args[0])
+
+    def test_fingerprint_check_reports_all_timeout_attempts(self) -> None:
+        config = make_config(values())
+        timeouts = remote.FINGERPRINT_SSH_TIMEOUTS
+        failures = [subprocess.TimeoutExpired(['ssh'], n) for n in timeouts]
+        with (
+            mock.patch('reccy.runtime.subprocess.run', side_effect=failures) as run,
+            self.assertRaisesRegex(SystemExit, 'timed out on all five attempts'),
+        ):
+            remote.applied_provisioning_fingerprint(config)
+
+        self.assertEqual(run.call_count, 5)
+
     def test_invalid_applied_fingerprint_stops_before_provisioning(self) -> None:
         config = make_config(values())
         with (
