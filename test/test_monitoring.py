@@ -120,6 +120,34 @@ class MonitoringTests(unittest.TestCase):
 
         self.assertEqual(len(calls), count)
 
+    def test_sampler_failure_stays_visible_and_does_not_stop_observer(self) -> None:
+        attempts = 0
+
+        class FailingSystemMonitor(SystemMonitor):
+            def status(self) -> models.SystemStatus:
+                nonlocal attempts
+                attempts += 1
+                raise RuntimeError('sensor failed')
+
+        with TemporaryDirectory() as directory:
+            monitor = PerformanceMonitor(
+                FailingSystemMonitor(),
+                lambda: snapshot(free=900),
+                directory=Path(directory),
+                sample_seconds=0.01,
+            )
+            monitor.start()
+            deadline = time.monotonic() + 1
+            while attempts < 2 and time.monotonic() < deadline:
+                time.sleep(0.01)
+            self.assertIsNotNone(monitor.thread)
+            self.assertTrue(monitor.thread.is_alive())
+            self.assertEqual(
+                monitor.observation_error,
+                'Performance sampling failed: sensor failed',
+            )
+            monitor.close()
+
 
 def system_status(*, cpu: float, memory: int) -> models.SystemStatus:
     return models.SystemStatus(

@@ -132,7 +132,21 @@ class PerformanceMonitor:
     def _run(self) -> None:
         next_sample = time.monotonic()
         while not self.stopped.is_set():
-            self.sample()
+            try:
+                self.sample()
+            except (
+                OSError,
+                ConnectionError,
+                TimeoutError,
+                RuntimeError,
+                TypeError,
+                ValidationError,
+                ValueError,
+            ) as error:
+                message = f'Performance sampling failed: {error}'
+                if message != self.observation_error:
+                    LOGGER.warning('%s', message)
+                self.observation_error = message
             next_sample += self.sample_seconds
             self.stopped.wait(max(0.0, next_sample - time.monotonic()))
 
