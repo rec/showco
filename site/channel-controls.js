@@ -9,38 +9,54 @@
     input.setCustomValidity("");
   }
 
+  function channelAction(fields) {
+    return showAction(fields).catch(error => {
+      if (!error.outcomeUnknown) throw error;
+      return requestStatus()
+        .then(status => {
+          updateChannels(status.recs.channels);
+          statusConnected();
+          error.observedStatus = status;
+        })
+        .catch(statusFailed)
+        .then(() => {throw error;});
+    });
+  }
+
   function saveTrackName(form) {
     const input = form.querySelector('[data-action="recs-track-name"]');
     if (!input) return Promise.resolve();
     if (input.value === form.dataset.savedTrackName) return Promise.resolve();
     const submittedName = input.value;
     input.setCustomValidity("");
-    return fetch("/actions", {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({
-        action: input.dataset.action,
-        device: form.dataset.device,
-        channel: form.dataset.channel,
-        track_name: submittedName,
-      }),
+    return channelAction({
+      action: input.dataset.action,
+      device: form.dataset.device,
+      channel: form.dataset.channel,
+      track_name: submittedName,
     })
-      .then(response => {
-        if (!response.ok) {
-          throw new Error(`track name request failed: ${response.status}`);
-        }
-        return response.json();
-      })
-      .then(result => {
-        if (!result.ok) throw new Error(result.message);
+      .then(() => {
         form.dataset.savedTrackName = submittedName;
       })
       .catch(error => {
-        input.setCustomValidity(error.message);
+        const observed = error.observedStatus?.recs.channels.find(channel =>
+          channel.device === form.dataset.device
+          && channel.channels.join(",") === form.dataset.channels,
+        );
+        if (observed) form.dataset.savedTrackName = observed.name;
+        if (error.outcomeUnknown && observed?.name === submittedName) return;
+        const message = error.outcomeUnknown && !observed
+          ? `${error.message} Reload this page before trying again.`
+          : error.message;
+        input.setCustomValidity(message);
         input.reportValidity();
+        if (error.outcomeUnknown && !observed) {
+          input.disabled = true;
+          const warning = document.createElement("small");
+          warning.setAttribute("role", "alert");
+          warning.textContent = message;
+          form.append(warning);
+        }
       });
   }
 
@@ -61,31 +77,19 @@
     const form = input.closest(".level");
     input.setCustomValidity("");
     input.disabled = true;
-    fetch("/actions", {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({
-        action: input.dataset.action,
-        device: form.dataset.device,
-        channels: form.dataset.channels,
-      }),
+    return channelAction({
+      action: input.dataset.action,
+      device: form.dataset.device,
+      channels: form.dataset.channels,
     })
-      .then(response => {
-        if (!response.ok) {
-          throw new Error(`stereo request failed: ${response.status}`);
-        }
-        return response.json();
-      })
-      .then(result => {
-        if (!result.ok) throw new Error(result.message);
+      .then(() => {
         return updateStatus();
       })
       .catch(error => {
-        input.checked = !input.checked;
-        input.disabled = false;
+        if (!error.outcomeUnknown) {
+          input.checked = !input.checked;
+          input.disabled = false;
+        }
         input.setCustomValidity(error.message);
         input.reportValidity();
       });
@@ -98,35 +102,24 @@
     button.setAttribute("aria-busy", "true");
     button.textContent = "Calibrating...";
     button.title = "";
-    fetch("/actions", {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({
-        action: button.dataset.action,
-        device: form.dataset.device,
-        channels: form.dataset.channels,
-      }),
+    return channelAction({
+      action: button.dataset.action,
+      device: form.dataset.device,
+      channels: form.dataset.channels,
     })
-      .then(response => {
-        if (!response.ok) {
-          throw new Error(`calibration request failed: ${response.status}`);
-        }
-        return response.json();
-      })
-      .then(result => {
-        if (!result.ok) throw new Error(result.message);
+      .then(() => {
         button.textContent = "Calibrated";
         return updateStatus();
       })
       .catch(error => {
-        button.textContent = "Calibration failed";
-        button.title = error.message;
+        button.textContent = error.outcomeUnknown ? "Calibration outcome unknown" : "Calibration failed";
+        button.title = error.outcomeUnknown
+          ? `${error.message} Reload this page to inspect state before trying again.`
+          : error.message;
+        if (error.outcomeUnknown) button.dataset.outcomeUnknown = "true";
       })
       .finally(() => {
-        button.disabled = false;
+        button.disabled = button.dataset.outcomeUnknown === "true";
         button.removeAttribute("aria-busy");
       });
   }
@@ -156,31 +149,27 @@
     }
     const savedValue = JSON.stringify(value);
     if (savedValue === attribute.dataset.savedValue) return;
-    fetch("/actions", {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({
-        action: "recs-set-attr",
-        address: attribute.dataset.address,
-        value: savedValue,
-      }),
+    return channelAction({
+      action: "recs-set-attr",
+      address: attribute.dataset.address,
+      value: savedValue,
     })
-      .then(response => {
-        if (!response.ok) {
-          throw new Error(`attribute request failed: ${response.status}`);
-        }
-        return response.json();
-      })
-      .then(result => {
-        if (!result.ok) throw new Error(result.message);
+      .then(() => {
         attribute.dataset.savedValue = savedValue;
       })
       .catch(error => {
-        input.setCustomValidity(error.message);
+        const message = error.outcomeUnknown
+          ? `${error.message} Reload this page to inspect the current value before trying again.`
+          : error.message;
+        input.setCustomValidity(message);
         input.reportValidity();
+        if (error.outcomeUnknown) {
+          input.disabled = true;
+          const warning = document.createElement("small");
+          warning.setAttribute("role", "alert");
+          warning.textContent = message;
+          attribute.append(warning);
+        }
       });
   }
 
