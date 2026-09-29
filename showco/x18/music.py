@@ -6,6 +6,7 @@ import threading
 import time
 from collections.abc import Callable, Sequence
 from contextlib import AbstractContextManager
+from math import isclose
 from pathlib import Path
 
 import numpy as np
@@ -45,23 +46,45 @@ class X18MusicRouting:
 
     def enable(self) -> None:
         with self.osc_factory(self.host, self.port) as osc:
-            osc.set(
-                f'/config/chlink/{self.source_channels[0]}-{self.source_channels[1]}', 0
+            self._set_confirmed(
+                osc,
+                f'/config/chlink/{self.source_channels[0]}-{self.source_channels[1]}',
+                0,
             )
             for channel in self.source_channels:
                 prefix = f'/ch/{channel:02}'
-                osc.set(f'{prefix}/config/rtnsrc', channel - 1)
-                osc.set(f'{prefix}/preamp/rtnsw', 1)
-                osc.set(f'{prefix}/mix/on', 1)
-                osc.set(f'{prefix}/mix/lr', 1)
-                osc.set(f'{prefix}/mix/fader', MUSIC_FADER)
+                self._set_confirmed(osc, f'{prefix}/config/rtnsrc', channel - 1)
+                self._set_confirmed(osc, f'{prefix}/preamp/rtnsw', 1)
+                self._set_confirmed(osc, f'{prefix}/mix/on', 1)
+                self._set_confirmed(osc, f'{prefix}/mix/lr', 1)
+                self._set_confirmed(osc, f'{prefix}/mix/fader', MUSIC_FADER)
 
     def disable(self) -> None:
+        errors: list[str] = []
         with self.osc_factory(self.host, self.port) as osc:
             for channel in self.source_channels:
-                osc.set(f'/ch/{channel:02}/preamp/rtnsw', 0)
-                osc.set(f'/ch/{channel:02}/mix/lr', 0)
-                osc.set(f'/ch/{channel:02}/mix/on', 0)
+                for path in (
+                    f'/ch/{channel:02}/preamp/rtnsw',
+                    f'/ch/{channel:02}/mix/lr',
+                    f'/ch/{channel:02}/mix/on',
+                ):
+                    try:
+                        self._set_confirmed(osc, path, 0)
+                    except (OSError, TimeoutError, ValueError) as error:
+                        errors.append(f'{path}: {error}')
+        if errors:
+            raise ValueError(
+                'Music returns could not be confirmed muted: ' + '; '.join(errors)
+            )
+
+    @staticmethod
+    def _set_confirmed(osc: OscControl, path: str, value: int | float) -> None:
+        osc.set(path, value)
+        observed = osc.query(path)
+        if not isinstance(observed, int | float) or not isclose(
+            observed, value, rel_tol=0, abs_tol=1e-5
+        ):
+            raise ValueError(f'X18 did not apply {path}={value}; observed {observed}')
 
 
 class MusicPlayer:

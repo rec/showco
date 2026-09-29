@@ -120,19 +120,43 @@ def test_stop_fades_music_then_shuts_down_the_pi() -> None:
     assert value.status().mode == 'stopped'
 
 
-def test_failed_recording_command_leaves_mode_unchanged() -> None:
-    value, recs, _, _ = controller()
+def test_failed_recording_command_mutes_returns_and_reports_completed_steps() -> None:
+    value, recs, player, routing = controller()
     recs.action.return_value = models.ActionResult(ok=False, message='recs offline')
 
-    with pytest.raises(ValueError, match='recs offline'):
+    with pytest.raises(
+        ValueError, match='record failed at new recs session started: recs offline'
+    ) as error:
         value.record()
 
-    assert value.status().mode == 'stopped'
+    assert value.status().mode == 'fault'
+    assert 'Completed: music stopped, music returns muted' in str(error.value)
+    assert 'mute music returns' in str(error.value)
+    assert value.status().error == str(error.value)
+    routing.disable.assert_called()
+    player.stop.assert_any_call(0)
+
+
+def test_failed_setup_routing_mutes_music_returns() -> None:
+    value, _, player, routing = controller()
+    routing.enable.side_effect = TimeoutError('X18 did not reply')
+
+    with pytest.raises(
+        ValueError, match='setup failed at music returns enabled'
+    ) as error:
+        value.setup()
+
+    assert 'Completed: streamO stopped, recs paused, setup music started' in str(
+        error.value
+    )
+    routing.disable.assert_called_once_with()
+    player.stop.assert_called_once_with(0)
 
 
 class FakeOsc:
     def __init__(self) -> None:
         self.values: list[tuple[str, object]] = []
+        self.applied: dict[str, object] = {}
 
     def __enter__(self) -> FakeOsc:
         return self
@@ -140,11 +164,12 @@ class FakeOsc:
     def __exit__(self, *args: object) -> None:
         return None
 
-    def query(self, path: str) -> str:
-        return ''
+    def query(self, path: str) -> object:
+        return self.applied[path]
 
     def set(self, path: str, value: object) -> None:
         self.values.append((path, value))
+        self.applied[path] = value
 
 
 def test_x18_music_routing_uses_usb_returns_on_main_lr_and_mutes_them() -> None:
@@ -175,6 +200,27 @@ def test_x18_music_routing_uses_usb_returns_on_main_lr_and_mutes_them() -> None:
         ('/ch/18/mix/lr', 0),
         ('/ch/18/mix/on', 0),
     ]
+
+
+def test_x18_music_routing_checks_readback_and_mutes_every_return() -> None:
+    osc = FakeOsc()
+    routing = x18_music.X18MusicRouting(
+        '10.0.0.18', 10_024, [17, 18], osc_factory=lambda host, port: osc
+    )
+    observed = osc.query
+
+    def stale_readback(path: str) -> object:
+        if path == '/ch/17/preamp/rtnsw':
+            return 1
+        return observed(path)
+
+    osc.query = stale_readback
+
+    with pytest.raises(ValueError, match='could not be confirmed muted'):
+        routing.disable()
+
+    assert ('/ch/18/mix/on', 0) in osc.values
+    assert len(osc.values) == 6
 
 
 def test_music_skips_non_audio_files_and_reports_failed_decoder(
