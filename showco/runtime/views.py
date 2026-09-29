@@ -448,6 +448,8 @@ def _stereo_enabled(
 
 
 def _recording_text(status: models.ShowStatus) -> str:
+    if status.recs.service.state != 'connected':
+        return 'recording state unavailable'
     if not status.recs.recording:
         return 'stopped'
     elapsed = _duration(status.recs.elapsed_seconds)

@@ -15,7 +15,13 @@ class ProgressMonitor:
         self.advanced_at: float | None = None
 
     def observe(self, recs: models.RecsStatus) -> models.RecordingProgress:
-        if not recs.recording or recs.paused or not recs.service.fresh:
+        if not recs.service.fresh:
+            self.recorded_seconds = None
+            self.advanced_at = None
+            return models.RecordingProgress(
+                ok=False, message='recording progress unavailable'
+            )
+        if not recs.recording or recs.paused:
             self.recorded_seconds = None
             self.advanced_at = None
             return models.RecordingProgress(ok=False, message='not recording')

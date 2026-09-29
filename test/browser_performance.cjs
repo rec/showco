@@ -58,7 +58,7 @@ async function test() {
     vm.runInContext(fs.readFileSync(`site/${file}`, 'utf8'), context);
   }
   await flush();
-  assert.match(elements.get('performance-recording').textContent, /recording requested/);
+  assert.match(elements.get('performance-recording').textContent, /recording reported active/);
   assert.match(elements.get('performance-disk').textContent, /recordings/);
   assert.ok(actionButtons.every(button => !button.disabled));
   assert.match(elements.get('performance-lock-state').textContent, /protected actions locked/);

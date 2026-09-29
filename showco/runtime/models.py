@@ -84,6 +84,7 @@ class PlaybackStatus(BaseModel, frozen=True):
 
 class RecsStatus(BaseModel, frozen=True):
     service: ServiceStatus
+    snapshot_available: bool = False
     recording: bool = False
     paused: bool = False
     elapsed_seconds: float | None = None

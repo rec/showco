@@ -34,7 +34,7 @@ document.getElementById('dim-display').addEventListener('change', event => {
 function renderPerformance(status) {
   const recs = status.recs;
   document.getElementById('performance-recording').textContent =
-    `recs ${recs.service.state}; recording ${recs.paused ? 'paused' : recs.recording ? 'requested' : 'stopped'}`;
+    `recs ${recs.service.state}; recording ${recs.service.state !== 'connected' ? 'state unavailable' : recs.paused ? 'paused' : recs.recording ? 'reported active' : 'stopped'}`;
   const disk = recs.disk;
   document.getElementById('performance-disk').textContent = disk
     ? `${disk.path}: ${(disk.free_bytes / 1073741824).toFixed(1)} GiB free; ${disk.estimated_seconds_remaining === null ? 'remaining time unknown' : Math.floor(disk.estimated_seconds_remaining / 60) + ' minutes estimated remaining'}`

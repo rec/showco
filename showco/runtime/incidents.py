@@ -153,7 +153,9 @@ def fault_details(status: models.ShowStatus) -> list[tuple[str, str, str]]:
 def states(status: models.ShowStatus) -> dict[str, str]:
     disk = status.recs.disk
     recording = (
-        'paused'
+        'unknown'
+        if status.recs.service.state != 'connected'
+        else 'paused'
         if status.recs.paused
         else 'recording'
         if status.recs.recording
