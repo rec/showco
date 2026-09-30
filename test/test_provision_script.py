@@ -127,6 +127,7 @@ class ProvisionScriptTests(unittest.TestCase):
 
     def test_remote_script_uses_locked_uv_run(self) -> None:
         self.assertIn('uv run --locked showco run network-config', script.REMOTE_SCRIPT)
+        self.assertIn("--ssh-peer '${SSH_CLIENT%% *}'", script.REMOTE_SCRIPT)
         self.assertIn('uv run --locked recs daemon install', script.REMOTE_SCRIPT)
         self.assertIn('uv run --locked streamo daemon install', script.REMOTE_SCRIPT)
         self.assertIn('uv run --locked lyte installation install', script.REMOTE_SCRIPT)
