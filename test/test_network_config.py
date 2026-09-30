@@ -141,19 +141,39 @@ class NetworkConfigTests(unittest.TestCase):
             ],
         )
 
-    def test_private_hotspot_rejects_only_connected_wifi_interfaces(self) -> None:
+    def test_private_hotspot_rejects_interface_carrying_ssh(self) -> None:
         config = make_network_config(topology=network_config.NetworkTopology.PRIVATE)
         assignment = network_config.assign_wifi(
             [network_config.WifiInterface(name='wlan0', connected=True)],
             swap_wifi=False,
         )
 
-        with self.assertRaisesRegex(SystemExit, 'no unconnected Wi-Fi interface'):
+        with self.assertRaisesRegex(SystemExit, 'carrying SSH'):
             network_config.network_commands(
-                config, assignment, network_config.NetworkTopology.PRIVATE
+                config, assignment, network_config.NetworkTopology.PRIVATE, 'wlan0'
             )
 
-    def test_swap_cannot_select_connected_wifi_for_private_hotspot(self) -> None:
+    def test_private_hotspot_in_use_by_ssh_is_not_replaced(self) -> None:
+        assignment = network_config.assign_wifi(
+            [
+                network_config.WifiInterface(
+                    name='wlan0', connected=True, connection='showco-private'
+                ),
+                network_config.WifiInterface(name='wlan1'),
+            ],
+            swap_wifi=False,
+            protected_interface='wlan0',
+        )
+
+        with self.assertRaisesRegex(SystemExit, 'SSH is using the private hotspot'):
+            network_config.network_commands(
+                make_network_config(x18=False),
+                assignment,
+                network_config.NetworkTopology.PRIVATE,
+                'wlan0',
+            )
+
+    def test_swap_uses_other_wifi_when_preferred_interface_carries_ssh(self) -> None:
         config = make_network_config(topology=network_config.NetworkTopology.PRIVATE)
         assignment = network_config.assign_wifi(
             [
@@ -161,12 +181,70 @@ class NetworkConfigTests(unittest.TestCase):
                 network_config.WifiInterface(name='wlan1', connected=True),
             ],
             swap_wifi=True,
+            protected_interface='wlan1',
         )
 
-        with self.assertRaisesRegex(SystemExit, 'no unconnected Wi-Fi interface'):
-            network_config.network_commands(
-                config, assignment, network_config.NetworkTopology.PRIVATE
+        commands = network_config.network_commands(
+            config, assignment, network_config.NetworkTopology.PRIVATE, 'wlan1'
+        )
+        self.assertEqual(assignment.primary.name, 'wlan0')
+        self.assertIn('ifname wlan0', commands[0][2])
+
+    def test_connected_non_ssh_wifi_is_disconnected_before_hotspot(self) -> None:
+        assignment = network_config.assign_wifi(
+            [
+                network_config.WifiInterface(
+                    name='wlan0', connected=True, connection='Venue'
+                ),
+                network_config.WifiInterface(
+                    name='wlan1', connected=True, connection='Livebox'
+                ),
+            ],
+            swap_wifi=False,
+            protected_interface='wlan1',
+        )
+
+        commands = network_config.network_commands(
+            make_network_config(x18=False, external_wifi_name='Livebox'),
+            assignment,
+            network_config.NetworkTopology.MIXED,
+            'wlan1',
+        )
+        self.assertEqual(
+            commands[0], ['sudo', 'nmcli', 'device', 'disconnect', 'wlan0']
+        )
+        self.assertEqual(commands[1][5:7], ['ifname', 'wlan0'])
+
+    def test_network_config_preserves_ssh_wifi_and_releases_other_connection(
+        self,
+    ) -> None:
+        commands: list[list[str]] = []
+
+        def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+            commands.append(list(command))
+            if command[0] == 'ip':
+                return subprocess.CompletedProcess(
+                    command, 0, '192.168.1.10 dev wlan1 src 192.168.1.21', ''
+                )
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                'wlan0:wifi:connected:Venue\nwlan1:wifi:connected:Livebox\n',
+                '',
             )
+
+        output = StringIO()
+        network_config.configure_network(
+            make_network_config(x18=False),
+            dry_run=True,
+            ssh_peer='192.168.1.10',
+            run_command=run_command,
+            output=output,
+        )
+
+        self.assertEqual(commands[1], ['ip', '-o', 'route', 'get', '192.168.1.10'])
+        self.assertIn('sudo nmcli device disconnect wlan0', output.getvalue())
+        self.assertNotIn('disconnect wlan1', output.getvalue())
 
     def test_x18_bridge_includes_ethernet_and_wifi_ports(self) -> None:
         commands = network_config.network_commands(

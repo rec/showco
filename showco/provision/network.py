@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import enum
 import ipaddress
+import os
 import shlex
 import sys
 from collections.abc import Callable, Sequence
@@ -54,6 +55,7 @@ class NetworkConfigOptions(BaseModel, frozen=True):
     ] = DEFAULT_CONFIG_PATH
     secrets: Path = DEFAULT_SECRETS_PATH
     dry_run: bool = False
+    ssh_peer: str = ''
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -66,21 +68,32 @@ def main(argv: list[str] | None = None) -> int:
 
 def configure_network_from_paths(options: NetworkConfigOptions) -> int:
     values = config.load_values(options.config_path, options.secrets)
-    return configure_network(config.config_from_values(values), dry_run=options.dry_run)
+    return configure_network(
+        config.config_from_values(values),
+        dry_run=options.dry_run,
+        ssh_peer=options.ssh_peer,
+    )
 
 
 def configure_network(
     provision_config: config.Config,
     *,
     dry_run: bool = False,
+    ssh_peer: str = '',
     run_command: RunCommand | None = None,
     output: TextIO = sys.stdout,
 ) -> int:
     run_command = run_command or run
     interfaces = detect_wifi_interfaces(run_command)
-    assignment = assign_wifi(interfaces, provision_config.network.swap_wifi)
+    peer = ssh_peer or os.environ.get('SSH_CLIENT', '').split(' ')[0]
+    protected_interface = ssh_route_interface(run_command, peer) if peer else ''
+    assignment = assign_wifi(
+        interfaces, provision_config.network.swap_wifi, protected_interface
+    )
     topology = select_topology(provision_config, assignment.secondary is not None)
-    commands = network_commands(provision_config, assignment, topology)
+    commands = network_commands(
+        provision_config, assignment, topology, protected_interface
+    )
     for command in commands:
         print(shell_command(command), file=output)
         if not dry_run:
@@ -135,7 +148,23 @@ def split_nmcli_terse_fields(line: str) -> list[str]:
     return fields
 
 
-def assign_wifi(interfaces: list[WifiInterface], swap_wifi: bool) -> WifiAssignment:
+def ssh_route_interface(run_command: RunCommand, peer: str) -> str:
+    completed = run_command(['ip', '-o', 'route', 'get', peer])
+    if completed.returncode != 0:
+        sys.exit(completed.stderr.strip() or 'ERROR: cannot identify SSH network route')
+    return route_interface(completed.stdout)
+
+
+def route_interface(route: str) -> str:
+    fields = route.split()
+    if 'dev' not in fields or fields.index('dev') + 1 == len(fields):
+        sys.exit('ERROR: cannot identify interface carrying SSH')
+    return fields[fields.index('dev') + 1]
+
+
+def assign_wifi(
+    interfaces: list[WifiInterface], swap_wifi: bool, protected_interface: str = ''
+) -> WifiAssignment:
     if not interfaces:
         sys.exit('ERROR: No Wi-Fi interfaces found')
     ordered = list(interfaces)
@@ -151,6 +180,11 @@ def assign_wifi(interfaces: list[WifiInterface], swap_wifi: bool) -> WifiAssignm
     ):
         ordered.remove(private_wifi)
         ordered.insert(0, private_wifi)
+    if ordered[0].name == protected_interface:
+        alternative = next((i for i in ordered if i.name != protected_interface), None)
+        if alternative is not None:
+            ordered.remove(alternative)
+            ordered.insert(0, alternative)
     primary = ordered[0]
     secondary = ordered[1] if len(ordered) > 1 else None
     return WifiAssignment(primary=primary, secondary=secondary)
@@ -180,6 +214,7 @@ def network_commands(
     provision_config: config.Config,
     assignment: WifiAssignment,
     topology: NetworkTopology,
+    protected_interface: str = '',
 ) -> list[list[str]]:
     if (
         provision_config.network.restrict_external_ingress
@@ -191,13 +226,22 @@ def network_commands(
         )
     if topology == NetworkTopology.MIXED and assignment.secondary is None:
         sys.exit('ERROR: mixed network topology requires a secondary Wi-Fi interface')
-    if (
-        topology != NetworkTopology.PUBLIC
-        and assignment.primary.connected
-        and assignment.primary.connection != PRIVATE_WIFI_CONNECTION
+    if topology != NetworkTopology.PUBLIC and any(
+        i.name == protected_interface and i.connection == PRIVATE_WIFI_CONNECTION
+        for i in (assignment.primary, assignment.secondary)
+        if i is not None
     ):
         sys.exit(
-            'ERROR: no unconnected Wi-Fi interface is available for the private hotspot'
+            'ERROR: SSH is using the private hotspot; reconnect SSH through '
+            'another interface before provisioning its Wi-Fi'
+        )
+    if (
+        topology != NetworkTopology.PUBLIC
+        and assignment.primary.name == protected_interface
+    ):
+        sys.exit(
+            'ERROR: cannot use the Wi-Fi interface carrying SSH for the private '
+            'hotspot; connect through another interface first'
         )
     if topology in (NetworkTopology.PUBLIC, NetworkTopology.MIXED):
         require_external_network(provision_config)
@@ -207,10 +251,15 @@ def network_commands(
         commands.append(x18_ethernet_command(provision_config))
     if topology == NetworkTopology.PUBLIC:
         return commands
+    if (
+        assignment.primary.connected
+        and assignment.primary.connection != PRIVATE_WIFI_CONNECTION
+    ):
+        commands.append(nmcli_command('device', 'disconnect', assignment.primary.name))
     if x18_network is not None:
         commands.append(x18_bridge_command(provision_config, assignment.primary))
         return commands
-    commands = [private_wifi_command(provision_config, assignment.primary)]
+    commands.append(private_wifi_command(provision_config, assignment.primary))
     if config.internal_wifi(provision_config).password:
         commands.extend(
             [

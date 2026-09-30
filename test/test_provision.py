@@ -140,14 +140,17 @@ class ProvisionTests(unittest.TestCase):
 
         self.assertTrue(provision_remote.call_args.kwargs['upgrade'])
 
-    def test_network_preflight_rejects_connected_hotspot_interface(self) -> None:
+    def test_network_preflight_rejects_ssh_interface_as_hotspot(self) -> None:
         config = make_config(values(networks=networks(x18=False)))
         with (
             mock.patch(
                 'showco.provision.ssh.capture_ssh',
-                return_value='wlan0:wifi:connected\n',
+                side_effect=[
+                    'wlan0:wifi:connected\n',
+                    '192.168.1.10 dev wlan0 src 192.168.1.21',
+                ],
             ),
-            self.assertRaisesRegex(SystemExit, 'no unconnected Wi-Fi interface'),
+            self.assertRaisesRegex(SystemExit, 'carrying SSH'),
         ):
             remote.preflight_network(config)
 
@@ -155,13 +158,18 @@ class ProvisionTests(unittest.TestCase):
         config = make_config(values(networks=networks(x18=False)))
         with mock.patch(
             'showco.provision.ssh.capture_ssh',
-            return_value='wlan0:wifi:disconnected\nwlan1:wifi:connected\n',
+            side_effect=[
+                'wlan0:wifi:disconnected\nwlan1:wifi:connected\n',
+                '192.168.1.10 dev wlan1 src 192.168.1.21',
+            ],
         ) as capture_ssh:
             topology = remote.preflight_network(config)
 
-        capture_ssh.assert_called_once_with(
-            config,
-            'nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device status',
+        self.assertEqual(
+            capture_ssh.call_args_list[0].args, (config, remote.WIFI_STATUS_COMMAND)
+        )
+        self.assertEqual(
+            capture_ssh.call_args_list[1].args, (config, remote.SSH_ROUTE_COMMAND)
         )
         self.assertEqual(topology, network_config.NetworkTopology.PRIVATE)
 
@@ -169,9 +177,10 @@ class ProvisionTests(unittest.TestCase):
         config = make_config(values(networks=networks(x18=False)))
         with mock.patch(
             'showco.provision.ssh.capture_ssh',
-            return_value=(
-                'wlan0:wifi:connected:Livebox\nwlan1:wifi:connected:showco-private\n'
-            ),
+            side_effect=[
+                'wlan0:wifi:connected:Livebox\nwlan1:wifi:connected:showco-private\n',
+                '192.168.1.10 dev wlan0 src 192.168.1.21',
+            ],
         ):
             topology = remote.preflight_network(config)
 

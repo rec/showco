@@ -18,6 +18,7 @@ REMOTE_PROVISION_TIMEOUT_SECONDS = 1_800
 PROVISIONING_FINGERPRINT_NAME = 'provisioning-fingerprint'
 FINGERPRINT_SSH_TIMEOUTS = (1, 2, 4, 8, 16)
 WIFI_STATUS_COMMAND = 'nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device status'
+SSH_ROUTE_COMMAND = 'test -n "$SSH_CLIENT" && ip -o route get "${SSH_CLIENT%% *}"'
 PASSWORDLESS_SUDO_COMMAND = (
     'sudo -n true || { '
     "echo 'ERROR: passwordless sudo is required. Prepare the SD card with "
@@ -97,11 +98,17 @@ def preflight_network(
     print(f'Checking Wi-Fi interfaces on {provision_config.ssh_target}...')
     status = ssh.capture_ssh(provision_config, WIFI_STATUS_COMMAND)
     interfaces = network.wifi_interfaces_from_status(status)
-    assignment = network.assign_wifi(interfaces, provision_config.network.swap_wifi)
+    route = ssh.capture_ssh(provision_config, SSH_ROUTE_COMMAND)
+    protected_interface = network.route_interface(route)
+    assignment = network.assign_wifi(
+        interfaces, provision_config.network.swap_wifi, protected_interface
+    )
     topology = network.select_topology(
         provision_config, assignment.secondary is not None
     )
-    network.network_commands(provision_config, assignment, topology)
+    network.network_commands(
+        provision_config, assignment, topology, protected_interface
+    )
     return topology
 
 
