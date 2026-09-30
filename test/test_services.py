@@ -49,7 +49,7 @@ class ServicesTests(unittest.TestCase):
                 control_endpoint=Path(directory) / 'gui.sock',
             )
             controller = mock.Mock()
-            controller.install.return_value = StatusResult(installed=True, running=True)
+            controller.status.return_value = StatusResult(installed=True, running=True)
             with (
                 mock.patch(
                     'showco.runtime.services.paths.current_platform',
@@ -78,7 +78,7 @@ class ServicesTests(unittest.TestCase):
 
     def test_install_showco_service_allows_an_inactive_new_unit(self) -> None:
         controller = mock.Mock()
-        controller.install.return_value = StatusResult(installed=True, running=None)
+        controller.status.return_value = StatusResult(installed=True, running=None)
         with (
             mock.patch(
                 'showco.runtime.services.paths.current_platform',
@@ -117,7 +117,7 @@ class ServicesTests(unittest.TestCase):
                 'control_endpoint': '/tmp/recs-gui.sock',
             }
         )
-        controller.install.return_value = StatusResult(installed=True, running=True)
+        controller.status.return_value = StatusResult(installed=True, running=True)
         registry = mock.Mock()
         registry.controller.return_value = controller
         with mock.patch(
@@ -168,7 +168,7 @@ class ServicesTests(unittest.TestCase):
 
     def test_restart_streamo_service_uses_service_registry(self) -> None:
         registry = mock.Mock()
-        registry.controller.return_value.restart.return_value = StatusResult(
+        registry.controller.return_value.status.return_value = StatusResult(
             installed=True,
             running=True,
         )

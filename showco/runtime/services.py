@@ -54,7 +54,7 @@ def install_showco_service(
 ) -> int:
     gui_schema.load_gui(gui)
     daemon = ShowcoDaemon(platform=paths.current_platform())
-    result = daemon.install_service(
+    daemon.install_service(
         [
             'run',
             *showco_args(
@@ -67,6 +67,7 @@ def install_showco_service(
             ),
         ]
     )
+    result = daemon.service_status()
     controller.print_service_status('showco', result)
     return 0 if result.installed else 1
 
@@ -93,7 +94,9 @@ def showco_args(
 def restart_service(name: str) -> models.ActionResult:
     if name not in {'recs', 'lyte', 'streamo'}:
         raise ValueError('Unsupported restart service')
-    result = service_registry().controller(name).restart()
+    controller = service_registry().controller(name)
+    controller.restart()
+    result = controller.status()
     if result.running:
         return models.ActionResult(ok=True, message=f'{name} restart requested')
     return models.ActionResult(ok=False, message=f'{name} service did not start')
@@ -105,7 +108,8 @@ def refresh_service_definition(
 ) -> StatusResult:
     controller = service_registry(runner=runner).controller(name)
     metadata = DaemonMetadata.model_validate_json(controller.paths.metadata.read_text())
-    return controller.install(metadata)
+    controller.install(metadata)
+    return controller.status()
 
 
 def service_registry(
