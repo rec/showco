@@ -270,9 +270,9 @@ def run_service_step(
             runner=service_runner(run_command)
         ).controller(service_name)
         if step == 'stop':
-            result = controller.stop()
+            controller.stop()
         elif step == 'start':
-            result = controller.start()
+            controller.start()
         elif step == 'refresh':
             result = services.refresh_service_definition(
                 service_name, runner=service_runner(run_command)
@@ -285,6 +285,8 @@ def run_service_step(
                 returncode=2,
                 output=f'unsupported service step {step}',
             )
+        if step != 'refresh':
+            result = controller.status()
     except FileNotFoundError as e:
         return StepResult(
             program=service_name,
