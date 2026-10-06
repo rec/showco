@@ -3,7 +3,7 @@ from __future__ import annotations
 import shlex
 import subprocess
 import unittest
-from io import StringIO
+from io import BytesIO, StringIO
 from pathlib import Path
 from unittest import mock
 
@@ -229,9 +229,9 @@ class ProvisionTests(unittest.TestCase):
             text=True,
         )
 
-    def test_streamed_command_output_is_displayed_on_success(self) -> None:
+    def test_successful_remote_command_hides_detailed_output(self) -> None:
         process = mock.Mock()
-        process.stdout = StringIO('==> installing services\ncompleted\n')
+        process.stdout = BytesIO(b'==> installing services\ncompleted\n')
         process.wait.return_value = 0
         process.poll.return_value = 0
         terminal = StringIO()
@@ -242,14 +242,33 @@ class ProvisionTests(unittest.TestCase):
             result = ssh.run_command(['ssh'])
 
         self.assertEqual(result.returncode, 0)
-        self.assertEqual(terminal.getvalue(), '==> installing services\ncompleted\n')
+        self.assertEqual(terminal.getvalue(), '')
         self.assertTrue(process.stdout.closed)
+
+    def test_remote_progress_shows_step_without_detailed_output(self) -> None:
+        class Terminal(StringIO):
+            def isatty(self) -> bool:
+                return True
+
+        process = mock.Mock()
+        process.stdout = BytesIO(b'==> installing services\nverbose details\n')
+        process.wait.return_value = 0
+        process.poll.return_value = 0
+        terminal = Terminal()
+        with (
+            mock.patch.object(ssh, 'Popen', return_value=process),
+            mock.patch('sys.stdout', terminal),
+        ):
+            self.assertEqual(ssh.run_command(['ssh']).returncode, 0)
+        self.assertIn('installing services', terminal.getvalue())
+        self.assertIn('\r', terminal.getvalue())
+        self.assertNotIn('verbose details', terminal.getvalue())
 
     def test_interrupted_ssh_keeps_partial_output_and_closes_process(self) -> None:
         for error in (KeyboardInterrupt(), subprocess.TimeoutExpired(['ssh'], 20)):
             with self.subTest(error=type(error).__name__):
                 process = mock.Mock()
-                process.stdout = StringIO('==> configuring Wi-Fi\n')
+                process.stdout = BytesIO(b'==> configuring Wi-Fi\n')
                 process.wait.side_effect = [error, 0]
                 process.poll.return_value = None
                 terminal = StringIO()

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import shutil
 import sys
+import tempfile
 import time
+from io import TextIOWrapper
 from pathlib import Path
 from subprocess import (
     PIPE,
@@ -15,6 +18,7 @@ from threading import Thread
 from typing import cast
 
 from reccy.runtime import subprocess
+from tqdm import tqdm
 
 from . import config
 
@@ -260,26 +264,43 @@ def run_command(
             command,
             stdout=PIPE,
             stderr=STDOUT,
-            text=True,
             start_new_session=True,
         )
         assert process.stdout is not None
+        returncode = None
+        with (
+            TextIOWrapper(process.stdout, newline='') as stream,
+            tempfile.TemporaryFile(mode='w+t', newline='') as record,
+            tqdm(
+                desc='Running remote command',
+                bar_format='{desc} [{elapsed}]',
+                file=sys.stdout,
+                disable=not sys.stdout.isatty(),
+                leave=False,
+            ) as progress,
+        ):
 
-        def display_output() -> None:
-            assert process.stdout is not None
-            for line in process.stdout:
-                print(line, end='', flush=True)
+            def collect_output() -> None:
+                for line in stream:
+                    record.write(line)
+                    if line.startswith('==> '):
+                        progress.set_description_str(line[4:].strip())
 
-        reader = Thread(target=display_output)
-        reader.start()
-        try:
-            returncode = process.wait(timeout=timeout_seconds)
-        finally:
-            if process.poll() is None:
-                process.kill()
-                process.wait()
-            reader.join()
-            process.stdout.close()
+            reader = Thread(target=collect_output)
+            reader.start()
+            try:
+                returncode = process.wait(timeout=timeout_seconds)
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait()
+                reader.join()
+                progress.close()
+                if returncode != 0:
+                    record.flush()
+                    record.seek(0)
+                    shutil.copyfileobj(record, sys.stdout)
+                    sys.stdout.flush()
         if returncode != 0:
             raise CalledProcessError(returncode, command)
         return CompletedProcess(command, returncode)

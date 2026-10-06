@@ -109,7 +109,7 @@ def main(argv: list[str] | None = None) -> int:
     ERROR_LOG_PATH.unlink(missing_ok=True)
     logging.configure()
     arguments = sys.argv[1:] if argv is None else argv
-    with tempfile.TemporaryFile(mode='w+t') as record:
+    with tempfile.TemporaryFile(mode='w+t', newline='') as record:
         with (
             redirect_stdout(_Tee(sys.stdout, record)),
             redirect_stderr(_Tee(sys.stderr, record)),
@@ -143,8 +143,12 @@ def main(argv: list[str] | None = None) -> int:
                 getLogger().removeHandler(handler)
                 handler.close()
                 error = sys.exception()
-                if status != 0 or error is not None:
+                if isinstance(error, SystemExit) and error.code in (None, 0):
+                    ERROR_LOG_PATH.unlink(missing_ok=True)
+                elif status != 0 or error is not None:
                     _append_error_report(record, status, error)
+                else:
+                    ERROR_LOG_PATH.unlink(missing_ok=True)
             return status
 
 
@@ -206,7 +210,7 @@ def _append_error_report(
         descriptor = os.open(
             ERROR_LOG_PATH, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600
         )
-        with os.fdopen(descriptor, 'a') as output:
+        with os.fdopen(descriptor, 'a', newline='') as output:
             output.write(f'\n--- showCo failure {datetime.now(UTC).isoformat()} ---\n')
             record.flush()
             record.seek(0)
