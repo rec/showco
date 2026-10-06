@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shlex
 import subprocess
 import tomllib
 import unittest
@@ -13,6 +14,30 @@ from showco.provision import remote, script
 
 
 class ProvisionScriptTests(unittest.TestCase):
+    def test_remote_command_quotes_repeated_target_audio_paths(self) -> None:
+        source = Path("/mnt/audio/performer's tracks/$intro.flac")
+        parsed = make_config(values()).model_copy(
+            update={
+                'audio': [Path('/mnt/audio/common'), source],
+                'setup': [Path('/mnt/audio/open')],
+            }
+        )
+        command = script.remote_command(parsed, '/tmp/provision.sh')
+        assignment = next(
+            a for a in shlex.split(command) if a.startswith('SHOWCO_AUDIO_ARGS=')
+        )
+        self.assertEqual(
+            shlex.split(assignment.partition('=')[2]),
+            [
+                '--audio',
+                '/mnt/audio/common',
+                '--audio',
+                str(source),
+                '--setup',
+                '/mnt/audio/open',
+            ],
+        )
+
     def test_remote_script_is_removed_after_remote_failure(self) -> None:
         config = make_config(values(networks=networks(x18=False)))
         original_error = subprocess.CalledProcessError(1, ['ssh', 'provision'])

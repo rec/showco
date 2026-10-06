@@ -11,6 +11,36 @@ from showco.provision import provision
 
 
 class DeployTests(unittest.TestCase):
+    def test_audio_paths_check_provisioning_configuration_even_with_autosquash(
+        self,
+    ) -> None:
+        provision_config = mock.Mock(ssh_target='tom@t.local')
+        with (
+            mock.patch(
+                'showco.provision.provision.resolved_config',
+                return_value=provision_config,
+            ),
+            mock.patch(
+                'showco.provision.state.provisioning_fingerprint', return_value='new'
+            ),
+            mock.patch(
+                'showco.provision.remote.applied_provisioning_fingerprint',
+                return_value='old',
+            ),
+            mock.patch(
+                'showco.provision.provision.run', return_value=0
+            ) as provision_target,
+            mock.patch(
+                'showco.deployment.local_update.update_from_provisioning_machine'
+            ) as update_target,
+        ):
+            options = self.options(audio=[Path('/mnt/audio')], autosquash=100)
+            self.assertEqual(deploy.run(options), 0)
+        provision_target.assert_called_once_with(
+            options, provision_config=provision_config
+        )
+        update_target.assert_not_called()
+
     def options(
         self, *, upgrade: bool = False, **kwargs: object
     ) -> provision.DeployOptions:

@@ -12,6 +12,7 @@ showco_args() {
     args+=(--lyte-enabled)
   fi
   printf '%q ' "${args[@]}"
+  printf '%s ' "$SHOWCO_AUDIO_ARGS"
 }
 
 user_systemctl() {
@@ -93,6 +94,7 @@ $SHOWCO_PORT
 $STREAMO_ENABLED
 $LYTE_ENABLED
 $SHOWCO_GUI_PATH
+$SHOWCO_AUDIO_ARGS
 $SHOWCO_MIXERS_TOML")
   if service_is_current showco "$input"; then
     printf 'showCo service is already installed.\n'

@@ -39,6 +39,31 @@ class ServicesTests(unittest.TestCase):
             ],
         )
 
+    def test_service_arguments_preserve_repeated_audio_sources(self) -> None:
+        arguments = services.showco_args(
+            '0.0.0.0',
+            17352,
+            None,
+            False,
+            False,
+            audio=[Path('/media/common'), Path('/media/intro.flac')],
+            setup=[Path('/media/open')],
+            teardown=[Path('/media/close')],
+        )
+        self.assertEqual(
+            arguments[-8:],
+            [
+                '--audio',
+                '/media/common',
+                '--audio',
+                '/media/intro.flac',
+                '--setup',
+                '/media/open',
+                '--teardown',
+                '/media/close',
+            ],
+        )
+
     def test_install_showco_service_uses_reccy_controller(self) -> None:
         with TemporaryDirectory() as directory:
             paths = ServicePaths(

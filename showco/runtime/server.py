@@ -350,6 +350,8 @@ def make_server(
     lyte: LyteClient | None = None,
     performance_enabled: bool = False,
     mixer_specs: list[MixerSpec] | None = None,
+    setup: list[Path] | None = None,
+    teardown: list[Path] | None = None,
 ) -> ThreadingHTTPServer:
     handler = type('ConfiguredShowcoHandler', (ShowcoHandler,), {})
     recs_client = recs or RecsClient()
@@ -388,6 +390,8 @@ def make_server(
             mixer_specs or [],
             streamo_client,
             streamo_restart_action if streamo_enabled else None,
+            setup=setup,
+            teardown=teardown,
         ),
         state_directory=Path.home() / '.local/state/showco'
         if performance_enabled
