@@ -9,7 +9,7 @@ from unittest import mock
 
 from update_helpers import make_config
 
-from showco.deployment import update
+from showco.deployment import bootstrap, update
 
 
 class UpdateTests(unittest.TestCase):
@@ -76,7 +76,7 @@ class UpdateTests(unittest.TestCase):
     def test_remote_step_reports_remote_output(self) -> None:
         command = ['ssh', 'tom@bertrand.local', 'showco deploy']
         with mock.patch(
-            'showco.deployment.update.subprocess.run',
+            'showco.deployment.update.run',
             return_value=subprocess.CompletedProcess(
                 command,
                 1,
@@ -88,6 +88,19 @@ class UpdateTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 1)
         self.assertEqual(result.output, 'target output\ntarget error\n')
+
+    def test_remote_update_sends_standalone_bootstrap(self) -> None:
+        command = ['ssh', 'tom@bertrand.local', 'update command']
+        with mock.patch(
+            'showco.deployment.update.run',
+            return_value=subprocess.CompletedProcess(command, 0, '', ''),
+        ) as run:
+            result = update.run_remote_step('target', 'update', command)
+
+        self.assertTrue(result.ok)
+        source = run.call_args.kwargs['input']
+        self.assertEqual(source, Path(bootstrap.__file__).read_text())
+        self.assertEqual(run.call_args.kwargs['timeout'], 3600)
 
     def test_showco_revision_step_checks_running_web_ui(self) -> None:
         commands: list[list[str]] = []
