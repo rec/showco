@@ -43,6 +43,15 @@ class DeployOptions(BaseModel, frozen=True):
     target_machine: bool = False
     clear_settings: bool = False
     autosquash: int | None = Field(default=None, ge=0)
+    audio: Annotated[list[Path], tyro.conf.UseAppendAction] = Field(
+        default_factory=list
+    )
+    setup: Annotated[list[Path], tyro.conf.UseAppendAction] = Field(
+        default_factory=list
+    )
+    teardown: Annotated[list[Path], tyro.conf.UseAppendAction] = Field(
+        default_factory=list
+    )
 
 
 def resolved_config(options: DeployOptions) -> config.Config:
@@ -61,6 +70,13 @@ def resolved_config(options: DeployOptions) -> config.Config:
         lyte_enabled=options.lyte_enabled,
         lyte_installation_config=options.lyte_installation_config,
     )
+    provision_config = provision_config.model_copy(
+        update={
+            'audio': options.audio,
+            'setup': options.setup,
+            'teardown': options.teardown,
+        }
+    )
     validate_config(provision_config)
     gui_schema.load_gui(PROVISION_DIR.parent.parent / provision_config.gui_path)
     return provision_config
@@ -77,6 +93,7 @@ def run(
         local_checkout_directory(),
         update.run_command_with_timeout,
         sys.stdout,
+        autosquash=options.autosquash if options.autosquash is not None else 50,
     ):
         sys.exit(
             'ERROR: local repositories are not ready for Raspberry Pi provisioning'

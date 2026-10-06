@@ -4,9 +4,10 @@ import random
 import subprocess
 import threading
 import time
+import tomllib
 from collections.abc import Callable, Sequence
 from contextlib import AbstractContextManager
-from math import isclose
+from math import isclose, isfinite
 from pathlib import Path
 
 import numpy as np
@@ -19,6 +20,20 @@ from .cable_test import X18_CHANNELS, OscControl, X18OscClient, find_audio_devic
 SAMPLE_RATE = 48_000
 BLOCK_FRAMES = 1_024
 MUSIC_FADER = 0.4
+
+
+class Files(BaseModel, frozen=True):
+    files: list[Path]
+    shuffle: bool | list[int | float] = False
+
+    @field_validator('shuffle')
+    @classmethod
+    def validate_shuffle(
+        cls, value: bool | list[int | float]
+    ) -> bool | list[int | float]:
+        if isinstance(value, list) and any(not isfinite(v) or v < 0 for v in value):
+            raise ValueError('shuffle weights must be finite and nonnegative')
+        return value
 
 
 class MusicPlayerStatus(BaseModel, frozen=True):
@@ -173,10 +188,10 @@ class MusicPlayer:
         with self.lock:
             return self.status_value
 
-    def start(self, directory: Path, shuffle: bool, fade_seconds: float) -> None:
-        tracks = music_files(directory)
-        if not tracks:
-            raise ValueError(f'No audio files in {directory}')
+    def start(self, paths: list[Path], fade_seconds: float) -> None:
+        playlists = audio_files(paths)
+        if not any(s.files for s in playlists):
+            raise ValueError('No audio files in the configured audio paths')
         device, _ = find_audio_device(
             self.query_devices(), self.audio_device_names, max(self.source_channels)
         )
@@ -193,10 +208,13 @@ class MusicPlayer:
             self.stream = stream
             self.stop_requested.clear()
             self.level = 0.0
-            self.status_value = MusicPlayerStatus(state='playing', directory=directory)
+            self.status_value = MusicPlayerStatus(
+                state='playing',
+                directory=paths[0] if paths[0].is_dir() else paths[0].parent,
+            )
             self.thread = threading.Thread(
                 target=self._play,
-                args=(tracks, shuffle),
+                args=(playlists,),
                 name='showco music',
                 daemon=True,
             )
@@ -241,11 +259,10 @@ class MusicPlayer:
             if step < steps:
                 time.sleep(seconds / steps)
 
-    def _play(self, tracks: list[Path], shuffle: bool) -> None:
-        previous: Path | None = None
-        playable = list(tracks)
+    def _play(self, playlists: list[Files]) -> None:
+        playable = [p for s in playlists for p in s.files]
         while not self.stop_requested.is_set():
-            playlist = ordered_tracks(playable, shuffle, previous)
+            playlist = [p for s in playlists for p in ordered_tracks(s)]
             for track in playlist:
                 if track not in playable:
                     continue
@@ -258,18 +275,17 @@ class MusicPlayer:
                     sounddevice.PortAudioError,
                     subprocess.TimeoutExpired,
                 ) as error:
+                    playable = [p for p in playable if p != track]
                     with self.lock:
                         self.status_value = self.status_value.model_copy(
                             update={
-                                'state': 'playing' if len(playable) > 1 else 'failed',
+                                'state': 'playing' if playable else 'failed',
                                 'error': f'Skipped {track.name}: {error}',
                             }
                         )
-                    playable.remove(track)
                     if not playable:
                         return
                     continue
-                previous = track
 
     def _play_track(self, track: Path) -> None:
         process = self.process_factory(
@@ -324,24 +340,61 @@ class MusicPlayer:
             raise OSError(f'ffmpeg exited with status {returncode}')
 
 
-def music_files(directory: Path) -> list[Path]:
-    if not directory.is_dir():
-        raise ValueError(f'Music directory does not exist: {directory}')
-    return sorted(
-        path
-        for path in directory.iterdir()
-        if path.is_file()
-        and path.suffix.lower()
-        in {'.aac', '.aif', '.aiff', '.flac', '.m4a', '.mp3', '.ogg', '.opus', '.wav'}
-    )
-
-
-def ordered_tracks(
-    tracks: list[Path], shuffle: bool, previous: Path | None
-) -> list[Path]:
-    result = list(tracks)
-    if shuffle:
-        random.SystemRandom().shuffle(result)
-        if len(result) > 1 and result[0] == previous:
-            result[0], result[1] = result[1], result[0]
+def audio_files(paths: list[Path]) -> list[Files]:
+    result: list[Files] = []
+    for p in paths:
+        if p.is_file():
+            score = Files(files=[p])
+        elif p.is_dir():
+            score_path = p / 'score.toml'
+            if score_path.is_file():
+                score = Files.model_validate(tomllib.loads(score_path.read_text()))
+                score = score.model_copy(update={'files': [p / f for f in score.files]})
+            else:
+                score = Files(
+                    files=sorted(
+                        f
+                        for f in p.iterdir()
+                        if f.is_file()
+                        and f.suffix.lower()
+                        in {
+                            '.aac',
+                            '.aif',
+                            '.aiff',
+                            '.flac',
+                            '.m4a',
+                            '.mp3',
+                            '.ogg',
+                            '.opus',
+                            '.wav',
+                        }
+                    )
+                )
+        else:
+            raise ValueError(f'Audio path does not exist: {p}')
+        for f in score.files:
+            if not f.is_file():
+                raise ValueError(f'Audio file does not exist: {f}')
+        result.append(score)
     return result
+
+
+def ordered_tracks(score: Files) -> list[Path]:
+    result = list(score.files)
+    if not score.shuffle:
+        return result
+    generator = random.SystemRandom()
+    if score.shuffle is True:
+        generator.shuffle(result)
+        return result
+    weights = [score.shuffle[i % len(score.shuffle)] for i in range(len(result))]
+    ordered: list[Path] = []
+    while result:
+        maximum = max(weights)
+        index = generator.choices(
+            range(len(result)),
+            weights=[w / maximum for w in weights] if maximum else None,
+        )[0]
+        ordered.append(result.pop(index))
+        weights.pop(index)
+    return ordered

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import random
 import subprocess
 import threading
 import time
@@ -28,10 +29,9 @@ def controller() -> tuple[music.MusicController, mock.Mock, mock.Mock, mock.Mock
         recs,
         player,
         routing,
-        music.MusicConfig(
-            setup_directory=Path('/music/setup'),
-            teardown_directory=Path('/music/teardown'),
-        ),
+        music.MusicConfig(),
+        setup=[Path('/music/setup')],
+        teardown=[Path('/music/teardown')],
     )
     return controller, recs, player, routing
 
@@ -43,7 +43,7 @@ def test_setup_pauses_recording_starts_music_and_routes_it_to_main_lr() -> None:
 
     assert result_value.ok
     recs.pause_recording.assert_called_once_with()
-    player.start.assert_called_once_with(Path('/music/setup'), False, 2.0)
+    player.start.assert_called_once_with([Path('/music/setup')], 2.0)
     routing.enable.assert_called_once_with()
     assert value.status().mode == 'setup'
 
@@ -91,7 +91,7 @@ def test_teardown_pauses_recording_stops_playback_and_starts_music() -> None:
     assert result_value.ok
     recs.pause_recording.assert_called_once_with()
     assert recs.action.call_args_list == [mock.call('stop_playback')]
-    player.start.assert_called_once_with(Path('/music/teardown'), False, 2.0)
+    player.start.assert_called_once_with([Path('/music/teardown')], 2.0)
     routing.enable.assert_called_once_with()
     assert value.status().mode == 'teardown'
 
@@ -119,8 +119,13 @@ def test_teardown_requests_credits_without_stopping_recs() -> None:
     value.closing_thread.join(timeout=5)
 
 
-def test_credits_keep_recs_running_until_broadcast_completes(tmp_path: Path) -> None:
+@pytest.mark.parametrize('with_audio', [True, False])
+def test_credits_keep_recs_running_until_broadcast_completes(
+    tmp_path: Path, with_audio: bool
+) -> None:
     value, recs, player, routing = controller()
+    if not with_audio:
+        value.teardown_audio = []
     streamo = mock.Mock()
     streamo.status.return_value = models.StreamoStatus(
         service=models.ServiceStatus(name='streamo', state='connected'),
@@ -163,9 +168,14 @@ def test_credits_keep_recs_running_until_broadcast_completes(tmp_path: Path) -> 
         time.sleep(0.01)
     assert value.mode == 'teardown'
     recs.pause_recording.assert_called_once()
-    player.start.assert_called_once_with(Path('/music/teardown'), False, 0)
+    if with_audio:
+        player.start.assert_called_once_with([Path('/music/teardown')], 0)
+        routing.fade_main.assert_any_call(0.7, 2.0)
+    else:
+        player.start.assert_not_called()
+        routing.enable.assert_not_called()
+        assert all(c.args[0] == 0 for c in routing.fade_main.call_args_list)
     routing.isolate_instruments.assert_called_once_with(scene)
-    routing.fade_main.assert_any_call(0.7, 2.0)
     assert streamo.start_closing.call_count == 1
     value.close()
 
@@ -427,8 +437,10 @@ def test_x18_music_routing_checks_readback_and_mutes_every_return() -> None:
     assert len(osc.values) == 6
 
 
+@pytest.mark.parametrize('repeats', [1, 2])
 def test_music_skips_non_audio_files_and_reports_failed_decoder(
     tmp_path: Path,
+    repeats: int,
 ) -> None:
     (tmp_path / 'notes.txt').write_text('set list')
     track = tmp_path / 'broken.flac'
@@ -448,7 +460,7 @@ def test_music_skips_non_audio_files_and_reports_failed_decoder(
     )
 
     with mock.patch('showco.x18.music.find_audio_device', return_value=(0, 'X18')):
-        player.start(tmp_path, False, 0)
+        player.start([tmp_path] * repeats, 0)
     assert player.thread is not None
     player.thread.join(timeout=1)
 
@@ -504,7 +516,7 @@ def test_music_skips_unreadable_track_and_continues_playing(tmp_path: Path) -> N
     )
 
     with mock.patch('showco.x18.music.find_audio_device', return_value=(0, 'X18')):
-        player.start(tmp_path, False, 0)
+        player.start([tmp_path], 0)
     assert reading.wait(timeout=1)
     assert player.status().state == 'playing'
     assert player.status().track == tmp_path / 'good.wav'
@@ -517,24 +529,88 @@ def test_music_skips_unreadable_track_and_continues_playing(tmp_path: Path) -> N
     assert not stopper.is_alive()
 
 
-def test_music_configuration_overrides_directories_fade_and_playlist_order(
+def test_music_configuration_overrides_fade_and_return_channels(
     tmp_path: Path,
 ) -> None:
     config_path = tmp_path / 'music.toml'
-    config_path.write_text(
-        'setup_directory = "/music/open"\n'
-        'teardown_directory = "/music/close"\n'
-        'fade_seconds = 3.5\n'
-        'shuffle = true\n'
-        'source_channels = [15, 16]\n'
-    )
+    config_path.write_text('fade_seconds = 3.5\nsource_channels = [15, 16]\n')
 
     config = music.load_config(config_path)
 
     assert config == music.MusicConfig(
-        setup_directory=Path('/music/open'),
-        teardown_directory=Path('/music/close'),
         fade_seconds=3.5,
-        shuffle=True,
         source_channels=[15, 16],
     )
+
+
+@pytest.mark.parametrize('phase', ['setup', 'teardown'])
+def test_unconfigured_segment_stays_silent(phase: str) -> None:
+    value, recs, player, routing = controller()
+    value.setup_audio = []
+    value.teardown_audio = []
+
+    outcome = value.setup() if phase == 'setup' else value.teardown()
+
+    assert outcome.ok
+    recs.pause_recording.assert_called_once()
+    player.start.assert_not_called()
+    routing.enable.assert_not_called()
+    routing.disable.assert_called_once()
+
+
+def test_audio_paths_use_score_order_then_alphabetic_directory_order(
+    tmp_path: Path,
+) -> None:
+    scored = tmp_path / 'scored'
+    plain = tmp_path / 'plain'
+    scored.mkdir()
+    plain.mkdir()
+    for p in [scored / 'a.flac', scored / 'b.flac', plain / 'b.mp3', plain / 'a.wav']:
+        p.touch()
+    (plain / 'notes.txt').touch()
+    (scored / 'score.toml').write_text('files = ["b.flac", "a.flac"]\nshuffle = []\n')
+    single = tmp_path / 'single.wav'
+    single.touch()
+
+    scores = x18_music.audio_files([scored, single, plain])
+
+    assert [x18_music.ordered_tracks(s) for s in scores] == [
+        [scored / 'b.flac', scored / 'a.flac'],
+        [single],
+        [plain / 'a.wav', plain / 'b.mp3'],
+    ]
+
+
+def test_weighted_shuffle_repeats_weights_and_plays_every_file_once() -> None:
+    paths = [Path(f'{i}.wav') for i in range(4)]
+    score = x18_music.Files(files=paths, shuffle=[1, 0])
+
+    for _ in range(10):
+        order = x18_music.ordered_tracks(score)
+        assert set(order[:2]) == {paths[0], paths[2]}
+        assert set(order[2:]) == {paths[1], paths[3]}
+
+
+def test_uniform_shuffle_preserves_all_listed_files() -> None:
+    paths = [Path(f'{i}.wav') for i in range(6)]
+    score = x18_music.Files(files=paths, shuffle=True)
+    with mock.patch(
+        'showco.x18.music.random.SystemRandom', return_value=random.Random(1)
+    ):
+        orders = [x18_music.ordered_tracks(score) for _ in range(10)]
+    assert all(sorted(o) == paths for o in orders)
+    assert any(o != paths for o in orders)
+
+
+def test_large_finite_weights_do_not_overflow() -> None:
+    paths = [Path('a.wav'), Path('b.wav')]
+    assert (
+        sorted(x18_music.ordered_tracks(x18_music.Files(files=paths, shuffle=[1e308])))
+        == paths
+    )
+
+
+@pytest.mark.parametrize('weights', [[-1], [float('nan')], [float('inf')]])
+def test_invalid_shuffle_weights_are_rejected(weights: list[float]) -> None:
+    with pytest.raises(ValueError, match='finite and nonnegative'):
+        x18_music.Files(files=[Path('a.wav')], shuffle=weights)

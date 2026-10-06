@@ -51,6 +51,9 @@ def install_showco_service(
     gui: Path = gui_schema.DEFAULT_GUI_PATH,
     streamo_enabled: bool = False,
     lyte_enabled: bool = False,
+    audio: list[Path] | None = None,
+    setup: list[Path] | None = None,
+    teardown: list[Path] | None = None,
 ) -> int:
     gui_schema.load_gui(gui)
     daemon = ShowcoDaemon(platform=paths.current_platform())
@@ -64,6 +67,9 @@ def install_showco_service(
                 streamo_enabled,
                 lyte_enabled,
                 gui,
+                audio,
+                setup,
+                teardown,
             ),
         ]
     )
@@ -79,6 +85,9 @@ def showco_args(
     streamo_enabled: bool,
     lyte_enabled: bool,
     gui: Path = gui_schema.DEFAULT_GUI_PATH,
+    audio: list[Path] | None = None,
+    setup: list[Path] | None = None,
+    teardown: list[Path] | None = None,
 ) -> list[str]:
     result = ['--host', host, '--port', str(port)]
     if mixers_config is not None:
@@ -88,6 +97,9 @@ def showco_args(
         result.append('--streamo-enabled')
     if lyte_enabled:
         result.append('--lyte-enabled')
+    for name, sources in [('audio', audio), ('setup', setup), ('teardown', teardown)]:
+        for p in sources or []:
+            result.extend([f'--{name}', str(p)])
     return result
 
 
@@ -137,6 +149,8 @@ def install_main(argv: list[str] | None = None) -> int:
     parser.add_argument('--streamo-enabled', action='store_true')
     parser.add_argument('--lyte-enabled', action='store_true')
     parser.add_argument('--root', required=True, type=Path)
+    for name in ['audio', 'setup', 'teardown']:
+        parser.add_argument(f'--{name}', action='append', type=Path)
     args = parser.parse_args(argv)
     return install_showco_service(
         host=args.host,
@@ -146,6 +160,9 @@ def install_main(argv: list[str] | None = None) -> int:
         streamo_enabled=args.streamo_enabled,
         lyte_enabled=args.lyte_enabled,
         root=args.root,
+        audio=args.audio,
+        setup=args.setup,
+        teardown=args.teardown,
     )
 
 

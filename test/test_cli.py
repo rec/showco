@@ -33,6 +33,49 @@ class CliTests(unittest.TestCase):
         self.assertEqual(options.port, 17_352)
         self.assertTrue(options.rehearsal_mode)
 
+    def test_audio_flags_append_paths_and_phase_sources_override_shared_audio(
+        self,
+    ) -> None:
+        options = tyro.cli(
+            cli.WebUiOptions,
+            args=[
+                '--audio',
+                '/audio/a.flac',
+                '--audio',
+                '/audio/common',
+                '--setup',
+                '/audio/open',
+                '--setup',
+                '/audio/intro.flac',
+            ],
+        )
+        self.assertEqual(options.audio, [Path('/audio/a.flac'), Path('/audio/common')])
+        with (
+            patch.object(cli.gui_schema, 'configure_gui'),
+            patch.object(cli.machine_role, 'require_target_machine'),
+            patch.object(cli, 'load_mixer_specs', return_value=[]),
+            patch.object(cli, 'make_server') as make_server,
+        ):
+            self.assertEqual(cli.run_web_ui(options), 0)
+        self.assertEqual(make_server.call_args.kwargs['setup'], options.setup)
+        self.assertEqual(make_server.call_args.kwargs['teardown'], options.audio)
+        self.assertFalse(self.error_log.exists())
+
+    def test_missing_phase_audio_warns_in_error_log_without_failing_startup(
+        self,
+    ) -> None:
+        with (
+            patch.object(cli.gui_schema, 'configure_gui'),
+            patch.object(cli.machine_role, 'require_target_machine'),
+            patch.object(cli, 'load_mixer_specs', return_value=[]),
+            patch.object(cli, 'make_server'),
+        ):
+            self.assertEqual(cli.run_web_ui(cli.WebUiOptions(setup=[Path('/open')])), 0)
+        self.assertIn(
+            'WARNING: Incidental audio is not configured for both',
+            self.error_log.read_text(),
+        )
+
     def test_dispatches_deploy_subcommand(self) -> None:
         with patch.object(cli.deploy, 'main', return_value=7) as deploy:
             self.assertEqual(cli.main(['deploy', 'recs']), 7)

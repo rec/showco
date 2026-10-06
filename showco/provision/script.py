@@ -64,6 +64,18 @@ def remote_command(
         'SHOWCO_PI_X18_SUBNET': x18_subnet,
         'SHOWCO_X18_HOST': x18_host,
         'SHOWCO_MIXERS_TOML': mixers_toml(provision_config.mixers),
+        'SHOWCO_AUDIO_ARGS': shlex.join(
+            [
+                v
+                for n, ps in [
+                    ('audio', provision_config.audio),
+                    ('setup', provision_config.setup),
+                    ('teardown', provision_config.teardown),
+                ]
+                for p in ps
+                for v in [f'--{n}', str(p)]
+            ]
+        ),
         'RECS_AUDIO_DEVICE_NAMES': '\n'.join(
             unique_selectors(
                 n for mixer in provision_config.mixers for n in mixer.audio_device_names

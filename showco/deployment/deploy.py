@@ -24,10 +24,22 @@ def run(options: provision.DeployOptions) -> int:
     selected = update.selected_repositories(options.repositories or [])
     if options.push and options.sync:
         sys.exit('ERROR: --push and --sync cannot be combined')
+    if (options.audio or options.setup or options.teardown) and (
+        options.push or options.sync or options.remote or options.target_machine
+    ):
+        sys.exit(
+            'ERROR: audio paths require provisioning; do not combine them with '
+            '--push, --sync, --remote, or --target-machine'
+        )
     if (
         options.target_machine
         or machine_role.machine_role() == machine_role.TARGET_ROLE
     ):
+        if options.audio or options.setup or options.teardown:
+            sys.exit(
+                'ERROR: on the Pi, use audio paths with showco run '
+                'or showco run install-service'
+            )
         if options.upgrade or options.remote or options.push or options.sync:
             sys.exit(
                 'ERROR: --upgrade, --remote, --push, and --sync are unavailable '
@@ -42,7 +54,7 @@ def run(options: provision.DeployOptions) -> int:
     machine_role.require_provisioning_machine('showco deploy')
     update_requested = (
         options.repositories is not None or options.autosquash is not None
-    )
+    ) and not (options.audio or options.setup or options.teardown)
     if options.upgrade and (
         update_requested or options.remote or options.push or options.sync
     ):

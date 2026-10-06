@@ -83,6 +83,9 @@ class Config(BaseModel, frozen=True):
     gui_path: Path = Path('showco/gui.toml')
     argon_one: bool = True
     accept_changed_host_key: bool = True
+    audio: list[Path] = Field(default_factory=list)
+    setup: list[Path] = Field(default_factory=list)
+    teardown: list[Path] = Field(default_factory=list)
 
     @cached_property
     def ssh_target(self) -> str:

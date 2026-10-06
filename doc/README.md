@@ -135,19 +135,34 @@ For a full installation or major-change check, also power-cycle the Pi, test dev
 - **Music mode** has four deliberate transitions. **Setup** stops streamO, pauses recs, restores the room's previous instrument routing after a teardown, and starts looping setup music. **Record** fades music out, mutes its X18 channels, starts a new recs session, then restarts streamO. **Tear down with closing credits** keeps recs and the room mix unchanged while streamO shows its configured pages and fades only the broadcast audio. During the final two seconds of black, showCo fades X18 main LR to zero. Only after streamO reports that the broadcast stopped does showCo pause recs, remove instrument channels from LR while preserving their settings, and fade in teardown music on the room master. A failed or uncertain closing sequence leaves recs alone and room music off. The Actions page offers explicit recovery: abandon the sequence and check recording state, or confirm externally that the broadcast ended before manually finishing teardown. **Stop and shut down** remains the immediate Pi shutdown action. All four transitions are blocked by Performance lock.
 - streamO actions appear only when streaming is enabled. They include restart, mute, unmute, stop, stream information, chat, announcement, clip, and marker actions.
 
-Music uses the target's existing ffmpeg installation, so it can decode normal audio formats. It writes stereo audio to X18 USB returns 17 and 18 and configures X18 channels 17 and 18 as USB-return channels routed to main LR. These channels must be reserved for showCo music. The X18 music fader is set to 40 percent; set the existing instrument mix to the intended 60-percent level on the mixer. Default music directories are `~/Music/setup` and `~/Music/teardown`. Custom `source_channels` must be an adjacent odd/even X18 pair.
+Music uses the target's existing ffmpeg installation, so it can decode normal audio formats. It writes stereo audio to X18 USB returns 17 and 18 and configures X18 channels 17 and 18 as USB-return channels routed to main LR. These channels must be reserved for showCo music. The X18 music fader is set to 40 percent; set the existing instrument mix to the intended 60-percent level on the mixer. Custom `source_channels` must be an adjacent odd/even X18 pair.
+
+Choose incidental audio with repeated target runtime flags. Each path may be an audio file or a directory:
+
+```bash
+uv run showco run --audio /mnt/audio/common --audio /mnt/audio/intro.flac \
+  --setup /mnt/audio/open --teardown /mnt/audio/close
+```
+
+`--setup` and `--teardown` override `--audio` for their respective phases. An unset phase uses `--audio`; if neither is supplied, that phase generates no sound. There are no default audio directories, and showCo creates no music directories. Missing audio for either phase produces a startup warning in the service log and `showco-errors.txt`. The same flags are accepted by `showco run install-service` and saved in the service's runtime arguments. Paths refer to files already on the Pi.
+
+On the development machine, use the same flags with `uv run showco --audio /mnt/audio/common` to provision the service with Pi paths. Changes to these paths trigger provisioning even when `--autosquash` is supplied. Updates such as `showco --autosquash 100` preserve the installed service arguments. When provisioning again, supply the audio flags again; provisioning without them configures silent phases. Supplying paths does not copy audio files to the Pi.
+
+Sources run in flag order, then repeat. A directory normally supplies its audio files in alphabetical filename order. If it contains `score.toml`, that file supplies the order and shuffle policy instead:
+
+```toml
+files = ["intro.flac", "ambient.flac", "interlude.wav"]
+shuffle = [4, 1]
+```
+
+Relative file paths resolve against the directory containing the score. `shuffle = false` or `shuffle = []` repeats the listed order. `shuffle = true` creates a uniform random ordering each cycle. A weight list creates a weighted ordering without replacement: every listed file plays once per cycle, with larger weights making earlier positions more likely. Short weight lists repeat cyclically, so the example gives weights 4, 1, 4. Zero-weight files play after positive-weight files; all-zero weights produce a uniform ordering. Weights must be finite and nonnegative.
 
 Optional target configuration is `~/.config/showco/music.toml`:
 
 ```toml
-setup_directory = "/home/tom/Music/setup"
-teardown_directory = "/home/tom/Music/teardown"
 fade_seconds = 2
-shuffle = false
 source_channels = [17, 18]
 ```
-
-When `shuffle` is false, files run in alphabetical order and repeat. When true, each cycle is shuffled without repeating a track within the cycle.
 
 streamO supplies three temporary closing pages until you replace them in its `closing_credits` configuration. Its status reports the current page, timing, final black interval, and completion. showCo persists the operation ID, observes it without a browser open, and resumes observation after a showCo restart. A streamO restart during credits reports a failed, uncertain outcome; showCo never sends the start command again automatically. [streamO's operator guide](https://github.com/rec/streamo/blob/main/doc/streamo.md) documents the page format.
 

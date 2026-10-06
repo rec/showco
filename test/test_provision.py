@@ -16,6 +16,34 @@ from showco.provision import network as network_config
 
 
 class ProvisionTests(unittest.TestCase):
+    def test_provisioning_flags_preserve_target_audio_paths(self) -> None:
+        options = tyro.cli(
+            provision.DeployOptions,
+            args=[
+                '--audio',
+                '/mnt/audio/common',
+                '--audio',
+                '/mnt/audio/intro.flac',
+                '--setup',
+                '/mnt/audio/open',
+                '--teardown',
+                '/mnt/audio/close',
+            ],
+        )
+        with (
+            mock.patch(
+                'showco.provision.provision.config.load_values', return_value=values()
+            ),
+            mock.patch('showco.provision.provision.validate_config'),
+            mock.patch('showco.provision.provision.gui_schema.load_gui'),
+        ):
+            resolved = provision.resolved_config(options)
+        self.assertEqual(
+            resolved.audio, [Path('/mnt/audio/common'), Path('/mnt/audio/intro.flac')]
+        )
+        self.assertEqual(resolved.setup, [Path('/mnt/audio/open')])
+        self.assertEqual(resolved.teardown, [Path('/mnt/audio/close')])
+
     def test_deploy_options_accept_provisioning_and_update_flags(self) -> None:
         options = tyro.cli(
             provision.DeployOptions,

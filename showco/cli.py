@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Annotated, TextIO
 
 import tyro
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from reccy import cli
 from reccy.runtime import logging
 
@@ -34,6 +34,15 @@ class WebUiOptions(BaseModel, frozen=True):
     streamo_enabled: bool = False
     lyte_enabled: bool = False
     gui: Path = gui_schema.DEFAULT_GUI_PATH
+    audio: Annotated[list[Path], tyro.conf.UseAppendAction] = Field(
+        default_factory=list
+    )
+    setup: Annotated[list[Path], tyro.conf.UseAppendAction] = Field(
+        default_factory=list
+    )
+    teardown: Annotated[list[Path], tyro.conf.UseAppendAction] = Field(
+        default_factory=list
+    )
     rehearsal_mode: Annotated[
         bool,
         tyro.conf.arg(
@@ -47,6 +56,19 @@ def run_web_ui(options: WebUiOptions) -> int:
     gui_schema.configure_gui(options.gui)
     if not options.rehearsal_mode:
         machine_role.require_target_machine('showco run')
+    if not options.audio and not (options.setup and options.teardown):
+        warning = 'Incidental audio is not configured for both Setup and Tear down'
+        getLogger(__name__).warning(warning)
+        try:
+            descriptor = os.open(
+                ERROR_LOG_PATH, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600
+            )
+            with os.fdopen(descriptor, 'a') as output:
+                output.write(f'WARNING: {warning}\n')
+        except OSError as error:
+            getLogger(__name__).warning(
+                'Could not save audio configuration warning: %s', error
+            )
     if options.rehearsal_mode:
         server = make_server(
             options.host,
@@ -58,6 +80,8 @@ def run_web_ui(options: WebUiOptions) -> int:
             streamo_restart=rehearsal.restart_streamo,
             lyte=rehearsal.RehearsalLyteClient(),
             streamo_enabled=True,
+            setup=options.setup or options.audio,
+            teardown=options.teardown or options.audio,
         )
         print(f'showco rehearsal listening on http://{options.host}:{options.port}')
     else:
@@ -70,6 +94,8 @@ def run_web_ui(options: WebUiOptions) -> int:
             streamo_enabled=options.streamo_enabled,
             lyte_enabled=options.lyte_enabled,
             performance_enabled=True,
+            setup=options.setup or options.audio,
+            teardown=options.teardown or options.audio,
         )
         print(f'showco listening on http://{options.host}:{options.port}')
     try:

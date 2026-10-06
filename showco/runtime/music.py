@@ -29,11 +29,6 @@ class ClosingRecord(BaseModel, frozen=True):
 
 
 class MusicConfig(BaseModel, frozen=True):
-    setup_directory: Path = Field(default_factory=lambda: Path.home() / 'Music/setup')
-    teardown_directory: Path = Field(
-        default_factory=lambda: Path.home() / 'Music/teardown'
-    )
-    shuffle: bool = False
     fade_seconds: float = DEFAULT_FADE_SECONDS
     source_channels: list[int] = Field(default_factory=lambda: [17, 18])
 
@@ -75,11 +70,15 @@ class MusicController:
         streamo: StreamoClient | None = None,
         streamo_restart: Callable[[], models.ActionResult] | None = None,
         closing_state_path: Path | None = None,
+        setup: list[Path] | None = None,
+        teardown: list[Path] | None = None,
     ) -> None:
         self.recs = recs
         self.player = player
         self.routing = routing
         self.config = config
+        self.setup_audio = setup or []
+        self.teardown_audio = teardown or []
         self.poweroff = poweroff
         self.streamo = streamo
         self.streamo_restart = streamo_restart
@@ -119,16 +118,23 @@ class MusicController:
         )
         result = self._transition(
             'setup',
-            'Setup music is playing',
+            'Setup music is playing'
+            if self.setup_audio
+            else 'Setup ready; no incidental audio configured',
             [
                 ('streamO stopped', self._stop_stream),
                 ('recs paused', self._pause_recording),
                 *restore,
                 (
                     'setup music started',
-                    lambda: self._start(self.config.setup_directory),
+                    lambda: self._start(self.setup_audio),
                 ),
-                ('music returns enabled', self.routing.enable),
+                (
+                    'music returns enabled'
+                    if self.setup_audio
+                    else 'music returns muted',
+                    self.routing.enable if self.setup_audio else self.routing.disable,
+                ),
             ],
         )
         self._clear_closing()
@@ -163,7 +169,9 @@ class MusicController:
             return self._request_closing()
         return self._transition(
             'teardown',
-            'Recording stopped; teardown music is playing',
+            'Recording stopped; teardown music is playing'
+            if self.teardown_audio
+            else 'Recording paused; no teardown audio configured',
             [
                 ('streamO stopped', self._stop_stream),
                 ('recs paused', self._pause_recording),
@@ -173,9 +181,16 @@ class MusicController:
                 ),
                 (
                     'teardown music started',
-                    lambda: self._start(self.config.teardown_directory),
+                    lambda: self._start(self.teardown_audio),
                 ),
-                ('music returns enabled', self.routing.enable),
+                (
+                    'music returns enabled'
+                    if self.teardown_audio
+                    else 'music returns muted',
+                    self.routing.enable
+                    if self.teardown_audio
+                    else self.routing.disable,
+                ),
             ],
         )
 
@@ -291,16 +306,25 @@ class MusicController:
         self._pause_recording()
         self._require(self.recs.action('stop_playback'))
         self.routing.isolate_instruments(record.room_scene)
-        self.player.start(self.config.teardown_directory, self.config.shuffle, 0)
-        self.routing.enable()
-        self.routing.fade_main(record.room_scene.master_fader, self.config.fade_seconds)
+        if self.teardown_audio:
+            self.player.start(self.teardown_audio, 0)
+            self.routing.enable()
+            self.routing.fade_main(
+                record.room_scene.master_fader, self.config.fade_seconds
+            )
+        else:
+            self.player.stop(0)
+            self.routing.disable()
         self._save_closing(
             record.model_copy(update={'phase': 'teardown-music-playing'})
         )
         self.mode = 'teardown'
         self.transition_error = None
         return models.ActionResult(
-            ok=True, message='Broadcast stopped; recs paused; teardown music is playing'
+            ok=True,
+            message='Broadcast stopped; recs paused; teardown music is playing'
+            if self.teardown_audio
+            else 'Broadcast stopped; recs paused; no teardown audio configured',
         )
 
     def _fail_closing(self, message: str) -> None:
@@ -523,8 +547,11 @@ class MusicController:
         if isinstance(result, models.ActionResult):
             self._require(result)
 
-    def _start(self, directory: Path) -> None:
-        self.player.start(directory, self.config.shuffle, self.config.fade_seconds)
+    def _start(self, paths: list[Path]) -> None:
+        if paths:
+            self.player.start(paths, self.config.fade_seconds)
+        else:
+            self.player.stop(0)
 
     def _start_stream(self) -> None:
         if self.streamo is not None:
@@ -547,6 +574,9 @@ def controller_from_specs(
     specs: list[MixerSpec],
     streamo: StreamoClient | None = None,
     streamo_restart: Callable[[], models.ActionResult] | None = None,
+    *,
+    setup: list[Path] | None = None,
+    teardown: list[Path] | None = None,
 ) -> MusicController | None:
     mixer = next((m for m in specs if m.name == 'X18'), None)
     if mixer is None or mixer.osc is None:
@@ -560,6 +590,8 @@ def controller_from_specs(
         streamo=streamo,
         streamo_restart=streamo_restart,
         closing_state_path=Path.home() / '.local/state/showco/closing.json',
+        setup=setup,
+        teardown=teardown,
     )
 
 
