@@ -229,6 +229,12 @@ class CliTests(unittest.TestCase):
 
         logs.assert_called_once_with(['--lines=50', 'recs'])
 
+    def test_dispatches_panel_subcommand(self) -> None:
+        with patch.object(cli.panel, 'main', return_value=0) as panel:
+            self.assertEqual(cli.main(['panel']), 0)
+
+        panel.assert_called_once_with([])
+
     def test_dispatches_python_subcommand(self) -> None:
         with patch.object(cli.python, 'main', return_value=7) as python:
             self.assertEqual(cli.main(['python', 'print(1)']), 7)
