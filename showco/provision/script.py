@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shlex
 from collections.abc import Iterable
+from ipaddress import IPv4Address, ip_network
 from pathlib import Path
 
 from . import config
@@ -23,12 +24,12 @@ def remote_command(
         (mixer for mixer in provision_config.mixers if mixer.name == 'X18'), None
     )
     x18_host = x18_mixer.osc.host if x18_mixer and x18_mixer.osc else ''
-    x18_subnet = '10.43.0.0/24'
+    x18_subnet = private.subnet
     if x18_network is not None:
         x18_host = config.require_value(
             'networks.internal.wired.x18.ip_address', x18_network.ip_address
         )
-        x18_subnet = config.string_or_default(x18_network.subnet, '10.43.0.0/24')
+        x18_subnet = x18_network.subnet
     values = {
         'SHOW_USER': provision_config.network.user,
         'SHOWCO_HOST': provision_config.network.host,
@@ -59,10 +60,19 @@ def remote_command(
         'LYTE_INSTALLATION_CONFIG': str(provision_config.lyte.installation_config),
         'PRIVATE_WIFI_SSID': config.string_or_default(private.name, 'showbox'),
         'PRIVATE_WIFI_PASSWORD': private.password,
+        'PRIVATE_WIFI_IP_OFFSET': (
+            str(address_offset(private.ip_address, private.subnet))
+            if private.ip_address
+            else ''
+        ),
         'EXTERNAL_WIFI_SSID': external.name,
         'EXTERNAL_WIFI_PASSWORD': external.password,
         'SHOWCO_PI_X18_SUBNET': x18_subnet,
         'SHOWCO_X18_HOST': x18_host,
+        'SHOWCO_X18_IP_OFFSET': (
+            str(address_offset(x18_host, x18_subnet)) if x18_network else ''
+        ),
+        'SHOWCO_X18_PORT': str(x18_mixer.port) if x18_network and x18_mixer else '',
         'SHOWCO_MIXERS_TOML': mixers_toml(provision_config.mixers),
         'SHOWCO_AUDIO_ARGS': shlex.join(
             [
@@ -90,6 +100,12 @@ def remote_command(
     }
     assignments = [f'{key}={shlex.quote(value)}' for key, value in values.items()]
     return ' '.join([*assignments, 'bash', shlex.quote(remote_script)])
+
+
+def address_offset(address: str, subnet: str) -> int:
+    return int(IPv4Address(address)) - int(
+        ip_network(subnet, strict=False).network_address
+    )
 
 
 def shell_bool(value: bool) -> str:
