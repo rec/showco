@@ -214,16 +214,67 @@ class ProvisionTests(unittest.TestCase):
 
         self.assertEqual(topology, network_config.NetworkTopology.PRIVATE)
 
-    def test_run_uses_key_based_ssh_command(self) -> None:
-        with mock.patch('reccy.runtime.subprocess.run') as run:
-            ssh.run_command(['ssh'])
+    def test_captured_ssh_output_is_returned(self) -> None:
+        with mock.patch(
+            'reccy.runtime.subprocess.run',
+            return_value=subprocess.CompletedProcess(['ssh'], 0, 'target output', ''),
+        ) as run:
+            result = ssh.run_command(['ssh'], capture_output=True)
 
+        self.assertEqual(result.stdout, 'target output')
         run.assert_called_once_with(
             ['ssh'],
-            capture_output=False,
+            capture_output=True,
             check=True,
             text=True,
         )
+
+    def test_streamed_command_output_is_displayed_on_success(self) -> None:
+        process = mock.Mock()
+        process.stdout = StringIO('==> installing services\ncompleted\n')
+        process.wait.return_value = 0
+        process.poll.return_value = 0
+        terminal = StringIO()
+        with (
+            mock.patch.object(ssh, 'Popen', return_value=process),
+            mock.patch('sys.stdout', terminal),
+        ):
+            result = ssh.run_command(['ssh'])
+
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(terminal.getvalue(), '==> installing services\ncompleted\n')
+        self.assertTrue(process.stdout.closed)
+
+    def test_interrupted_ssh_keeps_partial_output_and_closes_process(self) -> None:
+        for error in (KeyboardInterrupt(), subprocess.TimeoutExpired(['ssh'], 20)):
+            with self.subTest(error=type(error).__name__):
+                process = mock.Mock()
+                process.stdout = StringIO('==> configuring Wi-Fi\n')
+                process.wait.side_effect = [error, 0]
+                process.poll.return_value = None
+                terminal = StringIO()
+                with (
+                    mock.patch.object(ssh, 'Popen', return_value=process),
+                    mock.patch('sys.stdout', terminal),
+                    self.assertRaises(type(error)),
+                ):
+                    ssh.run_command(['ssh'], timeout_seconds=20)
+
+                self.assertIn('==> configuring Wi-Fi', terminal.getvalue())
+                process.kill.assert_called_once()
+                self.assertTrue(process.stdout.closed)
+
+    def test_ssh_timeout_reports_actual_operation_deadline(self) -> None:
+        configuration = make_config(values(networks=networks(x18=False)))
+        error = subprocess.TimeoutExpired(['ssh', 'secret command'], 1200)
+        with (
+            mock.patch.object(ssh, 'run_command', side_effect=error),
+            self.assertRaises(SystemExit) as failure,
+        ):
+            ssh.run_ssh(configuration, 'secret command', timeout_seconds=1200)
+
+        self.assertIn('timed out after 1200 seconds', str(failure.exception))
+        self.assertNotIn('secret command', str(failure.exception))
 
     def test_provision_checks_worktrees_before_network_preflight(self) -> None:
         calls: list[str] = []
@@ -606,7 +657,7 @@ class ProvisionTests(unittest.TestCase):
     def test_run_scp_uses_short_connect_timeout(self) -> None:
         config = make_config(values(networks=networks(x18=False)))
 
-        with mock.patch('reccy.runtime.subprocess.run') as run:
+        with mock.patch('showco.provision.ssh.run_command') as run:
             ssh.run_scp(config, Path('/tmp/local.sh'), '/tmp/remote.sh')
 
         self.assertIn('ConnectTimeout=2', run.call_args.args[0])
@@ -620,16 +671,16 @@ class ProvisionTests(unittest.TestCase):
         )
 
         with (
-            mock.patch('reccy.runtime.subprocess.run', side_effect=error),
+            mock.patch('showco.provision.ssh.run_command', side_effect=error),
             self.assertRaises(SystemExit) as exit_error,
         ):
             ssh.run_ssh(config, 'true')
 
         self.assertIn(
-            'ERROR: SSH connection or command failed for tom@recs-stage.local.',
+            'ERROR: SSH command for tom@recs-stage.local failed with exit status 255.',
             str(exit_error.exception),
         )
-        self.assertIn('SSH connect timeout is 2 seconds.', str(exit_error.exception))
+        self.assertNotIn('timeout', str(exit_error.exception))
         self.assertIn(
             'ssh said: ssh: connect to host failed', str(exit_error.exception)
         )

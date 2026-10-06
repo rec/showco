@@ -7,11 +7,13 @@ from io import StringIO
 from logging import getLogger
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import tyro
+from provision_helpers import make_config, networks, values
 
 from showco import cli
+from showco.provision import ssh
 
 
 class CliTests(unittest.TestCase):
@@ -131,6 +133,37 @@ class CliTests(unittest.TestCase):
                 cli.main(['deploy'])
 
         self.assertIn('bad option', self.error_log.read_text())
+
+    def test_remote_failure_saves_output_without_secret_command_context(self) -> None:
+        configuration = make_config(values(networks=networks(x18=False)))
+        terminal = StringIO()
+        process = Mock()
+        process.stdout = StringIO('==> installing lyte\nERROR: invalid installation\n')
+        process.wait.return_value = 1
+        process.poll.return_value = 1
+
+        def fail(arguments: list[str]) -> int:
+            ssh.run_ssh(
+                configuration, 'PRIVATE_WIFI_PASSWORD=example-secret bash script'
+            )
+            return 0
+
+        with (
+            patch.object(cli.deploy, 'main', side_effect=fail),
+            patch.object(ssh, 'Popen', return_value=process),
+            patch('sys.stdout', terminal),
+            self.assertRaises(SystemExit),
+        ):
+            cli.main(['deploy'])
+
+        contents = self.error_log.read_text()
+        self.assertIn('==> installing lyte', terminal.getvalue())
+        self.assertIn('ERROR: invalid installation', contents)
+        self.assertIn('failed with exit status 1', contents)
+        self.assertNotIn('example-secret', contents)
+        self.assertNotIn('PRIVATE_WIFI_PASSWORD', contents)
+        self.assertNotIn('CalledProcessError', contents)
+        self.assertNotIn('Traceback', contents)
 
     def test_control_c_prints_short_error_and_exits_abnormally(self) -> None:
         errors = StringIO()
