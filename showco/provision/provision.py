@@ -186,10 +186,13 @@ def validate_config(provision_config: config.Config) -> None:
 
 def config_errors(provision_config: config.Config) -> list[str]:
     errors = []
-    external = config.external_wifi(provision_config)
+    external = config.networks_at(provision_config, 'external', 'wifi')
     private = config.internal_wifi(provision_config)
-    if not external.name or external.name == 'TODO':
-        errors.append('- networks.external.wifi.external.name is required')
+    if not external:
+        errors.append('- networks.external.wifi must contain at least one network')
+    for k, n in external.items():
+        if not n.name or n.name == 'TODO':
+            errors.append(f'- networks.external.wifi.{k}.name is required')
     if not private.password or private.password == 'TODO':
         errors.append('- networks.internal.wifi.private.password is required')
     elif not valid_wpa_password(private.password):

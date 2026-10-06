@@ -181,7 +181,40 @@ The important configuration is near the top of `config.toml`:
 | `[stream]` | Enable streamO and provide its non-secret metadata. |
 | `[lyte]` | Enable lyte and name an installation configuration relative to the lyte checkout. |
 
-`network.topology` may be `public`, `private`, `mixed`, or empty. Public joins the external Wi-Fi and puts an X18 on Ethernet. Private creates the internal access point and bridges it to X18 Ethernet. Mixed uses one Wi-Fi interface for the private bridged network and a second for the external network. When empty, showCo selects a topology from the configured external network, available Wi-Fi interfaces, and whether streaming is enabled.
+External Wi-Fi networks use named tables in `showco/provision/config.toml`:
+
+```toml
+[networks.external.wifi.home]
+name = "Home Wi-Fi"
+
+[networks.external.wifi.venue]
+name = "Venue Wi-Fi"
+```
+
+Put passwords under the matching names in the ignored `showco/provision/secrets.toml`:
+
+```toml
+[networks.external.wifi.home]
+password = "your home password"
+
+[networks.external.wifi.venue]
+password = "your venue password"
+```
+
+The first network has the highest connection preference. NetworkManager automatically
+connects to an available saved network; it does not switch away from an active
+connection just because a preferred network appears. A venue network can be saved
+before visiting the venue. An entry without a password describes an open network;
+these settings cover personal WPA/WPA2 networks, not enterprise authentication or
+captive portal logins.
+
+Provisioning saves these profiles on the external Wi-Fi adapter without explicitly
+activating or disconnecting them. Mixed topology keeps the private hotspot on its
+own adapter. The existing single `[networks.external.wifi]` table must be replaced
+with named tables, including its matching password table. After provisioning, verify
+connection at both locations and after a reboot.
+
+`network.topology` may be `public`, `private`, `mixed`, or empty. Public uses a saved external Wi-Fi network and puts an X18 on Ethernet. Private creates the internal access point and bridges it to X18 Ethernet. Mixed uses one Wi-Fi interface for the private bridged network and a second for the external network. When empty, showCo selects a topology from the configured external network, available Wi-Fi interfaces, and whether streaming is enabled.
 
 This installation sets `network.restrict_external_ingress = true`. The policy allows incoming connections on the Pi's private network; other interfaces accept SSH on the configured port and mDNS discovery on UDP 5353 so `t.local` remains usable. Outbound traffic and its replies continue to work. Provisioning installs a persistent nftables ingress rule and rejects `public` topology, which has no private hotspot. Put a long, random private Wi-Fi password in the ignored `showco/provision/secrets.toml`. To reach the web UI, join the private Wi-Fi; from the external Wi-Fi, use SSH only. Verify access from both networks after provisioning.
 

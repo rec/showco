@@ -8,7 +8,7 @@ from io import StringIO
 import tyro
 
 from showco.provision import network as network_config
-from showco.provision.config import Config, config_from_values
+from showco.provision.config import Config, Network, config_from_values
 
 
 class NetworkConfigTests(unittest.TestCase):
@@ -54,6 +54,12 @@ class NetworkConfigTests(unittest.TestCase):
                 configuration = make_network_config(
                     private_wifi_password="secret ' password"
                 )
+                configuration.networks['external']['wifi'].update(
+                    {
+                        'home': Network(name='Home', password='home-secret'),
+                        'venue': Network(name='Venue', password='venue-secret'),
+                    }
+                )
                 if dry_run:
                     network_config.configure_network(
                         configuration,
@@ -71,6 +77,41 @@ class NetworkConfigTests(unittest.TestCase):
                     self.assertNotIn('secret', str(failure.exception))
                 self.assertNotIn('secret', output.getvalue())
                 self.assertIn('[redacted]', output.getvalue())
+
+    def test_saved_external_profiles_use_separate_adapter_and_ordered_preferences(
+        self,
+    ) -> None:
+        configuration = make_network_config(external_wifi_name='Home Wi-Fi')
+        configuration.networks['external']['wifi']['venue'] = Network(
+            name="Venue ' Wi-Fi", password='venue-secret'
+        )
+        assignment = network_config.assign_wifi(
+            [
+                network_config.WifiInterface(name='wlan0'),
+                network_config.WifiInterface(
+                    name='wlan1', connected=True, connection='showco-private'
+                ),
+            ],
+            swap_wifi=False,
+        )
+        commands = network_config.network_commands(
+            configuration, assignment, network_config.NetworkTopology.MIXED
+        )
+        self.assertEqual(assignment.primary.name, 'wlan1')
+        profiles = commands[-2:]
+        for i, command in enumerate(profiles):
+            script = command[2]
+            self.assertIn('ifname wlan0', script)
+            self.assertIn(f'connection.autoconnect-priority {999 - i}', script)
+            self.assertIn('connection.autoconnect yes', script)
+            self.assertNotIn('connection up', script)
+            self.assertNotIn('device disconnect', script)
+        self.assertIn('showco-external-home', profiles[0][2])
+        self.assertIn('wifi-sec.key-mgmt none', profiles[0][2])
+        self.assertIn('showco-external-venue', profiles[1][2])
+        self.assertIn(
+            'wifi-sec.key-mgmt wpa-psk wifi-sec.psk venue-secret', profiles[1][2]
+        )
 
     def test_network_config_options_accept_existing_flags(self) -> None:
         options = tyro.cli(
@@ -358,7 +399,7 @@ class NetworkConfigTests(unittest.TestCase):
         )
 
         self.assertEqual(
-            commands,
+            commands[:-1],
             [
                 [
                     'sudo',
@@ -651,9 +692,13 @@ def make_network_config(
                 },
                 'external': {
                     'wifi': {
-                        'name': external_wifi_name,
-                        'password': external_wifi_password,
-                    },
+                        'home': {
+                            'name': external_wifi_name,
+                            'password': external_wifi_password,
+                        }
+                    }
+                    if external_wifi_name
+                    else {},
                 },
             },
             'mixers': mixers,

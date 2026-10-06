@@ -219,7 +219,7 @@ def networks_value(
     values: dict[str, object], mixers: list[MixerSpec]
 ) -> dict[str, dict[str, dict[str, Network]]]:
     internal = table_value(values, 'internal')
-    external = table_value(values, 'external')
+    external = table_value(table_value(values, 'external'), 'wifi')
     subnet = internal_subnet(values)
     x18_mixer = next((mixer for mixer in mixers if mixer.name == 'X18'), None)
     wired = {}
@@ -242,11 +242,12 @@ def networks_value(
         },
         'external': {
             'wifi': {
-                'external': network_value(
-                    table_value(external, 'wifi'),
-                    'networks.external.wifi',
+                k: network_value(
+                    table_value(external, k),
+                    f'networks.external.wifi.{k}',
                     '',
                 )
+                for k in external
             }
         },
     }
@@ -325,15 +326,6 @@ def internal_wifi(config: Config) -> Network:
         'networks.internal.wifi',
         key='private',
         default=Network(name='showbox'),
-    )
-
-
-def external_wifi(config: Config) -> Network:
-    return first_network(
-        networks_at(config, 'external', 'wifi'),
-        'networks.external.wifi',
-        key='external',
-        default=Network(),
     )
 
 
