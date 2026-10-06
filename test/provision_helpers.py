@@ -71,6 +71,6 @@ def networks(
             },
         },
         'external': {
-            'wifi': external_wifi or {},
+            'wifi': {'home': external_wifi} if external_wifi else {},
         },
     }

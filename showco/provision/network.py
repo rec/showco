@@ -96,10 +96,15 @@ def configure_network(
     )
     for command in commands:
         displayed_command = list(command)
-        for password in (
+        for password in [
             config.internal_wifi(provision_config).password,
-            config.external_wifi(provision_config).password,
-        ):
+            *[
+                n.password
+                for n in config.networks_at(
+                    provision_config, 'external', 'wifi'
+                ).values()
+            ],
+        ]:
             if password:
                 displayed_command = [
                     s.replace(shlex_quote(password), '[redacted]').replace(
@@ -184,12 +189,8 @@ def assign_wifi(
     if swap_wifi and len(ordered) > 1:
         ordered[0], ordered[1] = ordered[1], ordered[0]
     elif private_wifi := next(
-        (
-            i
-            for i in ordered
-            if not i.connected or i.connection == PRIVATE_WIFI_CONNECTION
-        ),
-        None,
+        (i for i in ordered if i.connection == PRIVATE_WIFI_CONNECTION),
+        next((i for i in ordered if not i.connected), None),
     ):
         ordered.remove(private_wifi)
         ordered.insert(0, private_wifi)
@@ -209,10 +210,10 @@ def select_topology(
     topology = topology_value(provision_config.network.topology)
     if topology is not None:
         return topology
-    if not config.external_wifi(provision_config).name:
+    if not config.networks_at(provision_config, 'external', 'wifi'):
         if provision_config.stream.enabled:
             sys.exit(
-                'ERROR: networks.external.wifi.external.name is required '
+                'ERROR: networks.external.wifi must contain at least one network '
                 'when stream.enabled is true'
             )
         return NetworkTopology.PRIVATE
@@ -263,11 +264,17 @@ def network_commands(
     if x18_network is not None and topology == NetworkTopology.PUBLIC:
         commands.append(x18_ethernet_command(provision_config))
     if topology == NetworkTopology.PUBLIC:
+        commands.extend(external_wifi_commands(provision_config, assignment.primary))
         return commands
     if assignment.primary.connected:
         commands.append(nmcli_command('device', 'disconnect', assignment.primary.name))
     if x18_network is not None:
         commands.append(x18_bridge_command(provision_config, assignment.primary))
+        if topology == NetworkTopology.MIXED:
+            assert assignment.secondary is not None
+            commands.extend(
+                external_wifi_commands(provision_config, assignment.secondary)
+            )
         return commands
     commands.append(private_wifi_command(provision_config, assignment.primary))
     if config.internal_wifi(provision_config).password:
@@ -291,6 +298,41 @@ def network_commands(
             'yes',
         )
     )
+    if topology == NetworkTopology.MIXED:
+        assert assignment.secondary is not None
+        commands.extend(external_wifi_commands(provision_config, assignment.secondary))
+    return commands
+
+
+def external_wifi_commands(
+    provision_config: config.Config, interface: WifiInterface
+) -> list[list[str]]:
+    networks = config.networks_at(provision_config, 'external', 'wifi')
+    commands = []
+    for i, (k, n) in enumerate(networks.items()):
+        connection = shlex_quote(f'showco-external-{k}')
+        security = (
+            f'wifi-sec.key-mgmt wpa-psk wifi-sec.psk {shlex_quote(n.password)}'
+            if n.password
+            else 'wifi-sec.key-mgmt none'
+        )
+        script = '\n'.join(
+            [
+                'set -e',
+                f'if ! nmcli connection show {connection} >/dev/null 2>&1; then '
+                'sudo nmcli connection add type wifi '
+                f'ifname {shlex_quote(interface.name)} con-name {connection} '
+                f'ssid {shlex_quote(n.name)} connection.autoconnect no; fi',
+                f'sudo nmcli connection modify {connection} '
+                f'connection.interface-name {shlex_quote(interface.name)} '
+                f'802-11-wireless.ssid {shlex_quote(n.name)} '
+                '802-11-wireless.mode infrastructure '
+                f'{security} ipv4.method auto ipv6.method auto '
+                f'connection.autoconnect-priority {max(-999, 999 - i)} '
+                'connection.autoconnect yes',
+            ]
+        )
+        commands.append(['bash', '-c', script])
     return commands
 
 
@@ -480,8 +522,8 @@ def ip_network(subnet: str) -> ipaddress.IPv4Network | ipaddress.IPv6Network:
 
 
 def require_external_network(provision_config: config.Config) -> None:
-    if not config.external_wifi(provision_config).name:
-        sys.exit('ERROR: networks.external.wifi.external.name is required')
+    if not config.networks_at(provision_config, 'external', 'wifi'):
+        sys.exit('ERROR: networks.external.wifi must contain at least one network')
 
 
 def topology_value(value: object) -> NetworkTopology | None:

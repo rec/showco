@@ -17,7 +17,7 @@ subnet = "10.0.0.0/24"
 name = "showbox"
 ip_address = 1
 
-[networks.external.wifi]
+[networks.external.wifi.home]
 name = "Livebox-F13E"
 
 [[mixers]]

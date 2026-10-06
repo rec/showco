@@ -3,6 +3,7 @@ from __future__ import annotations
 import shlex
 from collections.abc import Iterable
 from ipaddress import IPv4Address, ip_network
+from json import dumps
 from pathlib import Path
 
 from . import config
@@ -18,7 +19,7 @@ def remote_command(
     provision_config: config.Config, remote_script: str, *, upgrade: bool = False
 ) -> str:
     private = config.internal_wifi(provision_config)
-    external = config.external_wifi(provision_config)
+    external = config.networks_at(provision_config, 'external', 'wifi')
     x18_network = config.x18(provision_config)
     x18_mixer = next(
         (mixer for mixer in provision_config.mixers if mixer.name == 'X18'), None
@@ -65,8 +66,14 @@ def remote_command(
             if private.ip_address
             else ''
         ),
-        'EXTERNAL_WIFI_SSID': external.name,
-        'EXTERNAL_WIFI_PASSWORD': external.password,
+        'EXTERNAL_WIFI_CONFIG': '\n'.join(
+            f'[networks.external.wifi.{dumps(k)}]\nname = {dumps(n.name)}'
+            for k, n in external.items()
+        ),
+        'EXTERNAL_WIFI_SECRETS': '\n'.join(
+            f'[networks.external.wifi.{dumps(k)}]\npassword = {dumps(n.password)}'
+            for k, n in external.items()
+        ),
         'SHOWCO_PI_X18_SUBNET': x18_subnet,
         'SHOWCO_X18_HOST': x18_host,
         'SHOWCO_X18_IP_OFFSET': (

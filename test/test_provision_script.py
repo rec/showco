@@ -289,8 +289,8 @@ class ProvisionScriptTests(unittest.TestCase):
         self.assertIn('SHOWCO_HOST=recs-stage.local', command)
         self.assertIn('ROOT=/srv/show-projects', command)
         self.assertIn("RECCY_REFNAME=''", command)
-        self.assertIn('EXTERNAL_WIFI_SSID=Venue', command)
-        self.assertIn("EXTERNAL_WIFI_PASSWORD='venue password'", command)
+        self.assertIn('name = "Venue"', command)
+        self.assertIn('password = "venue password"', command)
         self.assertIn("PRIVATE_WIFI_PASSWORD='private password'", command)
         self.assertIn('X18=false', command)
         self.assertIn("RECS_REFNAME=''", command)
@@ -387,6 +387,10 @@ def test_generated_network_files_are_readable_and_preserve_addresses(
         },
         external_wifi={'name': 'venue Wi-Fi', 'password': 'test-external-password'},
     )
+    network_values['external']['wifi']['venue'] = {
+        'name': 'Venue "guest" Wi-Fi',
+        'password': "second ' password\\with slash",
+    }
     network_values['internal']['subnet'] = '192.168.70.0/24'
     original = make_config(
         values(
@@ -423,3 +427,5 @@ def test_generated_network_files_are_readable_and_preserve_addresses(
     assert config.x18(restored) == config.x18(original)
     assert 'test-private-password' not in public_file.read_text()
     assert 'test-external-password' not in public_file.read_text()
+    assert 'second' not in public_file.read_text()
+    assert list(restored.networks['external']['wifi']) == ['home', 'venue']
