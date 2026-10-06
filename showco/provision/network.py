@@ -95,7 +95,19 @@ def configure_network(
         provision_config, assignment, topology, protected_interface
     )
     for command in commands:
-        print(shell_command(command), file=output)
+        displayed_command = list(command)
+        for password in (
+            config.internal_wifi(provision_config).password,
+            config.external_wifi(provision_config).password,
+        ):
+            if password:
+                displayed_command = [
+                    s.replace(shlex_quote(password), '[redacted]').replace(
+                        password, '[redacted]'
+                    )
+                    for s in displayed_command
+                ]
+        print(shell_command(displayed_command), file=output)
         if not dry_run:
             check_command_result(run_command(command))
     return 0
@@ -120,7 +132,8 @@ def wifi_interfaces_from_status(status: str) -> list[WifiInterface]:
             interfaces.append(
                 WifiInterface(
                     name=fields[0],
-                    connected=len(fields) >= 3 and fields[2].startswith('connected'),
+                    connected=len(fields) >= 3
+                    and fields[2].startswith(('connected', 'connecting')),
                     connection=fields[3] if len(fields) >= 4 else '',
                 )
             )
@@ -251,10 +264,7 @@ def network_commands(
         commands.append(x18_ethernet_command(provision_config))
     if topology == NetworkTopology.PUBLIC:
         return commands
-    if (
-        assignment.primary.connected
-        and assignment.primary.connection != PRIVATE_WIFI_CONNECTION
-    ):
+    if assignment.primary.connected:
         commands.append(nmcli_command('device', 'disconnect', assignment.primary.name))
     if x18_network is not None:
         commands.append(x18_bridge_command(provision_config, assignment.primary))
@@ -373,7 +383,9 @@ def x18_bridge_command(
         f'if nmcli connection show {wifi_connection} >/dev/null 2>&1; then '
         'sudo nmcli connection delete showco-private-rollback '
         '>/dev/null 2>&1 || true; '
-        f'sudo nmcli connection clone {wifi_connection} showco-private-rollback; fi',
+        f'sudo nmcli connection clone {wifi_connection} showco-private-rollback; '
+        'sudo nmcli connection modify showco-private-rollback '
+        'connection.autoconnect no; fi',
         'trap rollback ERR',
         f'if ! nmcli connection show {bridge_connection} >/dev/null 2>&1; then '
         'sudo nmcli connection add '
@@ -395,12 +407,13 @@ def x18_bridge_command(
         f'sudo nmcli connection delete {wifi_connection}; fi',
         'sudo nmcli connection add '
         f'type wifi ifname {wifi_name} con-name {wifi_connection} '
-        f'controller {bridge_interface} ssid {wifi_ssid}',
+        f'controller {bridge_interface} ssid {wifi_ssid} '
+        'connection.autoconnect no',
         'sudo nmcli connection modify '
         f'{wifi_connection} ifname {wifi_name} '
         f'connection.controller {bridge_interface} '
         '802-11-wireless.mode ap '
-        'connection.autoconnect yes',
+        'connection.autoconnect no',
     ]
     if network.password:
         script.append(
@@ -413,6 +426,8 @@ def x18_bridge_command(
             f'sudo nmcli connection up {bridge_connection}',
             f'sudo nmcli connection up {ethernet_connection}',
             f'sudo nmcli connection up {wifi_connection}',
+            f'sudo nmcli connection modify {wifi_connection} '
+            'connection.autoconnect yes',
             'trap - ERR',
             'sudo nmcli connection delete showco-private-rollback '
             '>/dev/null 2>&1 || true',
@@ -499,7 +514,9 @@ def check_command_result(completed: CompletedProcess[str]) -> None:
     if completed.returncode == 0:
         return
     output = f'{completed.stdout}{completed.stderr}'.strip()
-    message = f'ERROR: command failed: {shell_command(completed.args)}'
+    message = (
+        f'ERROR: network configuration command failed (exit {completed.returncode})'
+    )
     if output:
         message = f'{message}\n{output}'
     sys.exit(message)
