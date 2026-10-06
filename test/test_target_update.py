@@ -243,8 +243,8 @@ def test_remote_command_does_not_mutate_checkouts_before_transaction() -> None:
     )
     assert command == (
         "if cd '/srv/show projects/showco' && "
-        'PATH="$HOME/.local/bin:$PATH" uv run --no-sync showco deploy '
-        "--target-machine --root '/srv/show projects' recs; then exit 0; fi; "
+        'PATH="$HOME/.local/bin:$PATH" uv run --no-sync python - '
+        "'/srv/show projects' recs; then exit 0; fi; "
         "printf '\\nPost-update recs service diagnosis:\\n'; "
         'systemctl --user show recs.service '
         '--property=LoadState,ActiveState,SubState,Result,ExecMainStatus --no-pager '

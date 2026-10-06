@@ -5,7 +5,7 @@ import shlex
 import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
-from subprocess import CalledProcessError, CompletedProcess, TimeoutExpired
+from subprocess import CalledProcessError, CompletedProcess, TimeoutExpired, run
 from typing import TextIO, cast
 
 from pydantic import BaseModel
@@ -14,7 +14,7 @@ from tqdm import tqdm
 
 from ..provision import config, provision, script, ssh
 from ..runtime import recs, revision, services
-from . import repositories
+from . import bootstrap, repositories
 
 RunCommand = Callable[
     [Sequence[str]],
@@ -238,13 +238,13 @@ def remote_update_command(
     *,
     clear_settings: bool = False,
 ) -> str:
-    arguments = ['--target-machine', '--root', str(root)]
+    arguments = [str(root)]
     if clear_settings:
         arguments.append('--clear-settings')
     update_command = (
         f'cd {shlex.quote(str(root / "showco"))} && '
         'PATH="$HOME/.local/bin:$PATH" '
-        f'uv run --no-sync showco deploy {shlex.join([*arguments, *selected])}'
+        f'uv run --no-sync python - {shlex.join([*arguments, *selected])}'
     )
     return (
         f'if {update_command}; then exit 0; fi; '
@@ -429,8 +429,9 @@ def run_step(
 
 def run_remote_step(program: str, step: str, command: list[str]) -> StepResult:
     try:
-        completed = subprocess.run(
+        completed = run(
             command,
+            input=Path(bootstrap.__file__).read_text() if step == 'update' else None,
             capture_output=True,
             check=False,
             text=True,
