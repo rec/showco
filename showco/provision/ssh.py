@@ -3,7 +3,15 @@ from __future__ import annotations
 import sys
 import time
 from pathlib import Path
-from subprocess import CalledProcessError, CompletedProcess, TimeoutExpired
+from subprocess import (
+    PIPE,
+    STDOUT,
+    CalledProcessError,
+    CompletedProcess,
+    Popen,
+    TimeoutExpired,
+)
+from threading import Thread
 from typing import cast
 
 from reccy.runtime import subprocess
@@ -204,11 +212,20 @@ def capture_ssh(provision_config: config.Config, command: str) -> str:
 def ssh_error_message(
     provision_config: config.Config, error: CalledProcessError | TimeoutExpired
 ) -> str:
-    output = f'{error.stdout or ""}{error.stderr or ""}'.strip()
-    message = (
-        f'ERROR: SSH connection or command failed for {provision_config.ssh_target}. '
-        f'SSH connect timeout is {SSH_CONNECT_TIMEOUT_SECONDS} seconds.'
-    )
+    output = ''.join(
+        x.decode(errors='replace') if isinstance(x, bytes) else x or ''
+        for x in (error.stdout, error.stderr)
+    ).strip()
+    if isinstance(error, TimeoutExpired):
+        message = (
+            f'ERROR: SSH operation for {provision_config.ssh_target} '
+            f'timed out after {error.timeout} seconds.'
+        )
+    else:
+        message = (
+            f'ERROR: SSH command for {provision_config.ssh_target} '
+            f'failed with exit status {error.returncode}.'
+        )
     if output:
         message += f'\nssh said: {output}'
     return message
@@ -238,6 +255,34 @@ def run_command(
     capture_output: bool = False,
     timeout_seconds: int | None = None,
 ) -> CompletedProcess[str]:
+    if not capture_output:
+        process = Popen(
+            command,
+            stdout=PIPE,
+            stderr=STDOUT,
+            text=True,
+            start_new_session=True,
+        )
+        assert process.stdout is not None
+
+        def display_output() -> None:
+            assert process.stdout is not None
+            for line in process.stdout:
+                print(line, end='', flush=True)
+
+        reader = Thread(target=display_output)
+        reader.start()
+        try:
+            returncode = process.wait(timeout=timeout_seconds)
+        finally:
+            if process.poll() is None:
+                process.kill()
+                process.wait()
+            reader.join()
+            process.stdout.close()
+        if returncode != 0:
+            raise CalledProcessError(returncode, command)
+        return CompletedProcess(command, returncode)
     if timeout_seconds is None:
         return cast(
             CompletedProcess[str],

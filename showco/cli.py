@@ -211,7 +211,9 @@ def _append_error_report(
             record.flush()
             record.seek(0)
             shutil.copyfileobj(record, output)
-            if error is not None:
+            if isinstance(error, SystemExit):
+                output.write(f'{error}\n')
+            elif error is not None:
                 output.writelines(traceback.format_exception(error))
             elif status is not None:
                 output.write(f'showCo exited with status {status}\n')
