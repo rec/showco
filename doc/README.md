@@ -223,6 +223,14 @@ a command starts. If that command fails, it saves the terminal output there as
 well as displaying it. The file may contain operational details, so keep it
 private.
 
+On the development machine, run `showco panel` to open the Pi's control panel
+without switching Wi-Fi. It uses the configured SSH address and ports, forwards
+the panel to this machine's loopback interface, and opens your browser. Leave
+the command running while using the panel; Ctrl-C closes the tunnel. The tablet
+can use the panel at the same time. If the local port is occupied, choose another
+with `showco panel --port 17353`. SSH failures are displayed and saved in
+`showco-errors.txt`.
+
 Updates preserve saved recs settings by default. Pass `--clear-settings` to explicitly clear them when updating recs. Preflight checks run before settings or services are changed. A failed update restores the previous selected revisions, locked environments, and any settings explicitly cleared, then restarts affected services. If restoration fails, services remain stopped and the command reports the failure; a recovered update still exits unsuccessfully.
 
 Repository selection includes dependent applications. All affected services stop before any selected checkout changes, and showCo starts last. Unselected checkouts are not reset. Remote updates fetch the published showCo updater into a temporary directory and run it with its locked dependencies, so an older installed CLI does not block updates. The installed revisions and environments remain unchanged until the update transaction starts. A working target Python environment, uv, and Git checkout are required; provisioning is the repair path for a broken installation. Rollback handles command failures and interruption within the update process; it is not a durable recovery mechanism for power loss or a killed process.
