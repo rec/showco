@@ -3,7 +3,7 @@ from __future__ import annotations
 import gc
 import sys
 import unittest
-from io import StringIO
+from io import BytesIO, StringIO
 from logging import getLogger
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -127,6 +127,15 @@ class CliTests(unittest.TestCase):
 
         self.assertFalse(self.error_log.exists())
 
+    def test_success_removes_log_created_during_command(self) -> None:
+        def succeed(arguments: list[str]) -> int:
+            self.error_log.write_text('temporary warning')
+            return 0
+
+        with patch.object(cli.deploy, 'main', side_effect=succeed):
+            self.assertEqual(cli.main(['deploy']), 0)
+        self.assertFalse(self.error_log.exists())
+
     def test_exit_message_is_saved_without_changing_exit(self) -> None:
         with patch.object(cli.deploy, 'main', side_effect=SystemExit('bad option')):
             with self.assertRaisesRegex(SystemExit, 'bad option'):
@@ -138,7 +147,10 @@ class CliTests(unittest.TestCase):
         configuration = make_config(values(networks=networks(x18=False)))
         terminal = StringIO()
         process = Mock()
-        process.stdout = StringIO('==> installing lyte\nERROR: invalid installation\n')
+        process.stdout = BytesIO(
+            b'==> installing lyte\r\nprogress 1\rprogress 2\r\n'
+            b'ERROR: invalid installation\n'
+        )
         process.wait.return_value = 1
         process.poll.return_value = 1
 
@@ -156,7 +168,9 @@ class CliTests(unittest.TestCase):
         ):
             cli.main(['deploy'])
 
-        contents = self.error_log.read_text()
+        contents = self.error_log.read_bytes().decode()
+        self.assertIn('progress 1\rprogress 2\r\n', terminal.getvalue())
+        self.assertIn('progress 1\rprogress 2\r\n', contents)
         self.assertIn('==> installing lyte', terminal.getvalue())
         self.assertIn('ERROR: invalid installation', contents)
         self.assertIn('failed with exit status 1', contents)
