@@ -12,6 +12,66 @@ from showco.provision.config import Config, config_from_values
 
 
 class NetworkConfigTests(unittest.TestCase):
+    def test_hotspot_rebuild_disconnects_connecting_rollback_first(self) -> None:
+        interfaces = network_config.wifi_interfaces_from_status(
+            'wlan0:wifi:connecting (configuring):showco-private-rollback\n'
+        )
+        assignment = network_config.assign_wifi(interfaces, swap_wifi=False)
+        commands = network_config.network_commands(
+            make_network_config(), assignment, network_config.NetworkTopology.PRIVATE
+        )
+        self.assertEqual(
+            commands[0], ['sudo', 'nmcli', 'device', 'disconnect', 'wlan0']
+        )
+        script = commands[1][2]
+        self.assertIn('showco-private-rollback connection.autoconnect no', script)
+        self.assertLess(
+            script.index('connection.autoconnect no'),
+            script.index('sudo nmcli connection up showco-x18-bridge'),
+        )
+        self.assertIn(
+            'sudo nmcli connection up showco-private\n'
+            'sudo nmcli connection modify showco-private connection.autoconnect yes',
+            script,
+        )
+
+    def test_network_reports_do_not_include_passwords(self) -> None:
+        for dry_run in (True, False):
+            with self.subTest(dry_run=dry_run):
+                output = StringIO()
+
+                def run_command(
+                    command: Sequence[str],
+                ) -> subprocess.CompletedProcess[str]:
+                    if command[0] == 'nmcli':
+                        return subprocess.CompletedProcess(
+                            command, 0, 'wlan0:wifi:disconnected:\n', ''
+                        )
+                    return subprocess.CompletedProcess(
+                        command, 1, '', 'activation failed'
+                    )
+
+                configuration = make_network_config(
+                    private_wifi_password="secret ' password"
+                )
+                if dry_run:
+                    network_config.configure_network(
+                        configuration,
+                        dry_run=True,
+                        run_command=run_command,
+                        output=output,
+                    )
+                else:
+                    with self.assertRaisesRegex(
+                        SystemExit, 'activation failed'
+                    ) as failure:
+                        network_config.configure_network(
+                            configuration, run_command=run_command, output=output
+                        )
+                    self.assertNotIn('secret', str(failure.exception))
+                self.assertNotIn('secret', output.getvalue())
+                self.assertIn('[redacted]', output.getvalue())
+
     def test_network_config_options_accept_existing_flags(self) -> None:
         options = tyro.cli(
             network_config.NetworkConfigOptions,
