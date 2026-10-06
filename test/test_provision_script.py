@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shlex
 import subprocess
 import tomllib
@@ -7,10 +8,11 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import pytest
 from provision_helpers import make_config, networks, values
 
+from showco.provision import config, remote, script
 from showco.provision import network as network_config
-from showco.provision import remote, script
 
 
 class ProvisionScriptTests(unittest.TestCase):
@@ -369,3 +371,55 @@ class ProvisionScriptTests(unittest.TestCase):
         self.assertEqual(len(tomllib.loads(rendered)['mixers']), 2)
         self.assertIn("subscription_path = '/xremote'", rendered)
         self.assertEqual(osc.count('[[nodes]]'), 1)
+
+
+@pytest.mark.parametrize('x18', [True, False])
+@pytest.mark.parametrize('hotspot_offset', [None, 7])
+def test_generated_network_files_are_readable_and_preserve_addresses(
+    tmp_path: Path, x18: bool, hotspot_offset: int | None
+) -> None:
+    network_values = networks(
+        x18=x18,
+        internal_wifi={
+            'name': 'show "box"',
+            'ip_address': hotspot_offset,
+            'password': 'test-private-password',
+        },
+        external_wifi={'name': 'venue Wi-Fi', 'password': 'test-external-password'},
+    )
+    network_values['internal']['subnet'] = '192.168.70.0/24'
+    original = make_config(
+        values(
+            networks=network_values,
+            network={'topology': 'mixed', 'restrict_external_ingress': True},
+        )
+    )
+    assignments = shlex.split(script.remote_command(original, '/tmp/provision.sh'))[:-2]
+    environment = dict(os.environ)
+    environment.update(a.split('=', 1) for a in assignments)
+    public_file = tmp_path / 'network.toml'
+    secrets_file = tmp_path / 'secrets.toml'
+    # Exercise only the file writer, with privileged ownership changes disabled.
+    writer = (script.SCRIPT_DIR / 'templates/network.sh').read_text()
+    subprocess.run(
+        [
+            'bash',
+            '-c',
+            writer + '\nsudo() { :; }\nwrite_network_config_files "$1" "$2"',
+            'writer',
+            str(public_file),
+            str(secrets_file),
+        ],
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    restored = config.config_from_values(config.load_values(public_file, secrets_file))
+
+    assert restored.network == original.network
+    assert restored.networks == original.networks
+    assert config.x18(restored) == config.x18(original)
+    assert 'test-private-password' not in public_file.read_text()
+    assert 'test-external-password' not in public_file.read_text()

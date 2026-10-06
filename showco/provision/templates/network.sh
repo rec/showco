@@ -14,21 +14,6 @@ write_toml_string() {
   printf '\n'
 }
 
-write_toml_network_values() {
-  local name=$1
-  local ip_address=$2
-  local subnet=$3
-  if [ -n "$name" ]; then
-    write_toml_string name "$name"
-  fi
-  if [ -n "$ip_address" ]; then
-    write_toml_string ip_address "$ip_address"
-  fi
-  if [ -n "$subnet" ]; then
-    write_toml_string subnet "$subnet"
-  fi
-}
-
 write_toml_wifi_secret_values() {
   local password=$1
   write_toml_string password "$password"
@@ -47,14 +32,21 @@ write_network_config_files() {
     printf 'swap_wifi = %s\n' "$SWAP_WIFI"
     printf 'restrict_external_ingress = %s\n' "$RESTRICT_EXTERNAL_INGRESS"
     write_toml_string topology "$NETWORK_TOPOLOGY"
-    if [ "$X18" = true ]; then
-      printf '\n[networks.internal.wired.x18]\n'
-      write_toml_network_values x18 "$SHOWCO_X18_HOST" "$SHOWCO_PI_X18_SUBNET"
+    printf '\n[networks.internal]\n'
+    write_toml_string subnet "$SHOWCO_PI_X18_SUBNET"
+    printf '\n[networks.internal.wifi]\n'
+    write_toml_string name "$PRIVATE_WIFI_SSID"
+    if [ -n "$PRIVATE_WIFI_IP_OFFSET" ]; then
+      printf 'ip_address = %s\n' "$PRIVATE_WIFI_IP_OFFSET"
     fi
-    printf '\n[networks.internal.wifi.private]\n'
-    write_toml_network_values "$PRIVATE_WIFI_SSID" "" ""
-    printf '\n[networks.external.wifi.external]\n'
-    write_toml_network_values "$EXTERNAL_WIFI_SSID" "" ""
+    printf '\n[networks.external.wifi]\n'
+    write_toml_string name "$EXTERNAL_WIFI_SSID"
+    if [ "$X18" = true ]; then
+      printf '\n[[mixers]]\n'
+      write_toml_string name X18
+      printf 'ip_address = %s\n' "$SHOWCO_X18_IP_OFFSET"
+      printf 'port = %s\n' "$SHOWCO_X18_PORT"
+    fi
     printf '\n[stream]\n'
     printf 'enabled = %s\n' "$STREAMO_ENABLED"
     printf '\n[lyte]\n'
@@ -77,9 +69,9 @@ write_network_config_files() {
     write_toml_string refname "$SHOWCO_REFNAME"
   } >"$config_file"
   {
-    printf '[networks.internal.wifi.private]\n'
+    printf '[networks.internal.wifi]\n'
     write_toml_wifi_secret_values "$PRIVATE_WIFI_PASSWORD"
-    printf '\n[networks.external.wifi.external]\n'
+    printf '\n[networks.external.wifi]\n'
     write_toml_wifi_secret_values "$EXTERNAL_WIFI_PASSWORD"
   } >"$secrets_file"
   sudo chown "$SHOW_USER:$SHOW_USER" "$config_file" "$secrets_file"
@@ -94,11 +86,11 @@ configure_network() {
   local status
 
   if [[ -z "$EXTERNAL_WIFI_SSID" || "$EXTERNAL_WIFI_SSID" == TODO ]]; then
-    printf 'Skipping network configuration: networks.external.wifi.external.name is not set.\n'
+    printf 'Skipping network configuration: networks.external.wifi.name is not set.\n'
     return
   fi
   if [[ -z "$PRIVATE_WIFI_PASSWORD" || "$PRIVATE_WIFI_PASSWORD" == TODO ]]; then
-    printf 'Skipping network configuration: networks.internal.wifi.private.password is not set.\n'
+    printf 'Skipping network configuration: networks.internal.wifi.password is not set.\n'
     return
   fi
 
@@ -108,7 +100,8 @@ configure_network() {
   configuration_hash=$(printf '%s\0' \
     "$NETWORK_TOPOLOGY" "$X18" "$SWAP_WIFI" "$RESTRICT_EXTERNAL_INGRESS" \
     "$SHOWCO_SSH_PORT" "$SHOWCO_PI_X18_SUBNET" \
-    "$SHOWCO_X18_HOST" "$PRIVATE_WIFI_SSID" "$PRIVATE_WIFI_PASSWORD" \
+    "$SHOWCO_X18_HOST" "$SHOWCO_X18_PORT" "$PRIVATE_WIFI_IP_OFFSET" \
+    "$PRIVATE_WIFI_SSID" "$PRIVATE_WIFI_PASSWORD" \
     "$EXTERNAL_WIFI_SSID" "$EXTERNAL_WIFI_PASSWORD" "$STREAMO_ENABLED" \
     | sha256sum | awk '{print $1}')
   if [[ -f "$state_file" && "$(cat "$state_file")" == "$configuration_hash" ]]; then

@@ -256,6 +256,7 @@ def network_value(values: dict[str, object], name: str, subnet: str) -> Network:
     ip_address = values.get('ip_address')
     return Network(
         name=string_value(values, 'name'),
+        subnet=subnet,
         ip_address=(
             address_at_offset(
                 subnet,
