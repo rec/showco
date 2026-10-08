@@ -30,6 +30,28 @@ def test_lock_blocks_protected_action_before_dispatch(
     recorder.assert_not_called()
 
 
+@pytest.mark.parametrize(
+    'action',
+    ['streamo-stop', 'streamo-restart', 'music-close-cancel', 'music-close-finish'],
+)
+def test_lock_prevents_stream_and_closing_recovery_side_effects(
+    tmp_path: Path, action: str
+) -> None:
+    application = app(tmp_path)
+    application.streamo = mock.Mock()
+    application.streamo_restart = mock.Mock()
+    application.music = mock.Mock()
+    application.performance_lock.set(True)
+    result = application.run_action(
+        {'action': action, 'confirmation': 'broadcast-stopped'}
+    )
+    assert not result.ok
+    assert 'Performance lock blocks' in result.message
+    application.streamo.action.assert_not_called()
+    application.streamo_restart.assert_not_called()
+    application.music.recover_closing.assert_not_called()
+
+
 def test_lock_survives_restart_and_unlock_does_not_replay_actions(
     tmp_path: Path,
 ) -> None:
