@@ -329,6 +329,31 @@ class ServerTests(unittest.TestCase):
             self.assertTrue(started.wait(1))
             self.assertEqual(app.cable_test_status().state, 'running')
             self.assertFalse(app.run_action(form).ok)
+            app.music = mock.Mock()
+            for action in [
+                'music-setup',
+                'music-record',
+                'music-teardown',
+                'music-stop',
+                'music-close-finish',
+                'music-close-cancel',
+                'recs-new-session',
+                'recs-shutdown',
+                'recs-calibrate',
+                'soundcheck-start-recording',
+                'soundcheck-pause-recording',
+                'recovery-restart',
+                'recs-resume-recording',
+                'recs-playback-play',
+            ]:
+                with self.subTest(action=action):
+                    response = app.run_action(
+                        {'action': action, 'confirmation': 'output'}
+                    )
+                    self.assertFalse(response.ok)
+                    self.assertIn('cable test owns', response.message)
+            recs.action.assert_not_called()
+            self.assertEqual(app.music.mock_calls, [])
             self.assertIn(
                 'cable test owns the recs pause',
                 app.run_action({'action': 'recs-pause-recording'}).message,
@@ -341,6 +366,30 @@ class ServerTests(unittest.TestCase):
         ):
             time.sleep(0.01)
         self.assertEqual(app.cable_test_status().state, 'passed')
+
+    def test_cable_test_does_not_start_during_music_or_closing(self) -> None:
+        for mode, state in [
+            ('setup', 'playing'),
+            ('closing', 'stopped'),
+            ('fault', 'stopped'),
+        ]:
+            with self.subTest(mode=mode):
+                music = mock.Mock()
+                music.status.return_value = models.MusicStatus(mode=mode, state=state)
+                tester = mock.Mock()
+                app = ShowcoApp(
+                    mock.Mock(),
+                    None,
+                    rehearsal.RehearsalSystemMonitor(),
+                    rehearsal.RehearsalMixersMonitor(),
+                    cable_tester=tester,
+                    music_controller=music,
+                )
+                response = app.run_action({'action': 'cable-test'})
+                self.assertFalse(response.ok)
+                self.assertIn('before testing cables', response.message)
+                tester.run.assert_not_called()
+                self.assertEqual(app.cable_test_status().state, 'idle')
 
     def test_urgent_recording_pause_does_not_wait_for_unrelated_action(self) -> None:
         recs = mock.Mock()
