@@ -36,6 +36,52 @@ def controller() -> tuple[music.MusicController, mock.Mock, mock.Mock, mock.Mock
     return controller, recs, player, routing
 
 
+def test_record_phase_survives_restart_without_restarting_recording(
+    tmp_path: Path,
+) -> None:
+    value, recs, player, routing = controller()
+    path = tmp_path / 'closing.json'
+    value.closing_state_path = path
+    assert value.record().ok
+    recs.reset_mock()
+    restored = music.MusicController(
+        recs, player, routing, music.MusicConfig(), closing_state_path=path
+    )
+    assert restored.status().mode == 'record'
+    recs.action.assert_not_called()
+    player.reset_mock()
+    routing.reset_mock()
+    restored.close()
+
+
+def test_restart_during_transition_reports_uncertain_phase(tmp_path: Path) -> None:
+    (tmp_path / 'music.json').write_text(
+        music.MusicState(mode='transitioning').model_dump_json()
+    )
+    value, recs, player, routing = controller()
+    restored = music.MusicController(
+        recs,
+        player,
+        routing,
+        music.MusicConfig(),
+        closing_state_path=tmp_path / 'closing.json',
+    )
+    assert restored.status().mode == 'fault'
+    assert 'restarted during' in str(restored.status().error)
+    recs.action.assert_not_called()
+
+
+def test_phase_storage_failure_prevents_transition_side_effects(tmp_path: Path) -> None:
+    value, recs, player, routing = controller()
+    value.closing_state_path = tmp_path / 'closing.json'
+    with mock.patch.object(Path, 'write_text', side_effect=OSError('disk full')):
+        with pytest.raises(OSError, match='disk full'):
+            value.record()
+    recs.action.assert_not_called()
+    player.stop.assert_not_called()
+    routing.disable.assert_not_called()
+
+
 def test_setup_pauses_recording_starts_music_and_routes_it_to_main_lr() -> None:
     value, recs, player, routing = controller()
 
