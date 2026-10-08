@@ -412,6 +412,14 @@ def test_restart_after_broadcast_stops_finishes_teardown_in_order(
         value.close()
 
 
+def test_failed_player_shutdown_still_mutes_music_returns() -> None:
+    value, _, player, routing = controller()
+    player.stop.side_effect = OSError('audio device lost')
+    with pytest.raises(OSError, match='audio device lost'):
+        value.close()
+    routing.disable.assert_called_once_with()
+
+
 def test_stop_fades_music_then_shuts_down_the_pi() -> None:
     value, _, player, routing = controller()
     poweroff = mock.Mock()

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import gc
+import signal
 import sys
 import unittest
 from io import BytesIO, StringIO
@@ -205,6 +206,43 @@ class CliTests(unittest.TestCase):
                 cli.run_web_ui(cli.WebUiOptions())
 
         make_server.return_value.server_close.assert_called_once_with()
+
+    def test_sigterm_closes_server_and_restores_original_handler(self) -> None:
+        previous = signal.getsignal(signal.SIGTERM)
+
+        def terminate() -> None:
+            handler = signal.getsignal(signal.SIGTERM)
+            self.assertTrue(callable(handler))
+            if callable(handler):
+                handler(signal.SIGTERM, None)
+
+        with (
+            patch.object(cli.gui_schema, 'configure_gui'),
+            patch.object(cli.machine_role, 'require_target_machine'),
+            patch.object(cli, 'load_mixer_specs', return_value=[]),
+            patch.object(cli, 'make_server') as make_server,
+        ):
+            make_server.return_value.serve_forever.side_effect = terminate
+            with self.assertRaises(SystemExit) as error:
+                cli.run_web_ui(cli.WebUiOptions(audio=[Path('/audio')]))
+            self.assertEqual(error.exception.code, 0)
+            make_server.return_value.server_close.assert_called_once_with()
+        self.assertEqual(signal.getsignal(signal.SIGTERM), previous)
+
+    def test_failed_server_cleanup_still_restores_signal_handler(self) -> None:
+        previous = signal.getsignal(signal.SIGTERM)
+        with (
+            patch.object(cli.gui_schema, 'configure_gui'),
+            patch.object(cli.machine_role, 'require_target_machine'),
+            patch.object(cli, 'load_mixer_specs', return_value=[]),
+            patch.object(cli, 'make_server') as make_server,
+        ):
+            make_server.return_value.server_close.side_effect = OSError(
+                'cleanup failed'
+            )
+            with self.assertRaisesRegex(OSError, 'cleanup failed'):
+                cli.run_web_ui(cli.WebUiOptions(audio=[Path('/audio')]))
+        self.assertEqual(signal.getsignal(signal.SIGTERM), previous)
 
     def test_expected_deploy_failure_has_no_cleanup_error(self) -> None:
         with (

@@ -585,8 +585,10 @@ class MusicController:
             and threading.current_thread() is not self.closing_thread
         ):
             self.closing_thread.join(timeout=5)
-        self.player.stop(fade_seconds)
-        self.routing.disable()
+        try:
+            self.player.stop(fade_seconds)
+        finally:
+            self.routing.disable()
 
     def _pause_recording(self) -> None:
         result = self.recs.pause_recording()

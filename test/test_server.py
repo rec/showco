@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import time
+import traceback
 import unittest
 from datetime import datetime, timezone
+from http.server import ThreadingHTTPServer
 from io import BytesIO
 from threading import BoundedSemaphore, Event, Lock, Thread
 from unittest import mock
@@ -10,10 +12,27 @@ from unittest import mock
 from showco.runtime import models, rehearsal
 from showco.runtime.app import ShowcoApp
 from showco.runtime.lyte import LyteClient
-from showco.runtime.server import MAX_WAVEFORM_CONNECTIONS, ShowcoHandler
+from showco.runtime.server import MAX_WAVEFORM_CONNECTIONS, ShowcoHandler, ShowcoServer
 
 
 class ServerTests(unittest.TestCase):
+    def test_shutdown_attempts_every_cleanup_and_retains_errors(self) -> None:
+        server = object.__new__(ShowcoServer)
+        server.performance = mock.Mock()
+        server.app = mock.Mock()
+        server.performance.close.side_effect = OSError('monitor cleanup failed')
+        server.app.waveforms.close.side_effect = ValueError('waveform cleanup failed')
+        with mock.patch.object(ThreadingHTTPServer, 'server_close') as close_listener:
+            with self.assertRaises(ValueError) as error:
+                server.server_close()
+            server.performance.close.assert_called_once_with()
+            server.app.waveforms.close.assert_called_once_with()
+            server.app.music.close.assert_called_once_with()
+            close_listener.assert_called_once_with()
+        report = ''.join(traceback.format_exception(error.exception))
+        self.assertIn('monitor cleanup failed', report)
+        self.assertIn('waveform cleanup failed', report)
+
     @mock.patch('showco.runtime.app.source_revision', return_value='revision')
     def test_status_includes_server_revision(self, source_revision: mock.Mock) -> None:
         app = ShowcoApp(

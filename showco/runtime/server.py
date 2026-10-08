@@ -327,13 +327,19 @@ class ShowcoServer(ThreadingHTTPServer):
             self.connection_slots.release()
 
     def server_close(self) -> None:
-        if self.performance is not None:
-            self.performance.close()
-        if self.app.waveforms is not None:
-            self.app.waveforms.close()
-        if self.app.music is not None:
-            self.app.music.close()
-        super().server_close()
+        try:
+            if self.performance is not None:
+                self.performance.close()
+        finally:
+            try:
+                if self.app.waveforms is not None:
+                    self.app.waveforms.close()
+            finally:
+                try:
+                    if self.app.music is not None:
+                        self.app.music.close()
+                finally:
+                    super().server_close()
 
 
 def make_server(
