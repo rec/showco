@@ -7,6 +7,7 @@ import tomllib
 import uuid
 from collections.abc import Callable
 from pathlib import Path
+from typing import Literal
 
 import sounddevice
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
@@ -25,6 +26,11 @@ class ClosingRecord(BaseModel, frozen=True):
     operation_id: str
     phase: str
     room_scene: RoomScene
+    error: str | None = None
+
+
+class MusicState(BaseModel, frozen=True):
+    mode: Literal['stopped', 'setup', 'record', 'teardown', 'transitioning', 'fault']
     error: str | None = None
 
 
@@ -91,6 +97,7 @@ class MusicController:
         self.closing_stop = threading.Event()
         self.closing_thread: threading.Thread | None = None
         self.black_fade_done = False
+        self._load_mode()
         self._load_closing()
         if self.closing_record is not None and self.closing_record.phase not in {
             'teardown-music-playing',
@@ -318,8 +325,7 @@ class MusicController:
         self._save_closing(
             record.model_copy(update={'phase': 'teardown-music-playing'})
         )
-        self.mode = 'teardown'
-        self.transition_error = None
+        self._save_mode('teardown')
         return models.ActionResult(
             ok=True,
             message='Broadcast stopped; recs paused; teardown music is playing'
@@ -396,8 +402,7 @@ class MusicController:
                 return models.ActionResult(ok=False, message=str(error))
         self.routing.restore_room(record.room_scene)
         self._clear_closing()
-        self.mode = 'record'
-        self.transition_error = None
+        self._save_mode('record')
         return models.ActionResult(
             ok=True,
             message='Closing abandoned; verify recs recording state before continuing',
@@ -412,6 +417,38 @@ class MusicController:
     def _restore_room(self) -> None:
         if self.closing_record is not None:
             self.routing.restore_room(self.closing_record.room_scene)
+
+    def _load_mode(self) -> None:
+        if self.closing_state_path is None:
+            return
+        try:
+            state = MusicState.model_validate_json(
+                self.closing_state_path.with_name('music.json').read_text()
+            )
+        except FileNotFoundError:
+            return
+        except (OSError, ValidationError) as error:
+            self.mode = 'fault'
+            self.transition_error = f'Show phase cannot be read: {error}'
+            return
+        self.mode = state.mode
+        self.transition_error = state.error
+        if self.mode == 'transitioning':
+            self.mode = 'fault'
+            self.transition_error = (
+                'showCo restarted during a show transition; inspect recording, '
+                'stream and mixer state before choosing a mode'
+            )
+
+    def _save_mode(self, mode: str, error: str | None = None) -> None:
+        state = MusicState.model_validate({'mode': mode, 'error': error})
+        if self.closing_state_path is not None:
+            path = self.closing_state_path.with_name('music.json')
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with atomic_output(path) as temporary:
+                temporary.write_text(state.model_dump_json())
+        self.mode = state.mode
+        self.transition_error = state.error
 
     def _load_closing(self) -> None:
         if self.closing_state_path is None:
@@ -472,10 +509,13 @@ class MusicController:
     ) -> models.ActionResult:
         completed: list[str] = []
         step_name = ''
+        self._save_mode('transitioning')
         try:
             for step_name, action in steps:
                 action()
                 completed.append(step_name)
+            step_name = 'show phase saved'
+            self._save_mode(mode)
         except (
             OSError,
             ValueError,
@@ -490,8 +530,6 @@ class MusicController:
             raise KeyboardInterrupt(
                 self._recover_transition(mode, step_name, error, completed)
             ) from error
-        self.mode = mode
-        self.transition_error = None
         return models.ActionResult(ok=True, message=message)
 
     def _recover_transition(
@@ -526,7 +564,7 @@ class MusicController:
 
     def stop(self) -> models.ActionResult:
         self.close(self.config.fade_seconds)
-        self.mode = 'stopped'
+        self._save_mode('stopped')
         self.poweroff()
         return models.ActionResult(
             ok=True, message='Music stopped; Pi is shutting down'
