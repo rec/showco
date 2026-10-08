@@ -360,6 +360,58 @@ def test_showco_restart_observes_existing_closing_without_resending(
     value.close()
 
 
+@pytest.mark.parametrize('phase', ['credits-running', 'black-interval'])
+def test_restart_after_broadcast_stops_finishes_teardown_in_order(
+    tmp_path: Path, phase: str
+) -> None:
+    state_path = tmp_path / 'closing.json'
+    scene = x18_music.RoomScene(master_fader=0.7, input_lr=[1] * 18)
+    state_path.write_text(
+        music.ClosingRecord(
+            operation_id='finished-show',
+            phase=phase,
+            room_scene=scene,
+        ).model_dump_json()
+    )
+    _, recs, player, routing = controller()
+    streamo = mock.Mock()
+    streamo.status.return_value = models.StreamoStatus(
+        service=models.ServiceStatus(name='streamo', state='connected'),
+        closing=models.ClosingStatus(operation_id='finished-show', state='completed'),
+    )
+    calls = mock.Mock()
+    calls.attach_mock(routing.fade_main, 'fade_main')
+    calls.attach_mock(recs.pause_recording, 'pause_recording')
+    calls.attach_mock(player.start, 'start')
+    value = music.MusicController(
+        recs,
+        player,
+        routing,
+        music.MusicConfig(),
+        streamo=streamo,
+        teardown=[Path('/music/teardown')],
+        closing_state_path=state_path,
+    )
+    try:
+        deadline = time.monotonic() + 5
+        while value.mode == 'closing' and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert value.mode == 'teardown'
+        assert calls.mock_calls == [
+            mock.call.fade_main(0.0, 0),
+            mock.call.pause_recording(),
+            mock.call.start([Path('/music/teardown')], 0),
+            mock.call.fade_main(0.7, 2.0),
+        ]
+        streamo.start_closing.assert_not_called()
+        assert (
+            music.ClosingRecord.model_validate_json(state_path.read_text()).phase
+            == 'teardown-music-playing'
+        )
+    finally:
+        value.close()
+
+
 def test_stop_fades_music_then_shuts_down_the_pi() -> None:
     value, _, player, routing = controller()
     poweroff = mock.Mock()

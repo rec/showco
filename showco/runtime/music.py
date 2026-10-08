@@ -11,6 +11,7 @@ from typing import Literal
 
 import sounddevice
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from reccy.runtime import logging
 from reccy.runtime.files import atomic_output
 
 from ..streamo.client import StreamoClient
@@ -18,6 +19,8 @@ from ..x18.music import MusicPlayer, RoomScene, X18MusicRouting
 from . import models
 from .mixer import MixerSpec
 from .recs import RecsClient
+
+LOGGER = logging.get_logger(__name__)
 
 DEFAULT_FADE_SECONDS = 2.0
 
@@ -294,10 +297,10 @@ class MusicController:
                         self.black_fade_done = True
                 if closing.state == 'completed':
                     if not self.black_fade_done:
-                        self._fail_closing(
-                            'streamO completed before showCo confirmed the room fade'
+                        LOGGER.warning(
+                            'Missed the closing black interval; broadcast is stopped. '
+                            'Silencing the room mix before completing teardown.'
                         )
-                        return
                     self._finish_closing()
                     return
             except (
