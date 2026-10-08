@@ -61,4 +61,8 @@ PROTECTED_ACTIONS = {
     'music-record',
     'music-teardown',
     'music-stop',
+    'music-close-cancel',
+    'music-close-finish',
+    'streamo-stop',
+    'streamo-restart',
 }
