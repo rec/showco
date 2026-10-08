@@ -149,6 +149,11 @@ class MusicController:
 
     def record(self) -> models.ActionResult:
         self._require_no_closing()
+        if self.mode == 'record':
+            return models.ActionResult(
+                ok=True,
+                message='Already in Record mode; recording and stream are unchanged',
+            )
         restore = (
             [('room routing restored', self._restore_room)]
             if self.closing_record is not None
