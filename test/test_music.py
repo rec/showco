@@ -82,6 +82,38 @@ def test_phase_storage_failure_prevents_transition_side_effects(tmp_path: Path) 
     routing.disable.assert_not_called()
 
 
+@pytest.mark.parametrize('restart', [False, True])
+def test_repeated_record_preserves_session_and_stream(
+    tmp_path: Path, restart: bool
+) -> None:
+    value, recs, player, routing = controller()
+    value.closing_state_path = tmp_path / 'closing.json'
+    stream = mock.Mock()
+    restart_stream = mock.Mock(return_value=result())
+    value.streamo = stream
+    value.streamo_restart = restart_stream
+    assert value.record().ok
+    if restart:
+        value = music.MusicController(
+            recs,
+            player,
+            routing,
+            music.MusicConfig(),
+            stream,
+            restart_stream,
+            closing_state_path=tmp_path / 'closing.json',
+        )
+    recs.reset_mock()
+    player.reset_mock()
+    routing.reset_mock()
+    restart_stream.reset_mock()
+    assert value.record().ok
+    recs.action.assert_not_called()
+    player.stop.assert_not_called()
+    routing.disable.assert_not_called()
+    restart_stream.assert_not_called()
+
+
 def test_setup_pauses_recording_starts_music_and_routes_it_to_main_lr() -> None:
     value, recs, player, routing = controller()
 
