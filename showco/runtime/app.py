@@ -195,6 +195,17 @@ class ShowcoApp:
             return models.ActionResult(
                 ok=False, message='X18 cable test is not configured'
             )
+        if self.music is not None:
+            status = self.music.status()
+            if (
+                status.mode in {'closing', 'transitioning', 'fault'}
+                or status.state == 'playing'
+            ):
+                return models.ActionResult(
+                    ok=False,
+                    message='Stop incidental music and resolve any show transition '
+                    'before testing cables',
+                )
         channels = parse_range(form.get('channels', ''), 1, 18, 'channels')
         sends = parse_range(form.get('sends', ''), 1, 6, 'sends')
         duration = float(form.get('duration-seconds', str(TONE_SECONDS)))
@@ -306,13 +317,13 @@ class ShowcoApp:
                 message='Performance lock blocks this action. '
                 'Unlock explicitly, then submit it again.',
             )
-        if action in {'recs-pause-recording', 'recs-resume-recording'} and (
+        if action in CABLE_TEST_CONFLICTING_ACTIONS and (
             self.cable_test_status().state == 'running'
         ):
             return models.ActionResult(
                 ok=False,
                 message='X18 cable test owns the recs pause; wait for its result '
-                'before changing recording',
+                'before changing recording, playback or show mode',
             )
         if action == 'acknowledge-fault':
             with self.status_lock:
@@ -545,4 +556,28 @@ STREAMO_ACTIONS = {
     'streamo-announce': 'announce',
     'streamo-clip': 'clip',
     'streamo-marker': 'marker',
+}
+
+
+CABLE_TEST_CONFLICTING_ACTIONS = {
+    'music-setup',
+    'music-record',
+    'music-teardown',
+    'music-stop',
+    'music-close-cancel',
+    'music-close-finish',
+    'soundcheck-start-recording',
+    'soundcheck-pause-recording',
+    'recovery-restart',
+    'recs-pause-recording',
+    'recs-resume-recording',
+    'recs-new-session',
+    'recs-shutdown',
+    'recs-calibrate',
+    'recs-reload-profiles',
+    'recs-playback-play',
+    'recs-playback-pause',
+    'recs-playback-stop',
+    'recs-playback-jump',
+    'recs-playback-jump-session',
 }
