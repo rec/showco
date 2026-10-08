@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import signal
 import sys
 import tempfile
 import traceback
@@ -9,6 +10,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from datetime import UTC, datetime
 from logging import StreamHandler, getLogger
 from pathlib import Path
+from types import FrameType
 from typing import Annotated, TextIO
 
 import tyro
@@ -50,6 +52,10 @@ class WebUiOptions(BaseModel, frozen=True):
             help='run with simulated recs and streamo services',
         ),
     ] = False
+
+
+def terminate_web_ui(signum: int, frame: FrameType | None) -> None:
+    raise SystemExit(0)
 
 
 def run_web_ui(options: WebUiOptions) -> int:
@@ -98,10 +104,15 @@ def run_web_ui(options: WebUiOptions) -> int:
             teardown=options.teardown or options.audio,
         )
         print(f'showco listening on http://{options.host}:{options.port}')
+    previous_handler = signal.getsignal(signal.SIGTERM)
     try:
+        signal.signal(signal.SIGTERM, terminate_web_ui)
         server.serve_forever()
     finally:
-        server.server_close()
+        try:
+            server.server_close()
+        finally:
+            signal.signal(signal.SIGTERM, previous_handler)
     return 0
 
 
