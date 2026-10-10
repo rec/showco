@@ -3,6 +3,11 @@ name = "showco"
 version = "0.1.0"
 description = "🎪 Local show control for recs and streamo 🎪"
 requires-python = ">=3.13"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.15",
+]
 dependencies = [
     "jinja2>=3.1.6",
     "numpy",
