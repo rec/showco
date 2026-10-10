@@ -7,7 +7,7 @@ resolution-markers = [
 ]
 
 [options]
-exclude-newer = "2026-09-29T18:09:01.591897Z"
+exclude-newer = "2026-10-03T16:02:16.300632Z"
 exclude-newer-span = "P1W"
 
 [[package]]
@@ -1082,7 +1082,7 @@ wheels = [
 
 [[package]]
 name = "showco"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "jinja2" },
