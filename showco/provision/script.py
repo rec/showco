@@ -6,7 +6,7 @@ from ipaddress import IPv4Address, ip_network
 from json import dumps
 from pathlib import Path
 
-from . import config
+from . import config, media
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REMOTE_SCRIPT = '\n'.join(
@@ -81,6 +81,9 @@ def remote_command(
         ),
         'SHOWCO_X18_PORT': str(x18_mixer.port) if x18_network and x18_mixer else '',
         'SHOWCO_MIXERS_TOML': mixers_toml(provision_config.mixers),
+        'SHOWCO_STREAM_MEDIA_ARGS': shlex.join(
+            media.streamo_arguments(provision_config)
+        ),
         'SHOWCO_AUDIO_ARGS': shlex.join(
             [
                 v

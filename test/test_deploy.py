@@ -17,6 +17,13 @@ class DeployTests(unittest.TestCase):
         )
         self.scan_cards = scan.start()
         self.addCleanup(scan.stop)
+        save = mock.patch('showco.provision.media.save_sources')
+        save.start()
+        self.addCleanup(save.stop)
+        for name in ['synchronize', 'configure_stream_media']:
+            operation = mock.patch(f'showco.provision.media.{name}')
+            operation.start()
+            self.addCleanup(operation.stop)
 
     def test_attached_card_is_prepared_before_waiting_and_provisioning(self) -> None:
         for previous_boot_id in [None, 'previous-boot']:
@@ -142,7 +149,7 @@ class DeployTests(unittest.TestCase):
                     self.assertEqual(deploy.run(self.options(**values)), 0)
         self.scan_cards.assert_not_called()
 
-    def test_audio_paths_check_provisioning_configuration_even_with_autosquash(
+    def test_movie_path_checks_provisioning_configuration_even_with_autosquash(
         self,
     ) -> None:
         provision_config = mock.Mock(ssh_target='tom@t.local')
@@ -165,7 +172,7 @@ class DeployTests(unittest.TestCase):
                 'showco.deployment.local_update.update_from_provisioning_machine'
             ) as update_target,
         ):
-            options = self.options(audio=[Path('/mnt/audio')], autosquash=100)
+            options = self.options(movie=Path('/local/movie.mp4'), autosquash=100)
             self.assertEqual(deploy.run(options), 0)
         provision_target.assert_called_once_with(
             options, provision_config=provision_config

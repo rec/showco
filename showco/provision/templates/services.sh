@@ -127,6 +127,17 @@ migrate_streamo_configuration() {
   printf 'Converted Twitcho configuration to streamO TOML.\n'
 }
 
+configure_streamo_media() {
+  if [[ -z "$SHOWCO_STREAM_MEDIA_ARGS" ]] && ! grep -Fq \
+    "/home/$SHOW_USER/.local/share/showco/media/photos/" \
+    "/home/$SHOW_USER/.config/streamo/config.toml" 2>/dev/null; then
+    return
+  fi
+  sudo -H -u "$SHOW_USER" \
+    env PATH="$ROOT/showco/.venv/bin:/home/$SHOW_USER/.local/bin:$PATH" \
+    bash -lc "cd '$ROOT/showco' && uv run --locked python -m showco.provision.media --config /home/$SHOW_USER/.config/streamo/config.toml $SHOWCO_STREAM_MEDIA_ARGS"
+}
+
 uninstall_twitcho_service() {
   local command="$ROOT/twitcho/.venv/bin/twitcho"
   if [[ ! -x "$command" ]]; then

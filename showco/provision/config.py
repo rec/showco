@@ -72,6 +72,24 @@ class Git(BaseModel, frozen=True):
     lyte: GitRepo
 
 
+class Media(BaseModel, frozen=True):
+    photos: list[Path] = Field(default_factory=list)
+    audio: list[Path] = Field(default_factory=list)
+    setup: list[Path] = Field(default_factory=list)
+    teardown: list[Path] = Field(default_factory=list)
+    movie: Path | None = None
+
+    @cached_property
+    def sources(self) -> dict[str, list[Path]]:
+        return {
+            'photos': self.photos,
+            'audio': self.audio,
+            'setup': self.setup,
+            'teardown': self.teardown,
+            'movie': [self.movie] if self.movie is not None else [],
+        }
+
+
 class Config(BaseModel, frozen=True):
     network: NetworkConfig
     paths: Paths
@@ -83,6 +101,7 @@ class Config(BaseModel, frozen=True):
     gui_path: Path = Path('showco/gui.toml')
     argon_one: bool = True
     accept_changed_host_key: bool = True
+    media: Media = Field(default_factory=Media)
     audio: list[Path] = Field(default_factory=list)
     setup: list[Path] = Field(default_factory=list)
     teardown: list[Path] = Field(default_factory=list)

@@ -11,7 +11,7 @@ import tyro
 from pydantic import BaseModel, Field
 
 from ..runtime import gui_schema
-from . import config, remote, script, state
+from . import config, media, remote, script, state
 
 PROVISION_DIR = Path(__file__).resolve().parent
 
@@ -43,14 +43,23 @@ class DeployOptions(BaseModel, frozen=True):
     target_machine: bool = False
     clear_settings: bool = False
     autosquash: int | None = Field(default=None, ge=0)
+    movie: Path | None = Field(
+        default=None, description='Local movie file to copy for streamO video'
+    )
+    photos: Annotated[list[Path], tyro.conf.UseAppendAction] = Field(
+        default_factory=list, description='Local photo directories to copy to the Pi'
+    )
     audio: Annotated[list[Path], tyro.conf.UseAppendAction] = Field(
-        default_factory=list
+        default_factory=list,
+        description='Local audio files or directories for both music phases',
     )
     setup: Annotated[list[Path], tyro.conf.UseAppendAction] = Field(
-        default_factory=list
+        default_factory=list,
+        description='Local setup audio files or directories; overrides --audio',
     )
     teardown: Annotated[list[Path], tyro.conf.UseAppendAction] = Field(
-        default_factory=list
+        default_factory=list,
+        description='Local teardown audio files or directories; overrides --audio',
     )
 
 
@@ -70,11 +79,14 @@ def resolved_config(options: DeployOptions) -> config.Config:
         lyte_enabled=options.lyte_enabled,
         lyte_installation_config=options.lyte_installation_config,
     )
+    sources = media.resolve_sources(options.config_path, options)
     provision_config = provision_config.model_copy(
         update={
-            'audio': options.audio,
-            'setup': options.setup,
-            'teardown': options.teardown,
+            'media': sources,
+            **{
+                n: media.target_paths(sources, provision_config.network.user, n)
+                for n in ('audio', 'setup', 'teardown')
+            },
         }
     )
     validate_config(provision_config)

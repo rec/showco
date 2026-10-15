@@ -16,10 +16,16 @@ from showco.provision import network as network_config
 
 
 class ProvisionTests(unittest.TestCase):
-    def test_provisioning_flags_preserve_target_audio_paths(self) -> None:
+    def test_provisioning_flags_accept_repeated_media_paths(self) -> None:
         options = tyro.cli(
             provision.DeployOptions,
             args=[
+                '--movie',
+                '/local/movie.mp4',
+                '--photos',
+                '/local/photos',
+                '--photos',
+                '/local/more-photos',
                 '--audio',
                 '/mnt/audio/common',
                 '--audio',
@@ -30,19 +36,15 @@ class ProvisionTests(unittest.TestCase):
                 '/mnt/audio/close',
             ],
         )
-        with (
-            mock.patch(
-                'showco.provision.provision.config.load_values', return_value=values()
-            ),
-            mock.patch('showco.provision.provision.validate_config'),
-            mock.patch('showco.provision.provision.gui_schema.load_gui'),
-        ):
-            resolved = provision.resolved_config(options)
+        self.assertEqual(options.movie, Path('/local/movie.mp4'))
         self.assertEqual(
-            resolved.audio, [Path('/mnt/audio/common'), Path('/mnt/audio/intro.flac')]
+            options.photos, [Path('/local/photos'), Path('/local/more-photos')]
         )
-        self.assertEqual(resolved.setup, [Path('/mnt/audio/open')])
-        self.assertEqual(resolved.teardown, [Path('/mnt/audio/close')])
+        self.assertEqual(
+            options.audio, [Path('/mnt/audio/common'), Path('/mnt/audio/intro.flac')]
+        )
+        self.assertEqual(options.setup, [Path('/mnt/audio/open')])
+        self.assertEqual(options.teardown, [Path('/mnt/audio/close')])
 
     def test_deploy_options_accept_provisioning_and_update_flags(self) -> None:
         options = tyro.cli(
@@ -97,7 +99,7 @@ class ProvisionTests(unittest.TestCase):
         with (
             mock.patch(
                 'showco.provision.provision.config.read_toml',
-                side_effect=[values(), {}],
+                side_effect=[values(), {}, {}],
             ),
             mock.patch(
                 'showco.provision.provision.validate_config',
@@ -126,7 +128,7 @@ class ProvisionTests(unittest.TestCase):
         with (
             mock.patch(
                 'showco.provision.provision.config.read_toml',
-                side_effect=[values(), {}],
+                side_effect=[values(), {}, {}],
             ),
             mock.patch('showco.provision.provision.validate_config'),
             mock.patch(
@@ -151,7 +153,7 @@ class ProvisionTests(unittest.TestCase):
         with (
             mock.patch(
                 'showco.provision.provision.config.read_toml',
-                side_effect=[values(), {}],
+                side_effect=[values(), {}, {}],
             ),
             mock.patch('showco.provision.provision.validate_config'),
             mock.patch(

@@ -4,7 +4,7 @@ import sys
 
 import tyro
 
-from ..provision import provision, remote, script, ssh, state
+from ..provision import media, provision, remote, script, ssh, state
 from . import card, local_update, machine_role, target_update, update
 
 
@@ -24,21 +24,31 @@ def run(options: provision.DeployOptions) -> int:
     selected = update.selected_repositories(options.repositories or [])
     if options.push and options.sync:
         sys.exit('ERROR: --push and --sync cannot be combined')
-    if (options.audio or options.setup or options.teardown) and (
-        options.push or options.sync or options.remote or options.target_machine
-    ):
+    if (
+        options.movie
+        or options.photos
+        or options.audio
+        or options.setup
+        or options.teardown
+    ) and (options.push or options.sync or options.remote or options.target_machine):
         sys.exit(
-            'ERROR: audio paths require provisioning; do not combine them with '
+            'ERROR: media paths require provisioning; do not combine them with '
             '--push, --sync, --remote, or --target-machine'
         )
     if (
         options.target_machine
         or machine_role.machine_role() == machine_role.TARGET_ROLE
     ):
-        if options.audio or options.setup or options.teardown:
+        if (
+            options.movie
+            or options.photos
+            or options.audio
+            or options.setup
+            or options.teardown
+        ):
             sys.exit(
-                'ERROR: on the Pi, use audio paths with showco run '
-                'or showco run install-service'
+                'ERROR: media provisioning flags must run on the development machine; '
+                'on the Pi, showco run accepts existing audio paths'
             )
         if options.upgrade or options.remote or options.push or options.sync:
             sys.exit(
@@ -54,7 +64,13 @@ def run(options: provision.DeployOptions) -> int:
     machine_role.require_provisioning_machine('showco deploy')
     update_requested = (
         options.repositories is not None or options.autosquash is not None
-    ) and not (options.audio or options.setup or options.teardown)
+    ) and not (
+        options.movie
+        or options.photos
+        or options.audio
+        or options.setup
+        or options.teardown
+    )
     if options.upgrade and (
         update_requested or options.remote or options.push or options.sync
     ):
@@ -99,6 +115,7 @@ def run(options: provision.DeployOptions) -> int:
             autosquash=options.autosquash if options.autosquash is not None else 50,
             clear_settings=options.clear_settings,
         )
+    media.save_sources(options.config_path, provision_config.media)
     cards = card.attached_imager_cards()
     if len(cards) > 1:
         sys.exit(
@@ -146,6 +163,8 @@ def run(options: provision.DeployOptions) -> int:
             )
         return provision.run(options, provision_config=provision_config)
 
+    media.synchronize(provision_config)
+    media.configure_stream_media(provision_config)
     print(f'Configuration matches: updating {provision_config.ssh_target}...')
     return local_update.update_from_provisioning_machine(
         update.REPOSITORY_NAMES,

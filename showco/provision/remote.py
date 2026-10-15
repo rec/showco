@@ -11,7 +11,7 @@ from reccy.runtime import subprocess
 from tqdm import tqdm
 
 from ..deployment import repositories
-from . import config, network, script, ssh, verify
+from . import config, media, network, script, ssh, verify
 
 SSH_CLEANUP_TIMEOUT_SECONDS = 15
 REMOTE_PROVISION_TIMEOUT_SECONDS = 1_800
@@ -41,6 +41,7 @@ def provision_remote(
     require_passwordless_sudo(provision_config)
     validate_remote_worktrees(provision_config)
     topology = preflight_network(provision_config)
+    media.synchronize(provision_config)
     print(f'Checking {provision_config.ssh_target}...')
     ssh.run_ssh(
         provision_config,

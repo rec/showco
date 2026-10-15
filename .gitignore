@@ -222,3 +222,5 @@ backup
 # Our secrets
 showco/provision/secrets.env
 showco/provision/secrets.toml
+
+/showco/provision/media.toml

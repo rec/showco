@@ -146,7 +146,19 @@ uv run showco run --audio /mnt/audio/common --audio /mnt/audio/intro.flac \
 
 `--setup` and `--teardown` override `--audio` for their respective phases. An unset phase uses `--audio`; if neither is supplied, that phase generates no sound. There are no default audio directories, and showCo creates no music directories. Missing audio for either phase produces a startup warning in the service log and `showco-errors.txt`. The same flags are accepted by `showco run install-service` and saved in the service's runtime arguments. Paths refer to files already on the Pi.
 
-On the development machine, use the same flags with `uv run showco --audio /mnt/audio/common` to provision the service with Pi paths. Changes to these paths trigger provisioning even when `--autosquash` is supplied. Updates such as `showco --autosquash 100` preserve the installed service arguments. When provisioning again, supply the audio flags again; provisioning without them configures silent phases. Supplying paths does not copy audio files to the Pi.
+On the development machine, the provisioning flags take **local** paths and copy media to the Pi:
+
+```bash
+uv run showco --photos ./rouen-images --photos ./more-photos \
+  --audio ./music/common --setup ./music/open --teardown ./music/close \
+  --movie ./background.mp4
+```
+
+The four directory/audio flags repeat. `--movie` selects one local movie file for streamO's `video` setting. `--photos` takes directories; the audio flags take directories or individual files. The command saves absolute local paths in the ignored `showco/provision/media.toml` (beside the selected `--config` file). A supplied category replaces its saved list; omitted categories retain their lists. To clear a repeatable category, set its list to `[]` in that file. Clearing managed photos disables their display; if an image feed is configured too, remove that feed first. Subsequent plain `uv run showco` invocations reuse the selections and synchronize their contents. Explicit update-only commands such as `showco --autosquash 100` preserve installed media settings without copying media; supplying a media flag selects the provisioning path even with `--autosquash`.
+
+Each selected source has its own numbered destination under `/home/<user>/.local/share/showco/media/{photos,audio,setup,teardown,movie}/`, preserving source order and avoiding filename collisions. All five categories compare content checksums and skip transferring identical files, even when timestamps differ. Changed contents are copied even if size and timestamp match. Directory copies mirror local contents inside those managed destinations; streamO's downloaded-image inbox and approval files are preserved. Removed source slots are no longer used. Missing sources or failed transfers stop provisioning. A copied `score.toml` must use relative file paths within its directory.
+
+Provisioning installs the copied audio paths in showCo's service arguments and updates streamO's photo directories and movie path while preserving its other settings. Existing photo timing and compatible directory weights are retained. If photos were disabled, they are enabled every 30 seconds; incompatible weights reset to the descending defaults. This does not enable the streamO service or supply its streaming credentials. Target-side `showco run` and service-installation flags continue to refer to paths already on the Pi.
 
 Sources run in flag order, then repeat. A directory normally supplies its audio files in alphabetical filename order. If it contains `score.toml`, that file supplies the order and shuffle policy instead:
 
