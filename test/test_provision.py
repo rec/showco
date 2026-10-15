@@ -477,7 +477,7 @@ class ProvisionTests(unittest.TestCase):
             mock.patch('showco.provision.remote.validate_remote_worktrees'),
             mock.patch('showco.provision.ssh.run_scp'),
             mock.patch('showco.provision.ssh.wait_for_ssh') as initial_wait,
-            mock.patch('showco.provision.ssh.remove_known_host') as remove_host,
+            mock.patch('showco.provision.ssh.approve_changed_host_key') as approve_host,
             mock.patch(
                 'showco.provision.ssh.provisioning_reboot_required',
                 return_value=True,
@@ -499,7 +499,7 @@ class ProvisionTests(unittest.TestCase):
             )
 
         initial_wait.assert_called_once_with(config)
-        remove_host.assert_called_once_with(config)
+        approve_host.assert_not_called()
         wait.assert_called_once_with(config, 'old-boot')
         schedule.assert_called_once_with(config)
         verification.assert_called_once_with(
@@ -613,27 +613,18 @@ class ProvisionTests(unittest.TestCase):
         self.assertEqual(reachable.call_count, 3)
         sleep.assert_has_calls([mock.call(1), mock.call(1)])
 
-    def test_changed_host_key_is_removed_during_ssh_retry(self) -> None:
+    def test_changed_host_key_requires_approval_during_ssh_retry(self) -> None:
         config = make_config(values(networks=networks(x18=False)))
-        changed_key = subprocess.CompletedProcess(
-            ['ssh'],
-            255,
-            '',
-            'WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!',
+        changed = subprocess.CompletedProcess(
+            ['ssh'], 255, '', 'WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!'
         )
-        connected = subprocess.CompletedProcess(['ssh'], 0, '', '')
-        removed = subprocess.CompletedProcess(['ssh-keygen'], 0, '', '')
-        with mock.patch(
-            'reccy.runtime.subprocess.run',
-            side_effect=[changed_key, removed, connected],
-        ) as run:
+        with (
+            mock.patch('reccy.runtime.subprocess.run', return_value=changed),
+            mock.patch('showco.provision.ssh.approve_changed_host_key') as approve,
+        ):
             self.assertFalse(ssh.ssh_is_reachable(config))
-            self.assertTrue(ssh.ssh_is_reachable(config))
-
-        self.assertEqual(
-            run.call_args_list[1].args[0],
-            ['ssh-keygen', '-R', 'recs-stage.local'],
-        )
+            self.assertIsNone(ssh.ssh_boot_id(config))
+        self.assertEqual(approve.call_count, 2)
 
     def test_config_uses_ssh_target_and_accepts_changed_host_keys(self) -> None:
         config = make_config(values(networks=networks(x18=False)))
@@ -649,7 +640,7 @@ class ProvisionTests(unittest.TestCase):
             ['ssh'], 255, '', 'WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!'
         )
         with mock.patch('reccy.runtime.subprocess.run', return_value=changed_key):
-            with self.assertRaisesRegex(SystemExit, 'accept_changed_host_key'):
+            with self.assertRaisesRegex(SystemExit, 'replacement is disabled'):
                 ssh.ssh_is_reachable(config)
 
     def test_ssh_retry_uses_non_interactive_host_key_options(self) -> None:
@@ -712,7 +703,7 @@ class ProvisionTests(unittest.TestCase):
 
         self.assertEqual(
             ssh.known_host_names(config),
-            ['recs-stage.local', '[recs-stage.local]:2200'],
+            ['[recs-stage.local]:2200'],
         )
 
     def test_remote_worktree_command_reports_all_tracked_changes(self) -> None:

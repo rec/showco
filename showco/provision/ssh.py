@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import base64
+import hashlib
+import re
 import shutil
 import sys
 import tempfile
@@ -81,13 +84,7 @@ def ssh_boot_id(provision_config: config.Config) -> str | None:
     except TimeoutExpired:
         return None
     if has_changed_host_key(completed):
-        if not provision_config.accept_changed_host_key:
-            sys.exit(
-                'ERROR: SSH host key changed for '
-                f'{provision_config.ssh_target}. Verify the new key and set '
-                'accept_changed_host_key = true after reflashing.'
-            )
-        remove_known_host(provision_config)
+        approve_changed_host_key(provision_config, completed)
         return None
     if completed.returncode != 0:
         return None
@@ -124,14 +121,9 @@ def ssh_is_reachable(provision_config: config.Config) -> bool:
         check=False,
         text=True,
     )
-    if has_changed_host_key(cast(CompletedProcess[str], completed)):
-        if not provision_config.accept_changed_host_key:
-            sys.exit(
-                'ERROR: SSH host key changed for '
-                f'{provision_config.ssh_target}. Verify the new key and set '
-                'accept_changed_host_key = true after reflashing.'
-            )
-        remove_known_host(provision_config)
+    completed = cast(CompletedProcess[str], completed)
+    if has_changed_host_key(completed):
+        approve_changed_host_key(provision_config, completed)
         return False
     return completed.returncode == 0
 
@@ -142,22 +134,79 @@ def has_changed_host_key(completed: CompletedProcess[str]) -> bool:
     )
 
 
-def remove_known_host(provision_config: config.Config) -> None:
-    for host in known_host_names(provision_config):
-        print(f'Removing stale SSH host key for {host}...')
-        subprocess.run(
-            ['ssh-keygen', '-R', host],
+def approve_changed_host_key(
+    provision_config: config.Config, completed: CompletedProcess[str]
+) -> None:
+    target = provision_config.ssh_target
+    if not provision_config.accept_changed_host_key:
+        sys.exit(f'ERROR: SSH host key changed for {target}; replacement is disabled')
+    match = re.search(r'SHA256:[A-Za-z0-9+/]+', completed.stderr or '')
+    if match is None:
+        sys.exit(f'ERROR: cannot identify the changed SSH host key for {target}')
+    fingerprint = match.group()
+    host = provision_config.network.host
+    port = provision_config.network.ssh_port
+    try:
+        scanned = subprocess.run(
+            ['ssh-keyscan', '-T', '5', '-p', str(port), host],
             capture_output=True,
-            check=False,
+            check=True,
             text=True,
+            timeout=SSH_VERIFICATION_TIMEOUT_SECONDS,
         )
+        keys = []
+        for line in cast(str, scanned.stdout).splitlines():
+            if line.startswith('#') or len(fields := line.split()) != 3:
+                continue
+            digest = (
+                base64.b64encode(
+                    hashlib.sha256(base64.b64decode(fields[2], validate=True)).digest()
+                )
+                .decode()
+                .rstrip('=')
+            )
+            if f'SHA256:{digest}' == fingerprint:
+                keys.append(
+                    f'{known_host_names(provision_config)[0]} {fields[1]} {fields[2]}'
+                )
+        if not keys:
+            sys.exit(
+                f'ERROR: scanned SSH key for {target} does not match {fingerprint}'
+            )
+        print(f'SSH host key changed for {target}.')
+        print(f'New host key: {fingerprint}')
+        print('Confirm this key belongs to your Pi before replacing the saved key.')
+        try:
+            answer = input('Replace the saved SSH host key? Type yes to approve: ')
+        except EOFError:
+            answer = ''
+        if answer.strip().lower() != 'yes':
+            sys.exit('ERROR: SSH host key replacement declined; saved keys unchanged')
+        known_hosts = Path.home() / '.ssh' / 'known_hosts'
+        subprocess.run(
+            [
+                'ssh-keygen',
+                '-R',
+                known_host_names(provision_config)[0],
+                '-f',
+                str(known_hosts),
+            ],
+            capture_output=True,
+            check=True,
+            text=True,
+            timeout=SSH_VERIFICATION_TIMEOUT_SECONDS,
+        )
+        with known_hosts.open('a') as stream:
+            stream.write('\n' + '\n'.join(keys) + '\n')
+    except (OSError, ValueError, CalledProcessError, TimeoutExpired) as error:
+        sys.exit(f'ERROR: cannot replace SSH host key for {target}: {error}')
 
 
 def known_host_names(provision_config: config.Config) -> list[str]:
     host = provision_config.network.host
     if provision_config.network.ssh_port == 22:
         return [host]
-    return [host, f'[{host}]:{provision_config.network.ssh_port}']
+    return [f'[{host}]:{provision_config.network.ssh_port}']
 
 
 def run_ssh(

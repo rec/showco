@@ -4,7 +4,7 @@ import shlex
 import string
 import sys
 from pathlib import Path
-from subprocess import CalledProcessError, TimeoutExpired
+from subprocess import CalledProcessError, CompletedProcess, TimeoutExpired
 from typing import cast
 
 from reccy.runtime import subprocess
@@ -36,8 +36,6 @@ def provision_remote(
     fingerprint: str | None = None,
 ) -> None:
     uploaded = False
-    if provision_config.accept_changed_host_key:
-        ssh.remove_known_host(provision_config)
     print(f'Waiting for SSH connection to {provision_config.ssh_target}...')
     ssh.wait_for_ssh(provision_config)
     require_passwordless_sudo(provision_config)
@@ -166,17 +164,19 @@ def applied_provisioning_fingerprint(provision_config: config.Config) -> str | N
                 f'{provision_config.ssh_target}: SSH timed out on all five attempts '
                 '(1, 2, 4, 8, 16 seconds)'
             )
+    completed = cast(CompletedProcess[str], completed)
+    if ssh.has_changed_host_key(completed):
+        ssh.approve_changed_host_key(provision_config, completed)
+        return applied_provisioning_fingerprint(provision_config)
     if completed.returncode == 42:
         return None
     if completed.returncode != 0:
-        detail = cast(str, completed.stderr).strip() or (
-            f'SSH exit {completed.returncode}'
-        )
+        detail = completed.stderr.strip() or (f'SSH exit {completed.returncode}')
         sys.exit(
             f'ERROR: cannot check provisioning state on '
             f'{provision_config.ssh_target}: {detail}'
         )
-    fingerprint = cast(str, completed.stdout).strip()
+    fingerprint = completed.stdout.strip()
     if len(fingerprint) != 64 or not all(
         character in string.hexdigits for character in fingerprint
     ):
