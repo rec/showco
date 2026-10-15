@@ -13,9 +13,9 @@ import tyro
 from pydantic import BaseModel
 
 from ..provision import config
+from ..provision.provision import PROVISION_DIR
 from . import machine_role
 
-PROVISION_DIR = Path(__file__).resolve().parent / 'provision'
 MAX_CARD_SIZE = 256 * 1024**3
 USER_NAME_PATTERN = re.compile(r'[a-z_][a-z0-9_-]*')
 
@@ -37,6 +37,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     user = options.user or configured_user(options.config_path)
     card_path = select_card(options.card)
+    prepare_selected_card(card_path, user)
+    return 0
+
+
+def prepare_selected_card(card_path: Path, user: str) -> None:
     path = card_user_data_path(card_path)
     show_card(card_path)
     prompt = f'Prepare {path.parent} on {card_path}? Type yes to continue: '
@@ -49,7 +54,6 @@ def main(argv: list[str] | None = None) -> int:
         print(f'{path} is already prepared for passwordless sudo as {user}.')
     print(f'Ejecting {card_path}; remove the card after macOS confirms.')
     eject_card(card_path)
-    return 0
 
 
 def prepare_card(boot: Path, user: str) -> bool:
@@ -135,6 +139,28 @@ def write_cloud_init(
 
 def yaml_string(value: str) -> str:
     return json.dumps(value)
+
+
+def attached_imager_cards() -> list[Path]:
+    if sys.platform != 'darwin':
+        return []
+    cards: list[Path] = []
+    for value in disk_values():
+        device = value.get('DeviceIdentifier')
+        size = value.get('Size')
+        if not isinstance(device, str) or not isinstance(size, int):
+            continue
+        if not 0 < size <= MAX_CARD_SIZE:
+            continue
+        path = mounted_user_data_path(value)
+        if path is None or not all(
+            (path.parent / n).is_file() for n in ['config.txt', 'cmdline.txt']
+        ):
+            continue
+        with path.open('rb') as source:
+            if source.read(64).lstrip().startswith(b'#cloud-config'):
+                cards.append(Path('/dev') / device)
+    return cards
 
 
 def select_card(card: Path | None) -> Path:

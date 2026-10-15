@@ -4,8 +4,8 @@ import sys
 
 import tyro
 
-from ..provision import provision, remote, script, state
-from . import local_update, machine_role, target_update, update
+from ..provision import provision, remote, script, ssh, state
+from . import card, local_update, machine_role, target_update, update
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -99,6 +99,33 @@ def run(options: provision.DeployOptions) -> int:
             autosquash=options.autosquash if options.autosquash is not None else 50,
             clear_settings=options.clear_settings,
         )
+    cards = card.attached_imager_cards()
+    if len(cards) > 1:
+        sys.exit(
+            'ERROR: multiple Imager-written Raspberry Pi cards found: '
+            + ', '.join(str(c) for c in cards)
+            + '; disconnect all but the intended card and try again'
+        )
+    if cards:
+        previous_boot_id = ssh.ssh_boot_id(provision_config)
+        card.prepare_selected_card(cards[0], provision_config.network.user)
+        print(
+            'Insert the prepared card into the Pi and turn it on. '
+            f'Waiting up to five minutes for {provision_config.ssh_target}; '
+            'press Ctrl-C to cancel.'
+        )
+        if previous_boot_id is not None:
+            ssh.wait_for_rebooted_ssh(provision_config, previous_boot_id)
+        else:
+            ssh.wait_for_ssh(provision_config, timeout_seconds=ssh.REBOOT_WAIT_SECONDS)
+        print('Waiting for Raspberry Pi first-boot setup to finish...')
+        ssh.run_ssh(
+            provision_config,
+            'cloud-init status --wait --long',
+            timeout_seconds=ssh.REBOOT_WAIT_SECONDS,
+        )
+        return provision.run(options, provision_config=provision_config)
+
     if options.upgrade:
         print(
             f'Package upgrade requested: provisioning {provision_config.ssh_target}...'

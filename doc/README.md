@@ -218,15 +218,17 @@ connection at both locations and after a reboot.
 
 This installation sets `network.restrict_external_ingress = true`. The policy allows incoming connections on the Pi's private network; other interfaces accept SSH on the configured port and mDNS discovery on UDP 5353 so `t.local` remains usable. Outbound traffic and its replies continue to work. Provisioning installs a persistent nftables ingress rule and rejects `public` topology, which has no private hotspot. Put a long, random private Wi-Fi password in the ignored `showco/provision/secrets.toml`. To reach the web UI, join the private Wi-Fi; from the external Wi-Fi, use SSH only. Verify access from both networks after provisioning.
 
-The first Raspberry Pi must already boot, have the intended user and hostname, accept SSH keys, and allow `sudo -n`. To prepare an Imager-written card before its first boot, run this on macOS:
+For a new card, first write Raspberry Pi OS with Raspberry Pi Imager. Configure the user, hostname, Wi-Fi, and SSH public key to match your showCo provisioning configuration. Leave the card attached to the Mac and run `showco` or `showco deploy`.
+
+showCo detects an external disk no larger than 256 GiB containing Raspberry Pi boot files and Imager's cloud-init configuration. It displays the disk, requires `yes` before changing the card, adds passwordless sudo for the configured user, and ejects the card. Insert the card into the Pi and turn it on. showCo waits up to five minutes for SSH, then up to five minutes for [cloud-init first-boot setup](https://docs.cloud-init.io/en/latest/reference/cli.html#status) to complete successfully before provisioning. If the configured Pi was already online, it must reboot before provisioning can continue. Ctrl-C cancels the wait. Existing SSH host-key checks still apply after reflashing.
+
+Multiple matching cards stop the command without modifying any card; disconnect the extras and try again. No card is formatted or imaged by showCo. Detection is available on macOS. Without a matching attached card, deployment follows the ordinary path: it compares configuration and provisioning-script fingerprints, provisions a missing or changed fingerprint, and updates a matching target. Explicit update modes such as `--sync`, `--push`, `--remote`, or repository selection do not prepare cards.
+
+To prepare and eject a card without waiting for the Pi or provisioning, use:
 
 ```bash
 showco prepare-card
 ```
-
-It selects an external disk no larger than 256 GiB, requires the exact response `yes`, adds passwordless sudo to its existing cloud-init configuration, and ejects the card. It does not image the card.
-
-Run `showco` or `showco deploy` from the provisioning machine for ordinary deployment. It compares the resolved configuration and generated provisioning script against the target fingerprint. A missing or changed fingerprint causes provisioning; a match causes an update.
 
 Provisioning validates local repositories, publishes and synchronizes all five projects, checks SSH and passwordless sudo, configures the target, installs user services, and verifies the web UI, recs progress, enabled services, networking, and configured inputs. It may reboot the target when necessary.
 

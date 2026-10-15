@@ -7,10 +7,141 @@ from unittest import mock
 import tyro
 
 from showco.deployment import deploy, update
-from showco.provision import provision
+from showco.provision import provision, ssh
 
 
 class DeployTests(unittest.TestCase):
+    def setUp(self) -> None:
+        scan = mock.patch(
+            'showco.deployment.card.attached_imager_cards', return_value=[]
+        )
+        self.scan_cards = scan.start()
+        self.addCleanup(scan.stop)
+
+    def test_attached_card_is_prepared_before_waiting_and_provisioning(self) -> None:
+        for previous_boot_id in [None, 'previous-boot']:
+            with self.subTest(previous_boot_id=previous_boot_id):
+                self.scan_cards.return_value = [Path('/dev/disk4')]
+                configuration = mock.Mock(ssh_target='tom@pi.local')
+                configuration.network.user = 'tom'
+                calls = mock.Mock()
+                with (
+                    mock.patch(
+                        'showco.provision.provision.resolved_config',
+                        return_value=configuration,
+                    ),
+                    mock.patch(
+                        'showco.provision.ssh.ssh_boot_id',
+                        return_value=previous_boot_id,
+                    ),
+                    mock.patch(
+                        'showco.deployment.card.prepare_selected_card'
+                    ) as prepare,
+                    mock.patch('showco.provision.ssh.wait_for_ssh') as wait,
+                    mock.patch('showco.provision.ssh.wait_for_rebooted_ssh') as reboot,
+                    mock.patch('showco.provision.ssh.run_ssh') as cloud_init,
+                    mock.patch(
+                        'showco.provision.provision.run', return_value=0
+                    ) as provision_target,
+                    mock.patch(
+                        'showco.provision.remote.applied_provisioning_fingerprint'
+                    ) as applied,
+                ):
+                    calls.attach_mock(prepare, 'prepare')
+                    calls.attach_mock(wait, 'wait')
+                    calls.attach_mock(reboot, 'reboot')
+                    calls.attach_mock(cloud_init, 'cloud_init')
+                    calls.attach_mock(provision_target, 'provision')
+                    options = self.options()
+                    self.assertEqual(deploy.run(options), 0)
+                self.assertEqual(
+                    calls.mock_calls,
+                    [
+                        mock.call.prepare(Path('/dev/disk4'), 'tom'),
+                        mock.call.reboot(configuration, previous_boot_id)
+                        if previous_boot_id
+                        else mock.call.wait(
+                            configuration, timeout_seconds=ssh.REBOOT_WAIT_SECONDS
+                        ),
+                        mock.call.cloud_init(
+                            configuration,
+                            'cloud-init status --wait --long',
+                            timeout_seconds=ssh.REBOOT_WAIT_SECONDS,
+                        ),
+                        mock.call.provision(options, provision_config=configuration),
+                    ],
+                )
+                applied.assert_not_called()
+
+    def test_multiple_cards_stop_before_preparation_or_network_access(self) -> None:
+        self.scan_cards.return_value = [Path('/dev/disk4'), Path('/dev/disk5')]
+        with (
+            mock.patch('showco.provision.provision.resolved_config'),
+            mock.patch('showco.deployment.card.prepare_selected_card') as prepare,
+            mock.patch('showco.provision.ssh.ssh_boot_id') as boot_id,
+            self.assertRaisesRegex(SystemExit, 'multiple Imager-written'),
+        ):
+            deploy.run(self.options())
+        prepare.assert_not_called()
+        boot_id.assert_not_called()
+
+    def test_card_cancellation_boot_timeout_or_cloud_init_failure_stops_provisioning(
+        self,
+    ) -> None:
+        self.scan_cards.return_value = [Path('/dev/disk4')]
+        for failed_step in ['prepare_selected_card', 'wait_for_ssh', 'run_ssh']:
+            with (
+                self.subTest(failed_step=failed_step),
+                mock.patch('showco.provision.provision.resolved_config'),
+                mock.patch('showco.provision.ssh.ssh_boot_id', return_value=None),
+                mock.patch('showco.deployment.card.prepare_selected_card') as prepare,
+                mock.patch('showco.provision.ssh.wait_for_ssh') as wait,
+                mock.patch('showco.provision.ssh.run_ssh') as cloud_init,
+                mock.patch('showco.provision.provision.run') as provision_target,
+            ):
+                steps = {
+                    'prepare_selected_card': prepare,
+                    'wait_for_ssh': wait,
+                    'run_ssh': cloud_init,
+                }
+                steps[failed_step].side_effect = SystemExit('stopped')
+                with self.assertRaisesRegex(SystemExit, 'stopped'):
+                    deploy.run(self.options())
+                provision_target.assert_not_called()
+                if failed_step != 'run_ssh':
+                    cloud_init.assert_not_called()
+                if failed_step == 'prepare_selected_card':
+                    wait.assert_not_called()
+
+    def test_explicit_updates_do_not_scan_attached_cards(self) -> None:
+        with (
+            mock.patch('showco.provision.provision.resolved_config'),
+            mock.patch(
+                'showco.deployment.local_update.prepare_local_repositories',
+                return_value=True,
+            ),
+            mock.patch(
+                'showco.deployment.local_update.refresh_local_dependencies',
+                return_value=True,
+            ),
+            mock.patch(
+                'showco.deployment.local_update.update_from_provisioning_machine',
+                return_value=0,
+            ),
+            mock.patch('showco.deployment.update.update_remote_target', return_value=0),
+            mock.patch('showco.deployment.target_update.update_target', return_value=0),
+        ):
+            for values in [
+                {'sync': True},
+                {'push': True},
+                {'remote': True},
+                {'repositories': ['recs']},
+                {'target_machine': True},
+            ]:
+                with self.subTest(values=values):
+                    self.assertEqual(deploy.run(self.options(**values)), 0)
+        self.scan_cards.assert_not_called()
+
     def test_audio_paths_check_provisioning_configuration_even_with_autosquash(
         self,
     ) -> None:
