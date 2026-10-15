@@ -86,6 +86,7 @@ main() {
     network-manager
     nftables
     openssh-client
+    python3-dev
     rsync
     sudo
     tmux

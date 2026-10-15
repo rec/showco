@@ -75,6 +75,12 @@ class ProvisionScriptTests(unittest.TestCase):
     def test_remote_script_installs_shared_python(self) -> None:
         self.assertIn('phase "installing Python 3.13"', script.REMOTE_SCRIPT)
         self.assertIn('bash -lc "uv python install 3.13"', script.REMOTE_SCRIPT)
+        self.assertIn('\n    python3-dev\n', script.REMOTE_SCRIPT)
+        main = script.REMOTE_SCRIPT.rindex('main() {')
+        self.assertLess(
+            script.REMOTE_SCRIPT.index('install_base_packages "${packages[@]}"', main),
+            script.REMOTE_SCRIPT.index('phase "syncing repositories"', main),
+        )
         self.assertNotIn('\n    python3\n', script.REMOTE_SCRIPT)
         self.assertNotIn('\n    python3-venv\n', script.REMOTE_SCRIPT)
 
