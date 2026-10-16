@@ -20,6 +20,7 @@ from .cable_test import X18_CHANNELS, OscControl, X18OscClient, find_audio_devic
 SAMPLE_RATE = 48_000
 BLOCK_FRAMES = 1_024
 MUSIC_FADER = 0.4
+FADER_TOLERANCE = 0.5 / 1023 + 1e-7
 
 
 class Files(BaseModel, frozen=True):
@@ -80,14 +81,17 @@ class X18MusicRouting:
 
     def enable(self) -> None:
         with self.osc_factory(self.host, self.port) as osc:
-            self._set_confirmed(
-                osc,
-                f'/config/chlink/{self.source_channels[0]}-{self.source_channels[1]}',
-                0,
-            )
-            for channel in self.source_channels:
-                prefix = f'/ch/{channel:02}'
-                self._set_confirmed(osc, f'{prefix}/config/rtnsrc', channel - 1)
+            if self.source_channels == [17, 18]:
+                sources = [('/rtn/aux', 8)]  # Stereo USB return U17–18.
+            else:
+                self._set_confirmed(
+                    osc,
+                    f'/config/chlink/{self.source_channels[0]}-{self.source_channels[1]}',
+                    0,
+                )
+                sources = [(_input_path(c), c - 1) for c in self.source_channels]
+            for prefix, source in sources:
+                self._set_confirmed(osc, f'{prefix}/config/rtnsrc', source)
                 self._set_confirmed(osc, f'{prefix}/preamp/rtnsw', 1)
                 self._set_confirmed(osc, f'{prefix}/mix/on', 1)
                 self._set_confirmed(osc, f'{prefix}/mix/lr', 1)
@@ -96,11 +100,11 @@ class X18MusicRouting:
     def disable(self) -> None:
         errors: list[str] = []
         with self.osc_factory(self.host, self.port) as osc:
-            for channel in self.source_channels:
+            for prefix in dict.fromkeys(_input_path(c) for c in self.source_channels):
                 for path in (
-                    f'/ch/{channel:02}/preamp/rtnsw',
-                    f'/ch/{channel:02}/mix/lr',
-                    f'/ch/{channel:02}/mix/on',
+                    f'{prefix}/preamp/rtnsw',
+                    f'{prefix}/mix/lr',
+                    f'{prefix}/mix/on',
                 ):
                     try:
                         self._set_confirmed(osc, path, 0)
@@ -117,11 +121,12 @@ class X18MusicRouting:
             if not isinstance(master, int | float) or not 0 <= master <= 1:
                 raise ValueError(f'Invalid X18 main LR fader: {master}')
             routes: list[int] = []
-            for channel in range(1, X18_CHANNELS + 1):
-                value = osc.query(f'/ch/{channel:02}/mix/lr')
+            for channel in range(1, 18):
+                value = osc.query(f'{_input_path(channel)}/mix/lr')
                 if value not in (0, 1):
                     raise ValueError(f'Invalid X18 channel {channel} LR route: {value}')
                 routes.append(int(value))
+            routes.append(routes[-1])  # The stereo Aux return occupies 17 and 18.
         return RoomScene(master_fader=float(master), input_lr=routes)
 
     def fade_main(self, target: float, seconds: float) -> None:
@@ -139,21 +144,21 @@ class X18MusicRouting:
                     time.sleep(seconds / steps)
             observed = osc.query('/lr/mix/fader')
             if not isinstance(observed, int | float) or not isclose(
-                observed, target, rel_tol=0, abs_tol=1e-5
+                observed, target, rel_tol=0, abs_tol=FADER_TOLERANCE
             ):
                 raise ValueError(f'X18 main LR fader did not reach {target}')
 
     def isolate_instruments(self, scene: RoomScene) -> None:
         with self.osc_factory(self.host, self.port) as osc:
-            for channel, enabled in enumerate(scene.input_lr, 1):
+            for channel, enabled in enumerate(scene.input_lr[:17], 1):
                 if channel not in self.source_channels and enabled:
-                    self._set_confirmed(osc, f'/ch/{channel:02}/mix/lr', 0)
+                    self._set_confirmed(osc, f'{_input_path(channel)}/mix/lr', 0)
 
     def restore_room(self, scene: RoomScene) -> None:
         with self.osc_factory(self.host, self.port) as osc:
-            for channel, enabled in enumerate(scene.input_lr, 1):
+            for channel, enabled in enumerate(scene.input_lr[:17], 1):
                 if channel not in self.source_channels:
-                    self._set_confirmed(osc, f'/ch/{channel:02}/mix/lr', enabled)
+                    self._set_confirmed(osc, f'{_input_path(channel)}/mix/lr', enabled)
             self._set_confirmed(osc, '/lr/mix/fader', scene.master_fader)
 
     @staticmethod
@@ -161,7 +166,10 @@ class X18MusicRouting:
         osc.set(path, value)
         observed = osc.query(path)
         if not isinstance(observed, int | float) or not isclose(
-            observed, value, rel_tol=0, abs_tol=1e-5
+            observed,
+            value,
+            rel_tol=0,
+            abs_tol=FADER_TOLERANCE if path.endswith('/fader') else 1e-5,
         ):
             raise ValueError(f'X18 did not apply {path}={value}; observed {observed}')
 
@@ -405,3 +413,7 @@ def ordered_tracks(score: Files) -> list[Path]:
         ordered.append(result.pop(index))
         weights.pop(index)
     return ordered
+
+
+def _input_path(channel: int) -> str:
+    return '/rtn/aux' if channel > 16 else f'/ch/{channel:02}'

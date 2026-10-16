@@ -651,47 +651,88 @@ def test_x18_music_routing_uses_usb_returns_on_main_lr_and_mutes_them() -> None:
     routing.disable()
 
     assert osc.values == [
-        ('/config/chlink/17-18', 0),
-        ('/ch/17/config/rtnsrc', 16),
-        ('/ch/17/preamp/rtnsw', 1),
-        ('/ch/17/mix/on', 1),
-        ('/ch/17/mix/lr', 1),
-        ('/ch/17/mix/fader', 0.4),
-        ('/ch/18/config/rtnsrc', 17),
-        ('/ch/18/preamp/rtnsw', 1),
-        ('/ch/18/mix/on', 1),
-        ('/ch/18/mix/lr', 1),
-        ('/ch/18/mix/fader', 0.4),
-        ('/ch/17/preamp/rtnsw', 0),
-        ('/ch/17/mix/lr', 0),
-        ('/ch/17/mix/on', 0),
-        ('/ch/18/preamp/rtnsw', 0),
-        ('/ch/18/mix/lr', 0),
-        ('/ch/18/mix/on', 0),
+        ('/rtn/aux/config/rtnsrc', 8),
+        ('/rtn/aux/preamp/rtnsw', 1),
+        ('/rtn/aux/mix/on', 1),
+        ('/rtn/aux/mix/lr', 1),
+        ('/rtn/aux/mix/fader', 0.4),
+        ('/rtn/aux/preamp/rtnsw', 0),
+        ('/rtn/aux/mix/lr', 0),
+        ('/rtn/aux/mix/on', 0),
     ]
 
 
-def test_x18_room_scene_isolates_instruments_and_restores_main() -> None:
+def test_x18_music_can_use_a_pair_of_regular_channels() -> None:
     osc = FakeOsc()
-    osc.applied['/lr/mix/fader'] = 0.8
-    for channel in range(1, 19):
-        osc.applied[f'/ch/{channel:02}/mix/lr'] = int(channel % 2 == 0)
+    routing = x18_music.X18MusicRouting(
+        '10.0.0.18', 10_024, [15, 16], osc_factory=lambda host, port: osc
+    )
+    routing.enable()
+    routing.disable()
+    assert osc.applied['/config/chlink/15-16'] == 0
+    for channel in (15, 16):
+        assert osc.applied[f'/ch/{channel}/config/rtnsrc'] == channel - 1
+        assert osc.applied[f'/ch/{channel}/mix/fader'] == 0.4
+        assert osc.applied[f'/ch/{channel}/preamp/rtnsw'] == 0
+        assert osc.applied[f'/ch/{channel}/mix/on'] == 0
+        assert osc.applied[f'/ch/{channel}/mix/lr'] == 0
+
+
+@pytest.mark.parametrize('target', [0.4, 0.75, 0.8])
+def test_x18_accepts_fader_readback_at_the_mixers_resolution(target: float) -> None:
+    osc = FakeOsc()
+    osc.applied['/lr/mix/fader'] = 0.0
+    apply = osc.set
+
+    def quantized_set(path: str, value: object) -> None:
+        if path.endswith('/fader'):
+            value = round(float(value) * 1023) / 1023
+        apply(path, value)
+
+    osc.set = quantized_set
     routing = x18_music.X18MusicRouting(
         '10.0.0.18', 10_024, [17, 18], osc_factory=lambda host, port: osc
+    )
+    routing.enable()
+    routing.fade_main(target, 0)
+    assert osc.applied['/rtn/aux/mix/fader'] == pytest.approx(409 / 1023)
+    assert osc.applied['/lr/mix/fader'] == round(target * 1023) / 1023
+
+
+@pytest.mark.parametrize('music_channels', [[17, 18], [15, 16]])
+def test_x18_room_scene_isolates_instruments_and_restores_main(
+    music_channels: list[int],
+) -> None:
+    osc = FakeOsc()
+    osc.applied['/lr/mix/fader'] = 0.8
+    for channel in range(1, 17):
+        osc.applied[f'/ch/{channel:02}/mix/lr'] = int(channel % 2 == 0)
+    osc.applied['/rtn/aux/mix/lr'] = 1
+    routing = x18_music.X18MusicRouting(
+        '10.0.0.18', 10_024, music_channels, osc_factory=lambda host, port: osc
     )
 
     scene = routing.capture_room()
     with mock.patch('showco.x18.music.time.sleep'):
         routing.fade_main(0, 2)
     routing.isolate_instruments(scene)
+    for channel in range(1, 17):
+        assert osc.applied[f'/ch/{channel:02}/mix/lr'] == (
+            scene.input_lr[channel - 1] if channel in music_channels else 0
+        )
+    assert osc.applied['/rtn/aux/mix/lr'] == int(17 in music_channels)
     routing.restore_room(scene)
 
     assert scene.master_fader == 0.8
-    assert scene.input_lr == [int(channel % 2 == 0) for channel in range(1, 19)]
+    assert scene.input_lr == [int(channel % 2 == 0) for channel in range(1, 17)] + [
+        1,
+        1,
+    ]
     assert osc.applied['/lr/mix/fader'] == 0.8
     assert [
-        osc.applied[f'/ch/{channel:02}/mix/lr'] for channel in range(1, 19)
-    ] == scene.input_lr
+        osc.applied[f'/ch/{channel:02}/mix/lr'] for channel in range(1, 17)
+    ] == scene.input_lr[:16]
+    assert osc.applied['/rtn/aux/mix/lr'] == 1
 
 
 def test_x18_music_routing_checks_readback_and_mutes_every_return() -> None:
@@ -702,7 +743,7 @@ def test_x18_music_routing_checks_readback_and_mutes_every_return() -> None:
     observed = osc.query
 
     def stale_readback(path: str) -> object:
-        if path == '/ch/17/preamp/rtnsw':
+        if path == '/rtn/aux/preamp/rtnsw':
             return 1
         return observed(path)
 
@@ -711,8 +752,8 @@ def test_x18_music_routing_checks_readback_and_mutes_every_return() -> None:
     with pytest.raises(ValueError, match='could not be confirmed muted'):
         routing.disable()
 
-    assert ('/ch/18/mix/on', 0) in osc.values
-    assert len(osc.values) == 6
+    assert ('/rtn/aux/mix/on', 0) in osc.values
+    assert len(osc.values) == 3
 
 
 @pytest.mark.parametrize('repeats', [1, 2])
