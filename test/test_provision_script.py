@@ -435,3 +435,65 @@ def test_generated_network_files_are_readable_and_preserve_addresses(
     assert 'test-external-password' not in public_file.read_text()
     assert 'second' not in public_file.read_text()
     assert list(restored.networks['external']['wifi']) == ['home', 'venue']
+
+
+@pytest.mark.parametrize('previous', ['missing', 'installed', 'masked'])
+def test_disabling_lyte_stops_and_persistently_masks_existing_service(
+    tmp_path: Path, previous: str
+) -> None:
+    unit = tmp_path / 'lyte.service'
+    if previous == 'installed':
+        unit.write_text('[Service]\nExecStart=lyte\n')
+    elif previous == 'masked':
+        unit.symlink_to('/dev/null')
+    commands = tmp_path / 'commands'
+    source = (
+        (script.SCRIPT_DIR / 'templates/services.sh')
+        .read_text()
+        .replace(
+            'local unit_directory="/home/$SHOW_USER/.config/systemd/user"',
+            'local unit_directory="$TEST_UNIT_DIRECTORY"',
+        )
+    )
+    subprocess.run(
+        [
+            'bash',
+            '-eu',
+            '-c',
+            source
+            + """
+sudo() { shift 3; command "$@"; }
+user_systemctl() {
+  printf '%s\n' "$*" >> "$TEST_COMMANDS"
+  if [[ "$1" == show ]]; then
+    if [[ -L "$TEST_UNIT_DIRECTORY/lyte.service" ]]; then
+      printf 'masked\n'
+    elif [[ -f "$TEST_UNIT_DIRECTORY/lyte.service" ]]; then
+      printf 'loaded\n'
+    else
+      printf 'not-found\n'
+    fi
+  fi
+}
+install_lyte_service
+install_lyte_service
+""",
+        ],
+        env={
+            **os.environ,
+            'SHOW_USER': 'test',
+            'LYTE_ENABLED': 'false',
+            'TEST_UNIT_DIRECTORY': str(tmp_path),
+            'TEST_COMMANDS': str(commands),
+        },
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert unit.is_symlink()
+    assert unit.readlink() == Path('/dev/null')
+    recorded = commands.read_text().splitlines()
+    assert ('disable --now lyte.service' in recorded) == (previous == 'installed')
+    assert 'stop lyte.service' in recorded
+    assert recorded.count('daemon-reload') == 2
+    assert not any(c.startswith(('start ', 'restart ')) for c in recorded)

@@ -229,6 +229,11 @@ The important configuration is near the top of `config.toml`:
 | `[stream]` | Enable streamO and provide its non-secret metadata. |
 | `[lyte]` | Enable lyte and name an installation configuration relative to the lyte checkout. |
 
+With `[lyte] enabled = false`, provisioning stops lyte, removes its boot autostart,
+and masks its user service so service commands cannot start it. Verification
+checks that it is stopped and masked. Setting `enabled = true` and provisioning
+again removes the mask and installs the lighting service.
+
 External Wi-Fi networks use named tables in `showco/provision/config.toml`:
 
 ```toml
