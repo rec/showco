@@ -161,7 +161,7 @@ class MixerMonitor:
             sock.settimeout(self.timeout_seconds)
             try:
                 sock.connect((self.host, self.port))
-                sock.send(b'/xremote\0\0\0\0,\0\0\0')
+                sock.send(b'/info\0\0\0,\0\0\0')
                 sock.recv(1)
                 return MixerStatus(latency_ms=elapsed_ms(start))
             except OSError as e:
