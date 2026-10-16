@@ -98,8 +98,12 @@ class ProvisionTests(unittest.TestCase):
 
         with (
             mock.patch(
+                'showco.provision.provision.config.load_values',
+                return_value=values(),
+            ),
+            mock.patch(
                 'showco.provision.provision.config.read_toml',
-                side_effect=[values(), {}, {}],
+                return_value={},
             ),
             mock.patch(
                 'showco.provision.provision.validate_config',
@@ -127,8 +131,12 @@ class ProvisionTests(unittest.TestCase):
         )
         with (
             mock.patch(
+                'showco.provision.provision.config.load_values',
+                return_value=values(),
+            ),
+            mock.patch(
                 'showco.provision.provision.config.read_toml',
-                side_effect=[values(), {}, {}],
+                return_value={},
             ),
             mock.patch('showco.provision.provision.validate_config'),
             mock.patch(
@@ -152,8 +160,12 @@ class ProvisionTests(unittest.TestCase):
         )
         with (
             mock.patch(
+                'showco.provision.provision.config.load_values',
+                return_value=values(),
+            ),
+            mock.patch(
                 'showco.provision.provision.config.read_toml',
-                side_effect=[values(), {}, {}],
+                return_value={},
             ),
             mock.patch('showco.provision.provision.validate_config'),
             mock.patch(

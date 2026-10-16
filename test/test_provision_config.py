@@ -297,3 +297,17 @@ class ProvisionConfigTests(unittest.TestCase):
             values = config.load_values(config_path, secrets_path)
 
         self.assertEqual(values, {'network': {'host': 'pi', 'password': 'secret'}})
+
+    def test_missing_secrets_file_reports_its_path(self) -> None:
+        with TemporaryDirectory() as directory:
+            config_path = Path(directory) / 'config.toml'
+            secrets_path = Path(directory) / 'secrets.toml'
+            config_path.write_text("[network]\nhost = 'pi'\n")
+
+            with self.assertRaises(SystemExit) as raised:
+                config.load_values(config_path, secrets_path)
+
+        self.assertEqual(
+            str(raised.exception),
+            f'ERROR: provisioning secrets file not found: {secrets_path.resolve()}',
+        )

@@ -419,6 +419,11 @@ def read_toml(path: Path) -> dict[str, object]:
 
 
 def load_values(config_path: Path, secrets_path: Path) -> dict[str, object]:
+    secrets_path = secrets_path.expanduser()
+    if not secrets_path.is_file():
+        sys.exit(
+            f'ERROR: provisioning secrets file not found: {secrets_path.resolve()}'
+        )
     return merge_values(read_toml(config_path), read_toml(secrets_path))
 
 
