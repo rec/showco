@@ -378,6 +378,16 @@ def make_server(
         if performance_enabled
         else None
     )
+    music_controller = music.controller_from_specs(
+        recs_client,
+        mixer_specs or [],
+        streamo_client,
+        streamo_restart_action if streamo_enabled else None,
+        setup=setup,
+        teardown=teardown,
+    )
+    if music_controller is not None and streamo_enabled:
+        streamo_restart_action = music_controller.start_stream
     app = ShowcoApp(
         recs_client,
         streamo_client,
@@ -391,14 +401,7 @@ def make_server(
             if mixer_specs and any(m.name == 'X18' for m in mixer_specs)
             else None
         ),
-        music.controller_from_specs(
-            recs_client,
-            mixer_specs or [],
-            streamo_client,
-            streamo_restart_action if streamo_enabled else None,
-            setup=setup,
-            teardown=teardown,
-        ),
+        music_controller,
         state_directory=Path.home() / '.local/state/showco'
         if performance_enabled
         else None,

@@ -11,6 +11,12 @@ configured stereo pair. The exact source key is resolved from recs at deployment
 an absent or ambiguous mixer fails configuration instead of opening a competing
 hardware capture. Media and publishing credentials are preserved.
 
+Before starting or restarting streamO from showCo, the X18 sends Main L/R
+post-fader to USB 17–18. showCo confirms each routing setting before starting
+the broadcast; an unconfirmed setting prevents startup. This applies to the
+Twitch button, streamO restart and recovery actions, and entering Record mode, without
+changing room faders or the other USB sends.
+
 Run showCo from its Git source checkout, including the top-level `site/` directory. Installing showCo as a standalone wheel is not supported; provisioning maintains the required checkout layout.
 
 ## Perform a show

@@ -9,10 +9,11 @@ from io import BytesIO
 from threading import BoundedSemaphore, Event, Lock, Thread
 from unittest import mock
 
-from showco.runtime import models, rehearsal
+from showco.runtime import models, music, rehearsal, server
 from showco.runtime.app import ShowcoApp
 from showco.runtime.lyte import LyteClient
 from showco.runtime.server import MAX_WAVEFORM_CONNECTIONS, ShowcoHandler, ShowcoServer
+from showco.x18.music import MusicPlayerStatus
 
 
 class ServerTests(unittest.TestCase):
@@ -298,6 +299,53 @@ class ServerTests(unittest.TestCase):
                 self.assertTrue(app.run_action({'action': 'streamo-toggle'}).ok)
                 restart.assert_called_once_with()
         stream.action.assert_not_called()
+        self.assertEqual(recs.mock_calls, [])
+
+    def test_stream_start_actions_confirm_usb_routing_before_restart(self) -> None:
+        recs = mock.Mock()
+        stream = mock.Mock()
+        stream.status.return_value = models.StreamoStatus(
+            service=models.ServiceStatus(name='streamo', state='connected'),
+            stream_state='stopped',
+        )
+        restart = mock.Mock(
+            return_value=models.ActionResult(ok=True, message='started')
+        )
+        routing = mock.Mock()
+        player = mock.Mock()
+        player.status.return_value = MusicPlayerStatus()
+        controller = music.MusicController(
+            recs,
+            player,
+            routing,
+            music.MusicConfig(),
+            streamo=stream,
+            streamo_restart=restart,
+        )
+        calls = mock.Mock()
+        calls.attach_mock(routing.route_main_to_usb, 'route')
+        calls.attach_mock(restart, 'start')
+        with (
+            mock.patch.object(
+                server.music, 'controller_from_specs', return_value=controller
+            ),
+            mock.patch.object(server, 'ShowcoServer'),
+        ):
+            configured = server.make_server(
+                '127.0.0.1',
+                0,
+                recs=recs,
+                streamo=stream,
+                system=rehearsal.RehearsalSystemMonitor(),
+                mixers=rehearsal.RehearsalMixersMonitor(),
+                streamo_enabled=True,
+                streamo_restart=restart,
+            )
+        for action in ('streamo-toggle', 'streamo-restart'):
+            calls.reset_mock()
+            outcome = configured.app.run_action({'action': action})
+            self.assertTrue(outcome.ok, outcome.message)
+            self.assertEqual(calls.mock_calls, [mock.call.route(), mock.call.start()])
         self.assertEqual(recs.mock_calls, [])
 
     def test_twitch_toggle_stops_stream_and_prevents_service_restart(self) -> None:

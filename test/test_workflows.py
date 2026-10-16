@@ -325,6 +325,37 @@ def test_recovery_needs_named_confirmation(tmp_path: Path) -> None:
     app.recovery_restart.assert_not_called()
 
 
+def test_stream_recovery_uses_the_prepared_stream_restart(tmp_path: Path) -> None:
+    app = application(tmp_path)
+    app.recs = mock.Mock()
+    app.status = mock.Mock(
+        return_value=status().model_copy(
+            update={
+                'streamo': models.StreamoStatus(
+                    service=models.ServiceStatus(name='streamo', state='offline')
+                )
+            }
+        )
+    )
+    app.streamo_restart = mock.Mock(
+        return_value=models.ActionResult(ok=True, message='started')
+    )
+    app.recovery_restart = mock.Mock()
+
+    outcome = app.run_action(
+        {
+            'action': 'recovery-restart',
+            'service': 'streamo',
+            'confirmation': 'streamo',
+            'revision': '0',
+        }
+    )
+
+    assert outcome.ok, outcome.message
+    app.streamo_restart.assert_called_once_with()
+    app.recovery_restart.assert_not_called()
+
+
 def test_marker_sent_before_final_write_failure_remains_uncertain(
     tmp_path: Path,
 ) -> None:
