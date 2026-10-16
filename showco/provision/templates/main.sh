@@ -140,7 +140,6 @@ main() {
   phase "migrating Twitcho service"
   uninstall_twitcho_service
   migrate_streamo_configuration
-  configure_streamo_media
 
   phase "enabling user service autostart"
   sudo loginctl enable-linger "$SHOW_USER"
@@ -149,6 +148,7 @@ main() {
   install_recs_service
 
   phase "installing streamO service"
+  configure_streamo_media
   install_streamo_service
 
   phase "installing showco service"

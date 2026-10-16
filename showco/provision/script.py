@@ -57,6 +57,9 @@ def remote_command(
         'SWAP_WIFI': shell_bool(provision_config.network.swap_wifi),
         'NETWORK_TOPOLOGY': provision_config.network.topology,
         'STREAMO_ENABLED': shell_bool(provision_config.stream.enabled),
+        'RECS_FORWARD_AUDIO': shell_bool(
+            provision_config.stream.enabled and x18_mixer is not None
+        ),
         'LYTE_ENABLED': shell_bool(provision_config.lyte.enabled),
         'LYTE_INSTALLATION_CONFIG': str(provision_config.lyte.installation_config),
         'PRIVATE_WIFI_SSID': config.string_or_default(private.name, 'showbox'),

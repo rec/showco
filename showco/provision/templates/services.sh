@@ -53,7 +53,17 @@ install_recs_service() {
   local uid
   local args=()
   local input
+  if [[ "$RECS_FORWARD_AUDIO" == true ]]; then
+    args+=(--forward-audio)
+  fi
   uid=$(id -u "$SHOW_USER")
+  if [[ "$RECS_FORWARD_AUDIO" == true ]]; then
+    local dropin="/home/$SHOW_USER/.config/systemd/user/recs.service.d"
+    sudo -H -u "$SHOW_USER" install -d -m 700 "/home/$SHOW_USER/.local/state/recs"
+    sudo -H -u "$SHOW_USER" mkdir -p "$dropin"
+    sudo -H -u "$SHOW_USER" sh -c 'printf "[Service]\nUMask=0077\n" > "$1/audio-privacy.conf"' sh "$dropin"
+    user_systemctl daemon-reload
+  fi
   while IFS= read -r device_name; do
     [[ -n "$device_name" ]] && args+=(--include "$device_name")
   done <<<"$RECS_AUDIO_DEVICE_NAMES"
@@ -72,6 +82,7 @@ install_recs_service() {
   input=$(service_input "$(git -C "$ROOT/recs" rev-parse HEAD)
 $RECS_AUDIO_DEVICE_NAMES
 $RECS_MIDI_INPUT_NAMES
+$RECS_FORWARD_AUDIO
 $RECS_OSC_NODES_TOML")
   if service_is_current recs "$input"; then
     printf 'recs service is already installed.\n'

@@ -4,6 +4,13 @@ showCo is the operator web UI for a small live-show system. It reports and contr
 
 showCo runs on a Raspberry Pi. A provisioning machine configures and deploys it. The target has sibling checkouts of `reccy`, `recs`, `streamo`, `lyte`, and `showco`, each with its own locked `uv` environment.
 
+When streaming is enabled with an X18, provisioning enables recs audio forwarding
+and configures streamO to subscribe to that recorder. recs alone opens the USB
+input. The broadcast uses channels 17 and 18 by default, retaining an existing
+configured stereo pair. The exact source key is resolved from recs at deployment;
+an absent or ambiguous mixer fails configuration instead of opening a competing
+hardware capture. Media and publishing credentials are preserved.
+
 Run showCo from its Git source checkout, including the top-level `site/` directory. Installing showCo as a standalone wheel is not supported; provisioning maintains the required checkout layout.
 
 ## Perform a show
