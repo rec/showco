@@ -2,8 +2,10 @@ for (const form of document.querySelectorAll("form[method=post]")) {
   form.addEventListener("submit", event => {
     if (form.dataset.confirm === "true" && !confirm("Are you sure?")) {
       event.preventDefault();
+      event.stopImmediatePropagation();
       return;
     }
+    if (form.closest("[data-transport]")) return;
     const button = event.submitter || form.querySelector("button");
     if (!button) return;
     button.setAttribute("aria-busy", "true");

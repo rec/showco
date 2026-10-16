@@ -100,6 +100,10 @@
       case "bitrate": return value.output_bitrate_kbps === null
         ? "unknown"
         : `${value.output_bitrate_kbps.toFixed(0)} kbps`;
+      case "twitch": return value.service.state !== "connected"
+        ? serviceDetail(value.service)
+        : value.closing?.state === "running"
+          ? `Closing: ${value.closing.phase}` : value.stream_state;
       case "playback_state": return value.state;
       case "playback_selection": return value.state === "waiting"
         ? "No session selected"
@@ -160,10 +164,20 @@
   }
 
   function updateConfiguredActions(status) {
-    for (const button of document.querySelectorAll('[data-transport] button')) {
+    for (const form of document.querySelectorAll('form[data-teardown-label]')) {
+      const restart = status.music.restart_available;
+      form.querySelector('[name="action"]').value = restart ? "music-restart" : "music-teardown";
+      form.querySelector("button").textContent = restart ? "Restart" : form.dataset.teardownLabel;
+      form.dataset.confirm = restart ? "false" : "true";
+    }
+    for (const button of document.querySelectorAll('form[data-disabled-when] button')) {
       const form = button.closest("form");
-      button.disabled = form.dataset.disabledWhen === "playback_waiting"
-        && status.recs.playback.state === "waiting";
+      button.disabled = button.hasAttribute("aria-busy")
+        || (form.dataset.disabledWhen === "playback_waiting"
+          && status.recs.playback.state === "waiting")
+        || (form.dataset.disabledWhen === "streamo_unavailable"
+          && (!status.streamo.toggle_available || status.performance_locked
+            || ["closing", "transitioning", "fault"].includes(status.music.mode)));
     }
   }
 

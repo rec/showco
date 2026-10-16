@@ -284,6 +284,7 @@ class ShowcoApp:
             except (
                 ConnectionError,
                 OSError,
+                subprocess.SubprocessError,
                 TimeoutError,
                 ValidationError,
                 ValueError,
@@ -381,6 +382,42 @@ class ShowcoApp:
             return self.recs.play()
         if action in RECS_ACTIONS:
             return self.recs.action(RECS_ACTIONS[action], **_recs_fields(form))
+        if action == 'streamo-toggle':
+            if self.streamo is None:
+                return models.ActionResult(ok=False, message='streamO is disabled')
+            status = self.streamo.status()
+            if not status.toggle_available or (
+                self.music is not None
+                and self.music.status().mode in {'closing', 'transitioning', 'fault'}
+            ):
+                return models.ActionResult(
+                    ok=False,
+                    message='Twitch switching is unavailable during a transition '
+                    'or closing sequence, or when streamO is disabled',
+                )
+            if (
+                status.stream_state in {'stopped', 'failed'}
+                or not status.service.fresh
+                or status.service.last_error is not None
+            ):
+                return self.streamo_restart()
+            result = self.streamo.action('stop')
+            if not result.ok:
+                return result
+            try:
+                service = services.service_registry().controller('streamo')
+                service.stop()
+                stopped = service.status().running is False
+            except (OSError, subprocess.SubprocessError) as error:
+                return models.ActionResult(
+                    ok=False, message=f'Twitch stop could not be confirmed: {error}'
+                )
+            return models.ActionResult(
+                ok=stopped,
+                message='Twitch stopped'
+                if stopped
+                else 'Twitch stop could not be confirmed',
+            )
         if action == 'streamo-restart' and self.streamo is None:
             return models.ActionResult(ok=False, message='streamo is disabled')
         if action == 'streamo-restart':
@@ -405,6 +442,12 @@ class ShowcoApp:
                     return self.music.record()
                 case 'music-teardown':
                     return self.music.teardown()
+                case 'music-restart':
+                    if not self.music.status().restart_available:
+                        return models.ActionResult(
+                            ok=False, message='Teardown has not been requested'
+                        )
+                    return self.music.record(restart=True)
                 case 'music-close-cancel':
                     return self.music.recover_closing(False)
                 case 'music-close-finish':
@@ -563,6 +606,7 @@ CABLE_TEST_CONFLICTING_ACTIONS = {
     'music-setup',
     'music-record',
     'music-teardown',
+    'music-restart',
     'music-stop',
     'music-close-cancel',
     'music-close-finish',

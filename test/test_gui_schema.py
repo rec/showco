@@ -13,6 +13,7 @@ def test_default_gui_declares_all_navigation_pages() -> None:
     assert document.page_at('/performance').title == 'Performance'
     assert document.page('channels').sections
     assert [page.name for page in document.pages] == [
+        'show',
         'channels',
         'track-names',
         'musicians',
@@ -27,6 +28,76 @@ def test_default_gui_declares_all_navigation_pages() -> None:
         'actions',
         'errors',
     ]
+
+
+@pytest.mark.parametrize(
+    ('connection', 'state', 'enabled'),
+    [
+        ('connected', 'stopped', True),
+        ('connected', 'streaming', True),
+        ('connected', 'starting', False),
+        ('connected', 'failed', True),
+        ('error', 'streaming', True),
+        ('offline', 'unknown', True),
+        ('disabled', 'unknown', False),
+    ],
+)
+def test_show_page_has_only_twitch_status_toggle_and_teardown(
+    connection: str, state: str, enabled: bool
+) -> None:
+    document = gui_schema.load_gui(gui_schema.DEFAULT_GUI_PATH)
+    page = document.page('show')
+    status = models.ShowStatus(
+        recs=models.RecsStatus(
+            service=models.ServiceStatus(name='recs', state='connected')
+        ),
+        streamo=models.StreamoStatus(
+            service=models.ServiceStatus(name='streamo', state=connection),
+            stream_state=state,
+        ),
+    )
+
+    html = views.configured_page(page, status)
+
+    assert document.default_page == 'show'
+    assert [element.name for element in page.sections[0].elements] == [
+        'twitch-status',
+        'twitch-toggle',
+        'teardown',
+        'show-result',
+    ]
+    assert ('<button disabled>Switch Twitch on/off</button>' in html) == (not enabled)
+    assert 'Twitch: ' + (state if connection == 'connected' else connection) in html
+    assert '<button>Teardown</button>' in html
+    assert 'data-disabled-when="" data-confirm="true"' in html
+
+
+@pytest.mark.parametrize('page', ['show', 'actions'])
+@pytest.mark.parametrize('mode', ['closing', 'teardown', 'record'])
+def test_teardown_buttons_follow_shared_show_mode(page: str, mode: str) -> None:
+    document = gui_schema.load_gui(gui_schema.DEFAULT_GUI_PATH)
+    status = models.ShowStatus(
+        recs=models.RecsStatus(
+            service=models.ServiceStatus(name='recs', state='connected')
+        ),
+        streamo=models.StreamoStatus(
+            service=models.ServiceStatus(name='streamo', state='connected')
+        ),
+        music=models.MusicStatus(mode=mode),
+    )
+
+    html = views.configured_page(
+        document.page(page), status, features={'music_enabled'}
+    )
+
+    if mode == 'record':
+        assert 'value="music-teardown"' in html
+        assert 'data-confirm="true" data-teardown-label=' in html
+        assert '<button>Restart</button>' not in html
+    else:
+        assert 'value="music-restart"' in html
+        assert 'data-confirm="false" data-teardown-label=' in html
+        assert '<button>Restart</button>' in html
 
 
 def test_alternate_gui_changes_performance_page_without_code_changes() -> None:

@@ -2,7 +2,69 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 
+async function checkTeardownConfirmation() {
+  const listeners = [];
+  const attributes = new Set();
+  const button = {
+    disabled: false,
+    setAttribute(name) {attributes.add(name);},
+    removeAttribute(name) {attributes.delete(name);},
+  };
+  const form = {
+    dataset: {confirm: 'true'},
+    addEventListener(_name, callback) {listeners.push(callback);},
+    closest() {return {};},
+    querySelector() {return button;},
+  };
+  let approved = false;
+  let requests = 0;
+  const result = {};
+  const browser = vm.createContext({
+    document: {querySelectorAll: () => [form], querySelector: () => result},
+    confirm(message) {assert.equal(message, 'Are you sure?'); return approved;},
+    FormData: class { *[Symbol.iterator]() {yield ['action', 'music-teardown'];} },
+    URLSearchParams,
+    async fetch(_url, options) {
+      requests++;
+      assert.equal(new URLSearchParams(options.body).get('action'), 'music-teardown');
+      return {ok: true, json: async () => ({ok: true, message: 'Closing credits started'})};
+    },
+    async refreshShowStatus() {button.disabled = false;},
+    statusFailed(error) {throw error;},
+  });
+  for (const script of ['shutdown-action.js', 'playback-script.js']) {
+    vm.runInContext(fs.readFileSync(`site/${script}`, 'utf8'), browser);
+  }
+  async function submit() {
+    const event = {
+      prevented: false, stopped: false,
+      preventDefault() {this.prevented = true;},
+      stopImmediatePropagation() {this.stopped = true;},
+    };
+    for (const listener of listeners) {
+      await listener(event);
+      if (event.stopped) break;
+    }
+    assert.equal(event.prevented, true);
+  }
+  await submit();
+  assert.equal(requests, 0);
+  assert.equal(button.disabled, false);
+  assert.equal(attributes.has('aria-busy'), false);
+  approved = true;
+  await submit();
+  assert.equal(requests, 1);
+  assert.equal(result.textContent, 'Closing credits started');
+  assert.equal(button.disabled, false);
+}
+
 const status = JSON.parse(fs.readFileSync(0, 'utf8'));
+const toggle = {
+  disabled: true,
+  busy: false,
+  hasAttribute() {return this.busy;},
+  closest() {return {dataset: {disabledWhen: 'streamo_unavailable'}};},
+};
 const elements = new Map([
   'streamo-health', 'bitrate', 'temperature', 'readiness-state',
   'readiness-checks', 'incidents', 'input-checks', 'osc-recorders', 'connection-status', 'lyte-health', 'playback-state',
@@ -25,7 +87,8 @@ const context = vm.createContext({
     getElementById: id => elements.get(id) || null,
     querySelectorAll: selector => selector === 'p[data-value]'
       ? [...elements.values()].filter(element => element.dataset?.value)
-      : selector === '[data-layout="list"]' ? [osc] : [],
+      : selector === '[data-layout="list"]' ? [osc]
+      : selector === 'form[data-disabled-when] button' ? [toggle] : [],
     createElement: () => ({append() {}}),
   },
   fetch: async () => ({ok: true, json: async () => status}),
@@ -38,6 +101,7 @@ vm.runInContext(fs.readFileSync('site/show-controls.js', 'utf8'), context);
 vm.runInContext(fs.readFileSync('site/channel-controls.js', 'utf8'), context);
 vm.runInContext(fs.readFileSync('site/status-script.js', 'utf8'), context);
 vm.runInContext('updateStatus()', context).then(async () => {
+  await checkTeardownConfirmation();
   assert.equal(elements.get('streamo-health').textContent,
     `streamo: ${status.streamo.service.state}`);
   assert.equal(elements.get('bitrate').textContent,
@@ -48,6 +112,37 @@ vm.runInContext('updateStatus()', context).then(async () => {
   assert.equal(elements.get('osc-recorders').textContent, 'No OSC recorders.');
   assert.match(elements.get('connection-status').textContent, /^Connected/);
   assert.ok(!elements.get('lyte-health').textContent.includes('undefined'));
+  assert.equal(toggle.disabled, !status.streamo.toggle_available);
+  context.toggleStatus = {...status, streamo: {...status.streamo, toggle_available: true}};
+  vm.runInContext('updateConfiguredActions(toggleStatus)', context);
+  assert.equal(toggle.disabled, false);
+  toggle.busy = true;
+  vm.runInContext('updateConfiguredActions(toggleStatus)', context);
+  assert.equal(toggle.disabled, true);
+  toggle.busy = false;
+
+  const teardownForms = ['Teardown', 'Tear down with closing credits'].map(label => ({
+    dataset: {teardownLabel: label, confirm: 'true'},
+    action: {value: 'music-teardown'},
+    button: {textContent: label},
+    querySelector(selector) {return selector === 'button' ? this.button : this.action;},
+  }));
+  context.document.querySelectorAll = selector =>
+    selector === 'form[data-teardown-label]' ? teardownForms : [];
+  context.restartStatus = {...status, music: {...status.music, restart_available: true}};
+  vm.runInContext('updateConfiguredActions(restartStatus)', context);
+  for (const form of teardownForms) {
+    assert.equal(form.action.value, 'music-restart');
+    assert.equal(form.button.textContent, 'Restart');
+    assert.equal(form.dataset.confirm, 'false');
+  }
+  context.restartStatus.music.restart_available = false;
+  vm.runInContext('updateConfiguredActions(restartStatus)', context);
+  for (const form of teardownForms) {
+    assert.equal(form.action.value, 'music-teardown');
+    assert.equal(form.button.textContent, form.dataset.teardownLabel);
+    assert.equal(form.dataset.confirm, 'true');
+  }
 
   const fields = [
     {dataset: {value: 'item.name', format: 'bold'}, textContent: ''},
@@ -69,10 +164,14 @@ vm.runInContext('updateStatus()', context).then(async () => {
   assert.equal(row.className, 'failed');
   assert.deepEqual(fields.map(field => field.textContent), ['X18 input 1', 'clipping']);
 
+  toggle.disabled = false;
+  context.document.querySelectorAll = selector =>
+    selector === '[data-disabled-when="streamo_unavailable"] button' ? [toggle] : [];
   context.fetch = async () => {throw new Error('offline');};
   await vm.runInContext('updateStatus()', context);
   assert.match(elements.get('connection-status').textContent, /offline/);
   assert.equal(elements.get('readiness-state').textContent, 'unknown (status unavailable)');
+  assert.equal(toggle.disabled, true);
 
   let respond;
   let submitted;

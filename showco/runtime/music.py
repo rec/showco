@@ -150,8 +150,18 @@ class MusicController:
         self._clear_closing()
         return result
 
-    def record(self) -> models.ActionResult:
-        self._require_no_closing()
+    def record(self, *, restart: bool = False) -> models.ActionResult:
+        if restart:
+            self.closing_stop.set()
+            if self.closing_thread is not None and self.closing_thread.is_alive():
+                self.closing_thread.join(timeout=5)
+                if self.closing_thread.is_alive():
+                    return models.ActionResult(
+                        ok=False,
+                        message='Closing observer is still active; retry Restart',
+                    )
+        else:
+            self._require_no_closing()
         if self.mode == 'record':
             return models.ActionResult(
                 ok=True,
@@ -173,6 +183,10 @@ class MusicController:
                     'new recs session started',
                     lambda: self._require(self.recs.action('new_session')),
                 ),
+                (
+                    'recs recording resumed',
+                    lambda: self._require(self.recs.action('resume_recording')),
+                ),
                 ('streamO started', self._start_stream),
             ],
         )
@@ -180,8 +194,9 @@ class MusicController:
         return result
 
     def teardown(self) -> models.ActionResult:
-        if self.streamo is not None:
+        if self.streamo is not None and self.streamo.status().stream_state != 'stopped':
             return self._request_closing()
+        self._require_no_closing()
         return self._transition(
             'teardown',
             'Recording stopped; teardown music is playing'
@@ -217,10 +232,10 @@ class MusicController:
                     ok=False,
                     message='A closing operation already exists; review its status',
                 )
-            if self.mode != 'record':
+            if self.mode in {'transitioning', 'fault'}:
                 return models.ActionResult(
                     ok=False,
-                    message='Enter Record mode before starting closing credits',
+                    message='Resolve the current music transition before closing',
                 )
             scene = self.routing.capture_room()
             record = ClosingRecord(
@@ -609,6 +624,8 @@ class MusicController:
 
     def _stop_stream(self) -> None:
         if self.streamo is not None:
+            if self.streamo.status().stream_state == 'stopped':
+                return
             self._require(self.streamo.action('stop'))
 
     @staticmethod

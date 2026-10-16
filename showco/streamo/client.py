@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -7,7 +8,7 @@ from pathlib import Path
 import tyro
 from pydantic import BaseModel
 from reccy.protocol import rpc
-from reccy.services import paths
+from reccy.services import controller, paths
 from streamo.config import STREAMO_SERVICE
 
 from ..deployment import machine_role
@@ -50,6 +51,26 @@ class StreamoClient:
         try:
             status = self._call('status')
         except (ConnectionError, OSError, TimeoutError, ValueError) as error:
+            default_endpoint = paths.service_paths(
+                STREAMO_SERVICE, paths.current_platform()
+            ).control_endpoint
+            if sys.platform == 'linux' and self.control_endpoint == default_endpoint:
+                try:
+                    service = controller.ServiceController(
+                        STREAMO_SERVICE, paths.current_platform()
+                    ).status()
+                except (OSError, subprocess.SubprocessError, ValueError):
+                    pass
+                else:
+                    if (
+                        service.installed
+                        and service.running is False
+                        and service.details == 'inactive'
+                    ):
+                        return StreamoStatus(
+                            service=ServiceStatus(name='streamo', state='connected'),
+                            stream_state='stopped',
+                        )
             return StreamoStatus(
                 service=ServiceStatus(
                     name='streamo',

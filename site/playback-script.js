@@ -3,6 +3,7 @@
     form.addEventListener("submit", async event => {
       event.preventDefault();
       const button = form.querySelector("button");
+      if (button.disabled) return;
       button.disabled = true;
       button.setAttribute("aria-busy", "true");
       const result = document.querySelector("[data-action-result]");
@@ -15,7 +16,7 @@
           },
           body: new URLSearchParams(new FormData(form)),
         });
-        if (!response.ok) throw new Error(`playback request failed: ${response.status}`);
+        if (!response.ok) throw new Error(`Action request failed: ${response.status}`);
         const action = await response.json();
         if (result) {
           result.textContent = action.message;
@@ -29,7 +30,7 @@
         }
       } finally {
         button.removeAttribute("aria-busy");
-        button.disabled = false;
+        button.disabled = true;
         await globalThis.refreshShowStatus().catch(statusFailed);
       }
     });

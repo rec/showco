@@ -145,7 +145,10 @@ def test_record_fades_music_before_starting_a_new_session() -> None:
     assert result_value.ok
     player.stop.assert_called_once_with(2.0)
     routing.disable.assert_called_once_with()
-    recs.action.assert_called_once_with('new_session')
+    assert recs.action.call_args_list == [
+        mock.call('new_session'),
+        mock.call('resume_recording'),
+    ]
     assert value.status().mode == 'record'
 
 
@@ -157,7 +160,10 @@ def test_record_starts_streamo_after_the_new_recording_session() -> None:
 
     value.record()
 
-    recs.action.assert_called_once_with('new_session')
+    assert recs.action.call_args_list == [
+        mock.call('new_session'),
+        mock.call('resume_recording'),
+    ]
     restart.assert_called_once_with()
 
 
@@ -174,7 +180,8 @@ def test_teardown_pauses_recording_stops_playback_and_starts_music() -> None:
     assert value.status().mode == 'teardown'
 
 
-def test_teardown_requests_credits_without_stopping_recs() -> None:
+@pytest.mark.parametrize('mode', ['stopped', 'record'])
+def test_teardown_requests_credits_without_stopping_recs(mode: str) -> None:
     value, recs, _, routing = controller()
     streamo = mock.Mock()
     streamo.status.return_value = models.StreamoStatus(
@@ -182,7 +189,7 @@ def test_teardown_requests_credits_without_stopping_recs() -> None:
         closing=models.ClosingStatus(),
     )
     value.streamo = streamo
-    value.mode = 'record'
+    value.mode = mode
     routing.capture_room.return_value = x18_music.RoomScene(
         master_fader=0.7, input_lr=[1] * 18
     )
@@ -195,6 +202,107 @@ def test_teardown_requests_credits_without_stopping_recs() -> None:
     value.closing_stop.set()
     assert value.closing_thread is not None
     value.closing_thread.join(timeout=5)
+
+
+def test_teardown_with_twitch_already_stopped_starts_music_without_credits() -> None:
+    value, recs, player, routing = controller()
+    stream = mock.Mock()
+    stream.status.return_value = models.StreamoStatus(
+        service=models.ServiceStatus(name='streamo', state='connected'),
+        stream_state='stopped',
+    )
+    value.streamo = stream
+
+    assert value.teardown().ok
+
+    stream.start_closing.assert_not_called()
+    stream.action.assert_not_called()
+    recs.pause_recording.assert_called_once_with()
+    player.start.assert_called_once_with([Path('/music/teardown')], 2.0)
+    routing.enable.assert_called_once_with()
+    assert value.status().mode == 'teardown'
+
+
+def test_restart_during_credits_stops_observer_and_starts_record_mode() -> None:
+    value, recs, player, routing = controller()
+    stream = mock.Mock()
+    stream.status.return_value = models.StreamoStatus(
+        service=models.ServiceStatus(name='streamo', state='connected'),
+        stream_state='streaming',
+        closing=models.ClosingStatus(),
+    )
+    value.streamo = stream
+    value.streamo_restart = mock.Mock(return_value=result())
+    scene = x18_music.RoomScene(master_fader=0.7, input_lr=[1] * 18)
+    routing.capture_room.return_value = scene
+    assert value.teardown().ok
+    assert value.status().restart_available
+
+    assert value.record(restart=True).ok
+
+    assert value.closing_thread is not None
+    assert not value.closing_thread.is_alive()
+    assert value.closing_record is None
+    assert value.status().mode == 'record'
+    assert not value.status().restart_available
+    recs.pause_recording.assert_not_called()
+    assert recs.action.call_args_list == [
+        mock.call('new_session'),
+        mock.call('resume_recording'),
+    ]
+    player.stop.assert_called_once_with(2.0)
+    routing.restore_room.assert_called_once_with(scene)
+    value.streamo_restart.assert_called_once_with()
+
+
+def test_restart_from_teardown_resumes_recording_and_stops_music() -> None:
+    value, recs, player, routing = controller()
+    assert value.teardown().ok
+    recs.reset_mock()
+    player.reset_mock()
+    routing.reset_mock()
+
+    assert value.record(restart=True).ok
+
+    assert recs.action.call_args_list == [
+        mock.call('new_session'),
+        mock.call('resume_recording'),
+    ]
+    player.stop.assert_called_once_with(2.0)
+    routing.disable.assert_called_once_with()
+    assert value.status().mode == 'record'
+
+
+def test_restart_waits_for_closing_observer_before_changing_recording() -> None:
+    value, recs, player, routing = controller()
+    value.closing_thread = mock.Mock()
+    value.closing_thread.is_alive.return_value = True
+
+    outcome = value.record(restart=True)
+
+    assert not outcome.ok
+    assert 'observer is still active' in outcome.message
+    recs.action.assert_not_called()
+    player.stop.assert_not_called()
+    routing.disable.assert_not_called()
+
+
+def test_restart_does_not_start_twitch_when_recording_cannot_resume() -> None:
+    value, recs, _, _ = controller()
+    value.mode = 'teardown'
+    value.streamo = mock.Mock()
+    restart_stream = mock.Mock(return_value=result())
+    value.streamo_restart = restart_stream
+    recs.action.side_effect = [
+        result(),
+        models.ActionResult(ok=False, message='disk full'),
+    ]
+
+    with pytest.raises(ValueError, match='recs recording resumed: disk full'):
+        value.record(restart=True)
+
+    restart_stream.assert_not_called()
+    assert value.status().mode == 'fault'
 
 
 @pytest.mark.parametrize('with_audio', [True, False])

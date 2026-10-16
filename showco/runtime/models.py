@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 
 class ActionResult(BaseModel, frozen=True):
@@ -130,6 +130,23 @@ class StreamoStatus(BaseModel, frozen=True):
     output_bitrate_kbps: float | None = None
     closing: ClosingStatus | None = None
 
+    @computed_field
+    @property
+    def toggle_available(self) -> bool:
+        return (
+            self.service.state in {'connected', 'offline', 'error'}
+            and self.stream_state not in {'starting', 'stopping'}
+            and (
+                self.service.state in {'offline', 'error'}
+                or self.service.last_error is not None
+                or self.stream_state in {'stopped', 'streaming', 'muted', 'failed'}
+            )
+            and (
+                self.closing is None
+                or self.closing.state in {'idle', 'completed', 'failed'}
+            )
+        )
+
 
 class LyteStringStatus(BaseModel, frozen=True):
     state: str = 'pending'
@@ -220,6 +237,13 @@ class MusicStatus(BaseModel, frozen=True):
     track: Path | None = None
     error: str | None = None
     closing: ClosingStatus | None = None
+
+    @computed_field
+    @property
+    def restart_available(self) -> bool:
+        return self.mode in {'closing', 'teardown'} or (
+            self.closing is not None and self.closing.operation_id is not None
+        )
 
 
 class CableTestStatus(BaseModel, frozen=True):

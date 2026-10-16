@@ -1,6 +1,37 @@
 version = 1
 name = "showCo"
-default_page = "channels"
+default_page = "show"
+
+[[pages]]
+name = "show"
+
+[[pages.sections]]
+name = "show-controls"
+style = "transport"
+
+[[pages.sections.elements]]
+name = "twitch-status"
+kind = "status"
+label = "Twitch"
+value = "show.streamo"
+format = "twitch"
+
+[[pages.sections.elements]]
+name = "twitch-toggle"
+kind = "action_button"
+label = "Switch Twitch on/off"
+action = "streamo-toggle"
+disabled_when = "streamo_unavailable"
+
+[[pages.sections.elements]]
+name = "teardown"
+kind = "action_button"
+label = "Teardown"
+action = "music-teardown"
+
+[[pages.sections.elements]]
+name = "show-result"
+kind = "action_result"
 
 [[pages]]
 name = "channels"

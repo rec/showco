@@ -205,6 +205,12 @@ def _gui_enabled(
 
 
 def _gui_disabled(element: gui_schema.Element, status: models.ShowStatus) -> bool:
+    if element.disabled_when == 'streamo_unavailable':
+        return (
+            not status.streamo.toggle_available
+            or status.performance_locked
+            or status.music.mode in {'closing', 'transitioning', 'fault'}
+        )
     return (
         element.disabled_when == 'playback_waiting'
         and status.recs.playback.state == 'waiting'
@@ -255,6 +261,12 @@ def _gui_status_text(element: gui_schema.Element, status: models.ShowStatus) -> 
             return _temperature(status)
         case 'bitrate':
             return _bitrate(status)
+        case 'twitch' if isinstance(value, models.StreamoStatus):
+            if value.service.state != 'connected':
+                return _service_detail(value.service.state, value.service.last_error)
+            if value.closing is not None and value.closing.state == 'running':
+                return f'Closing: {value.closing.phase}'
+            return value.stream_state
         case 'playback_state' if isinstance(value, models.PlaybackStatus):
             return value.state
         case 'playback_selection' if isinstance(value, models.PlaybackStatus):

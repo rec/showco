@@ -88,7 +88,11 @@ class Element(BaseModel, frozen=True):
                     raise ValueError(f'{self.name}: unknown service {self.value!r}')
                 continue
             if self.kind == 'action_button' and field == 'disabled_when':
-                if self.disabled_when not in {'', 'playback_waiting'}:
+                if self.disabled_when not in {
+                    '',
+                    'playback_waiting',
+                    'streamo_unavailable',
+                }:
                     raise ValueError(f'{self.name}: unsupported disabled condition')
                 continue
             expected = ELEMENT_FIELDS[self.kind].get(field, '')
@@ -528,7 +532,7 @@ STATUS_FORMATS = {
     'show.streamo.service': {'service'},
     'show.lyte': {'lyte'},
     'show.system': {'temperature'},
-    'show.streamo': {'bitrate', 'shutdown_streamo'},
+    'show.streamo': {'bitrate', 'shutdown_streamo', 'twitch'},
     'show.recs.playback': {
         'playback_state',
         'playback_selection',
@@ -560,8 +564,10 @@ ACTION_BUTTON_PARAMETERS = {
     'music-setup': [{}],
     'music-record': [{}],
     'music-teardown': [{}],
+    'music-restart': [{}],
     'music-close-cancel': [{}],
     'streamo-restart': [{}],
+    'streamo-toggle': [{}],
     'streamo-mute': [{}],
     'streamo-unmute': [{}],
     'streamo-stop': [{}],

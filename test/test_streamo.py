@@ -39,10 +39,34 @@ class StreamoTests(unittest.TestCase):
     def test_status_reports_failed_command(self) -> None:
         client = FakeStreamoClient(ConnectionError('not running'))
 
-        status = client.status()
+        with mock.patch(
+            'showco.streamo.client.controller.ServiceController'
+        ) as manager:
+            manager.return_value.status.return_value.installed = False
+            status = client.status()
 
         self.assertEqual(status.service.state, 'offline')
         self.assertEqual(status.service.last_error, 'not running')
+
+    def test_linux_status_distinguishes_stopped_from_unavailable(self) -> None:
+        client = FakeStreamoClient(ConnectionError('not running'))
+        with (
+            mock.patch('showco.streamo.client.sys.platform', 'linux'),
+            mock.patch('showco.streamo.client.controller.ServiceController') as manager,
+        ):
+            service = manager.return_value.status.return_value
+            service.installed = True
+            for running, details, expected in [
+                (False, 'inactive', 'stopped'),
+                (False, 'failed', 'unknown'),
+                (True, 'active', 'unknown'),
+            ]:
+                with self.subTest(details=details):
+                    service.running = running
+                    service.details = details
+                    status = client.status()
+                    self.assertEqual(status.stream_state, expected)
+                    self.assertTrue(status.toggle_available)
 
     def test_status_reports_stream_failure(self) -> None:
         client = FakeStreamoClient({'state': 'failed', 'last_error': 'encoder exited'})
@@ -136,6 +160,7 @@ class StreamoTests(unittest.TestCase):
 
 class FakeStreamoClient(StreamoClient):
     def __init__(self, reply: str | dict[str, object] | ConnectionError) -> None:
+        super().__init__()
         self.reply = reply
 
     def _call(self, command: str, **fields: object) -> str | dict[str, object]:

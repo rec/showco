@@ -264,6 +264,115 @@ class ServerTests(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertEqual(result.message, 'streamo is disabled')
 
+    def test_twitch_toggle_starts_or_recovers_without_changing_recording(self) -> None:
+        recs = mock.Mock()
+        stream = mock.Mock()
+        stream.status.return_value = models.StreamoStatus(
+            service=models.ServiceStatus(name='streamo', state='connected'),
+            stream_state='stopped',
+        )
+        restart = mock.Mock(
+            return_value=models.ActionResult(ok=True, message='started')
+        )
+        app = ShowcoApp(
+            recs,
+            stream,
+            rehearsal.RehearsalSystemMonitor(),
+            rehearsal.RehearsalMixersMonitor(),
+            streamo_restart=restart,
+        )
+
+        for connection, state in [
+            ('connected', 'stopped'),
+            ('connected', 'failed'),
+            ('error', 'streaming'),
+            ('offline', 'unknown'),
+            ('offline', 'stopped'),
+        ]:
+            with self.subTest(connection=connection, state=state):
+                stream.status.return_value = models.StreamoStatus(
+                    service=models.ServiceStatus(name='streamo', state=connection),
+                    stream_state=state,
+                )
+                restart.reset_mock()
+                self.assertTrue(app.run_action({'action': 'streamo-toggle'}).ok)
+                restart.assert_called_once_with()
+        stream.action.assert_not_called()
+        self.assertEqual(recs.mock_calls, [])
+
+    def test_twitch_toggle_stops_stream_and_prevents_service_restart(self) -> None:
+        stream = mock.Mock()
+        stream.status.return_value = models.StreamoStatus(
+            service=models.ServiceStatus(name='streamo', state='connected'),
+            stream_state='streaming',
+        )
+        stream.action.return_value = models.ActionResult(ok=True, message='stopping')
+        recs = mock.Mock()
+        app = ShowcoApp(
+            recs,
+            stream,
+            rehearsal.RehearsalSystemMonitor(),
+            rehearsal.RehearsalMixersMonitor(),
+        )
+        with mock.patch('showco.runtime.app.services.service_registry') as registry:
+            service = registry.return_value.controller.return_value
+            service.status.return_value.running = False
+            self.assertTrue(app.run_action({'action': 'streamo-toggle'}).ok)
+
+        stream.action.assert_called_once_with('stop')
+        service.stop.assert_called_once_with()
+        self.assertEqual(recs.mock_calls, [])
+
+    def test_twitch_toggle_rejects_unavailable_states_and_closing(self) -> None:
+        stream = mock.Mock()
+        restart = mock.Mock()
+        app = ShowcoApp(
+            mock.Mock(),
+            stream,
+            rehearsal.RehearsalSystemMonitor(),
+            rehearsal.RehearsalMixersMonitor(),
+            streamo_restart=restart,
+        )
+        for connection, state, closing in [
+            ('connected', 'starting', None),
+            ('connected', 'stopping', None),
+            ('disabled', 'stopped', None),
+            ('connected', 'unknown', None),
+            ('error', 'starting', None),
+            ('offline', 'unknown', models.ClosingStatus(state='running')),
+            ('connected', 'streaming', models.ClosingStatus(state='running')),
+        ]:
+            with self.subTest(connection=connection, state=state, closing=closing):
+                stream.status.return_value = models.StreamoStatus(
+                    service=models.ServiceStatus(name='streamo', state=connection),
+                    stream_state=state,
+                    closing=closing,
+                )
+                self.assertFalse(app.run_action({'action': 'streamo-toggle'}).ok)
+        stream.action.assert_not_called()
+        restart.assert_not_called()
+
+    def test_restart_button_uses_record_transition_only_after_teardown(self) -> None:
+        controller = mock.Mock()
+        controller.status.return_value = models.MusicStatus(mode='teardown')
+        controller.record.return_value = models.ActionResult(
+            ok=True, message='recording'
+        )
+        app = ShowcoApp(
+            mock.Mock(),
+            None,
+            rehearsal.RehearsalSystemMonitor(),
+            rehearsal.RehearsalMixersMonitor(),
+            music_controller=controller,
+        )
+
+        self.assertTrue(app.run_action({'action': 'music-restart'}).ok)
+        controller.record.assert_called_once_with(restart=True)
+        controller.record.reset_mock()
+        controller.status.return_value = models.MusicStatus(mode='record')
+        self.assertFalse(app.run_action({'action': 'music-restart'}).ok)
+        controller.record.assert_not_called()
+
     def test_playback_actions_send_typed_recs_parameters(self) -> None:
         recs = mock.Mock()
         recs.action.return_value = models.ActionResult(ok=True, message='jumped')

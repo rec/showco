@@ -81,6 +81,7 @@ class ViewsTests(unittest.TestCase):
         self.assertIn('value="music-setup"', html)
         self.assertIn('value="music-record"', html)
         self.assertIn('value="music-teardown"', html)
+        self.assertIn('data-disabled-when="" data-confirm="true"', html)
         self.assertIn('value="music-stop"', html)
         self.assertIn('Stops the broadcast, pauses recs, starts setup music', html)
         self.assertIn('starts a new recs session, and starts the broadcast', html)
