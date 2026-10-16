@@ -34,6 +34,11 @@ main {
   grid-template-columns: repeat(7, minmax(0, 1fr));
 }
 .transport button { margin: 0; }
+main[data-page="show"] .transport {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+main[data-page="show"] [data-action-result] { grid-column: 1 / -1; }
+main[data-page="show"] [data-action-result]:empty { display: none; }
 .levels {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }

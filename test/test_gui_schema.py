@@ -31,19 +31,21 @@ def test_default_gui_declares_all_navigation_pages() -> None:
 
 
 @pytest.mark.parametrize(
-    ('connection', 'state', 'enabled'),
+    ('connection', 'state', 'enabled', 'label'),
     [
-        ('connected', 'stopped', True),
-        ('connected', 'streaming', True),
-        ('connected', 'starting', False),
-        ('connected', 'failed', True),
-        ('error', 'streaming', True),
-        ('offline', 'unknown', True),
-        ('disabled', 'unknown', False),
+        ('connected', 'stopped', True, 'Start Twitch'),
+        ('connected', 'streaming', True, 'Stop Twitch'),
+        ('connected', 'muted', True, 'Stop Twitch'),
+        ('connected', 'starting', False, 'Starting...'),
+        ('connected', 'stopping', False, 'Stopping...'),
+        ('connected', 'failed', True, 'Retry Twitch (error)'),
+        ('error', 'streaming', True, 'Retry Twitch (error)'),
+        ('offline', 'unknown', True, 'Retry Twitch (status unavailable)'),
+        ('disabled', 'unknown', False, 'Twitch disabled'),
     ],
 )
-def test_show_page_has_only_twitch_status_toggle_and_teardown(
-    connection: str, state: str, enabled: bool
+def test_show_page_has_only_faults_toggle_and_teardown(
+    connection: str, state: str, enabled: bool, label: str
 ) -> None:
     document = gui_schema.load_gui(gui_schema.DEFAULT_GUI_PATH)
     page = document.page('show')
@@ -61,13 +63,17 @@ def test_show_page_has_only_twitch_status_toggle_and_teardown(
 
     assert document.default_page == 'show'
     assert [element.name for element in page.sections[0].elements] == [
-        'twitch-status',
         'twitch-toggle',
         'teardown',
         'show-result',
     ]
-    assert ('<button disabled>Switch Twitch on/off</button>' in html) == (not enabled)
-    assert 'Twitch: ' + (state if connection == 'connected' else connection) in html
+    assert f'<button{"" if enabled else " disabled"}>{label}</button>' in html
+    assert 'id="fault-banner"' in html
+    assert 'id="performance-lock-form"' not in html
+    assert 'id="connection-status"' not in html
+    assert 'id="monitoring-error"' not in html
+    assert 'id="twitch-status"' not in html
+    assert 'function updateConfiguredActions(status)' in html
     assert '<button>Teardown</button>' in html
     assert 'data-disabled-when="" data-confirm="true"' in html
 

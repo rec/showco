@@ -132,6 +132,31 @@ class StreamoStatus(BaseModel, frozen=True):
 
     @computed_field
     @property
+    def toggle_label(self) -> str:
+        if self.service.state == 'disabled':
+            return 'Twitch disabled'
+        if self.service.state == 'error':
+            return 'Retry Twitch (error)'
+        if not self.service.fresh:
+            return 'Retry Twitch (status unavailable)'
+        if self.closing is not None and self.closing.state not in {
+            'idle',
+            'completed',
+            'failed',
+        }:
+            return 'Stopping...'
+        if self.service.last_error is not None or self.stream_state == 'failed':
+            return 'Retry Twitch (error)'
+        return {
+            'stopped': 'Start Twitch',
+            'streaming': 'Stop Twitch',
+            'muted': 'Stop Twitch',
+            'starting': 'Starting...',
+            'stopping': 'Stopping...',
+        }.get(self.stream_state, 'Twitch status unknown')
+
+    @computed_field
+    @property
     def toggle_available(self) -> bool:
         return (
             self.service.state in {'connected', 'offline', 'error'}

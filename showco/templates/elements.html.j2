@@ -129,7 +129,7 @@
       <form method="post" data-disabled-when="{{ element.disabled_when }}"{% if element.action == 'music-teardown' %} data-confirm="{{ 'false' if restart else 'true' }}" data-teardown-label="{{ element.label }}"{% endif %}>
         <input type="hidden" name="action" value="{{ 'music-restart' if restart else element.action }}">
         {% for name, value in element.parameters.items() %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
-        <button{% if is_disabled(element, status) %} disabled{% endif %}>{{ 'Restart' if restart else element.label }}</button>
+        <button{% if is_disabled(element, status) %} disabled{% endif %}>{{ status.streamo.toggle_label if element.action == 'streamo-toggle' else 'Restart' if restart else element.label }}</button>
       </form>
     {% elif element.kind == 'action_result' %}
       <p id="{{ element.name }}" data-action-result aria-live="polite"></p>

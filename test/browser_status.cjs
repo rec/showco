@@ -113,12 +113,15 @@ vm.runInContext('updateStatus()', context).then(async () => {
   assert.match(elements.get('connection-status').textContent, /^Connected/);
   assert.ok(!elements.get('lyte-health').textContent.includes('undefined'));
   assert.equal(toggle.disabled, !status.streamo.toggle_available);
+  assert.equal(toggle.textContent, status.streamo.toggle_label);
   context.toggleStatus = {...status, streamo: {...status.streamo, toggle_available: true}};
   vm.runInContext('updateConfiguredActions(toggleStatus)', context);
   assert.equal(toggle.disabled, false);
   toggle.busy = true;
+  toggle.textContent = 'Starting...';
   vm.runInContext('updateConfiguredActions(toggleStatus)', context);
   assert.equal(toggle.disabled, true);
+  assert.equal(toggle.textContent, 'Starting...');
   toggle.busy = false;
 
   const teardownForms = ['Teardown', 'Tear down with closing credits'].map(label => ({

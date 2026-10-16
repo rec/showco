@@ -10,16 +10,9 @@ name = "show-controls"
 style = "transport"
 
 [[pages.sections.elements]]
-name = "twitch-status"
-kind = "status"
-label = "Twitch"
-value = "show.streamo"
-format = "twitch"
-
-[[pages.sections.elements]]
 name = "twitch-toggle"
 kind = "action_button"
-label = "Switch Twitch on/off"
+label = "Start Twitch"
 action = "streamo-toggle"
 disabled_when = "streamo_unavailable"
 
