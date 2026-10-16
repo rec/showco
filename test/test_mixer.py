@@ -25,6 +25,21 @@ class MixerTests(unittest.TestCase):
         self.assertIsNotNone(status.latency_ms)
         self.assertIsNone(status.error)
 
+    def test_udp_probe_requests_an_immediate_reply(self) -> None:
+        with mock.patch('showco.runtime.mixer.socket.socket') as factory:
+            sock = factory.return_value.__enter__.return_value
+
+            def reply(size: int) -> bytes:
+                if sock.send.call_args.args != (b'/info\0\0\0,\0\0\0',):
+                    raise TimeoutError('no immediate reply to subscriptions')
+                return b'/info\0\0\0,ssss\0\0\0'[:size]
+
+            sock.recv.side_effect = reply
+            status = MixerMonitor(host='10.0.0.18', port=10024, protocol='udp').status()
+
+        self.assertIsNone(status.error)
+        self.assertIsNotNone(status.latency_ms)
+
     def test_unprobed_mixer_reports_declared_input_progress(self) -> None:
         monitor = MixersMonitor(
             [
