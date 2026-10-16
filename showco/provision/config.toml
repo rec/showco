@@ -20,6 +20,9 @@ ip_address = 1
 [networks.external.wifi.home]
 name = "Livebox-F13E"
 
+[networks.external.wifi.daco]
+name = "Russia hacked 000"
+
 [[mixers]]
 name = "X18"
 audio_device_names = ["X18", "XR18"]
