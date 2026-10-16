@@ -429,7 +429,7 @@ class ProvisionTests(unittest.TestCase):
         self.assertEqual(fingerprint, 'a' * 64)
         self.assertEqual(
             [c.kwargs['timeout'] for c in run.call_args_list],
-            list(timeouts),
+            [n + ssh.SSH_VERIFICATION_TIMEOUT_SECONDS for n in timeouts],
         )
         for call, timeout in zip(run.call_args_list, timeouts, strict=True):
             self.assertIn(f'ConnectTimeout={timeout}', call.args[0])
@@ -452,7 +452,7 @@ class ProvisionTests(unittest.TestCase):
             self.assertIsNone(remote.applied_provisioning_fingerprint(config))
 
         self.assertIn(
-            f'Checking {config.ssh_target} provisioning state (1s)',
+            f'Checking {config.ssh_target} provisioning state (SSH connect timeout 1s)',
             output.getvalue(),
         )
 

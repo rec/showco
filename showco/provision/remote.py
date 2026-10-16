@@ -128,9 +128,11 @@ def applied_provisioning_fingerprint(provision_config: config.Config) -> str | N
         disable=not sys.stdout.isatty(),
     ) as progress:
         for timeout in FINGERPRINT_SSH_TIMEOUTS:
+            # ConnectTimeout excludes local name resolution and the remote command.
+            check_timeout = timeout + ssh.SSH_VERIFICATION_TIMEOUT_SECONDS
             progress.set_description_str(
                 f'Checking {provision_config.ssh_target} provisioning state '
-                f'({timeout}s)'
+                f'(SSH connect timeout {timeout}s)'
             )
             try:
                 completed = subprocess.run(
@@ -143,12 +145,13 @@ def applied_provisioning_fingerprint(provision_config: config.Config) -> str | N
                     capture_output=True,
                     check=False,
                     text=True,
-                    timeout=timeout,
+                    timeout=check_timeout,
                 )
             except TimeoutExpired:
                 if timeout != FINGERPRINT_SSH_TIMEOUTS[-1]:
                     tqdm.write(
-                        f'SSH provisioning check timed out after {timeout}s; '
+                        f'Provisioning-state check timed out after {check_timeout}s '
+                        f'(SSH connect timeout {timeout}s); '
                         'retrying...',
                         file=sys.stdout,
                     )
@@ -162,8 +165,10 @@ def applied_provisioning_fingerprint(provision_config: config.Config) -> str | N
         else:
             sys.exit(
                 f'ERROR: cannot check provisioning state on '
-                f'{provision_config.ssh_target}: SSH timed out on all five attempts '
-                '(1, 2, 4, 8, 16 seconds)'
+                f'{provision_config.ssh_target}: provisioning-state check timed out '
+                'on all five attempts (SSH connect timeouts: 1, 2, 4, 8, 16 seconds; '
+                f'{ssh.SSH_VERIFICATION_TIMEOUT_SECONDS}s additional allowance '
+                'per attempt for name resolution and the remote command)'
             )
     completed = cast(CompletedProcess[str], completed)
     if ssh.has_changed_host_key(completed):
