@@ -160,6 +160,10 @@ For a full installation or major-change check, also power-cycle the Pi, test dev
 
 Music uses the target's existing ffmpeg installation, so it can decode normal audio formats. It writes stereo audio to X18 USB returns 17 and 18 and configures X18 channels 17 and 18 as USB-return channels routed to main LR. These channels must be reserved for showCo music. The X18 music fader is set to 40 percent; set the existing instrument mix to the intended 60-percent level on the mixer. Custom `source_channels` must be an adjacent odd/even X18 pair.
 
+On the X18, inputs 17–18 share the stereo Aux return. showCo controls that return
+as one stereo channel for music playback, muting, and room-scene capture and
+restoration. Other configured music pairs use the ordinary channel controls.
+
 Choose incidental audio with repeated target runtime flags. Each path may be an audio file or a directory:
 
 ```bash
