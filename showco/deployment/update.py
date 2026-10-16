@@ -366,6 +366,10 @@ def install_recs_service(
 ) -> StepResult:
     directory = root / 'recs'
     arguments = ['uv', 'run', '--locked', 'recs', 'daemon', 'install']
+    if provision_config.stream.enabled and any(
+        m.name == 'X18' for m in provision_config.mixers
+    ):
+        arguments.append('--forward-audio')
     for name in script.unique_selectors(
         n for mixer in provision_config.mixers for n in mixer.audio_device_names
     ):

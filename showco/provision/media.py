@@ -6,6 +6,7 @@ import json
 import os
 import shlex
 import sys
+import time
 import tomllib
 from pathlib import Path
 from shutil import which
@@ -17,6 +18,7 @@ from pydantic import BaseModel, Field, TypeAdapter
 from reccy.configuration import units
 from reccy.runtime.files import atomic_output
 
+from ..runtime.recs_control import RecsControlClient
 from ..streamo.config import configure_stream_settings
 from ..x18.music import Files
 from . import config, ssh
@@ -29,6 +31,9 @@ class StreamMediaOptions(BaseModel, frozen=True):
     config_path: Annotated[Path, tyro.conf.arg(name='config')]
     movie: Path | None = None
     photos: Annotated[list[Path], tyro.conf.UseAppendAction] = Field(
+        default_factory=list
+    )
+    recs_device: Annotated[list[str], tyro.conf.UseAppendAction] = Field(
         default_factory=list
     )
 
@@ -205,11 +210,45 @@ def streamo_arguments(provision_config: config.Config) -> list[str]:
         provision_config.media, provision_config.network.user, 'movie'
     ):
         arguments.extend(['--movie', str(movies[0])])
+    if provision_config.stream.enabled:
+        for mixer in provision_config.mixers:
+            if mixer.name == 'X18':
+                for name in mixer.audio_device_names:
+                    arguments.extend(['--recs-device', name])
     return arguments
 
 
+def forwarded_audio_source(selectors: list[str]) -> str:
+    deadline = time.monotonic() + 30
+    error = 'no matching device in the recs catalogue'
+    while True:
+        try:
+            reply = RecsControlClient().call('list_devices', timeout=1)
+            devices = reply.get('devices', []) if isinstance(reply, dict) else []
+            names = [
+                d['name']
+                for d in devices
+                if isinstance(d, dict)
+                and isinstance(d.get('name'), str)
+                and any(d['name'].startswith(s) for s in selectors)
+            ]
+            if len(names) == 1:
+                return names[0]
+            if len(names) > 1:
+                raise ValueError(f'Ambiguous recs stream input: {names}')
+        except (ConnectionError, OSError, TimeoutError) as failure:
+            error = str(failure)
+        if time.monotonic() >= deadline:
+            raise ValueError(f'Cannot select recs input for {selectors}: {error}')
+        time.sleep(1)
+
+
 def stream_media_configuration(
-    text: str, photos: list[Path], movie: Path | None = None
+    text: str,
+    photos: list[Path],
+    movie: Path | None = None,
+    *,
+    recs_source: str | None = None,
 ) -> str:
     """Replace root media settings without reserializing credentials or tables."""
     values = tomllib.loads(text)
@@ -237,7 +276,12 @@ def stream_media_configuration(
         if values.get('image_feed'):
             raise ValueError('remove image_feed before disabling managed photos')
         replacements['image_interval'] = 0.0
-    if not replacements:
+    removed = (
+        {'device_name', 'channel', 'sample_rate', 'recs_input'}
+        if recs_source
+        else set()
+    )
+    if not replacements and not recs_source:
         return text
     lines = text.splitlines(keepends=True)
     kept = []
@@ -245,7 +289,12 @@ def stream_media_configuration(
     while index < len(lines):
         line = lines[index]
         if line.lstrip().startswith('['):
-            kept.extend(lines[index:])
+            in_recs_input = False
+            for line in lines[index:]:
+                if line.lstrip().startswith('['):
+                    in_recs_input = line.strip() == '[recs_input]'
+                if not recs_source or not in_recs_input:
+                    kept.append(line)
             break
         assignment = line
         index += 1
@@ -256,11 +305,25 @@ def stream_media_configuration(
             except tomllib.TOMLDecodeError:
                 assignment += lines[index]
                 index += 1
-        if not any(k in replacements for k in parsed):
+        if not any(k in replacements or k in removed for k in parsed):
             kept.append(assignment)
-    return ''.join(
-        f'{k} = {json.dumps(v)}\n' for k, v in replacements.items()
-    ) + ''.join(kept)
+    audio = ''
+    if recs_source:
+        existing = values.get('recs_input', {})
+        channel = values.get('channel', 17)
+        channels = existing.get('channels', [channel, channel + 1])
+        audio = (
+            'recs_input = { daemon = true, source = '
+            + json.dumps(recs_source)
+            + ', channels = '
+            + json.dumps(channels)
+            + ' }\n'
+        )
+    return (
+        audio
+        + ''.join(f'{k} = {json.dumps(v)}\n' for k, v in replacements.items())
+        + ''.join(kept)
+    )
 
 
 def main() -> None:
@@ -268,7 +331,12 @@ def main() -> None:
     path = options.config_path.expanduser()
     try:
         text = path.read_text() if path.exists() else ''
-        updated = stream_media_configuration(text, options.photos, options.movie)
+        source = (
+            forwarded_audio_source(options.recs_device) if options.recs_device else None
+        )
+        updated = stream_media_configuration(
+            text, options.photos, options.movie, recs_source=source
+        )
         if updated != text:
             with atomic_output(path) as temporary:
                 temporary.write_text(updated)

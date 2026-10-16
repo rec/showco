@@ -10,6 +10,7 @@ from unittest import mock
 import pytest
 from provision_helpers import make_config, values
 
+from showco.deployment.update import install_recs_service
 from showco.provision import config, media, provision, script
 
 
@@ -61,6 +62,90 @@ def test_target_media_configuration_applies_publish_credentials(tmp_path: Path) 
     assert value['ingest']['stream_key'] == 'test-key'
     assert value['client_id'] == 'test-client'
     assert value['access_token'] == 'test-token'
+
+
+@pytest.mark.parametrize(
+    'old_input',
+    [
+        'device_name = "X18"\nchannel = 17\nsample_rate = 48000\n',
+        '[recs_input]\nsource = "old"\nchannels = [17, 18]\ndaemon = true\n',
+        'recs_input = { source = "old", channels = [17, 18], daemon = true }\n',
+    ],
+)
+def test_stream_input_uses_recs_and_preserves_media_and_credentials(
+    old_input: str,
+) -> None:
+    original = (
+        'video = "movie.mp4"\n# Keep operator notes\n'
+        + old_input
+        + '[streaming_service.ingest]\nstream_key = "private-test-key"\n'
+        + '[streaming_service.encoding.audio]\nsample_rate = 48000\n'
+    )
+    source = 'X18: USB Audio (hw:3,0)'
+    updated = media.stream_media_configuration(original, [], recs_source=source)
+    parsed = tomllib.loads(updated)
+    assert parsed['recs_input'] == {
+        'daemon': True,
+        'source': source,
+        'channels': [17, 18],
+    }
+    assert not {'device_name', 'channel', 'sample_rate'} & parsed.keys()
+    assert parsed['video'] == 'movie.mp4'
+    assert parsed['streaming_service']['ingest']['stream_key'] == 'private-test-key'
+    assert parsed['streaming_service']['encoding']['audio']['sample_rate'] == 48000
+    assert '# Keep operator notes' in updated
+    assert media.stream_media_configuration(updated, [], recs_source=source) == updated
+
+
+def test_existing_stereo_pair_is_kept_when_switching_to_recs() -> None:
+    parsed = tomllib.loads(
+        media.stream_media_configuration(
+            'channel = 5\n', [], recs_source='X18: USB Audio (hw:0,0)'
+        )
+    )
+    assert parsed['recs_input']['channels'] == [5, 6]
+
+
+def test_forwarding_resolves_exact_source_and_rejects_ambiguity() -> None:
+    for names, expected in (
+        (['FLOW 8', 'X18: USB Audio (hw:3,0)'], 'X18: USB Audio (hw:3,0)'),
+        (['X18 one', 'X18 two'], None),
+    ):
+        with mock.patch('showco.provision.media.RecsControlClient') as client:
+            client.return_value.call.return_value = {
+                'devices': [{'name': n} for n in names]
+            }
+            if expected:
+                assert media.forwarded_audio_source(['X18', 'XR18']) == expected
+            else:
+                with pytest.raises(ValueError, match='Ambiguous'):
+                    media.forwarded_audio_source(['X18', 'XR18'])
+
+
+def test_missing_forwarding_source_fails_without_opening_hardware() -> None:
+    with (
+        mock.patch('showco.provision.media.RecsControlClient') as client,
+        mock.patch('showco.provision.media.time.monotonic', side_effect=[0, 31]),
+    ):
+        client.return_value.call.return_value = {'devices': []}
+        with pytest.raises(ValueError, match='no matching device'):
+            media.forwarded_audio_source(['X18'])
+
+
+def test_provisioning_enables_forwarding_for_streaming_x18() -> None:
+    configuration = make_config(values(stream={'enabled': True}))
+    args = media.streamo_arguments(configuration)
+    assert args[-4:] == ['--recs-device', 'X18', '--recs-device', 'XR18']
+    assert 'RECS_FORWARD_AUDIO=true' in script.remote_command(
+        configuration, '/tmp/provision.sh'
+    )
+    command = script.REMOTE_SCRIPT
+    assert command.index('  install_recs_service\n') < command.index(
+        '  configure_streamo_media\n'
+    )
+    runner = mock.Mock(return_value=subprocess.CompletedProcess([], 0, '', ''))
+    install_recs_service(Path('/code'), configuration, runner)
+    assert '--forward-audio' in runner.call_args.args[0][-1]
 
 
 def test_media_selections_persist_and_only_specified_categories_are_replaced(
