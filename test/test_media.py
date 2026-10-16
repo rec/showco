@@ -145,7 +145,10 @@ def test_provisioning_enables_forwarding_for_streaming_x18() -> None:
     )
     runner = mock.Mock(return_value=subprocess.CompletedProcess([], 0, '', ''))
     install_recs_service(Path('/code'), configuration, runner)
-    assert '--forward-audio' in runner.call_args.args[0][-1]
+    command = runner.call_args.args[0][-1]
+    assert '--forward-audio' in command
+    assert 'UMask=0077' in command
+    assert 'install -d -m 700 /home/tom/.local/state/recs' in command
 
 
 def test_media_selections_persist_and_only_specified_categories_are_replaced(

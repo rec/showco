@@ -366,9 +366,10 @@ def install_recs_service(
 ) -> StepResult:
     directory = root / 'recs'
     arguments = ['uv', 'run', '--locked', 'recs', 'daemon', 'install']
-    if provision_config.stream.enabled and any(
+    forward_audio = provision_config.stream.enabled and any(
         m.name == 'X18' for m in provision_config.mixers
-    ):
+    )
+    if forward_audio:
         arguments.append('--forward-audio')
     for name in script.unique_selectors(
         n for mixer in provision_config.mixers for n in mixer.audio_device_names
@@ -390,6 +391,20 @@ def install_recs_service(
             ]
         )
     command = f'cd {shlex.quote(str(directory))} && {shlex.join(arguments)}'
+    if forward_audio:
+        home = Path('/home') / provision_config.network.user
+        dropin = home / '.config/systemd/user/recs.service.d'
+        privacy = '[Service]\nUMask=0077\n'
+        command = (
+            shlex.join(['install', '-d', '-m', '700', str(home / '.local/state/recs')])
+            + ' && '
+            + shlex.join(['mkdir', '-p', str(dropin)])
+            + ' && '
+            + shlex.join(['printf', '%s', privacy])
+            + f' > {shlex.quote(str(dropin / "audio-privacy.conf"))}'
+            + ' && systemctl --user daemon-reload && '
+            + command
+        )
     return run_step('recs', 'install service', ['sh', '-c', command], run_command)
 
 
