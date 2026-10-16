@@ -7,7 +7,7 @@ resolution-markers = [
 ]
 
 [options]
-exclude-newer = "2026-10-09T18:28:00.741005Z"
+exclude-newer = "2026-10-09T19:51:48.131976Z"
 exclude-newer-span = "P1W"
 
 [[package]]
@@ -984,7 +984,7 @@ dependencies = [
 [[package]]
 name = "recs"
 version = "0.13.1"
-source = { git = "https://github.com/rec/recs.git?branch=main#0c0f1e4a8f036fabef361a65f0acf7bb6c4afe4d" }
+source = { git = "https://github.com/rec/recs.git?branch=main#762b3e5d1a9fb563bcd0162a0ad51dc588d6be0b" }
 dependencies = [
     { name = "dvice" },
     { name = "humanfriendly" },
@@ -1171,7 +1171,7 @@ wheels = [
 [[package]]
 name = "streamo"
 version = "0.2.0"
-source = { git = "https://github.com/rec/streamo.git?branch=main#ca11384a2924cca65a1edf7b269401009a696605" }
+source = { git = "https://github.com/rec/streamo.git?branch=main#8dc80f2a4ac7fb1f620bd84a0176b8379815bbc8" }
 dependencies = [
     { name = "google-auth" },
     { name = "google-auth-oauthlib" },
@@ -1179,6 +1179,7 @@ dependencies = [
     { name = "pillow" },
     { name = "pydantic" },
     { name = "reccy" },
+    { name = "recs" },
     { name = "sounddevice" },
     { name = "tyro" },
 ]
