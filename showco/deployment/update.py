@@ -14,7 +14,7 @@ from tqdm import tqdm
 
 from ..provision import config, provision, script, ssh
 from ..runtime import recs, revision, services
-from . import bootstrap, repositories
+from . import bootstrap, machine_role, repositories
 
 RunCommand = Callable[
     [Sequence[str]],
@@ -225,10 +225,14 @@ def tracked_worktree_changes(status_output: str) -> str:
 
 
 def provisioning_config() -> config.Config:
-    values = config.load_values(
-        provision.PROVISION_DIR / 'config.toml',
-        provision.PROVISION_DIR / 'secrets.toml',
-    )
+    config_path = provision.PROVISION_DIR / 'config.toml'
+    if machine_role.machine_role() == machine_role.TARGET_ROLE:
+        values = config.read_toml(config_path)
+    else:
+        values = config.load_values(
+            config_path,
+            provision.PROVISION_DIR / 'secrets.toml',
+        )
     return config.config_from_values(values)
 
 

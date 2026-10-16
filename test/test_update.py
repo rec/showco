@@ -5,6 +5,7 @@ import unittest
 from collections.abc import Sequence
 from io import StringIO
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest import mock
 
 from update_helpers import make_config
@@ -19,6 +20,39 @@ class UpdateTests(unittest.TestCase):
         )
         ensure_log.start()
         self.addCleanup(ensure_log.stop)
+
+    def test_target_update_configuration_does_not_require_secrets(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory)
+            (path / 'config.toml').write_text(
+                '[network]\nhost = "show-pi.local"\nuser = "performer"\n'
+                '[stream]\nenabled = false\n'
+                '[networks.internal]\nsubnet = "10.0.0.0/24"\n'
+            )
+            with (
+                mock.patch('showco.deployment.update.provision.PROVISION_DIR', path),
+                mock.patch(
+                    'showco.deployment.update.machine_role.machine_role',
+                    return_value='target',
+                ),
+            ):
+                configuration = update.provisioning_config()
+            self.assertEqual(configuration.ssh_target, 'performer@show-pi.local')
+            self.assertFalse(configuration.stream.enabled)
+
+    def test_development_configuration_still_requires_secrets(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory)
+            (path / 'config.toml').write_text('[network]\nhost = "show-pi.local"\n')
+            with (
+                mock.patch('showco.deployment.update.provision.PROVISION_DIR', path),
+                mock.patch(
+                    'showco.deployment.update.machine_role.machine_role',
+                    return_value='',
+                ),
+            ):
+                with self.assertRaisesRegex(SystemExit, 'secrets file not found'):
+                    update.provisioning_config()
 
     def test_remote_update_reports_target_before_ssh(self) -> None:
         output = StringIO()
