@@ -203,7 +203,7 @@ fade_seconds = 2
 source_channels = [17, 18]
 ```
 
-streamO supplies three temporary closing pages until you replace them in its `closing_credits` configuration. Its status reports the current page, timing, final black interval, and completion. showCo persists the operation ID, observes it without a browser open, and resumes observation after a showCo restart. A streamO restart during credits reports a failed, uncertain outcome; showCo never sends the start command again automatically. [streamO's operator guide](https://github.com/rec/streamo/blob/main/doc/streamo.md) documents the page format.
+streamO supplies one closing card reading “Thank you” and “for watching” on separate lines, unless replaced in its `closing_credits` configuration. showCo uses these same credits. Its status reports the current page, timing, final black interval, and completion. showCo persists the operation ID, observes it without a browser open, and resumes observation after a showCo restart. A streamO restart during credits reports a failed, uncertain outcome; showCo never sends the start command again automatically. [streamO's operator guide](https://github.com/rec/streamo/blob/main/doc/streamo.md) documents the page format.
 
 ## Configure and deploy
 
