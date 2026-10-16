@@ -75,7 +75,14 @@ class StreamoClient:
                 service=ServiceStatus(
                     name='streamo',
                     state='offline',
-                    last_error=str(error),
+                    last_error=(
+                        f'streamO is not responding: its control socket '
+                        f'{self.control_endpoint} does not exist. The service may '
+                        'not be running or may have failed during startup. '
+                        'Check the streamO service log for the cause.'
+                        if isinstance(error, FileNotFoundError)
+                        else str(error)
+                    ),
                 )
             )
         if not isinstance(status, dict):

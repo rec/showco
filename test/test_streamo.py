@@ -9,6 +9,19 @@ from showco.streamo.client import StreamoClient
 
 
 class StreamoTests(unittest.TestCase):
+    def test_missing_socket_explains_how_to_investigate_startup(self) -> None:
+        client = StreamoClient(control_endpoint=Path('/missing/streamo/gui.sock'))
+        with mock.patch.object(
+            client,
+            '_call',
+            side_effect=FileNotFoundError(2, 'No such file or directory'),
+        ):
+            status = client.status()
+        self.assertEqual(status.service.state, 'offline')
+        self.assertIn('/missing/streamo/gui.sock', status.service.last_error)
+        self.assertIn('failed during startup', status.service.last_error)
+        self.assertIn('service log', status.service.last_error)
+
     def test_control_endpoint_uses_streamo_service_socket(self) -> None:
         self.assertEqual(
             StreamoClient().control_endpoint,
