@@ -8,6 +8,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import mock
 
+from reccy.services.models import Platform
 from update_helpers import make_config
 
 from showco.deployment import bootstrap, update
@@ -94,6 +95,52 @@ class UpdateTests(unittest.TestCase):
                 ]
             ],
         )
+
+    def test_service_stop_accepts_reccy_runner_timeout(self) -> None:
+        with (
+            mock.patch(
+                'reccy.services.controller.current_platform',
+                return_value=Platform.linux,
+            ),
+            mock.patch(
+                'showco.deployment.update.subprocess.run',
+                return_value=subprocess.CompletedProcess(['systemctl'], 0, '', ''),
+            ) as run,
+        ):
+            result = update.run_service_step(
+                'recs', 'stop', update.run_command_with_timeout
+            )
+        self.assertTrue(result.ok)
+        stop = run.call_args_list[0]
+        self.assertEqual(stop.args[0], ['systemctl', '--user', 'stop', 'recs.service'])
+        self.assertEqual(stop.kwargs['timeout'], 30)
+
+    def test_service_stop_reports_failure_and_timeout_without_traceback(self) -> None:
+        for failure, status, message in (
+            (
+                subprocess.CompletedProcess(['systemctl'], 1, '', 'stop failed'),
+                1,
+                'stop failed',
+            ),
+            (subprocess.TimeoutExpired(['systemctl'], 30), 124, 'timed out after 30'),
+        ):
+            with self.subTest(status=status):
+                with (
+                    mock.patch(
+                        'reccy.services.controller.current_platform',
+                        return_value=Platform.linux,
+                    ),
+                    mock.patch('showco.deployment.update.subprocess.run') as run,
+                ):
+                    if isinstance(failure, subprocess.TimeoutExpired):
+                        run.side_effect = failure
+                    else:
+                        run.return_value = failure
+                    result = update.run_service_step(
+                        'recs', 'stop', update.run_command_with_timeout
+                    )
+                self.assertEqual(result.returncode, status)
+                self.assertIn(message, result.output)
 
     def test_run_command_uses_noninteractive_editor_for_rebase(self) -> None:
         command = ['git', '-C', '/code/recs', 'rebase', '--interactive']

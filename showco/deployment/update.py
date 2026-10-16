@@ -487,7 +487,9 @@ def service_runner(
         check: bool,
         text: bool,
         capture_output: bool,
+        timeout: float,
     ) -> CompletedProcess[str]:
+        # run_command already bounds systemctl commands to 30 seconds.
         completed = run_command(command)
         if check and completed.returncode != 0:
             raise CalledProcessError(
