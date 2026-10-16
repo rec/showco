@@ -67,12 +67,14 @@ def provision_remote(
         else:
             print(f'No reboot is required for {provision_config.ssh_target}.')
 
+        if fingerprint is not None:
+            # Service health must not invalidate successfully applied machine setup.
+            record_applied_provisioning_fingerprint(provision_config, fingerprint)
+
         print(f'Checking provisioned services on {provision_config.ssh_target}...')
         verify.report_verification_results(
             verify.wait_for_provisioning_ready(provision_config, topology)
         )
-        if fingerprint is not None:
-            record_applied_provisioning_fingerprint(provision_config, fingerprint)
     finally:
         if uploaded:
             try:
