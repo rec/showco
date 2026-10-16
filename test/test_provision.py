@@ -840,13 +840,41 @@ class ProvisionTests(unittest.TestCase):
         config = make_config(values())
         with mock.patch(
             'reccy.runtime.subprocess.run',
-            return_value=subprocess.CompletedProcess(['ssh'], 1, '', ''),
+            side_effect=[
+                subprocess.CompletedProcess(['ssh'], n, '', '') for n in (1, 1, 42)
+            ],
         ):
             result = verify.verify_mixer_devices(config)
 
         self.assertTrue(all(value.error == '' for value in result))
         self.assertEqual(result[0].name, 'X18 USB audio')
         self.assertEqual(result[0].note, 'X18/XR18 not detected')
+
+    def test_midi_detection_uses_installed_python_and_reports_probe_failures(
+        self,
+    ) -> None:
+        config = make_config(values())
+        for code, stderr, expected_error, expected_note in [
+            (0, '', '', ''),
+            (42, '', '', 'FLOW 8 not detected'),
+            (1, 'MIDI backend failed', 'MIDI backend failed', ''),
+            (127, 'python missing', 'python missing', ''),
+            (255, '', 'detection exited with status 255', ''),
+        ]:
+            with (
+                self.subTest(code=code),
+                mock.patch(
+                    'reccy.runtime.subprocess.run',
+                    return_value=subprocess.CompletedProcess(['ssh'], code, '', stderr),
+                ) as run,
+            ):
+                result = verify.verify_mixer_midi_input(config, 'Flow 8', 'FLOW 8')
+
+            command = shlex.split(run.call_args.args[0][-1])
+            self.assertEqual(command[0], '/srv/show-projects/recs/.venv/bin/python')
+            self.assertEqual(command[-1], 'FLOW 8')
+            self.assertEqual(result.error, expected_error)
+            self.assertEqual(result.note, expected_note)
 
     def test_mixer_audio_device_check_accepts_any_selector(self) -> None:
         config = make_config(values())

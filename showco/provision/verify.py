@@ -275,14 +275,15 @@ def verify_mixer_midi_input(
 ) -> VerificationResult:
     matcher = (
         'from recs.midi.device import input_names; import sys; '
-        'sys.exit(not any(name.startswith(sys.argv[1]) for name in input_names()))'
+        'sys.exit(0 if any(name.startswith(sys.argv[1]) '
+        'for name in input_names()) else 42)'
     )
-    command = ' '.join(
+    command = shlex.join(
         [
-            f'cd {shlex.quote(str(provision_config.paths.root / "recs"))}',
-            '&& uv run --locked python -c',
-            shlex.quote(matcher),
-            shlex.quote(selector),
+            str(provision_config.paths.root / 'recs/.venv/bin/python'),
+            '-c',
+            matcher,
+            selector,
         ]
     )
     try:
@@ -306,6 +307,12 @@ def verify_mixer_midi_input(
         )
     if completed.returncode == 0:
         return VerificationResult(name=f'{mixer_name} USB MIDI {selector}', error='')
+    if completed.returncode != 42:
+        return VerificationResult(
+            name=f'{mixer_name} USB MIDI {selector}',
+            error=completed.stderr.strip()
+            or f'detection exited with status {completed.returncode}',
+        )
     return VerificationResult(
         name=f'{mixer_name} USB MIDI {selector}',
         error='',
