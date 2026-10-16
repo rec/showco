@@ -42,7 +42,7 @@ audio_device_names = ["FLOW 8"]
 midi_input_names = ["FLOW 8"]
 
 [stream]
-enabled = false
+enabled = true
 account = "loopopenloop"
 stream_title = "openLoop, broadcasting live from Rouen"
 category = "Music"
