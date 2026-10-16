@@ -156,6 +156,37 @@ class UpdateTests(unittest.TestCase):
                 self.assertEqual(result.returncode, status)
                 self.assertIn(message, result.output)
 
+    def test_dependency_sync_has_time_to_install_and_uses_its_own_environment(
+        self,
+    ) -> None:
+        command = ['uv', 'sync', '--locked', '--directory', '/home/tom/code/streamo']
+        with (
+            mock.patch.dict('os.environ', {'VIRTUAL_ENV': '/tmp/updater/.venv'}),
+            mock.patch(
+                'showco.deployment.update.subprocess.run',
+                return_value=subprocess.CompletedProcess(command, 0, '', ''),
+            ) as run,
+        ):
+            update.run_command_with_timeout(command)
+        self.assertEqual(run.call_args.kwargs['timeout'], 600)
+        self.assertNotIn('VIRTUAL_ENV', run.call_args.kwargs['env'])
+        self.assertEqual(update.timeout(['git', 'fetch']), 120)
+        self.assertEqual(update.timeout(['systemctl', '--user', 'stop', 'recs']), 30)
+
+    def test_timeout_reports_subprocess_output_as_text(self) -> None:
+        command = ['uv', 'sync', '--locked']
+        runner = mock.Mock(
+            side_effect=subprocess.TimeoutExpired(
+                command, 600, output=b'Resolved packages\n', stderr=b'Downloading Qt\n'
+            )
+        )
+        result = update.run_step('streamo', 'sync dependencies', command, runner)
+        self.assertEqual(result.returncode, 124)
+        self.assertEqual(
+            result.output,
+            'command timed out after 600 seconds\nResolved packages\nDownloading Qt\n',
+        )
+
     def test_run_command_uses_noninteractive_editor_for_rebase(self) -> None:
         command = ['git', '-C', '/code/recs', 'rebase', '--interactive']
         with mock.patch(

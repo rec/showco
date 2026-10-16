@@ -469,6 +469,7 @@ def run_remote_step(program: str, step: str, command: list[str]) -> StepResult:
 
 def run_command_with_timeout(command: Sequence[str]) -> CompletedProcess[str]:
     env = dict(os.environ)
+    env.pop('VIRTUAL_ENV', None)
     if command and command[0] == 'git':
         env['GIT_TERMINAL_PROMPT'] = '0'
         if 'rebase' in command:
@@ -513,15 +514,19 @@ def service_runner(
 
 
 def timeout(command: Sequence[str]) -> float:
+    if tuple(command[:2]) == ('uv', 'sync'):
+        return 600.0
     if command and command[0] in ('git', 'ssh', 'uv'):
         return 120.0
     return 30.0
 
 
 def timeout_output(error: TimeoutExpired) -> str:
-    output = error.output or ''
-    stderr = error.stderr or ''
-    return f'command timed out after {error.timeout} seconds\n{output}{stderr}'
+    output = ''.join(
+        v.decode(errors='replace') if isinstance(v, bytes) else v or ''
+        for v in (error.stdout, error.stderr)
+    )
+    return f'command timed out after {error.timeout} seconds\n{output}'
 
 
 def progress_bar(total: int, output: TextIO) -> tqdm:
