@@ -1,3 +1,5 @@
+import os
+import subprocess
 from collections.abc import Sequence
 from io import StringIO
 from pathlib import Path
@@ -242,18 +244,41 @@ def test_remote_command_does_not_mutate_checkouts_before_transaction() -> None:
         ['recs'], Path('/srv/show projects'), clear_settings=False
     )
     assert command == (
-        "if cd '/srv/show projects/showco' && "
+        'export SHOWCO_DIAGNOSTICS_SINCE=$(date -u +%Y-%m-%dT%H:%M:%SZ); '
+        "cd '/srv/show projects/showco' && "
         'PATH="$HOME/.local/bin:$PATH" uv run --no-sync python - '
-        "'/srv/show projects' recs; then exit 0; fi; "
-        "printf '\\nPost-update recs service diagnosis:\\n'; "
-        'systemctl --user show recs.service '
-        '--property=LoadState,ActiveState,SubState,Result,ExecMainStatus --no-pager '
-        "2>&1 || true; printf '\\nRecent recs journal entries:\\n'; "
-        'journalctl --user --unit=recs.service --lines=25 --no-pager 2>&1 || true; '
-        "printf '\\nRecent recs service log entries:\\n'; "
-        'tail --lines=50 "$HOME/.local/state/recs/recs.log" 2>&1 || true; '
-        'exit 1'
+        "'/srv/show projects' recs"
     )
+
+
+def test_unrelated_update_failure_does_not_dump_recs_logs(tmp_path: Path) -> None:
+    checkout = tmp_path / 'showco'
+    checkout.mkdir()
+    commands = tmp_path / 'bin'
+    commands.mkdir()
+    for name, script in {
+        'uv': 'echo "updater failed: configuration error" >&2; exit 7',
+        'journalctl': 'echo "unrelated recs history"',
+        'systemctl': 'echo "unrelated recs status"',
+    }.items():
+        path = commands / name
+        path.write_text('#!/bin/sh\n' + script + '\n')
+        path.chmod(0o700)
+    result = subprocess.run(
+        ['sh', '-c', update.remote_update_command(['showco'], tmp_path)],
+        env={
+            **os.environ,
+            'HOME': str(tmp_path),
+            'PATH': str(commands) + os.pathsep + os.environ['PATH'],
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=5,
+    )
+    assert result.returncode == 7
+    assert result.stderr == 'updater failed: configuration error\n'
+    assert result.stdout == ''
 
 
 def test_explicit_settings_clear_is_restored_after_failed_update(

@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from threading import Event
 from unittest import mock
 
@@ -515,10 +519,9 @@ class RecsTests(unittest.TestCase):
         self.assertIn('current=$(updated_at)', command)
         self.assertIn('previous="$current"', command)
         self.assertIn('systemctl --user show recs.service', command)
-        self.assertIn('journalctl --user --unit=recs.service --lines=25', command)
-        self.assertIn('tail --lines=50 "$HOME/.local/state/recs/recs.log"', command)
+        self.assertIn('--since "$diagnostics_since" --priority=err', command)
 
-    def test_status_failure_summary_shows_recent_error_messages(self) -> None:
+    def test_status_failure_summary_omits_retained_error_history(self) -> None:
         summary = recs.status_failure_summary(
             json.dumps(
                 {
@@ -530,9 +533,56 @@ class RecsTests(unittest.TestCase):
 
         self.assertEqual(
             summary,
-            'recs status did not advance; updated_at=123.0\n'
-            'Recent recs errors:\n- second\n- third\n- fourth',
+            'recs status did not advance; updated_at=123.0',
         )
+
+    def test_failed_status_check_reports_only_current_run_log_errors(self) -> None:
+        with TemporaryDirectory() as directory:
+            home = Path(directory)
+            state = home / '.local/state/recs'
+            state.mkdir(parents=True)
+            (state / 'status.json').write_text(json.dumps({'updated_at': 1}))
+            (state / 'recs.log').write_text(
+                '2026-10-16T17:00:00Z ERROR recs: historical error\n'
+                'historical traceback\n'
+                '2026-10-16T18:00:01Z INFO recs: ordinary progress\n'
+                '2026-10-16T18:00:02Z ERROR recs: current error\n'
+                'current traceback\n'
+                '2026-10-16T18:00:03Z INFO recs: later progress\n'
+            )
+            commands = home / 'bin'
+            commands.mkdir()
+            for name, script in {
+                'systemctl': 'echo ActiveState=failed',
+                'sleep': 'exit 0',
+                'journalctl': (
+                    'printf "%s\\n" "$*"; '
+                    'echo "2026-10-16T18:00:02Z current journal error"'
+                ),
+            }.items():
+                path = commands / name
+                path.write_text('#!/bin/sh\n' + script + '\n')
+                path.chmod(0o700)
+            result = subprocess.run(
+                ['sh', '-c', recs.status_changes_command()],
+                env={
+                    **os.environ,
+                    'HOME': str(home),
+                    'PATH': str(commands) + os.pathsep + os.environ['PATH'],
+                    'SHOWCO_DIAGNOSTICS_SINCE': '2026-10-16T18:00:00Z',
+                },
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=5,
+            )
+        summary = recs.status_failure_summary(result.stdout)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('current error\ncurrent traceback', summary)
+        self.assertIn('current journal error', summary)
+        self.assertIn('--since 2026-10-16T18:00:00Z --priority=err', summary)
+        self.assertNotIn('historical', summary)
+        self.assertNotIn('progress', summary)
 
     def test_status_failure_summary_includes_service_diagnosis(self) -> None:
         summary = recs.status_failure_summary(

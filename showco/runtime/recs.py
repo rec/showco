@@ -10,7 +10,6 @@ from . import models, recs_channels, recs_control, recs_snapshot
 
 STATUS_CHANGE_WAIT_SECONDS = 4
 STATUS_CHANGE_SAMPLE_COUNT = 3
-STATUS_ERROR_LIMIT = 3
 STATUS_DIAGNOSIS_SEPARATOR = '\n--- recs service diagnosis ---\n'
 
 
@@ -447,6 +446,8 @@ class RecsClient:
 
 def status_changes_command() -> str:
     return (
+        'diagnostics_since=${SHOWCO_DIAGNOSTICS_SINCE:-'
+        '$(date -u +%Y-%m-%dT%H:%M:%SZ)}; '
         'status="$HOME/.local/state/recs/status.json"; '
         'diagnose() { '
         'cat "$status" 2>&1; '
@@ -454,10 +455,16 @@ def status_changes_command() -> str:
         'systemctl --user show recs.service '
         '--property=LoadState,ActiveState,SubState,Result,ExecMainStatus --no-pager '
         '2>&1 || true; '
-        "printf '\\nRecent recs journal entries:\\n'; "
-        'journalctl --user --unit=recs.service --lines=25 --no-pager 2>&1 || true; '
-        "printf '\\nRecent recs service log entries:\\n'; "
-        'tail --lines=50 "$HOME/.local/state/recs/recs.log" 2>&1 || true; '
+        "printf '\\nCurrent-run recs journal errors:\\n'; "
+        'journalctl --user --unit=recs.service --since "$diagnostics_since" '
+        '--priority=err --lines=25 --no-pager 2>&1 || true; '
+        "printf '\\nCurrent-run recs service log errors:\\n'; "
+        'awk -v since="$diagnostics_since" '
+        "'/^[0-9][0-9][0-9][0-9]-/ { "
+        'show = (substr($1, 1, 19) >= substr(since, 1, 19) && '
+        '($2 == "ERROR" || $2 == "CRITICAL")) } '
+        "show { print }' "
+        '"$HOME/.local/state/recs/recs.log" | tail --lines=50; '
         '}; '
         'updated_at() { sed -nE '
         '\'s/.*"updated_at"[[:space:]]*:[[:space:]]*'
@@ -486,14 +493,6 @@ def status_failure_summary(output: str) -> str:
     result = 'recs status did not advance'
     if isinstance(updated_at := data.get('updated_at'), int | float):
         result += f'; updated_at={updated_at}'
-    errors = data.get('errors')
-    if isinstance(errors, list):
-        messages = [error_message(e) for e in errors]
-        messages = [m for m in messages if m]
-        if messages:
-            result += '\nRecent recs errors:\n' + '\n'.join(
-                f'- {m}' for m in messages[-STATUS_ERROR_LIMIT:]
-            )
     if separator and diagnosis.strip():
         result += '\nrecs service diagnosis:\n' + diagnosis.strip()
     return result
@@ -586,16 +585,6 @@ def command_result_message(command: str, response: object) -> str:
     if len(text) > 500:
         text = text[:497] + '...'
     return f'recs {command} succeeded: {text}'
-
-
-def error_message(value: object) -> str:
-    if isinstance(value, str):
-        return value
-    if recs_snapshot.object_dict(value) and isinstance(
-        message := value.get('message'), str
-    ):
-        return message
-    return ''
 
 
 def _int(value: object) -> int | None:
