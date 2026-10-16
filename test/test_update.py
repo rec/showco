@@ -8,7 +8,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import mock
 
-from reccy.services.models import Platform
+from reccy.services.models import Platform, StatusResult
 from update_helpers import make_config
 
 from showco.deployment import bootstrap, update
@@ -94,6 +94,20 @@ class UpdateTests(unittest.TestCase):
                     '--config /home/tom/.config/streamo/config.toml',
                 ]
             ],
+        )
+
+    def test_showco_refresh_uses_its_installed_environment(self) -> None:
+        with mock.patch(
+            'showco.deployment.update.services.refresh_service_definition',
+            return_value=StatusResult(installed=True, running=True),
+        ) as refresh:
+            result = update.start_or_refresh_service_step(
+                'showco', True, Path('/srv/show projects'), make_config(), mock.Mock()
+            )
+        self.assertTrue(result.ok)
+        self.assertEqual(
+            refresh.call_args.kwargs['executable'],
+            Path('/srv/show projects/showco/.venv/bin/python'),
         )
 
     def test_service_stop_accepts_reccy_runner_timeout(self) -> None:

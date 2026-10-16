@@ -257,7 +257,11 @@ def remote_update_command(
 
 
 def run_service_step(
-    service_name: str, step: str, run_command: RunCommand
+    service_name: str,
+    step: str,
+    run_command: RunCommand,
+    *,
+    executable: Path | None = None,
 ) -> StepResult:
     spec = services.SERVICES[service_name]
     command = ['systemctl', '--user', step, spec.systemd_unit]
@@ -271,7 +275,9 @@ def run_service_step(
             controller.start()
         elif step == 'refresh':
             result = services.refresh_service_definition(
-                service_name, runner=service_runner(run_command)
+                service_name,
+                runner=service_runner(run_command),
+                executable=executable,
             )
         else:
             return StepResult(
@@ -335,7 +341,10 @@ def start_or_refresh_service_step(
                 root, provision_config.network.user, run_command
             )
     return run_service_step(
-        service_name, 'refresh' if refresh_definitions else 'start', run_command
+        service_name,
+        'refresh' if refresh_definitions else 'start',
+        run_command,
+        executable=root / service_name / '.venv/bin/python',
     )
 
 

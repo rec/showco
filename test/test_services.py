@@ -148,7 +148,9 @@ class ServicesTests(unittest.TestCase):
         with mock.patch(
             'showco.runtime.services.service_registry', return_value=registry
         ):
-            result = services.refresh_service_definition('recs')
+            result = services.refresh_service_definition(
+                'recs', executable=Path('/srv/recs/.venv/bin/python')
+            )
 
         self.assertTrue(result.running)
         self.assertEqual(
@@ -160,7 +162,7 @@ class ServicesTests(unittest.TestCase):
                 'platform': 'linux',
                 'control_endpoint': '/tmp/recs-gui.sock',
                 'event_endpoint': None,
-                'executable': None,
+                'executable': Path('/srv/recs/.venv/bin/python'),
             },
         )
 

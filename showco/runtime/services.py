@@ -117,9 +117,13 @@ def restart_service(name: str) -> models.ActionResult:
 def refresh_service_definition(
     name: str,
     runner: Callable[..., CompletedProcess[str]] | None = None,
+    *,
+    executable: Path | None = None,
 ) -> StatusResult:
     controller = service_registry(runner=runner).controller(name)
     metadata = DaemonMetadata.model_validate_json(controller.paths.metadata.read_text())
+    if executable is not None:
+        metadata = metadata.model_copy(update={'executable': executable})
     controller.install(metadata)
     return controller.status()
 

@@ -80,7 +80,13 @@ def target(monkeypatch: pytest.MonkeyPatch) -> Target:
     )
     monkeypatch.setattr(update, 'provisioning_config', lambda: configuration)
 
-    def service(name: str, step: str, runner: update.RunCommand) -> update.StepResult:
+    def service(
+        name: str,
+        step: str,
+        runner: update.RunCommand,
+        *,
+        executable: Path | None = None,
+    ) -> update.StepResult:
         return update.run_step(
             name, step, ['systemctl', '--user', step, f'{name}.service'], runner
         )
