@@ -71,5 +71,5 @@ config_dir = "$HOME/.config/streamo"
 state = "SaqhIYFnE124j25yv7OJm8FQ9yLIceEh"
 
 [lyte]
-enabled = true
+enabled = false
 installation_config = "patches/showco-installation.toml"
