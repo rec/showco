@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import shlex
 import subprocess
 import tomllib
@@ -10,6 +11,56 @@ import pytest
 from provision_helpers import make_config, values
 
 from showco.provision import config, media, provision, script
+
+
+def test_provisioning_transfers_only_streamo_publish_credentials() -> None:
+    configuration = make_config(
+        values(
+            stream={
+                'enabled': True,
+                'stream_key': 'test-key',
+                'client_id': 'test-client',
+                'access_token': 'test-token',
+                'client_secret': 'keep-local',
+            }
+        )
+    )
+    assignments = shlex.split(script.remote_command(configuration, '/tmp/provision.sh'))
+    payload = next(
+        a.split('=', 1)[1]
+        for a in assignments
+        if a.startswith('SHOWCO_STREAM_SETTINGS=')
+    )
+    assert json.loads(payload) == {
+        'stream_key': 'test-key',
+        'client_id': 'test-client',
+        'access_token': 'test-token',
+    }
+    with mock.patch('showco.provision.media.ssh.run_ssh') as run:
+        media.configure_stream_media(configuration)
+    command = run.call_args.args[1]
+    assert 'SHOWCO_STREAM_SETTINGS=' in command
+    assert 'test-token' in command
+    assert 'keep-local' not in command
+
+
+def test_target_media_configuration_applies_publish_credentials(tmp_path: Path) -> None:
+    target = tmp_path / 'config.toml'
+    settings = {
+        'stream_key': 'test-key',
+        'client_id': 'test-client',
+        'access_token': 'test-token',
+    }
+    with (
+        mock.patch('sys.argv', ['media', '--config', str(target)]),
+        mock.patch.dict('os.environ', {'SHOWCO_STREAM_SETTINGS': json.dumps(settings)}),
+    ):
+        media.main()
+    value = tomllib.loads(target.read_text())['streaming_service']
+    assert value['service'] == 'twitch'
+    assert value['ingest']['stream_key'] == 'test-key'
+    assert value['client_id'] == 'test-client'
+    assert value['access_token'] == 'test-token'
 
 
 def test_media_selections_persist_and_only_specified_categories_are_replaced(

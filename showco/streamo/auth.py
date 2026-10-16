@@ -149,7 +149,7 @@ def exchange_code(config_path: Path, secrets_path: Path) -> int:
     access_token = response['access_token']
     if not isinstance(access_token, str):
         raise ValueError('Stream returned an invalid access token')
-    write_toml_value(secrets_path, 'stream', 'oath_token', access_token)
+    write_toml_value(secrets_path, 'stream', 'access_token', access_token)
     (config_dir / 'oauth-token').write_text(access_token + '\n')
     if refresh_token := response.get('refresh_token'):
         (config_dir / 'refresh-token').write_text(refresh_token + '\n')
@@ -165,7 +165,7 @@ def exchange_code(config_path: Path, secrets_path: Path) -> int:
 
 def validate_token(values: dict[str, object]) -> int:
     stream = config.table_value(values, 'stream')
-    token = require_value(stream, 'oath_token')
+    token = require_value(stream, 'access_token')
     http_request = request.Request(
         STREAM_VALIDATE_URL,
         headers={'Authorization': f'OAuth {token}'},

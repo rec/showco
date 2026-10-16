@@ -192,6 +192,15 @@ streamO supplies three temporary closing pages until you replace them in its `cl
 
 The source configuration is [`showco/provision/config.toml`](../showco/provision/config.toml). Private values belong in the ignored `showco/provision/secrets.toml`, which overlays the public configuration. Never commit Wi-Fi passwords, stream keys, OAuth tokens, client secrets, or private keys.
 
+Under `[stream]`, use `access_token` instead of the former `oath_token` spelling.
+Provisioning and normal `showco` updates copy non-empty `stream_key`, `client_id`,
+and `access_token` values into streamO's `streaming_service.ingest.stream_key`,
+`streaming_service.client_id`, and `streaming_service.access_token`, respectively.
+Existing encoding, media, and other streamO settings are preserved. Omitted
+credentials leave existing target values unchanged. The target configuration is
+written with owner-only permissions. `client_secret` stays local for obtaining
+tokens; it is not copied into streamO's configuration.
+
 The important configuration is near the top of `config.toml`:
 
 | Setting | Meaning |

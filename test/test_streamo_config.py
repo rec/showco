@@ -8,10 +8,44 @@ from tempfile import TemporaryDirectory
 
 from streamo.config import Streamo
 
-from showco.streamo.config import convert_twitcho_config
+from showco.streamo.config import configure_stream_settings, convert_twitcho_config
 
 
 class StreamoConfigTests(unittest.TestCase):
+    def test_provisioned_credentials_preserve_existing_stream_configuration(
+        self,
+    ) -> None:
+        with TemporaryDirectory() as directory:
+            target = Path(directory) / 'config.toml'
+            target.write_text(
+                '# Operator settings\nvideo = "movie.mp4"\n'
+                '[streaming_service]\nservice = "twitch"\n'
+                'access_token = "old-token"\n'
+                '[streaming_service.ingest]\nprotocol = "rtmps"\n'
+                'server_url = "rtmps://live.twitch.tv/app"\nstream_key = "old-key"\n'
+                '[streaming_service.encoding.audio]\nbitrate = "192kbps"\n'
+            )
+            settings = {
+                'stream_key': 'new-key',
+                'client_id': 'client-id',
+                'access_token': 'new-token',
+            }
+            configure_stream_settings(target, settings)
+            text = target.read_text()
+            value = tomllib.loads(text)
+            configure_stream_settings(target, {'stream_key': 'new-key'})
+
+            self.assertEqual(target.read_text(), text)
+            self.assertEqual(target.stat().st_mode & 0o777, 0o600)
+        self.assertIn('# Operator settings', text)
+        self.assertEqual(value['video'], 'movie.mp4')
+        service = value['streaming_service']
+        self.assertEqual(service['access_token'], 'new-token')
+        self.assertEqual(service['client_id'], 'client-id')
+        self.assertEqual(service['ingest']['stream_key'], 'new-key')
+        self.assertEqual(service['ingest']['server_url'], 'rtmps://live.twitch.tv/app')
+        self.assertEqual(service['encoding']['audio']['bitrate'], '192kbps')
+
     def test_converts_twitcho_configuration_to_streamo_toml(self) -> None:
         with TemporaryDirectory() as directory:
             source = Path(directory) / 'config.json'

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shlex
 import sys
 import tomllib
@@ -16,6 +17,7 @@ from pydantic import BaseModel, Field, TypeAdapter
 from reccy.configuration import units
 from reccy.runtime.files import atomic_output
 
+from ..streamo.config import configure_stream_settings
 from ..x18.music import Files
 from . import config, ssh
 
@@ -165,7 +167,9 @@ def configure_stream_media(provision_config: config.Config) -> None:
             *arguments,
         ]
     )
-    if not arguments:
+    settings = streamo_settings(provision_config)
+    command = f'SHOWCO_STREAM_SETTINGS={shlex.quote(settings)} {command}'
+    if not arguments and not settings:
         command = (
             f'if grep -Fq -- {shlex.quote("/.local/share/showco/media/photos/")} '
             f'{shlex.quote(str(path))} 2>/dev/null; then {command}; fi'
@@ -176,6 +180,17 @@ def configure_stream_media(provision_config: config.Config) -> None:
         f'export PATH="$HOME/.local/bin:$PATH" && {command}',
         timeout_seconds=60,
     )
+
+
+def streamo_settings(provision_config: config.Config) -> str:
+    settings = {
+        k: v
+        for k, v in provision_config.stream.model_dump(
+            include={'stream_key', 'client_id', 'access_token'}
+        ).items()
+        if v
+    }
+    return json.dumps(settings) if provision_config.stream.enabled and settings else ''
 
 
 def streamo_arguments(provision_config: config.Config) -> list[str]:
@@ -257,8 +272,20 @@ def main() -> None:
         if updated != text:
             with atomic_output(path) as temporary:
                 temporary.write_text(updated)
+        if settings := os.environ.get('SHOWCO_STREAM_SETTINGS'):
+            stream = config.Stream.model_validate_json(settings)
+            configure_stream_settings(
+                path,
+                {
+                    k: v
+                    for k, v in stream.model_dump(
+                        include={'stream_key', 'client_id', 'access_token'}
+                    ).items()
+                    if v
+                },
+            )
     except (OSError, ValueError) as error:
-        sys.exit(f'ERROR: cannot configure streamO media in {path}: {error}')
+        sys.exit(f'ERROR: cannot configure streamO in {path}: {error}')
 
 
 if __name__ == '__main__':

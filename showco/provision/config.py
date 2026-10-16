@@ -55,7 +55,7 @@ class Stream(BaseModel, frozen=True):
     state: str = ''
     stream_key: str = ''
     client_secret: str = ''
-    oath_token: str = ''
+    access_token: str = ''
     callback_url_or_code: str = ''
 
 
@@ -380,7 +380,7 @@ def stream_value(values: dict[str, object]) -> Stream:
         state=string_value(values, 'state'),
         stream_key=string_value(values, 'stream_key'),
         client_secret=string_value(values, 'client_secret'),
-        oath_token=string_value(values, 'oath_token'),
+        access_token=string_value(values, 'access_token'),
         callback_url_or_code=string_value(values, 'callback_url_or_code'),
     )
 

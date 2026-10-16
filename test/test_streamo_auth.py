@@ -11,6 +11,24 @@ from showco.streamo import auth
 
 
 class StreamoAuthTests(unittest.TestCase):
+    def test_exchange_code_saves_access_token_under_renamed_setting(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            config_path, secrets_path = config_paths(root)
+            with (
+                mock.patch('showco.streamo.auth.Path.home', return_value=root),
+                mock.patch(
+                    'showco.streamo.auth.request_http',
+                    return_value=auth.HttpResponse(
+                        status=200, text='{"access_token":"test-token"}'
+                    ),
+                ),
+            ):
+                self.assertEqual(auth.exchange_code(config_path, secrets_path), 0)
+            values = config.read_toml(secrets_path)['stream']
+        self.assertEqual(values['access_token'], 'test-token')
+        self.assertNotIn('oath_token', values)
+
     def test_exchange_code_reports_http_error_response(self) -> None:
         with TemporaryDirectory() as directory:
             directory_path = Path(directory)

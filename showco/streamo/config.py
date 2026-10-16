@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import json
+import tomllib
 from pathlib import Path
 from typing import Annotated
 
 import tyro
 from pydantic import BaseModel
+from reccy.runtime.files import atomic_output
+
+from .auth import write_toml_value
 
 
 class StreamoConfigOptions(BaseModel, frozen=True):
@@ -28,6 +32,24 @@ def convert_twitcho_config(source: Path, target: Path) -> None:
         raise ValueError(f'{source} must contain a JSON object')
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(streamo_toml(values))
+
+
+def configure_stream_settings(target: Path, settings: dict[str, str]) -> None:
+    text = target.read_text() if target.exists() else ''
+    values = tomllib.loads(text)
+    service = values.get('streaming_service', {})
+    if service.get('service', 'twitch') != 'twitch':
+        raise ValueError('showCo Twitch credentials require a Twitch streaming_service')
+    with atomic_output(target) as temporary:
+        temporary.write_text(text)
+        write_toml_value(temporary, 'streaming_service', 'service', 'twitch')
+        for name, value in settings.items():
+            section = (
+                'streaming_service.ingest'
+                if name == 'stream_key'
+                else 'streaming_service'
+            )
+            write_toml_value(temporary, section, name, value)
 
 
 def streamo_toml(values: dict[str, object]) -> str:

@@ -84,6 +84,7 @@ def remote_command(
         'SHOWCO_STREAM_MEDIA_ARGS': shlex.join(
             media.streamo_arguments(provision_config)
         ),
+        'SHOWCO_STREAM_SETTINGS': media.streamo_settings(provision_config),
         'SHOWCO_AUDIO_ARGS': shlex.join(
             [
                 v
