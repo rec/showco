@@ -120,7 +120,9 @@ def run(app: 'ShowcoApp', form: dict[str, str]) -> models.ActionResult:
                 name,
                 int(form.get('revision', '-1')),
                 show,
-                app.recovery_restart,
+                lambda n: (
+                    app.streamo_restart() if n == 'streamo' else app.recovery_restart(n)
+                ),
                 remember,
             )
             app.recs.snapshot_client.invalidate()

@@ -119,6 +119,14 @@ class MusicController:
             closing=self.closing_status,
         )
 
+    def start_stream(self) -> models.ActionResult:
+        if self.streamo is None:
+            return models.ActionResult(ok=True, message='streamO is disabled')
+        if self.streamo_restart is None:
+            raise ValueError('streamO restart is not configured')
+        self.routing.route_main_to_usb()
+        return self.streamo_restart()
+
     def setup(self) -> models.ActionResult:
         self._require_no_closing()
         restore = (
@@ -187,7 +195,7 @@ class MusicController:
                     'recs recording resumed',
                     lambda: self._require(self.recs.action('resume_recording')),
                 ),
-                ('streamO started', self._start_stream),
+                ('streamO started', lambda: self._require(self.start_stream())),
             ],
         )
         self._clear_closing()
@@ -615,12 +623,6 @@ class MusicController:
             self.player.start(paths, self.config.fade_seconds)
         else:
             self.player.stop(0)
-
-    def _start_stream(self) -> None:
-        if self.streamo is not None:
-            if self.streamo_restart is None:
-                raise ValueError('streamO restart is not configured')
-            self._require(self.streamo_restart())
 
     def _stop_stream(self) -> None:
         if self.streamo is not None:

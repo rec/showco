@@ -71,6 +71,13 @@ class X18MusicRouting:
         self.source_channels = source_channels
         self.osc_factory = osc_factory
 
+    def route_main_to_usb(self) -> None:
+        with self.osc_factory(self.host, self.port) as osc:
+            # X AIR sources 36/37 are Main L/R; tap 10 is post-fader.
+            for channel, source in ((17, 36), (18, 37)):
+                self._set_confirmed(osc, f'/routing/usb/{channel}/src', source)
+                self._set_confirmed(osc, f'/routing/usb/{channel}/pos', 10)
+
     def enable(self) -> None:
         with self.osc_factory(self.host, self.port) as osc:
             self._set_confirmed(

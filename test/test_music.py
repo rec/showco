@@ -153,10 +153,13 @@ def test_record_fades_music_before_starting_a_new_session() -> None:
 
 
 def test_record_starts_streamo_after_the_new_recording_session() -> None:
-    value, recs, _, _ = controller()
+    value, recs, _, routing = controller()
     restart = mock.Mock(return_value=result())
     value.streamo = mock.Mock()
     value.streamo_restart = restart
+    calls = mock.Mock()
+    calls.attach_mock(routing.route_main_to_usb, 'route')
+    calls.attach_mock(restart, 'start')
 
     value.record()
 
@@ -165,6 +168,21 @@ def test_record_starts_streamo_after_the_new_recording_session() -> None:
         mock.call('resume_recording'),
     ]
     restart.assert_called_once_with()
+    assert calls.mock_calls == [mock.call.route(), mock.call.start()]
+
+
+def test_stream_does_not_start_when_usb_routing_is_unconfirmed() -> None:
+    value, recs, player, routing = controller()
+    value.streamo = mock.Mock()
+    value.streamo_restart = mock.Mock(return_value=result())
+    routing.route_main_to_usb.side_effect = ValueError('USB routing not confirmed')
+
+    with pytest.raises(ValueError, match='USB routing not confirmed'):
+        value.start_stream()
+
+    value.streamo_restart.assert_not_called()
+    recs.action.assert_not_called()
+    player.stop.assert_not_called()
 
 
 def test_teardown_pauses_recording_stops_playback_and_starts_music() -> None:
@@ -607,6 +625,20 @@ class FakeOsc:
     def set(self, path: str, value: object) -> None:
         self.values.append((path, value))
         self.applied[path] = value
+
+
+def test_x18_main_mix_is_sent_to_usb_without_changing_room_controls() -> None:
+    osc = FakeOsc()
+    routing = x18_music.X18MusicRouting(
+        '10.0.0.18', 10_024, [17, 18], osc_factory=lambda host, port: osc
+    )
+    routing.route_main_to_usb()
+    assert osc.values == [
+        ('/routing/usb/17/src', 36),
+        ('/routing/usb/17/pos', 10),
+        ('/routing/usb/18/src', 37),
+        ('/routing/usb/18/pos', 10),
+    ]
 
 
 def test_x18_music_routing_uses_usb_returns_on_main_lr_and_mutes_them() -> None:
