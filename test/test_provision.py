@@ -673,6 +673,25 @@ class ProvisionTests(unittest.TestCase):
     def test_lyte_service_is_a_startup_check(self) -> None:
         self.assertIn('lyte service', verify.STARTUP_CHECK_NAMES)
 
+    def test_disabled_lyte_verification_reports_failure_instead_of_assuming_disabled(
+        self,
+    ) -> None:
+        for error in ('', 'lyte is still running'):
+            with (
+                self.subTest(error=error),
+                mock.patch(
+                    'showco.provision.verify.verify_remote_command',
+                    return_value=verify.VerificationResult(
+                        name='lyte service', error=error
+                    ),
+                ) as check,
+            ):
+                result = verify.verify_lyte_service(make_config(values()))
+                self.assertEqual(result.error, error)
+                self.assertEqual(result.note, '' if error else 'disabled')
+                self.assertIn('masked', check.call_args.args[2])
+                self.assertIn('inactive', check.call_args.args[2])
+
     def test_streamo_health_command_uses_target_showco(self) -> None:
         command = verify.showco_streamo_health_command(Path('/code'))
 

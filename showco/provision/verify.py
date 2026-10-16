@@ -192,7 +192,21 @@ def user_session_command(command: str) -> str:
 
 def verify_lyte_service(provision_config: config.Config) -> VerificationResult:
     if not provision_config.lyte.enabled:
-        return VerificationResult(name='lyte service', error='', note='disabled')
+        result = verify_remote_command(
+            provision_config,
+            'lyte service',
+            user_session_command(
+                'sh -c '
+                + shlex.quote(
+                    '[ "$(systemctl --user is-enabled lyte.service '
+                    '2>/dev/null)" = masked ] && '
+                    '[ "$(systemctl --user is-active lyte.service)" = inactive ]'
+                )
+            ),
+        )
+        return result.model_copy(
+            update={'note': 'disabled'} if not result.error else {}
+        )
     installed = verify_remote_command(
         provision_config,
         'lyte service is installed',

@@ -195,7 +195,18 @@ install_lyte_service() {
   local uid
   local input
   if [[ "$LYTE_ENABLED" != true ]]; then
-    printf 'lyte service is disabled.\n'
+    local unit_directory="/home/$SHOW_USER/.config/systemd/user"
+    local load_state
+    load_state=$(user_systemctl show --property=LoadState --value lyte.service)
+    if [[ "$load_state" == masked ]]; then
+      user_systemctl stop lyte.service
+    elif [[ "$load_state" != not-found ]]; then
+      user_systemctl disable --now lyte.service
+    fi
+    sudo -H -u "$SHOW_USER" mkdir -p "$unit_directory"
+    sudo -H -u "$SHOW_USER" ln -sfn /dev/null "$unit_directory/lyte.service"
+    user_systemctl daemon-reload
+    printf 'lyte service is stopped and masked.\n'
     return
   fi
   config_path="$ROOT/lyte/$LYTE_INSTALLATION_CONFIG"
@@ -203,6 +214,7 @@ install_lyte_service() {
     printf 'ERROR: lyte installation configuration does not exist: %s\n' "$config_path" >&2
     return 1
   fi
+  user_systemctl unmask lyte.service
   quoted_config=$(printf '%q' "$config_path")
   uid=$(id -u "$SHOW_USER")
   input=$(service_input "$(git -C "$ROOT/lyte" rev-parse HEAD)
