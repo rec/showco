@@ -619,6 +619,57 @@ class ProvisionTests(unittest.TestCase):
         self.assertEqual(verification.call_count, 2)
         sleep.assert_called_once_with(1)
 
+    def test_verification_retries_connection_timeouts_with_backoff(self) -> None:
+        config = make_config(values())
+        timed_out = subprocess.CompletedProcess(
+            ['ssh'],
+            255,
+            '',
+            'ssh: connect to host t.local port 22: Operation timed out',
+        )
+        ready = subprocess.CompletedProcess(['ssh'], 0, '', '')
+        for recover in (True, False):
+            with self.subTest(recover=recover):
+                responses = [timed_out] * 4 + [ready if recover else timed_out]
+                with mock.patch(
+                    'reccy.runtime.subprocess.run', side_effect=responses
+                ) as run:
+                    result = verify.verify_remote_command(config, 'web UI', 'check')
+                self.assertEqual(result.error, '' if recover else timed_out.stderr)
+                self.assertEqual(run.call_count, 5)
+                for call, timeout in zip(
+                    run.call_args_list, (1, 2, 4, 8, 16), strict=True
+                ):
+                    self.assertIn(f'ConnectTimeout={timeout}', call.args[0])
+                    self.assertEqual(call.kwargs['timeout'], timeout + 15)
+
+    def test_verification_reports_command_and_authentication_failures(
+        self,
+    ) -> None:
+        config = make_config(values())
+        for status, error in ((1, 'service failed'), (255, 'Permission denied')):
+            with self.subTest(status=status):
+                with mock.patch(
+                    'reccy.runtime.subprocess.run',
+                    return_value=subprocess.CompletedProcess(
+                        ['ssh'], status, '', error
+                    ),
+                ) as run:
+                    result = verify.verify_remote_command(config, 'service', 'check')
+                self.assertEqual(result.error, error)
+                run.assert_called_once()
+
+    def test_verification_does_not_repeat_a_command_that_timed_out(self) -> None:
+        with mock.patch(
+            'reccy.runtime.subprocess.run',
+            side_effect=subprocess.TimeoutExpired(['ssh'], 16),
+        ) as run:
+            result = verify.verify_remote_command(
+                make_config(values()), 'service', 'check'
+            )
+        self.assertEqual(result.error, 'command timed out after 16s')
+        run.assert_called_once()
+
     def test_lyte_service_is_a_startup_check(self) -> None:
         self.assertIn('lyte service', verify.STARTUP_CHECK_NAMES)
 

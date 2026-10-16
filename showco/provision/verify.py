@@ -14,6 +14,7 @@ from ..runtime import recs, revision
 from . import config, network, ssh
 
 POST_REBOOT_READY_WAIT_SECONDS = 60
+VERIFICATION_SSH_TIMEOUTS = (1, 2, 4, 8, 16)
 STARTUP_CHECK_NAMES = [
     'lyte service',
     'recs service is active',
@@ -328,24 +329,34 @@ def verify_remote_command(
     expect_empty_stdout: bool = False,
     summarize_error: Callable[[str], str] | None = None,
 ) -> VerificationResult:
-    try:
-        completed = subprocess.run(
-            ssh.ssh_command(
-                provision_config,
-                provision_config.ssh_target,
-                command,
-                connect_timeout=1,
-            ),
-            capture_output=True,
-            check=False,
-            text=True,
-            timeout=ssh.SSH_VERIFICATION_TIMEOUT_SECONDS,
-        )
-    except TimeoutExpired:
-        return VerificationResult(
-            name=name,
-            error=f'command timed out after {ssh.SSH_VERIFICATION_TIMEOUT_SECONDS}s',
-        )
+    for connect_timeout in VERIFICATION_SSH_TIMEOUTS:
+        command_timeout = connect_timeout + ssh.SSH_VERIFICATION_TIMEOUT_SECONDS
+        try:
+            completed = subprocess.run(
+                ssh.ssh_command(
+                    provision_config,
+                    provision_config.ssh_target,
+                    command,
+                    connect_timeout=connect_timeout,
+                ),
+                capture_output=True,
+                check=False,
+                text=True,
+                timeout=command_timeout,
+            )
+        except TimeoutExpired:
+            return VerificationResult(
+                name=name,
+                error=f'command timed out after {command_timeout}s',
+            )
+        # A connection timeout means the command never ran and is safe to retry.
+        connection_error = str(completed.stderr).lower()
+        if not (
+            completed.returncode == 255
+            and 'connect to host ' in connection_error
+            and 'timed out' in connection_error
+        ):
+            break
     output = f'{completed.stdout}{completed.stderr}'.strip()
     if completed.returncode == 0 and (not expect_empty_stdout or not output):
         return VerificationResult(name=name, error='')
