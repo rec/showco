@@ -9,7 +9,10 @@ function showControlsUnavailable() {
   document.querySelectorAll('[data-performance-action], #performance-lock-form button')
     .forEach(button => {button.disabled = true;});
   document.querySelectorAll('[data-disabled-when="streamo_unavailable"] button')
-    .forEach(button => {button.disabled = true;});
+    .forEach(button => {
+      button.disabled = true;
+      button.textContent = 'Twitch status unavailable';
+    });
 }
 
 async function showAction(fields) {

@@ -6,6 +6,9 @@
       if (button.disabled) return;
       button.disabled = true;
       button.setAttribute("aria-busy", "true");
+      if (form.dataset.disabledWhen === "streamo_unavailable") {
+        button.textContent = button.textContent === "Stop Twitch" ? "Stopping..." : "Starting...";
+      }
       const result = document.querySelector("[data-action-result]");
       try {
         const response = await fetch("/actions", {

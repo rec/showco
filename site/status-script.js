@@ -172,6 +172,10 @@
     }
     for (const button of document.querySelectorAll('form[data-disabled-when] button')) {
       const form = button.closest("form");
+      if (form.dataset.disabledWhen === "streamo_unavailable"
+          && !button.hasAttribute("aria-busy")) {
+        button.textContent = status.streamo.toggle_label;
+      }
       button.disabled = button.hasAttribute("aria-busy")
         || (form.dataset.disabledWhen === "playback_waiting"
           && status.recs.playback.state === "waiting")

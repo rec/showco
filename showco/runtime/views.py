@@ -60,7 +60,7 @@ def configured_page(
         features=features or set(),
     )
     has_live_status = any(
-        element.kind in {'repeat', 'status', 'service_card', 'meter'}
+        element.kind in {'repeat', 'status', 'service_card', 'meter', 'action_button'}
         for section in page_spec.sections
         for element in section.elements
     )
@@ -419,6 +419,24 @@ def page(page_id: str, body: str, *, script: str = '') -> str:
         f'<script>{site_file("show-controls.js")}</script>'
         f'<script>{script or "pollShowControls();"}</script>'
     )
+    protection = ''
+    monitoring = ''
+    if page_id != 'show':
+        protection = """<p id="connection-status" role="status">Connecting...</p>
+    <section class="show-controls" aria-label="Performance protection">
+      <strong id="performance-lock-state">Performance lock: checking</strong>
+      <form id="performance-lock-form" method="post" action="/actions">
+        <button name="action" value="performance-lock">Enable performance lock</button>
+        <label><input type="checkbox" name="confirmation" value="unlock">
+          Confirm unlock</label>
+        <button name="action" value="performance-unlock">
+          Unlock protected actions</button>
+      </form>
+      <p>Protects web configuration, calibration, tests, session replacement,
+         and shutdown. Separate CLI and deployment commands are not locked.</p>
+      <p id="lock-result" role="status"></p>
+    </section>"""
+        monitoring = '<p id="monitoring-error" role="status"></p>'
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -432,23 +450,10 @@ def page(page_id: str, body: str, *, script: str = '') -> str:
     <h1>{html.escape(document.name)}</h1>
     <nav>{navigation}</nav>
   </header>
-  <main><p id="connection-status" role="status">Connecting...</p>
-    <section class="show-controls" aria-label="Performance protection">
-      <strong id="performance-lock-state">Performance lock: checking</strong>
-      <form id="performance-lock-form" method="post" action="/actions">
-        <button name="action" value="performance-lock">Enable performance lock</button>
-        <label><input type="checkbox" name="confirmation" value="unlock">
-          Confirm unlock</label>
-        <button name="action" value="performance-unlock">
-          Unlock protected actions</button>
-      </form>
-      <p>Protects web configuration, calibration, tests, session replacement,
-         and shutdown. Separate CLI and deployment commands are not locked.</p>
-      <p id="lock-result" role="status"></p>
-    </section>
+  <main data-page="{html.escape(page_id)}">{protection}
     <section id="fault-banner" class="failed" aria-live="polite">
       Checking for faults...</section>
-    <p id="monitoring-error" role="status"></p>
+    {monitoring}
     {body}</main>
   <script>{site_file('shutdown-action.js')}</script>
   {page_script}
