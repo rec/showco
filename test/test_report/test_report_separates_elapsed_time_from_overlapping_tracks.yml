@@ -1,0 +1,29 @@
+report: 'Latest show (UTC)
+
+  2026-10-16 18:00:00 to 2026-10-16 19:00:00
+
+  1 recording sessions; elapsed 01:00:00
+
+  Saved media (known metadata): 1.00 GB; 2 audio files; 0 MIDI messages
+
+  Broadcast output observed: unknown
+
+
+  Saved audio by source / track:
+
+  - X18: 1: 01:00:00
+
+  - X18: 17-18: 00:30:00
+
+
+  Issues found:
+
+  - input_overflow (2 observations)
+
+
+  Recording directories:
+
+  - recording
+
+
+  Evidence limits:'

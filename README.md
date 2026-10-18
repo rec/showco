@@ -44,6 +44,7 @@ showco deploy --upgrade            # provision and run apt-get upgrade
 showco --push [repository ...] # publish local histories only
 showco --sync [repository ...] # publish and synchronize internal lockfiles
 showco logs [service ...]      # read target service log files
+showco report                  # summarize the latest show from saved target evidence
 showco python 'CODE'           # run one Python expression on the target
 showco prepare-card            # prepare and eject an Imager-written SD card
 ```

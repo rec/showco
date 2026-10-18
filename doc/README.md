@@ -344,6 +344,27 @@ showco logs
 showco logs recs showco --lines 500
 ```
 
+`showco report` reads the target without restarting services or changing recordings.
+It starts with the latest recs session and includes preceding sessions until a gap
+of three hours or more. Change that threshold with `showco report --gap-hours 2`.
+Gaps are measured from a session's end to the next session's start, including overlap.
+Sessions are ordered by capture timestamps, not file modification times.
+
+The short report lists recording directories, saved media size and audio-file counts,
+MIDI messages, saved duration per source/track, recording-quality issues, service
+warnings, and available CPU/disk history. Stereo pairs remain single tracks. Saved
+track durations include recs pre-roll and tails; they do not establish exactly how
+long a channel had audible sound. Overlapping track durations are not show duration.
+Open or unfinalized sessions are marked provisional or incomplete.
+
+Broadcast duration is a lower bound from retained streamO FFmpeg progress, not proof
+that Twitch received the stream. Missing progress is reported as unknown. Rotated-away
+logs, unmounted recording disks, and expired monitoring/incident history cannot be
+reconstructed. Recording metrics use recs metadata without a full media integrity
+check. Errors are restricted to the selected show window; repeated observations are
+grouped, with the ten most frequent issue types displayed. Counts from different
+sources can describe the same incident. URLs and common credential fields are redacted.
+
 Logs are retained on the target at `~/.local/state/SERVICE/SERVICE.log` for `showco`, `recs`, `streamo`, and `lyte`. showCo itself keeps only the current process's recs errors and ten recent action results.
 
 For a small target-side inspection, use:

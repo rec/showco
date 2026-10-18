@@ -1,0 +1,10 @@
+audio_files: 1
+ended_at: '2026-10-16T18:00:02Z'
+issues:
+- 'input_overflow: body.streams[stereo].gaps[0]'
+metadata_available: true
+midi_messages: 0
+open: false
+started_at: '2026-10-16T18:00:00Z'
+tracks:
+  'X18: 17-18': 1.0
