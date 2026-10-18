@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import unittest
 from collections.abc import Sequence
 from io import StringIO
+from pathlib import Path
 
 from showco.deployment import logs
 from showco.provision import config
@@ -90,3 +92,57 @@ def target_config() -> config.Config:
 
 if __name__ == '__main__':
     unittest.main()
+
+
+def test_clear_logs_preserves_running_writer_and_unrelated_history(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "code with ' quotes"
+    checkout = root / 'showco'
+    checkout.mkdir(parents=True)
+    errors = checkout / 'showco-errors.txt'
+    errors.write_text('old error')
+    paths: list[Path] = [errors]
+    for service in logs.SERVICE_NAMES:
+        directory = tmp_path / '.local/state' / service
+        directory.mkdir(parents=True)
+        for suffix in ('', '.1', '.2'):
+            path = directory / f'{service}.log{suffix}'
+            path.write_text('old log\n')
+            paths.append(path)
+    history = tmp_path / '.local/state/showco/incidents.json'
+    history.write_text('saved incidents')
+    unrelated = tmp_path / 'unrelated.log'
+    unrelated.write_text('keep this')
+    (history.parent / 'showco.log.link').symlink_to(unrelated)
+    current = history.parent / 'showco.log'
+    inode = current.stat().st_ino
+    with current.open('a') as writer:
+        completed = subprocess.run(
+            ['/bin/sh', '-c', logs.remote_clear_logs_command(root)],
+            env=dict(os.environ, HOME=str(tmp_path)),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert completed.returncode == 0, completed.stderr
+        assert 'Cleared 13 log files.' in completed.stdout
+        assert all(p.read_text() == '' for p in paths)
+        writer.write('new entry\n')
+    assert current.stat().st_ino == inode
+    assert current.read_text() == 'new entry\n'
+    assert history.read_text() == 'saved incidents'
+    assert unrelated.read_text() == 'keep this'
+
+
+def test_clear_logs_skips_missing_files(tmp_path: Path) -> None:
+    completed = subprocess.run(
+        ['/bin/sh', '-c', logs.remote_clear_logs_command(tmp_path)],
+        env=dict(os.environ, HOME=str(tmp_path)),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert 'Cleared 0 log files.' in completed.stdout
+    assert list(tmp_path.iterdir()) == []

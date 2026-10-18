@@ -3,6 +3,8 @@ from __future__ import annotations
 import subprocess
 import sys
 from collections.abc import Callable, Sequence
+from pathlib import Path
+from shlex import quote
 from subprocess import CompletedProcess
 from typing import Annotated, TextIO
 
@@ -21,6 +23,30 @@ class LogsOptions(BaseModel, frozen=True):
     services: Annotated[list[str], tyro.conf.Positional] = Field(default_factory=list)
     lines: int = 50
     host: str | None = None
+
+
+class ClearLogsOptions(BaseModel, frozen=True):
+    pass
+
+
+def clear_main(argv: list[str] | None = None) -> int:
+    tyro.cli(
+        ClearLogsOptions,
+        args=sys.argv[1:] if argv is None else argv,
+        description='Clear managed service log files on the showCo target',
+    )
+    machine_role.require_provisioning_machine('showco clear-logs')
+    provision_config = update.provisioning_config()
+    completed = run_command_with_timeout(
+        ssh.ssh_command(
+            provision_config,
+            provision_config.ssh_target,
+            remote_clear_logs_command(provision_config.paths.root),
+        )
+    )
+    sys.stdout.write(completed.stdout)
+    sys.stderr.write(completed.stderr)
+    return completed.returncode
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -76,6 +102,38 @@ def remote_logs_command(services: list[str], lines: int) -> str:
         f'"$HOME/.local/state/{service}/{service}.log"' for service in services
     )
     return f'tail --lines={lines} {paths}'
+
+
+def remote_clear_logs_command(root: Path) -> str:
+    services = ' '.join(SERVICE_NAMES)
+    errors = quote(str(root / 'showco/showco-errors.txt'))
+    return f"""status=0
+count=0
+for service in {services}; do
+    for path in "$HOME/.local/state/$service/$service.log" \
+"$HOME/.local/state/$service/$service.log."*; do
+        if [ -f "$path" ] && [ ! -L "$path" ]; then
+            if : > "$path"; then
+                count=$((count + 1))
+            else
+                status=1
+            fi
+        fi
+    done
+done
+path={errors}
+if [ -f "$path" ] && [ ! -L "$path" ]; then
+    if : > "$path"; then
+        count=$((count + 1))
+    else
+        status=1
+    fi
+fi
+printf 'Cleared %s log files.\\n' "$count"
+printf '%s\\n' 'Running services may write new entries immediately.' \
+    'Shared systemd journal, monitoring and recording history retained.'
+exit "$status"
+"""
 
 
 def run_command_with_timeout(command: Sequence[str]) -> CompletedProcess[str]:
