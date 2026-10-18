@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from reccy import cli
 from reccy.runtime import logging
 
-from .deployment import bundle, card, deploy, logs, machine_role, panel, python
+from .deployment import bundle, card, deploy, logs, machine_role, panel, python, report
 from .provision import network
 from .runtime import gui_schema, rehearsal, services
 from .runtime.mixer import MixersMonitor, load_mixer_specs
@@ -140,6 +140,7 @@ def main(argv: list[str] | None = None) -> int:
                             'prepare-card': card.main,
                             'deploy': deploy.main,
                             'logs': logs.main,
+                            'report': report.main,
                             'panel': panel.main,
                             'python': python.main,
                             'streamo': streamo_command,
