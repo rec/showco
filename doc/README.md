@@ -25,7 +25,7 @@ Open showCo on the show network at the configured address and port. The Health p
 
 | Page | Use it for |
 | --- | --- |
-| Show | First page: Twitch status, an on/off button, and Teardown. Twitch switching leaves recs unchanged. After a streamO error or disconnection, the button restarts streamO. It is disabled during startup, stopping, or closing. |
+| Show | First page: observed faults, Start/Stop Twitch, and End show. Twitch switching leaves recs unchanged. After a streamO error or disconnection, the button retries streamO. Starting is disabled after teardown; use Resume show on Actions. |
 | Lighting cues | Named lighting looks, Go/Back, current/next cue position, and live lyte state. |
 | Performance | Manual song cues, large marker and pause/resume controls, recording destination and capacity, stream state, pinned inputs, dimming, and optional screen-awake mode. |
 | Set list | Prepare and reorder songs, notes, and expected durations. |
@@ -40,13 +40,17 @@ Open showCo on the show network at the configured address and port. The Health p
 | Errors | See up to 25 recs errors from the current showCo process. |
 
 The **Show** tab opens by default. Switching Twitch does not start a new recs
-session or pause recording. **Teardown** runs the existing closing credits and
+session or pause recording. **End show** runs the existing closing credits and
 fades when broadcasting, then pauses recs and starts the configured teardown
 music. If Twitch is already stopped, teardown music starts without credits.
 Performance lock also blocks these buttons.
-After teardown is requested, both Teardown buttons become **Restart**. Restart
-stops the closing observer, fades out teardown music, restores the room mix,
-starts a new recs session, and restarts Twitch. This also works during credits.
+**End show** always ends the show; it never becomes a restart action. It is
+disabled during closing and after teardown finishes. A broadcast that is live
+despite a saved teardown phase can still be ended with this button.
+**Resume show** is a separate control on **Actions**. It stops the closing
+observer, fades out teardown music, restores the room mix, starts a new recs
+session, and restarts Twitch. This also works during credits. Starting Twitch
+alone after teardown is blocked so it cannot bypass restoring the show.
 
 The browser refreshes status and channel data. Waveforms use a dedicated event stream and resynchronize after a delayed browser connection. An unavailable optional service does not make the other pages unavailable.
 

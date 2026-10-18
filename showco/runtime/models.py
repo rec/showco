@@ -157,6 +157,15 @@ class StreamoStatus(BaseModel, frozen=True):
 
     @computed_field
     @property
+    def toggle_starts_stream(self) -> bool:
+        return (
+            self.stream_state in {'stopped', 'failed'}
+            or not self.service.fresh
+            or self.service.last_error is not None
+        )
+
+    @computed_field
+    @property
     def toggle_available(self) -> bool:
         return (
             self.service.state in {'connected', 'offline', 'error'}
@@ -300,3 +309,15 @@ class ShowStatus(BaseModel, frozen=True):
     active_faults: list[ActiveFault] = Field(default_factory=list)
     observed_at: datetime | None = None
     monitoring_error: str | None = None
+
+    @computed_field
+    @property
+    def end_show_available(self) -> bool:
+        return (
+            not self.performance_locked
+            and self.music.mode not in {'closing', 'transitioning', 'fault'}
+            and (
+                self.music.mode != 'teardown'
+                or self.streamo.stream_state in {'streaming', 'muted'}
+            )
+        )

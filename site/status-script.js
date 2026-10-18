@@ -164,12 +164,6 @@
   }
 
   function updateConfiguredActions(status) {
-    for (const form of document.querySelectorAll('form[data-teardown-label]')) {
-      const restart = status.music.restart_available;
-      form.querySelector('[name="action"]').value = restart ? "music-restart" : "music-teardown";
-      form.querySelector("button").textContent = restart ? "Restart" : form.dataset.teardownLabel;
-      form.dataset.confirm = restart ? "false" : "true";
-    }
     for (const button of document.querySelectorAll('form[data-disabled-when] button')) {
       const form = button.closest("form");
       if (form.dataset.disabledWhen === "streamo_unavailable"
@@ -177,11 +171,15 @@
         button.textContent = status.streamo.toggle_label;
       }
       button.disabled = button.hasAttribute("aria-busy")
+        || (form.dataset.action === "music-teardown" && !status.end_show_available)
+        || (form.dataset.action === "music-restart"
+          && (!status.music.restart_available || status.performance_locked))
         || (form.dataset.disabledWhen === "playback_waiting"
           && status.recs.playback.state === "waiting")
         || (form.dataset.disabledWhen === "streamo_unavailable"
           && (!status.streamo.toggle_available || status.performance_locked
-            || ["closing", "transitioning", "fault"].includes(status.music.mode)));
+            || ["closing", "transitioning", "fault"].includes(status.music.mode)
+            || (status.music.mode === "teardown" && status.streamo.toggle_starts_stream)));
     }
   }
 

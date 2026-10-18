@@ -124,28 +124,41 @@ vm.runInContext('updateStatus()', context).then(async () => {
   assert.equal(toggle.textContent, 'Starting...');
   toggle.busy = false;
 
-  const teardownForms = ['Teardown', 'Tear down with closing credits'].map(label => ({
-    dataset: {teardownLabel: label, confirm: 'true'},
+  context.toggleStatus.music = {...status.music, mode: 'teardown'};
+  context.toggleStatus.streamo.toggle_starts_stream = true;
+  vm.runInContext('updateConfiguredActions(toggleStatus)', context);
+  assert.equal(toggle.disabled, true);
+  context.toggleStatus.streamo.toggle_starts_stream = false;
+  vm.runInContext('updateConfiguredActions(toggleStatus)', context);
+  assert.equal(toggle.disabled, false);
+
+  const endForm = {
+    dataset: {action: 'music-teardown', disabledWhen: '', confirm: 'true'},
     action: {value: 'music-teardown'},
-    button: {textContent: label},
-    querySelector(selector) {return selector === 'button' ? this.button : this.action;},
-  }));
+  };
+  const resumeForm = {dataset: {action: 'music-restart', disabledWhen: ''}};
+  const end = {
+    textContent: 'End show', hasAttribute() {return false;}, closest() {return endForm;},
+  };
+  const resume = {
+    textContent: 'Resume show', hasAttribute() {return false;}, closest() {return resumeForm;},
+  };
   context.document.querySelectorAll = selector =>
-    selector === 'form[data-teardown-label]' ? teardownForms : [];
-  context.restartStatus = {...status, music: {...status.music, restart_available: true}};
+    selector === 'form[data-disabled-when] button' ? [end, resume] : [];
+  context.restartStatus = {...status, end_show_available: false,
+    music: {...status.music, restart_available: true}};
   vm.runInContext('updateConfiguredActions(restartStatus)', context);
-  for (const form of teardownForms) {
-    assert.equal(form.action.value, 'music-restart');
-    assert.equal(form.button.textContent, 'Restart');
-    assert.equal(form.dataset.confirm, 'false');
-  }
+  assert.equal(end.disabled, true);
+  assert.equal(resume.disabled, false);
+  assert.equal(endForm.action.value, 'music-teardown');
+  assert.equal(endForm.dataset.confirm, 'true');
+  assert.equal(end.textContent, 'End show');
+  assert.equal(resume.textContent, 'Resume show');
+  context.restartStatus.end_show_available = true;
   context.restartStatus.music.restart_available = false;
   vm.runInContext('updateConfiguredActions(restartStatus)', context);
-  for (const form of teardownForms) {
-    assert.equal(form.action.value, 'music-teardown');
-    assert.equal(form.button.textContent, form.dataset.teardownLabel);
-    assert.equal(form.dataset.confirm, 'true');
-  }
+  assert.equal(end.disabled, false);
+  assert.equal(resume.disabled, true);
 
   const fields = [
     {dataset: {value: 'item.name', format: 'bold'}, textContent: ''},

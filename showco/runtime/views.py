@@ -205,11 +205,16 @@ def _gui_enabled(
 
 
 def _gui_disabled(element: gui_schema.Element, status: models.ShowStatus) -> bool:
+    if element.action == 'music-teardown':
+        return not status.end_show_available
+    if element.action == 'music-restart':
+        return not status.music.restart_available or status.performance_locked
     if element.disabled_when == 'streamo_unavailable':
         return (
             not status.streamo.toggle_available
             or status.performance_locked
             or status.music.mode in {'closing', 'transitioning', 'fault'}
+            or (status.music.mode == 'teardown' and status.streamo.toggle_starts_stream)
         )
     return (
         element.disabled_when == 'playback_waiting'

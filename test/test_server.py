@@ -400,7 +400,37 @@ class ServerTests(unittest.TestCase):
         stream.action.assert_not_called()
         restart.assert_not_called()
 
-    def test_restart_button_uses_record_transition_only_after_teardown(self) -> None:
+    def test_twitch_start_after_teardown_requires_explicit_resume(self) -> None:
+        stream = mock.Mock()
+        restart = mock.Mock()
+        controller = mock.Mock()
+        controller.status.return_value = models.MusicStatus(mode='teardown')
+        app = ShowcoApp(
+            mock.Mock(),
+            stream,
+            rehearsal.RehearsalSystemMonitor(),
+            rehearsal.RehearsalMixersMonitor(),
+            streamo_restart=restart,
+            music_controller=controller,
+        )
+        for connection, state in [
+            ('connected', 'stopped'),
+            ('connected', 'failed'),
+            ('offline', 'unknown'),
+        ]:
+            with self.subTest(connection=connection, state=state):
+                stream.status.return_value = models.StreamoStatus(
+                    service=models.ServiceStatus(name='streamo', state=connection),
+                    stream_state=state,
+                )
+                outcome = app.run_action({'action': 'streamo-toggle'})
+                self.assertFalse(outcome.ok)
+                self.assertIn('Resume show', outcome.message)
+        restart.assert_not_called()
+        stream.action.assert_not_called()
+        controller.record.assert_not_called()
+
+    def test_resume_show_uses_record_transition_only_after_teardown(self) -> None:
         controller = mock.Mock()
         controller.status.return_value = models.MusicStatus(mode='teardown')
         controller.record.return_value = models.ActionResult(

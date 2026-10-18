@@ -205,6 +205,8 @@ class MusicController:
         if self.streamo is not None and self.streamo.status().stream_state != 'stopped':
             return self._request_closing()
         self._require_no_closing()
+        if self.mode == 'teardown':
+            return models.ActionResult(ok=True, message='The show has already ended')
         return self._transition(
             'teardown',
             'Recording stopped; teardown music is playing'
@@ -235,7 +237,10 @@ class MusicController:
     def _request_closing(self) -> models.ActionResult:
         assert self.streamo is not None
         with self.closing_lock:
-            if self.closing_record is not None:
+            if (
+                self.closing_record is not None
+                and self.closing_record.phase != 'teardown-music-playing'
+            ):
                 return models.ActionResult(
                     ok=False,
                     message='A closing operation already exists; review its status',
@@ -245,7 +250,11 @@ class MusicController:
                     ok=False,
                     message='Resolve the current music transition before closing',
                 )
-            scene = self.routing.capture_room()
+            scene = (
+                self.closing_record.room_scene
+                if self.closing_record is not None
+                else self.routing.capture_room()
+            )
             record = ClosingRecord(
                 operation_id=str(uuid.uuid4()),
                 phase='credits-requesting',
