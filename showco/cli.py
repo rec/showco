@@ -140,6 +140,7 @@ def main(argv: list[str] | None = None) -> int:
                             'prepare-card': card.main,
                             'deploy': deploy.main,
                             'logs': logs.main,
+                            'clear-logs': logs.clear_main,
                             'report': report.main,
                             'panel': panel.main,
                             'python': python.main,

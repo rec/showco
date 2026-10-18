@@ -344,6 +344,14 @@ showco logs
 showco logs recs showco --lines 500
 ```
 
+`showco clear-logs` truncates the current and rotated log files for showCo, recs,
+streamO and lyte, plus the target checkout's `showco-errors.txt`. It does not
+restart services; new entries can appear immediately. Missing files are skipped,
+and failures produce a nonzero exit status. The shared systemd journal cannot be
+cleared selectively by service and remains intact, as do recordings, session
+journals, monitoring history and saved incidents. This removes evidence used by
+`showco report`, so generate any needed report first.
+
 `showco report` reads the target without restarting services or changing recordings.
 It starts with the latest recs session and includes preceding sessions until a gap
 of three hours or more. Change that threshold with `showco report --gap-hours 2`.
