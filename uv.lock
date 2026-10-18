@@ -7,7 +7,7 @@ resolution-markers = [
 ]
 
 [options]
-exclude-newer = "2026-10-09T21:23:45.005769Z"
+exclude-newer = "2026-10-11T13:57:45.791738Z"
 exclude-newer-span = "P1W"
 
 [[package]]
@@ -1309,10 +1309,11 @@ wheels = [
 
 [[package]]
 name = "ufor"
-version = "0.1.0"
-source = { git = "https://github.com/rec/ufor.git?branch=main#1239e4586cee42032be5fc29bfb9516e21324b92" }
+version = "0.2.0"
+source = { git = "https://github.com/rec/ufor.git?branch=main#2d3378a8ec8a8b09cda18256d306cc9031b82c04" }
 dependencies = [
     { name = "pydantic" },
+    { name = "reccy" },
     { name = "tomlkit" },
 ]
 
