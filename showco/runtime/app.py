@@ -395,11 +395,13 @@ class ShowcoApp:
                     message='Twitch switching is unavailable during a transition '
                     'or closing sequence, or when streamO is disabled',
                 )
-            if (
-                status.stream_state in {'stopped', 'failed'}
-                or not status.service.fresh
-                or status.service.last_error is not None
-            ):
+            if status.toggle_starts_stream:
+                if self.music is not None and self.music.status().mode == 'teardown':
+                    return models.ActionResult(
+                        ok=False,
+                        message='The show has ended. Use Resume show on Actions to '
+                        'restore the room mix and recording before broadcasting.',
+                    )
                 return self.streamo_restart()
             result = self.streamo.action('stop')
             if not result.ok:

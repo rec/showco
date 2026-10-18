@@ -19,7 +19,7 @@ disabled_when = "streamo_unavailable"
 [[pages.sections.elements]]
 name = "teardown"
 kind = "action_button"
-label = "Teardown"
+label = "End show"
 action = "music-teardown"
 
 [[pages.sections.elements]]
@@ -1616,7 +1616,7 @@ visible_when = "music_enabled"
 [[pages.sections.elements]]
 name = "music-teardown"
 kind = "action_button"
-label = "Tear down with closing credits"
+label = "End show"
 action = "music-teardown"
 visible_when = "music_enabled"
 
@@ -1624,6 +1624,13 @@ visible_when = "music_enabled"
 name = "music-teardown-effects"
 kind = "text"
 label = "With streamO: starts closing credits while recs and the room mix continue; fades the broadcast and then the room mix; after the broadcast stops, pauses recs and fades in teardown music. Without streamO: pauses recs and starts teardown music immediately."
+visible_when = "music_enabled"
+
+[[pages.sections.elements]]
+name = "music-resume"
+kind = "action_button"
+label = "Resume show"
+action = "music-restart"
 visible_when = "music_enabled"
 
 [[pages.sections.elements]]

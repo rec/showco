@@ -74,20 +74,22 @@ def test_show_page_has_only_faults_toggle_and_teardown(
     assert 'id="monitoring-error"' not in html
     assert 'id="twitch-status"' not in html
     assert 'function updateConfiguredActions(status)' in html
-    assert '<button>Teardown</button>' in html
+    assert '<button>End show</button>' in html
     assert 'data-disabled-when="" data-confirm="true"' in html
 
 
 @pytest.mark.parametrize('page', ['show', 'actions'])
 @pytest.mark.parametrize('mode', ['closing', 'teardown', 'record'])
-def test_teardown_buttons_follow_shared_show_mode(page: str, mode: str) -> None:
+@pytest.mark.parametrize('stream', ['stopped', 'streaming'])
+def test_end_show_never_becomes_resume(page: str, mode: str, stream: str) -> None:
     document = gui_schema.load_gui(gui_schema.DEFAULT_GUI_PATH)
     status = models.ShowStatus(
         recs=models.RecsStatus(
             service=models.ServiceStatus(name='recs', state='connected')
         ),
         streamo=models.StreamoStatus(
-            service=models.ServiceStatus(name='streamo', state='connected')
+            service=models.ServiceStatus(name='streamo', state='connected'),
+            stream_state=stream,
         ),
         music=models.MusicStatus(mode=mode),
     )
@@ -96,14 +98,23 @@ def test_teardown_buttons_follow_shared_show_mode(page: str, mode: str) -> None:
         document.page(page), status, features={'music_enabled'}
     )
 
-    if mode == 'record':
-        assert 'value="music-teardown"' in html
-        assert 'data-confirm="true" data-teardown-label=' in html
-        assert '<button>Restart</button>' not in html
-    else:
+    assert 'value="music-teardown"' in html
+    assert 'data-disabled-when="" data-confirm="true"' in html
+    disabled = mode == 'closing' or (mode == 'teardown' and stream == 'stopped')
+    assert f'<button{" disabled" if disabled else ""}>End show</button>' in html
+    assert '<button>Restart</button>' not in html
+    if page == 'actions':
         assert 'value="music-restart"' in html
-        assert 'data-confirm="false" data-teardown-label=' in html
-        assert '<button>Restart</button>' in html
+        assert (
+            f'<button{" disabled" if mode == "record" else ""}>Resume show</button>'
+            in html
+        )
+    else:
+        assert 'value="music-restart"' not in html
+        if mode == 'teardown':
+            label = 'Start' if stream == 'stopped' else 'Stop'
+            attributes = ' disabled' if stream == 'stopped' else ''
+            assert f'<button{attributes}>{label} Twitch</button>' in html
 
 
 def test_alternate_gui_changes_performance_page_without_code_changes() -> None:

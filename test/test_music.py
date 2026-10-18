@@ -291,6 +291,55 @@ def test_restart_from_teardown_resumes_recording_and_stops_music() -> None:
     assert value.status().mode == 'record'
 
 
+def test_repeated_end_show_does_not_restart_teardown_music() -> None:
+    value, recs, player, routing = controller()
+    assert value.teardown().ok
+    for dependency in (recs, player, routing):
+        dependency.reset_mock()
+    assert value.teardown().ok
+    assert value.status().mode == 'teardown'
+    recs.pause_recording.assert_not_called()
+    player.start.assert_not_called()
+    routing.enable.assert_not_called()
+
+
+def test_live_broadcast_can_end_again_after_saved_teardown(tmp_path: Path) -> None:
+    path = tmp_path / 'closing.json'
+    scene = x18_music.RoomScene(master_fader=0.7, input_lr=[1] * 18)
+    path.write_text(
+        music.ClosingRecord(
+            operation_id='previous-show',
+            phase='teardown-music-playing',
+            room_scene=scene,
+        ).model_dump_json()
+    )
+    _, recs, player, routing = controller()
+    stream = mock.Mock()
+    stream.status.return_value = models.StreamoStatus(
+        service=models.ServiceStatus(name='streamo', state='connected'),
+        stream_state='streaming',
+    )
+    value = music.MusicController(
+        recs,
+        player,
+        routing,
+        music.MusicConfig(),
+        streamo=stream,
+        closing_state_path=path,
+    )
+    try:
+        assert value.status().mode == 'teardown'
+        assert value.teardown().ok
+        saved = music.ClosingRecord.model_validate_json(path.read_text())
+        assert saved.operation_id != 'previous-show'
+        assert saved.room_scene == scene
+        stream.start_closing.assert_called_once_with(saved.operation_id)
+        assert value.status().mode == 'closing'
+        recs.pause_recording.assert_not_called()
+    finally:
+        value.close()
+
+
 def test_restart_waits_for_closing_observer_before_changing_recording() -> None:
     value, recs, player, routing = controller()
     value.closing_thread = mock.Mock()
