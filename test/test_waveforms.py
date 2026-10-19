@@ -3,6 +3,7 @@ from unittest import mock
 
 import pytest
 from reccy.protocol import rpc
+from test_recs import waveform_batch, waveform_layout
 
 from showco.runtime import waveforms
 from showco.runtime.recs_control import RecsControlClient
@@ -100,3 +101,43 @@ def test_inactive_waveform_subscription_is_closed_without_waiting() -> None:
     client.wait_closed.assert_not_called()
     client.close.assert_called_once_with()
     assert bridge.thread is not None and not bridge.thread.is_alive()
+
+
+def test_disconnect_clears_history_and_requests_browser_resynchronization() -> None:
+    disconnected = Event()
+    retrying = Event()
+    client = mock.Mock(spec=rpc.EventClient)
+    client.wait_closed.side_effect = lambda timeout: disconnected.wait(timeout)
+    control = mock.Mock(spec=RecsControlClient)
+    control.call.return_value = {'type': 'waveform_subscription', 'active': True}
+    bridge = waveforms.WaveformBridge(
+        event_client=lambda receive: client, control=control
+    )
+
+    def retry(timeout: float) -> bool:
+        retrying.set()
+        return bridge.stopped.wait(timeout)
+
+    with mock.patch.object(waveforms, 'WAVEFORM_RECONNECT_SECONDS', 10):
+        bridge.start()
+        try:
+            bridge.receive(
+                rpc.Event(name='waveform_layout', data=waveform_layout().model_dump())
+            )
+            bridge.receive(
+                rpc.Event(name='waveform', data=waveform_batch().model_dump())
+            )
+            layouts, batches, cursor = bridge.snapshot()
+            assert len(layouts) == len(batches) == 1
+            disconnected.set()
+            deadline = Event()
+            for _ in range(100):
+                if bridge.snapshot()[2] > cursor:
+                    break
+                deadline.wait(0.01)
+            layouts, batches, changed = bridge.snapshot()
+            assert layouts == [] and batches == []
+            assert changed > cursor
+            assert bridge.events_since(cursor) == (True, [])
+        finally:
+            bridge.close()
