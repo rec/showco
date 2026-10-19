@@ -187,3 +187,38 @@ def test_oauth_transport_failure_has_deadline_and_useful_error(
         with pytest.raises(SystemExit, match='OAuth HTTP request failed'):
             auth.request_http(auth.request.Request('https://example.invalid'))
     assert open_request.call_args.kwargs['timeout'] == 10
+
+
+@pytest.mark.parametrize(
+    'assignment',
+    [
+        'access_token="old"',
+        '  access_token = "old" # comment',
+        '"access_token" = "old"',
+        "access_token = '''old\nmultiline'''",
+        'access_token = "old"',
+    ],
+)
+def test_toml_update_handles_existing_formatting_without_duplicate_keys(
+    tmp_path: Path, assignment: str
+) -> None:
+    path = tmp_path / 'config.toml'
+    path.write_text(
+        '[stream] # table comment\n# keep this comment\n'
+        + assignment
+        + '\nother = "unchanged"\n[nested]\nvalue = "preserved"\n'
+    )
+    auth.write_toml_value(path, 'stream', 'access_token', 'new')
+    data = config.read_toml(path)
+    assert data['stream'] == {'access_token': 'new', 'other': 'unchanged'}
+    assert data['nested'] == {'value': 'preserved'}
+    assert '# keep this comment' in path.read_text()
+
+
+def test_unsupported_inline_table_update_preserves_original(tmp_path: Path) -> None:
+    path = tmp_path / 'config.toml'
+    original = 'stream = { access_token = "old" }\n'
+    path.write_text(original)
+    with pytest.raises(ValueError, match='file unchanged'):
+        auth.write_toml_value(path, 'stream', 'access_token', 'new')
+    assert path.read_text() == original
