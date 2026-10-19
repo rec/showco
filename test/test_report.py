@@ -53,7 +53,7 @@ def test_gap_must_be_positive_and_finite(gap: float) -> None:
         report.ReportOptions(gap_hours=gap)
 
 
-def test_logs_filter_window_group_losses_and_measure_encoder_resets(
+def test_logs_group_losses_without_joining_unidentified_encoder_attempts(
     tmp_path: Path,
 ) -> None:
     directory = tmp_path / 'streamo'
@@ -69,14 +69,14 @@ def test_logs_filter_window_group_losses_and_measure_encoder_resets(
     newer.write_text(
         'bad timestamp ERROR ignored\n'
         '2026-10-16T18:00:12Z ERROR Dropped 200 frames in processing\n'
-        '2026-10-16T18:01:00Z INFO FFmpeg: out_time_us=0\n'
-        '2026-10-16T18:01:20Z INFO FFmpeg: out_time_us=20000000\n'
+        '2026-10-16T18:01:00Z INFO FFmpeg: out_time_us=100000000\n'
+        '2026-10-16T18:01:20Z INFO FFmpeg: out_time_us=120000000\n'
         '2026-10-16T20:00:00Z ERROR future failure\n'
     )
     seconds, issues = report_scan.log_evidence(
         [newer, older], START, START + timedelta(hours=1)
     )
-    assert seconds == 30
+    assert seconds is None
     assert issues == {'streamo: Dropped frames in processing': 2}
     assert report_scan.log_evidence([], START, START)[0] is None
 

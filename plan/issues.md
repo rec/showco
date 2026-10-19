@@ -29,18 +29,6 @@ across invocations is not a requirement.
 
 ## Configuration, authentication, and reporting
 
-### 25. P2: Broadcast-duration arithmetic can join unrelated encoder attempts
-
-`deployment/report_scan.py:log_evidence()` sorts progress records by time and
-sums every nondecreasing counter difference. It detects a restart only when the
-counter decreases. If a new encoder's first retained counter exceeds the previous
-encoder's last retained counter, their difference is counted despite crossing
-attempts. With missing/rotated logs this can overcount, so the reported “at least”
-duration is not reliably a lower bound.
-
-Associate progress with encoder attempts or omit uncertain boundary differences.
-Check two attempts whose retained counters increase across the restart.
-
 ## API shape, duplication, and module boundaries
 
 ### 26. P3: Status names imply stronger guarantees than they provide

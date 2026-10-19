@@ -73,7 +73,6 @@ def safe_message(message: str) -> str:
 def log_evidence(
     paths: list[Path], start: datetime, end: datetime
 ) -> tuple[float | None, dict[str, int]]:
-    progress: list[tuple[datetime, float]] = []
     issues: Counter[str] = Counter()
     for path in paths:
         with path.open(errors='replace') as source:
@@ -92,17 +91,9 @@ def log_evidence(
                     # Repeated audio losses differ only in their frame count.
                     message = re.sub(r'Dropped \d+ frames', 'Dropped frames', message)
                     issues[f'{path.parent.name}: {message}'] += 1
-                if path.parent.name == 'streamo' and (
-                    match := re.search(r'\bout_time_us=(\d+)\b', parts[2])
-                ):
-                    progress.append((when, int(match[1]) / 1_000_000))
-    progress.sort(key=lambda p: p[0])
-    seconds = 0.0
-    for previous, current in zip(progress, progress[1:], strict=False):
-        # Counter resets start a new encoder attempt, not a negative duration.
-        if current[1] >= previous[1]:
-            seconds += current[1] - previous[1]
-    return (seconds if len(progress) >= 2 else None), dict(issues)
+    # Progress counters lack attempt IDs, so even increasing values may span
+    # separate encoders. They cannot establish a broadcast duration lower bound.
+    return None, dict(issues)
 
 
 def recording_roots(home: Path, limitations: list[str]) -> list[Path]:
@@ -275,8 +266,8 @@ def collect(gap_hours: float, home: Path | None = None) -> Report:
         'Unmounted disks are not searched.',
         'Histories have finite retention; issue observations can overlap '
         'between sources.',
-        'Broadcast is a lower bound from retained encoder progress, not proof '
-        'of Twitch delivery. Missing starts/stops cannot be reconstructed.',
+        'Broadcast duration is unknown: retained encoder progress lacks reliable '
+        'attempt identifiers and does not prove Twitch delivery.',
     ]
     sessions = select_sessions(
         recording_sessions(recording_roots(home, limitations), limitations), gap_hours
