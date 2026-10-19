@@ -11,6 +11,7 @@ from urllib import error, parse, request
 
 import tyro
 from pydantic import BaseModel
+from reccy.runtime.files import atomic_output
 
 from ..provision import config
 
@@ -108,7 +109,8 @@ def exchange_code(config_path: Path, secrets_path: Path) -> int:
     redirect_uri = require_value(stream, 'redirect_uri')
     callback = require_value(stream, 'callback_url_or_code')
     config_dir = Path.home() / '.config/streamo'
-    config_dir.mkdir(parents=True, exist_ok=True)
+    config_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    config_dir.chmod(0o700)
     response_file = config_dir / 'oauth-response.json'
     data = parse.urlencode(
         {
@@ -121,7 +123,7 @@ def exchange_code(config_path: Path, secrets_path: Path) -> int:
     ).encode()
     http_request = request.Request(STREAM_TOKEN_URL, data=data, method='POST')
     http_response = request_http(http_request)
-    response_file.write_text(http_response.text + '\n')
+    write_private(response_file, http_response.text + '\n')
     try:
         response = json.loads(http_response.text)
     except json.JSONDecodeError:
@@ -149,10 +151,13 @@ def exchange_code(config_path: Path, secrets_path: Path) -> int:
     access_token = response['access_token']
     if not isinstance(access_token, str):
         raise ValueError('Stream returned an invalid access token')
-    write_toml_value(secrets_path, 'stream', 'access_token', access_token)
-    (config_dir / 'oauth-token').write_text(access_token + '\n')
+    with atomic_output(secrets_path) as temporary:
+        if secrets_path.exists():
+            temporary.write_text(secrets_path.read_text())
+        write_toml_value(temporary, 'stream', 'access_token', access_token)
+    write_private(config_dir / 'oauth-token', access_token + '\n')
     if refresh_token := response.get('refresh_token'):
-        (config_dir / 'refresh-token').write_text(refresh_token + '\n')
+        write_private(config_dir / 'refresh-token', refresh_token + '\n')
 
     print(f'Saved full response to {response_file}')
     print(f'Saved access token to {config_dir / "oauth-token"}')
@@ -161,6 +166,11 @@ def exchange_code(config_path: Path, secrets_path: Path) -> int:
     print()
     print('Run showco streamo validate-token next.')
     return 0
+
+
+def write_private(path: Path, value: str) -> None:
+    with atomic_output(path) as temporary:
+        temporary.write_text(value)
 
 
 def validate_token(values: dict[str, object]) -> int:

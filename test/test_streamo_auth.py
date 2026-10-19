@@ -117,3 +117,32 @@ def config_paths(directory: Path) -> tuple[Path, Path]:
 
 if __name__ == '__main__':
     unittest.main()
+
+
+def test_token_files_and_directory_are_private_even_when_replacing_existing_files(
+    tmp_path: Path,
+) -> None:
+    config_path, secrets_path = config_paths(tmp_path)
+    directory = tmp_path / '.config/streamo'
+    directory.mkdir(parents=True)
+    directory.chmod(0o755)
+    for name in ['oauth-response.json', 'oauth-token', 'refresh-token']:
+        path = directory / name
+        path.write_text('old')
+        path.chmod(0o644)
+    secrets_path.chmod(0o644)
+    with (
+        mock.patch.object(auth.Path, 'home', return_value=tmp_path),
+        mock.patch.object(
+            auth,
+            'request_http',
+            return_value=auth.HttpResponse(
+                status=200,
+                text='{"access_token":"test","refresh_token":"test-refresh"}',
+            ),
+        ),
+    ):
+        assert auth.exchange_code(config_path, secrets_path) == 0
+    assert directory.stat().st_mode & 0o777 == 0o700
+    for path in [secrets_path, *directory.iterdir()]:
+        assert path.stat().st_mode & 0o777 == 0o600

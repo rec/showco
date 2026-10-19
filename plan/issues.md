@@ -29,17 +29,6 @@ across invocations is not a requirement.
 
 ## Configuration, authentication, and reporting
 
-### 21. P2: OAuth token files use ambient filesystem permissions
-
-`streamo/auth.py:103`, `exchange_code()`, uses plain `write_text()` for the full
-OAuth response, access token, refresh token, and secrets update. New token files
-and their directory get ambient umask permissions; a 022 umask makes them
-readable by other local users. Existing permissive files are not tightened either.
-
-Create credential files and directories privately and preserve that policy on
-replacement. Check modes under a permissive test umask with fake token responses,
-without printing credentials.
-
 ### 22. P2: OAuth callback state is generated but never checked
 
 `streamo/auth.py:81,184`, `authorize_url()` saves random state, but
