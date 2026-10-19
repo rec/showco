@@ -74,7 +74,13 @@ The same problem occurs when streamO reports failure and saving it fails.
 Publish the in-memory fault even if persistence fails, and expose observer death.
 Check failed saves during both finalization and failure handling.
 
-### 4. P1: Closing cleanup races an observer that has not stopped
+### 4. Resolved: Closing cleanup races an observer that has not stopped
+
+As requested, shutdown now waits for the closing observer to exit before
+stopping playback or muting returns. A regression holds finalization beyond the
+old five-second timeout and verifies cleanup occurs only after it is released.
+Validation: music tests, full pytest suite, Ruff, ty, pyupgrade, and diff checks.
+Shutdown can consequently take as long as an in-flight observer operation.
 
 `runtime/music.py:613`, `MusicController.close()`, joins the observer for five
 seconds, then proceeds without checking `is_alive()`. Unlike `record(restart=True)`

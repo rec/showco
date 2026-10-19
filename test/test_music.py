@@ -1096,3 +1096,54 @@ def test_closing_fault_is_reported_when_failure_record_cannot_be_saved(
     assert value.closing_record.error == status.error
     assert recs.pause_recording.called == finalizing
     value.close()
+
+
+def test_shutdown_waits_for_finalization_before_muting_returns() -> None:
+    value, recs, player, routing = controller()
+    paused = threading.Event()
+    release = threading.Event()
+    closed = threading.Event()
+
+    def pause() -> bool:
+        paused.set()
+        assert release.wait(timeout=15)
+        return True
+
+    def close() -> None:
+        value.close()
+        closed.set()
+
+    recs.pause_recording.side_effect = pause
+    routing.capture_room.return_value = x18_music.RoomScene(
+        master_fader=0.7, input_lr=[1] * 18
+    )
+    stream = mock.Mock()
+    stream.status.return_value = models.StreamoStatus(
+        service=models.ServiceStatus(name='streamo', state='connected'),
+    )
+    value.streamo = stream
+    assert value.teardown().ok
+    assert value.closing_record is not None
+    stream.status.return_value = models.StreamoStatus(
+        service=models.ServiceStatus(name='streamo', state='connected'),
+        closing=models.ClosingStatus(
+            operation_id=value.closing_record.operation_id, state='completed'
+        ),
+    )
+    assert paused.wait(timeout=5)
+    shutdown = threading.Thread(target=close)
+    shutdown.start()
+    try:
+        assert not closed.wait(timeout=5.2)
+        player.stop.assert_not_called()
+        routing.disable.assert_not_called()
+        player.start.assert_not_called()
+    finally:
+        release.set()
+        shutdown.join(timeout=5)
+    assert closed.is_set()
+    player.start.assert_called_once()
+    player.stop.assert_called_once_with(0.0)
+    routing.disable.assert_called_once_with()
+    assert value.closing_thread is not None
+    assert not value.closing_thread.is_alive()
