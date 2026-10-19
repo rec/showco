@@ -25,18 +25,6 @@ across invocations is not a requirement.
 
 ## Operational correctness and recovery
 
-### 9. P2: Workflow polls can occupy all health slots behind a long action
-
-`runtime/server.py:69` takes `action_lock` for `/workflow-status`; actions hold
-that lock across fades, RPCs, restarts, and filesystem operations. Workflow and
-ordinary status requests share two `status_slots`. Two workflow requests can
-occupy both while waiting for an action, causing ordinary `/status` polls to get
-503 even though those polls do not require `action_lock`. Browser aborts do not
-cancel the server threads waiting for the lock.
-
-Avoid reserving all health capacity for requests waiting on actions. Check two
-workflow polls during a blocked action, then an independent `/status` request.
-
 ### 10. P2: Provisioning subprocess timeouts can hang in output cleanup
 
 `provision/ssh.py:305`, `run_command()`, starts a new session, kills only the

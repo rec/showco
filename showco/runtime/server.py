@@ -71,8 +71,13 @@ class ShowcoHandler(BaseHTTPRequestHandler):
             self._json(self.app.status())
             return
         if self.path == '/workflow-status':
-            with self.app.action_lock:
+            if not self.app.action_lock.acquire(blocking=False):
+                self.send_error(503, 'A showCo action is in progress; retry shortly')
+                return
+            try:
                 payload = workflows.status(self.app)
+            finally:
+                self.app.action_lock.release()
             self._json(payload)
             return
         if self.path == '/diagnostics':
