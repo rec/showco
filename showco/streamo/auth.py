@@ -216,10 +216,12 @@ def callback_code(value: str, state: str, redirect_uri: str) -> str:
 
 def request_http(http_request: request.Request) -> HttpResponse:
     try:
-        with request.urlopen(http_request) as response:
+        with request.urlopen(http_request, timeout=10) as response:
             return HttpResponse(status=response.status, text=response.read().decode())
     except error.HTTPError as e:
         return HttpResponse(status=e.code, text=e.read().decode())
+    except OSError as failure:
+        sys.exit(f'OAuth HTTP request failed: {failure}')
 
 
 def write_toml_value(path: Path, section: str, name: str, value: str) -> None:

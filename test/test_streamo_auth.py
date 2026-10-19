@@ -172,3 +172,18 @@ def test_invalid_oauth_callbacks_are_rejected_before_network_request(
             with pytest.raises(ValueError, match='OAuth'):
                 auth.exchange_code(config_path, secrets_path)
         request.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    'failure',
+    [TimeoutError('timed out'), auth.error.URLError('connection unavailable')],
+)
+def test_oauth_transport_failure_has_deadline_and_useful_error(
+    failure: OSError,
+) -> None:
+    with mock.patch.object(
+        auth.request, 'urlopen', side_effect=failure
+    ) as open_request:
+        with pytest.raises(SystemExit, match='OAuth HTTP request failed'):
+            auth.request_http(auth.request.Request('https://example.invalid'))
+    assert open_request.call_args.kwargs['timeout'] == 10
