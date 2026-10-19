@@ -950,3 +950,21 @@ class ServerTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+def test_malformed_calibration_selection_never_runs_global_calibration() -> None:
+    recs = mock.Mock()
+    app = ShowcoApp(
+        recs,
+        None,
+        rehearsal.RehearsalSystemMonitor(),
+        rehearsal.RehearsalMixersMonitor(),
+    )
+    for value in ['bad', '1,bad', '1,,2', '1,']:
+        outcome = app.run_action({'action': 'recs-calibrate', 'channels': value})
+        assert not outcome.ok
+        assert 'comma-separated list of integers' in outcome.message
+    recs.calibrate.assert_not_called()
+    recs.calibrate.return_value = models.ActionResult(ok=True, message='ok')
+    assert app.run_action({'action': 'recs-calibrate'}).ok
+    recs.calibrate.assert_called_once_with()

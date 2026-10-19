@@ -25,17 +25,6 @@ across invocations is not a requirement.
 
 ## Operational correctness and recovery
 
-### 14. P2: Malformed channels silently change calibration scope
-
-`runtime/app.py:530`, `_channel_numbers()`, returns an empty list for malformed
-integers. `_dispatch_action()` treats empty device and channels as global
-calibration. For example, `recs-calibrate` with `channels=bad` and no device runs
-global calibration instead of rejecting the selection. With a device, it replaces
-the parse error with a misleading missing-channels error.
-
-Reject malformed lists; reserve global calibration for an absent selection.
-Check that malformed selections never call calibration.
-
 ## Browser and waveform behavior
 
 ### 15. P2: Transport actions have no browser timeout
