@@ -44,6 +44,11 @@ function renderPerformance(status) {
   if (destination) destination.textContent = disk
     ? `${disk.path}: ${(disk.free_bytes / 1073741824).toFixed(1)} GiB free; ${disk.estimated_seconds_remaining === null ? 'remaining time unknown' : Math.floor(disk.estimated_seconds_remaining / 60) + ' minutes estimated remaining'}`
     : 'Recording destination and capacity unavailable';
+  if (destination) {
+    const stale = recs.disk_error || recs.snapshot_error;
+    if (disk && stale) destination.textContent += `; stale: ${stale}`;
+    destination.className = stale ? 'failed' : '';
+  }
   const progress = document.getElementById('performance-progress');
   if (progress) progress.textContent =
     `Audio writes: ${status.recording_progress.message}. Silence filtering may pause file growth.`;
