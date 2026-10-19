@@ -12,9 +12,9 @@ from showco.runtime import (
     models,
     recovery,
     rehearsal,
+    server,
     setlist,
     soundcheck,
-    workflows,
 )
 from showco.runtime.app import ShowcoApp
 from showco.runtime.server import ShowcoHandler
@@ -250,7 +250,7 @@ def test_soundcheck_missing_identity_and_bad_inputs_cannot_pass() -> None:
 def test_soundcheck_pages_and_status_never_start_output(tmp_path: Path) -> None:
     app = application(tmp_path)
     with mock.patch.object(app.recs, 'action') as action:
-        payload = workflows.status(app)
+        payload = app.workflow_status()
         expected = [x.key for x in payload.inputs]
         result = app.run_action(
             {
@@ -454,9 +454,9 @@ def test_diagnostics_download_uses_existing_collector(tmp_path: Path) -> None:
     handler.wfile = BytesIO()
     (tmp_path / 'bundle.json').write_text('{}')
     with mock.patch(
-        'showco.runtime.workflows.bundle.create_bundle', return_value=tmp_path
+        'showco.runtime.server.bundle.create_bundle', return_value=tmp_path
     ) as collect:
-        workflows.download(handler)
+        server.download_diagnostics(handler)
     collect.assert_called_once()
     handler.send_header.assert_any_call('Cache-Control', 'no-store')
     with tarfile.open(
@@ -468,11 +468,11 @@ def test_diagnostics_download_uses_existing_collector(tmp_path: Path) -> None:
 def test_second_diagnostics_download_is_rejected() -> None:
     handler = object.__new__(ShowcoHandler)
     handler.send_error = mock.Mock()
-    workflows.DIAGNOSTICS_LOCK.acquire()
+    server.DIAGNOSTICS_LOCK.acquire()
     try:
-        workflows.download(handler)
+        server.download_diagnostics(handler)
     finally:
-        workflows.DIAGNOSTICS_LOCK.release()
+        server.DIAGNOSTICS_LOCK.release()
 
     handler.send_error.assert_called_once_with(
         429, 'A diagnostic download is already in progress'

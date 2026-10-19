@@ -145,7 +145,7 @@ class ShowcoApp:
             )
             with self.soundcheck_lock:
                 try:
-                    workflows.refresh_soundcheck(self, status)
+                    workflows.refresh_soundcheck(self.soundcheck, status, self.revision)
                 except OSError as error:
                     self.soundcheck_error = f'Soundcheck evidence unavailable: {error}'
                 else:
@@ -360,7 +360,7 @@ class ShowcoApp:
                 'retry recording controls when it finishes',
             )
         if action.startswith(('setlist-', 'soundcheck-', 'recovery-', 'lighting-')):
-            return workflows.run(self, form)
+            return self._run_workflow(form)
         if action in performance.PROTECTED_ACTIONS:
             with self.soundcheck_lock:
                 try:
@@ -463,6 +463,65 @@ class ShowcoApp:
                 return models.ActionResult(ok=False, message='streamo is disabled')
             return self.streamo.action(STREAMO_ACTIONS[action], **_streamo_fields(form))
         return models.ActionResult(ok=False, message=f'unknown action {action}')
+
+    def workflow_status(self) -> workflows.WorkflowStatus:
+        show = self.status()
+        return workflows.WorkflowStatus(
+            show=show,
+            setlist=self.setlist.state,
+            lighting=self.lighting.state,
+            soundcheck=self.soundcheck.state,
+            recovery=self.recovery.state,
+            soundcheck_error=self.soundcheck_error,
+            inputs=[
+                workflows.ExpectedInput(key=soundcheck.input_key(c), name=c.name)
+                for c in show.recs.channels
+            ],
+        )
+
+    def _run_workflow(self, form: dict[str, str]) -> models.ActionResult:
+        action = form['action']
+        if action.startswith('lighting-'):
+            return workflows.run_lighting(self.lighting, self.lyte, form)
+        if action.startswith('setlist-'):
+            return workflows.run_setlist(self.setlist, self.recs, form)
+        show = self.status()
+        if action.startswith('recovery-'):
+            result = workflows.run_recovery(
+                self.recovery,
+                form,
+                show,
+                self._refresh_recovery,
+                self._restart_recovery,
+                self._remember_recovery,
+                self._invalidate_soundcheck,
+            )
+            if action == 'recovery-restart':
+                self.recs.snapshot_client.invalidate()
+            return result
+        with self.soundcheck_lock:
+            if self.soundcheck_error:
+                raise ValueError(self.soundcheck_error)
+            return workflows.run_soundcheck(
+                self.soundcheck, self.recs, self.lyte, form, show
+            )
+
+    def _refresh_recovery(self) -> models.ShowStatus:
+        self.recs.snapshot_client.invalidate()
+        return self.status()
+
+    def _restart_recovery(self, name: str) -> models.ActionResult:
+        return (
+            self.streamo_restart() if name == 'streamo' else self.recovery_restart(name)
+        )
+
+    def _remember_recovery(self, message: str) -> None:
+        with self.status_lock:
+            self.incidents.record(message)
+
+    def _invalidate_soundcheck(self) -> None:
+        with self.soundcheck_lock:
+            self.soundcheck.invalidate('Service restart requested; repeat soundcheck')
 
     def recent_actions(self) -> list[models.ActionLogEntry]:
         with self.action_log_lock:

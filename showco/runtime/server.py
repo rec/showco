@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 import json
+import shutil
 import socket
 import threading
 from collections.abc import Callable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import ClassVar, cast
 from urllib import parse
 
 from reccy.runtime import logging
 
+from ..deployment import bundle
 from ..streamo.client import StreamoClient
 from ..x18.cable_test import (
     cable_tester_from_specs,
@@ -30,6 +33,8 @@ from .monitoring import PerformanceMonitor
 from .recs import RecsClient
 from .system import SystemMonitor
 from .waveforms import WaveformBridge
+
+DIAGNOSTICS_LOCK = threading.Lock()
 
 MAX_ACTION_BYTES = 65_536
 MAX_CONCURRENT_REQUESTS = 8
@@ -75,13 +80,13 @@ class ShowcoHandler(BaseHTTPRequestHandler):
                 self.send_error(503, 'A showCo action is in progress; retry shortly')
                 return
             try:
-                payload = workflows.status(self.app)
+                payload = self.app.workflow_status()
             finally:
                 self.app.action_lock.release()
             self._json(payload)
             return
         if self.path == '/diagnostics':
-            workflows.download(self)
+            download_diagnostics(self)
             return
         document = gui_schema.current_gui()
         default_path = f'/{document.page(document.default_page).name}'
@@ -419,3 +424,32 @@ def make_server(
         performance.observe = app.status
         performance.start()
     return server
+
+
+def download_diagnostics(handler: ShowcoHandler) -> None:
+    if not DIAGNOSTICS_LOCK.acquire(blocking=False):
+        handler.send_error(429, 'A diagnostic download is already in progress')
+        return
+    try:
+        _download_diagnostics(handler)
+    finally:
+        DIAGNOSTICS_LOCK.release()
+
+
+def _download_diagnostics(handler: ShowcoHandler) -> None:
+    with TemporaryDirectory() as directory:
+        root = Path(directory)
+        destination = bundle.create_bundle(root / 'bundle')
+        archive = Path(
+            shutil.make_archive(str(root / 'diagnostics'), 'gztar', destination)
+        )
+        handler.send_response(200)
+        handler.send_header('Content-Type', 'application/gzip')
+        handler.send_header(
+            'Content-Disposition', 'attachment; filename="showco-diagnostics.tar.gz"'
+        )
+        handler.send_header('Cache-Control', 'no-store')
+        handler.send_header('Content-Length', str(archive.stat().st_size))
+        handler.end_headers()
+        with archive.open('rb') as source:
+            shutil.copyfileobj(source, handler.wfile, length=65536)
