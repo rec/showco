@@ -1,8 +1,9 @@
 # showCo code review
 
-Static review of checkout `5125349` on 2026-10-19. This replaces the previous
-issue list. No application, service, deployment, hardware flow, or test suite was
-run. Findings follow the current source paths; they are not failures observed on
+Initial static review of checkout `5125349` on 2026-10-19. This replaces the
+previous issue list. That review ran no application, service, deployment, hardware
+flow, or test suite. Subsequent fixes and automated verification are recorded
+under the resolved findings. The original findings are not failures observed on
 the Pi. P1 means potentially disruptive or misleading during operation, P2 means
 an ordinary correctness or recovery problem, and P3 means a maintainability
 concern. Line numbers refer to the reviewed checkout. Paths below are relative
@@ -21,6 +22,8 @@ Fixed by rebasing from the parent of the oldest matching fixup target, including
 `--root` when the target is the first commit. Regression coverage uses real
 temporary Git histories with a separated fixup and both root/non-root targets.
 Validation: focused tests, full pytest suite, Ruff, ty, pyupgrade, and diff checks.
+
+Original finding before the fix:
 
 `deployment/publication.py:172`, `autosquash_program()` and
 `oldest_fixup_commit()`, choose the parent of the oldest **fixup**, rather than
@@ -43,6 +46,8 @@ keeps recovery evidence and does not start broadcasting. This follows the user's
 explicit recovery decision. Validation: music regressions, full pytest suite,
 Ruff, ty, pyupgrade, and diff checks.
 
+Original finding before the fix:
+
 `runtime/music.py:409`, `MusicController.recover_closing(False)`, restores room
 routing, clears closing evidence, and saves mode `record`. It does not resume
 recs or restart the stream. A reachable trigger is failure in
@@ -63,6 +68,8 @@ storage rejects the failure record. Regression coverage exercises stream failure
 and finalization failure with an unwritable failure record. Validation: music
 tests, full pytest suite, Ruff, ty, pyupgrade, and diff checks.
 
+Original finding before the fix:
+
 `runtime/music.py:298,376`, `_observe_closing()` and `_fail_closing()`: after
 catching an operational or persistence error, the observer calls `_fail_closing()`.
 That performs another unguarded `_save_closing()` before assigning mode `fault`
@@ -81,6 +88,8 @@ stopping playback or muting returns. A regression holds finalization beyond the
 old five-second timeout and verifies cleanup occurs only after it is released.
 Validation: music tests, full pytest suite, Ruff, ty, pyupgrade, and diff checks.
 Shutdown can consequently take as long as an in-flight observer operation.
+
+Original finding before the fix:
 
 `runtime/music.py:613`, `MusicController.close()`, joins the observer for five
 seconds, then proceeds without checking `is_alive()`. Unlike `record(restart=True)`
@@ -103,6 +112,8 @@ checks concurrent actions, closing, browser disabling/re-enabling, and existing
 cable-test conflicts. Validation: focused tests, full pytest suite, Ruff, ty,
 pyupgrade, and diff checks.
 
+Original finding before the fix:
+
 `runtime/app.py:274`, `ShowcoApp.run_action()`, exempts pause/resume from
 `action_lock`. They can interleave with `music-record`, setup, or teardown and
 undo the recording state those sequences just established. The cable-test check
@@ -114,7 +125,16 @@ Define recording ownership across transitions and cable tests while preserving
 intended pause/resume responsiveness. Check interleavings with barriers, including
 resume crossing cable-test startup and pause crossing Record mode.
 
-### 6. P1: Disabling streamO leaves an existing broadcaster running
+### 6. Resolved: Disabling streamO leaves an existing broadcaster running
+
+Provisioning now matches lyte: stop/disable any existing streamO unit, persistently
+mask it, and reload systemd. Enabling streamO unmasks it before installation.
+Shell regressions use fake controllers and temporary unit directories to cover
+missing, installed, and already masked units for both optional services, including
+repeat provisioning. Validation: provisioning tests, full pytest suite, Ruff, ty,
+pyupgrade, shell syntax, and diff checks. No actual service was changed.
+
+Original finding before the fix:
 
 `provision/templates/services.sh:161`, `install_streamo_service()`, prints that
 streamO is disabled and returns when `STREAMO_ENABLED` is false. It never stops
@@ -409,8 +429,9 @@ implementation or a browser framework.
 
 ## Review limits
 
-This source review is not exhaustive execution coverage. Suggested checks describe
-verification for eventual fixes; they were not run for this documentation change.
+This source review is not exhaustive execution coverage. Resolved findings list
+the automated checks performed for their fixes; checks suggested for unresolved
+findings have not been run.
 Pi networking, X18 routing, broadcast delivery, and physical audio acceptance
 still require the existing hardware plans. Previous lack of physical verification
 is not evidence of a newly discovered code defect.

@@ -165,7 +165,18 @@ install_streamo_service() {
   local uid
   local input
   if [[ "$STREAMO_ENABLED" != true ]]; then
-    printf 'streamO service is disabled.\n'
+    local unit_directory="/home/$SHOW_USER/.config/systemd/user"
+    local load_state
+    load_state=$(user_systemctl show --property=LoadState --value streamo.service)
+    if [[ "$load_state" == masked ]]; then
+      user_systemctl stop streamo.service
+    elif [[ "$load_state" != not-found ]]; then
+      user_systemctl disable --now streamo.service
+    fi
+    sudo -H -u "$SHOW_USER" mkdir -p "$unit_directory"
+    sudo -H -u "$SHOW_USER" ln -sfn /dev/null "$unit_directory/streamo.service"
+    user_systemctl daemon-reload
+    printf 'streamO service is stopped and masked.\n'
     return
   fi
   config_path="/home/$SHOW_USER/.config/streamo/config.toml"
@@ -173,6 +184,7 @@ install_streamo_service() {
     printf 'ERROR: streamO configuration does not exist: %s\n' "$config_path" >&2
     return 1
   fi
+  user_systemctl unmask streamo.service
   quoted_config=$(printf '%q' "$config_path")
   uid=$(id -u "$SHOW_USER")
   input=$(service_input "$(git -C "$ROOT/streamo" rev-parse HEAD)
