@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import os
-import shutil
 import signal
 import sys
-import tempfile
 import traceback
 from contextlib import redirect_stderr, redirect_stdout
 from datetime import UTC, datetime
+from io import TextIOBase
 from logging import StreamHandler, getLogger
 from pathlib import Path
+from threading import Lock
 from types import FrameType
 from typing import Annotated, TextIO
 
@@ -27,6 +27,33 @@ from .streamo import auth, client, config
 from .x18 import cable_test
 
 ERROR_LOG_PATH = Path(__file__).resolve().parents[1] / 'showco-errors.txt'
+MAX_DIAGNOSTIC_BYTES = 2 * 1024 * 1024
+
+
+class DiagnosticCapture(TextIOBase):
+    def __init__(self) -> None:
+        super().__init__()
+        self.buffer = bytearray()
+        self.truncated = False
+        self.lock = Lock()
+
+    def write(self, value: str) -> int:
+        data = value.encode()
+        with self.lock:
+            self.truncated |= len(self.buffer) + len(data) > MAX_DIAGNOSTIC_BYTES
+            self.buffer.extend(data[-MAX_DIAGNOSTIC_BYTES:])
+            if len(self.buffer) > MAX_DIAGNOSTIC_BYTES:
+                del self.buffer[:-MAX_DIAGNOSTIC_BYTES]
+        return len(value)
+
+    def getvalue(self) -> str:
+        with self.lock:
+            prefix = (
+                '[Earlier output truncated; retaining the last 2 MiB]\n'
+                if self.truncated
+                else ''
+            )
+            return prefix + self.buffer.decode(errors='replace')
 
 
 class WebUiOptions(BaseModel, frozen=True):
@@ -120,7 +147,7 @@ def main(argv: list[str] | None = None) -> int:
     ERROR_LOG_PATH.unlink(missing_ok=True)
     logging.configure()
     arguments = sys.argv[1:] if argv is None else argv
-    with tempfile.TemporaryFile(mode='w+t', newline='') as record:
+    with DiagnosticCapture() as record:
         with (
             redirect_stdout(_Tee(sys.stdout, record)),
             redirect_stderr(_Tee(sys.stderr, record)),
@@ -190,7 +217,7 @@ def streamo_command(arguments: list[str]) -> int:
 
 
 class _Tee:
-    def __init__(self, original: TextIO, record: TextIO) -> None:
+    def __init__(self, original: TextIO, record: DiagnosticCapture) -> None:
         self.original = original
         self.record = record
 
@@ -215,7 +242,7 @@ class _Tee:
 
 
 def _append_error_report(
-    record: TextIO, status: int | None, error: BaseException | None
+    record: DiagnosticCapture, status: int | None, error: BaseException | None
 ) -> None:
     if isinstance(error, SystemExit) and error.code in (None, 0):
         return
@@ -225,9 +252,7 @@ def _append_error_report(
         )
         with os.fdopen(descriptor, 'a', newline='') as output:
             output.write(f'\n--- showCo failure {datetime.now(UTC).isoformat()} ---\n')
-            record.flush()
-            record.seek(0)
-            shutil.copyfileobj(record, output)
+            output.write(record.getvalue())
             if isinstance(error, SystemExit):
                 output.write(f'{error}\n')
             elif error is not None:
