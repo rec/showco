@@ -1404,3 +1404,77 @@ def test_resume_preserves_record_mode_when_old_evidence_cannot_be_deleted(
         routing.restore_room.assert_called_once_with(evidence.room_scene)
     finally:
         value.close()
+
+
+@pytest.mark.parametrize('fault_saved', [True, False])
+def test_closing_failure_remains_visible_after_interrupted_resume(
+    tmp_path: Path, fault_saved: bool
+) -> None:
+    from showco.runtime.incidents import fault_details
+
+    (tmp_path / 'music.json').write_text(
+        music.MusicState(mode='transitioning').model_dump_json()
+    )
+    path = tmp_path / 'closing.json'
+    path.write_text(
+        closing.ClosingRecord(
+            operation_id='resumed-closing',
+            phase='credits-running',
+            room_scene=x18_music.RoomScene(master_fader=0.7, input_lr=[1] * 18),
+        ).model_dump_json()
+    )
+    stream = mock.Mock()
+    stream.status.return_value = models.StreamoStatus(
+        service=models.ServiceStatus(name='streamo', state='connected'),
+        closing=models.ClosingStatus(operation_id='resumed-closing', state='completed'),
+    )
+    original_write = Path.write_text
+
+    def write(p: Path, text: str) -> int:
+        if (
+            not fault_saved
+            and closing.ClosingRecord.model_validate_json(text).phase == 'failed'
+        ):
+            raise OSError('closing fault storage full')
+        return original_write(p, text)
+
+    _, recs, player, routing = controller()
+    routing.isolate_instruments.side_effect = ValueError('closing routing failed')
+    with mock.patch.object(Path, 'write_text', autospec=True, side_effect=write):
+        value = music.MusicController(
+            recs,
+            player,
+            routing,
+            music.MusicConfig(),
+            streamo=stream,
+            closing_state_path=path,
+        )
+        try:
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                record = value.closing.status().record
+                if record is not None and record.phase == 'failed':
+                    break
+                time.sleep(0.01)
+            assert value.closing.stop(timeout=2)
+            status = value.status()
+            assert status.mode == 'fault'
+            assert 'restarted during a show transition' in str(status.error)
+            assert 'closing routing failed' in str(status.error)
+            if not fault_saved:
+                assert 'closing fault storage full' in str(status.error)
+            assert status.closing is not None
+            assert status.closing.state == 'completed'
+            show = models.ShowStatus(
+                recs=models.RecsStatus(
+                    service=models.ServiceStatus(name='recs', state='connected')
+                ),
+                streamo=stream.status.return_value,
+                music=status,
+            )
+            assert (
+                next(m for n, m, _ in fault_details(show) if n == 'Music')
+                == status.error
+            )
+        finally:
+            value.close()
