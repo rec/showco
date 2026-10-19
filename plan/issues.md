@@ -23,25 +23,7 @@ results do not need to become live-show faults.
 another invocation replaces the previous diagnostic; retaining failure history
 across invocations is not a requirement.
 
-## Operational correctness and recovery
-
-## Browser and waveform behavior
-
-## Configuration, authentication, and reporting
-
 ## API shape, duplication, and module boundaries
-
-### 26. P3: Status names imply stronger guarantees than they provide
-
-`runtime/recs.py:32` sets `RecsStatus.recording` whenever a snapshot exists and
-the service is connected, regardless of row contents, enabled inputs, or writes.
-`ServiceStatus.fresh` in `runtime/models.py` is a connectivity comparison, not
-an age check. Callers often correctly combine these with pause/progress checks,
-but a bare boolean appears to mean active capture or recent observation. This
-is confusing next to `snapshot_available` and `recording_progress`.
-
-Document exact guarantees and align names/call sites around one meaning rather
-than adding parallel flags with the same semantics.
 
 ### 27. P3: Action dispatch and music lifecycle concentrate too many contracts
 
@@ -56,43 +38,6 @@ The problem is mixed responsibility rather than line count alone.
 Make the existing ownership/transition contracts explicit when fixing these
 paths. A wider architectural extraction needs separate scope; splitting files
 alone will not fix behavior.
-
-### 28. P3: Workflow controllers repeat file-persistence mechanics
-
-`SetListController.save()` (`runtime/setlist.py:48`),
-`LightingController.save()` (`runtime/lighting.py:38`),
-`Soundcheck.save()` (`runtime/soundcheck.py:45`), and
-`Recovery.save()` (`runtime/recovery.py:32`) repeat directory creation, fixed
-`.tmp` files, JSON writing, replacement, and in-memory assignment. Performance
-lock and incident storage have related copies; music uses the existing
-`reccy.runtime.files.atomic_output`. Persistence fixes can drift between copies.
-Soundcheck's pending-save behavior is distinct and should remain explicit.
-
-Consider reusing the existing atomic-file primitive for mechanical writes,
-without introducing a generic controller hierarchy.
-
-### 29. P3: A one-use module and trivial auth helpers add indirection
-
-`runtime/input_check.py` contains a 17-line channel presentation function called
-in production only by `ShowcoApp.status()`. It does not own a separate lifecycle
-or adapter. In `streamo/auth.py`, `auth_options()` just constructs `AuthOptions`
-for three wrappers that immediately unpack it; `provision_dir()` has no caller.
-These are specific consolidation candidates, not a reason to merge all small
-modules. `workflow_storage.py` and `deployment/repositories.py` have multiple
-production consumers and clear shared responsibilities.
-
-### 30. P3: Browser/server presentation and action behavior have parallel copies
-
-`runtime/views.py` and `site/status-script.js` independently format recording,
-playback, streaming, lighting, and mixer state and calculate disabled controls.
-`site/performance.js` adds another disk presentation, and
-`site/playback-script.js` adds another action transport. Initial rendering and
-polled rendering must be maintained separately. Findings 15 and 19 are existing
-behavioral drift, not just theoretical duplication.
-
-Keep the initial-render/live-update contract explicit and check parity where
-it matters. Reuse existing action transport rather than adding another request
-implementation or a browser framework.
 
 ## Review limits
 
