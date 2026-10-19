@@ -25,17 +25,6 @@ across invocations is not a requirement.
 
 ## Operational correctness and recovery
 
-### 8. P2: Music failures never become active faults
-
-`runtime/incidents.py:130`, `fault_details()`, considers readiness and audio-write
-progress only. `ShowcoApp.status()` observes incidents before adding music
-state to the response. A failed player or faulted
-closing transition can coexist with the global “No active observed faults”
-banner. Detailed errors on another page do not enter the shared incident history.
-
-Feed relevant terminal failures into fault observation, with explicit recovery
-conditions. Check a music fault while all monitored services remain healthy.
-
 ### 9. P2: Workflow polls can occupy all health slots behind a long action
 
 `runtime/server.py:69` takes `action_lock` for `/workflow-status`; actions hold
