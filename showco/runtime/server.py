@@ -160,7 +160,7 @@ class ShowcoHandler(BaseHTTPRequestHandler):
                     continue
                 for _, name, event in events:
                     self._waveform_event(name, event.model_dump())
-                changed = updated
+                changed = events[-1][0] if events else updated
         except (BrokenPipeError, ConnectionResetError, OSError):
             return
         finally:

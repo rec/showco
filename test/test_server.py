@@ -968,3 +968,37 @@ def test_malformed_calibration_selection_never_runs_global_calibration() -> None
     recs.calibrate.return_value = models.ActionResult(ok=True, message='ok')
     assert app.run_action({'action': 'recs-calibrate'}).ok
     recs.calibrate.assert_called_once_with()
+
+
+def test_waveform_cursor_includes_events_arriving_during_snapshot_read() -> None:
+    bridge = mock.Mock()
+    bridge.snapshot.return_value = ([], [], 0)
+    bridge.stopped = Event()
+    cursors: list[int] = []
+
+    def wait(changed: int, timeout: float) -> int:
+        cursors.append(changed)
+        if len(cursors) == 2:
+            bridge.stopped.set()
+            return changed
+        return 1
+
+    bridge.wait_for_change.side_effect = wait
+    events = [mock.Mock(), mock.Mock()]
+    for n, event in enumerate(events, 1):
+        event.model_dump.return_value = {'sequence': n}
+    bridge.events_since.return_value = (
+        False,
+        [(1, 'waveform', events[0]), (2, 'waveform', events[1])],
+    )
+    handler = object.__new__(ShowcoHandler)
+    handler.path = '/waveforms'
+    handler.app = mock.Mock(waveforms=bridge)
+    handler.server = mock.Mock(waveform_slots=BoundedSemaphore(1))
+    handler.wfile = BytesIO()
+    handler.send_response = mock.Mock()
+    handler.send_header = mock.Mock()
+    handler.end_headers = mock.Mock()
+    handler.do_GET()
+    assert cursors == [0, 2]
+    assert handler.wfile.getvalue().count(b'event: waveform\n') == 2

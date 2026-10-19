@@ -27,17 +27,6 @@ across invocations is not a requirement.
 
 ## Browser and waveform behavior
 
-### 17. P2: Concurrent waveform arrivals can be delivered twice
-
-`runtime/server.py:120`, `_waveforms()`, gets `updated` from `wait_for_change()`,
-then separately calls `events_since(changed)`. Events arriving between those
-reads are sent too, but the cursor is set to the older `updated` value. The next
-iteration sends the tail again. The browser appends samples without deduplicating
-these sequence numbers.
-
-Advance to the last emitted event or read events and cursor together. Check
-arrival between the two reads.
-
 ### 18. P2: Waveform reconnection retains removed sources indefinitely
 
 `runtime/waveforms.py`, `WaveformBridge._run()`, `_layout()`, and `snapshot()`,
