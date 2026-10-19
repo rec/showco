@@ -55,7 +55,13 @@ Preserve an unresolved state until recording is reconciled, or make explicit
 recovery perform and verify the intended transition. Cover failure after pausing
 recs, then cancellation and a Record request.
 
-### 3. P1: Failure to save closing failure can kill its only observer
+### 3. Resolved: Failure to save closing failure can kill its only observer
+
+Closing failure handling now retains the failed operation in memory, publishes
+fault/failed status and the persistence error, and logs the failure even when
+storage rejects the failure record. Regression coverage exercises stream failure
+and finalization failure with an unwritable failure record. Validation: music
+tests, full pytest suite, Ruff, ty, pyupgrade, and diff checks.
 
 `runtime/music.py:298,376`, `_observe_closing()` and `_fail_closing()`: after
 catching an operational or persistence error, the observer calls `_fail_closing()`.

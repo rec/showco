@@ -400,11 +400,20 @@ class MusicController:
                 sounddevice.PortAudioError,
             ) as error:
                 message += f'; {name} failed: {error}'
-        self._save_closing(
-            record.model_copy(update={'phase': 'failed', 'error': message})
-        )
+        failed = record.model_copy(update={'phase': 'failed', 'error': message})
+        try:
+            self._save_closing(failed)
+        except OSError as error:
+            message += f'; closing failure could not be saved: {error}'
+            failed = failed.model_copy(update={'error': message})
+        self.closing_record = failed
+        self.closing_status = (
+            self.closing_status
+            or models.ClosingStatus(operation_id=record.operation_id)
+        ).model_copy(update={'state': 'failed', 'phase': 'failed', 'error': message})
         self.mode = 'fault'
         self.transition_error = message
+        LOGGER.error('Closing failed: %s', message)
 
     def recover_closing(self, finish: bool) -> models.ActionResult:
         record = self.closing_record

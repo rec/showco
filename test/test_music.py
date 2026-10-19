@@ -1044,3 +1044,55 @@ def test_abandon_closing_restarts_show_only_after_recording_resumes(
         mock.call('new_session'),
         mock.call('resume_recording'),
     ]
+
+
+@pytest.mark.parametrize('finalizing', [False, True])
+def test_closing_fault_is_reported_when_failure_record_cannot_be_saved(
+    tmp_path: Path, finalizing: bool
+) -> None:
+    value, recs, _, routing = controller()
+    value.closing_state_path = tmp_path / 'closing.json'
+    stream = mock.Mock()
+    stream.status.return_value = models.StreamoStatus(
+        service=models.ServiceStatus(name='streamo', state='connected'),
+    )
+    value.streamo = stream
+    routing.capture_room.return_value = x18_music.RoomScene(
+        master_fader=0.7, input_lr=[1] * 18
+    )
+    assert value.teardown().ok
+    assert value.closing_record is not None
+    operation = value.closing_record.operation_id
+    original_write = Path.write_text
+
+    def write(path: Path, data: str) -> int:
+        record = music.ClosingRecord.model_validate_json(data)
+        if record.phase == 'failed':
+            raise OSError('disk full')
+        return original_write(path, data)
+
+    routing.isolate_instruments.side_effect = ValueError('routing failed')
+    with mock.patch.object(Path, 'write_text', autospec=True, side_effect=write):
+        stream.status.return_value = models.StreamoStatus(
+            service=models.ServiceStatus(name='streamo', state='connected'),
+            closing=models.ClosingStatus(
+                operation_id=operation,
+                state='completed' if finalizing else 'failed',
+                error=None if finalizing else 'encoder failed',
+            ),
+        )
+        assert value.closing_thread is not None
+        value.closing_thread.join(timeout=5)
+        assert not value.closing_thread.is_alive()
+
+    status = value.status()
+    assert status.mode == 'fault'
+    assert status.closing is not None and status.closing.state == 'failed'
+    assert status.closing.operation_id == operation
+    assert 'could not be saved: disk full' in str(status.error)
+    assert ('routing failed' if finalizing else 'encoder failed') in str(status.error)
+    assert value.closing_record is not None
+    assert value.closing_record.phase == 'failed'
+    assert value.closing_record.error == status.error
+    assert recs.pause_recording.called == finalizing
+    value.close()
