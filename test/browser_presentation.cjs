@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 
-const {status, expected} = JSON.parse(fs.readFileSync(0, 'utf8'));
+const {status, expected, actions} = JSON.parse(fs.readFileSync(0, 'utf8'));
 const context = vm.createContext({
   document: {querySelectorAll: () => []},
   requestStatus: () => new Promise(() => {}),
@@ -53,3 +53,13 @@ result('updatePerformance(status)');
 for (const name of ['cpu', 'memory', 'disk']) {
   assert.equal(meters[name].span.textContent, expected[`${name}-value`], name);
 }
+
+const buttons = actions.map(action => ({
+  disabled: false,
+  hasAttribute: () => false,
+  closest: () => ({dataset: action}),
+}));
+assert.ok(buttons.length > 0);
+context.document.querySelectorAll = selector => selector === 'form[data-disabled-when] button' ? buttons : [];
+result('updateConfiguredActions(status)');
+buttons.forEach((button, index) => assert.equal(button.disabled, actions[index].disabled, actions[index].action));

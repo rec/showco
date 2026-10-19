@@ -1,138 +1,104 @@
-# showCo decomposition plan
+# showCo decomposition
 
-Implementation in progress. Status and OAuth naming are complete; remaining
-steps below are being implemented without changing MusicController's structure.
-This plan takes over review items 26, 28, 29, and 30 and the application portion
-of item 27. Music lifecycle decomposition is specified in
+Implementation complete. This work covers review items 26, 28, 29, and 30 and
+application ownership from item 27. MusicController's lifecycle structure is
+unchanged; its separate work remains in
 [music-controller-decomp.md](music-controller-decomp.md).
 
 ## Additional work beyond the prompt
 
 None.
 
-## Purpose
-
-Make action ownership, status guarantees, and persistence behavior apparent from
-their owning modules. Preserve the current stdlib HTTP server, Pydantic models,
-Jinja rendering, browser scripts, and independently testable service adapters.
-Do not introduce a framework, generic command bus, controller hierarchy, plugin
-registry, new dependency, or parallel compatibility path.
-
-## Existing contracts to preserve
-
-- `ShowcoApp.run_action()` serializes actions. Manual recording controls reject
-  immediately when another action owns the lock; they are never queued.
-- Closing and cable-test ownership also block recording changes. Cable testing
-  remains a separate utility, not a source of live-show incident requirements.
-- Performance protection, confirmation checks, and action logging apply once per
-  action, before or after service dispatch as appropriate.
-- Workflow polls return busy immediately during actions. Ordinary health polls
-  retain their separate capacity.
-- Service connectivity, a retained snapshot, enabled recording, and advancing
-  audio writes are different observations. None proves physical output.
-- Set-list and lighting commands retain pending outcomes after uncertain delivery;
-  their revisions prevent stale requests from silently replacing current state.
-- Failed soundcheck invalidation updates in-memory evidence even when its save
-  fails. Incident persistence failures remain visible and can recover.
-- `showco-errors.txt` describes the last invocation only. Its in-run capture is
-  bounded; no failure archive is introduced.
-
-## Target ownership
+## Module ownership
 
 | Owner | Responsibility |
 | --- | --- |
-| `runtime/server.py` | HTTP routing, request limits, responses, waveform transport, and diagnostic-download transport |
-| `runtime/app.py:ShowcoApp` | Dependency composition, action serialization, shared protection/ownership gates, action history, and status assembly |
+| `runtime/server.py` | HTTP routing, request limits, responses, waveform transport, and diagnostic downloads |
+| `runtime/app.py:ShowcoApp` | Dependency composition, action serialization, protection and ownership gates, action history, and status assembly |
 | `runtime/recs.py:RecsClient` | recs RPC and reply interpretation |
-| `runtime/recs_actions.py` | Cohesive recs form parsing and action dispatch currently embedded in `ShowcoApp` |
+| `runtime/recs_actions.py` | recs form parsing and dispatch: calibration, musicians, track/stereo/attribute edits, playback, and command fields |
+| `runtime/workflows.py` | Workflow form parsing and commands using concrete controllers, status, and explicit callbacks |
+| Existing workflow controllers | State transitions, revisions, pending commands, and save-failure policy |
+| `runtime/readiness.py` | Readiness and enabled-input checks |
 | `streamo/client.py` and existing service controls | streamO RPC, health interpretation, and service lifecycle |
-| `runtime/workflows.py` | Workflow commands and coherent workflow snapshots; no HTTP download implementation |
-| Existing workflow controllers | Their own state transitions, revisions, pending commands, and save-failure policy |
 | `runtime/views.py` and `site/` | Initial HTML and live presentation of the same status contract |
 
-The proposed recs action module must contain the complete cohesive group:
-calibration, track/stereo/attribute edits, musicians, playback, and recs command
-field parsing. It should expose a direct function accepting `RecsClient`, the
-action, and form data, returning `ActionResult`. It must not acquire app locks,
-reach into unrelated controllers, or repeat global protection rules. Move the
-old branches and helpers completely; do not leave forwarding copies in app.py.
+The recs dispatcher accepts `RecsClient`, an action name, and form data and
+returns `ActionResult`. It does not acquire application locks or repeat global
+protection rules. streamO orchestration remains explicit in ShowcoApp.
 
-Keep streamO orchestration explicit in the dispatcher until there is a similarly
-cohesive extraction. Avoid adding a module for every short branch. Replace
-`workflows.run(app, ...)`'s unrestricted application access with the particular
-controllers, status, and restart/incident callbacks that its branches need;
-prefer existing concrete types and plain functions over new interface layers.
+Workflow functions cannot access the whole application. ShowcoApp owns workflow
+status assembly and locking, including soundcheck invalidation and incident
+recording. Recovery receives explicit refresh, restart, incident, and invalidation
+callbacks. Diagnostic download serialization and transport live in server.py.
 
-## Naming and status semantics
+## Status and configuration contract
 
-1. Remove the misleading `ServiceStatus.fresh` property. Use the explicit
-   connectivity comparison at consumers; do not introduce another alias with
-   the same ambiguity. Actual observation times remain separate data.
-2. Remove the connectivity-derived `RecsStatus.recording` flag. Use service state,
-   snapshot availability, `paused`, and `recording_progress` for their respective
-   purposes. A connected unpaused snapshot may be described as recording enabled
-   or reported active, never as proof that usable audio was written.
-3. Update readiness, incidents, recording-progress logic, soundcheck, rehearsals,
-   initial rendering, browser rendering, and tests together. Trace all references
-   first, including the JSON contract. Do not maintain both old and new fields.
-4. Keep genuinely different counters distinct: elapsed session time, recorded
-   audio duration, file count, and recording-write progress are not synonyms.
-5. Record the callback setting's requirement for a full OAuth URL. Renaming
-   `callback_url_or_code` belongs in this naming pass, including configuration
-   parsing, instructions, and tests; do not add a second accepted spelling.
+- Service connectivity is tested with `service.state == 'connected'`.
+  `ServiceStatus.fresh` has been removed.
+- `RecsStatus.recording` has been removed. Connectivity, snapshot availability,
+  `paused`, and recording-write progress remain separate observations.
+- `snapshot_available` can describe retained data while disconnected. Only a
+  connected, available, unpaused snapshot is described as recording enabled.
+  Advancing writes are reported separately; neither observation proves physical
+  output or usable audio.
+- Elapsed session time, recorded audio duration, file count, and write progress
+  remain distinct counters.
+- OAuth exchange uses `stream.callback_url`, containing the full callback URL
+  with the pending state. The former `callback_url_or_code` spelling and raw-code
+  input are not supported. Private operational configuration was not edited.
 
-These are intended schema changes for later implementation, not changes made by
-this plan. Check for documented consumers before executing that step and surface
-any newly discovered external consumer rather than inventing compatibility.
+Readiness, incidents, progress monitoring, soundcheck, rehearsal, initial HTML,
+browser rendering, and tests use this contract without compatibility aliases.
 
-## Persistence and small modules
+## Persistence and helper consolidation
 
-Replace mechanical fixed-`.tmp` writes in setlist, lighting, soundcheck, recovery,
-performance lock, and incidents with `reccy.runtime.files.atomic_output`. Retain
-each controller's ordering of durable intent, side effects, confirmation, and
-in-memory assignment. Atomic replacement alone is not a transaction and does not
-justify retries or hiding an uncertain command outcome.
+Set list, lighting, soundcheck, recovery, performance lock, and incidents use
+`reccy.runtime.files.atomic_output` instead of fixed `.tmp` paths. Their durable
+intent, side-effect, confirmation, and in-memory assignment order is preserved.
+Atomic replacement does not turn uncertain delivery into a transaction or retry.
 
-Preserve soundcheck's pending-save handling and incident storage-error reporting.
-Do not introduce a generic state-store class just to share JSON serialization.
-Keep `workflow_storage.quarantine()` and `deployment/repositories.py`; both own
-shared responsibilities with multiple consumers.
+Soundcheck retains pending-save evidence after failed invalidation. Incident
+storage errors remain visible and recover on a later save. No generic state store
+was introduced. `workflow_storage.quarantine()` and
+`deployment/repositories.py` retain their shared responsibilities.
 
-Move `input_check.checks()` into an existing cohesive status/presentation owner
-and remove the one-use module and stale imports. Remove `auth_options()` and its
-immediately unpacked `AuthOptions` if no independent use remains, and remove the
-unused auth `provision_dir()` after checking callers. Do not fold unrelated auth
-HTTP or credential responsibilities into `ShowcoApp`.
+The one-use input_check module was removed; its checks and tests now live with
+readiness. The immediately unpacked auth_options/AuthOptions pair and unused auth
+provision_dir helper were removed. Existing auth command syntax is unchanged.
 
-## Browser and server parity
+## Presentation and action guarantees
 
-Transport forms now use the shared `showAction()` deadline and unknown-outcome
-behavior. Preserve that single request path. Both disk presentations now label
-retained values stale; retain parity during any presentation extraction.
+- Server rendering remains responsible for first paint. Browser refreshes use
+  the same connectivity, snapshot, paused, and write-progress distinctions.
+- Both disk displays label retained values stale when disk or snapshot polling
+  reports an error. Missing metrics remain visibly unavailable.
+- Initial and refreshed controls apply the same recording-availability, closing,
+  end-show, playback, stream-switch, and performance-protection rules.
+- `ShowcoApp.run_action()` serializes actions. Manual recording controls reject
+  immediately if another action owns the lock, during closing/transitions, or
+  during conflicting cable-test ownership; they are never queued.
+- Performance protection, confirmation, and action logging apply once per action.
+  Workflow polls return busy during actions; health polls retain separate capacity.
+- Set-list and lighting commands retain pending outcomes after uncertain delivery;
+  revisions prevent stale requests from silently replacing current state.
+- Browser actions retain the shared `showAction()` deadline and unknown-outcome
+  path. Display-specific formatting remains local where wording and precision
+  differ; no additional formatter wrappers were needed.
 
-Keep server rendering for first paint and progressive page behavior. Do not
-replace it with a new frontend framework or move the entire UI into JSON-driven
-client rendering. Document the shared formatting/disable rules and test a compact
-matrix: connected/offline, retained snapshot, paused/enabled recording, advancing
-writes, active closing, protected actions, and unavailable disk metrics. Prefer
-existing browser harnesses and behavior checks over snapshots of all generated
-markup. Extract shared browser formatters only where they have multiple actual
-consumers; do not create one wrapper per label.
+The parity test matrix compares initial HTML with browser text and disabled
+controls for connected/offline, snapshot availability, paused/enabled recording,
+advancing writes, closing, protection, and stale/missing disk metrics. Existing
+browser tests cover performance controls, action deadlines, disconnection, and
+pending requests. Controller tests retain coverage of uncertain outcomes and
+storage failures.
 
-## Implementation sequence
+## Operational boundaries
 
-1. Inventory production imports and status consumers; confirm the contracts above
-   against current tests. Resolve newly discovered behavioral choices before edits.
-2. Change connectivity/recording names and their consumers in one coherent commit.
-3. Extract recs form dispatch and parsing; keep application ownership gates central.
-4. Narrow workflow dependencies and put HTTP downloads with HTTP handling.
-5. Reuse atomic output one controller group at a time, retaining distinct failure
-   semantics and tests for uncertain outcomes.
-6. Consolidate the named one-use helpers and remove their old definitions.
-7. Check presentation parity and extract only repeated browser behavior that
-   remains after the functional fixes.
+No application, deployment, service restart, or hardware flow was launched for
+this refactor. The successful show already supplied the user's hardware acceptance.
+Cable testing remains a separate utility. `showco-errors.txt` still describes
+exactly the last invocation, with bounded capture and no failure archive.
 
-Each implementation commit must stand alone, pass its focused tests and the full
-suite, and preserve unrelated operational files. Run Ruff, ty, pyupgrade, and diff
-checks for Python changes. Do not launch the app, deploy, restart services, or
-contact hardware to validate a structural refactor without explicit instruction.
+Each implementation commit passed the full unit suite, Ruff, ty, pyupgrade, and
+diff checks. Unrelated operational files were preserved.

@@ -7,14 +7,18 @@ recording with `recs`, streaming with `streamo`, mixer reachability, and
 Raspberry Pi health checks.
 
 The runtime entry point is `showco.cli:main`, exposed as the `showco` script.
-The default app is a stdlib `ThreadingHTTPServer` with hand-rendered HTML in
-`showco/runtime/server.py`. Avoid introducing web frameworks, template engines, or new
-client-side tooling unless the user explicitly asks for that direction.
+The default app is a stdlib `ThreadingHTTPServer` in
+`showco/runtime/server.py` with Jinja HTML rendering in `showco/runtime/views.py`.
+Avoid introducing web frameworks, template engines, or new client-side tooling
+unless the user explicitly asks for that direction.
 
 ## Important Modules
 
 - `showco/cli.py`: command routing, `showco deploy`, and rehearsal mode.
-- `showco/runtime/server.py`: request handling, app orchestration, and action dispatch.
+- `showco/runtime/server.py`: HTTP handling, request limits, and diagnostic downloads.
+- `showco/runtime/app.py`: dependency composition, action ownership, and status assembly.
+- `showco/runtime/recs_actions.py`: recs form parsing and dispatch.
+- `showco/runtime/workflows.py`: workflow commands with concrete dependencies.
 - `showco/runtime/views.py`: HTML rendering. Static CSS and JavaScript live in `site/`.
 - `showco/runtime/waveforms.py`: waveform subscriptions and bounded event history.
 - `showco/runtime/models.py`: shared status/result Pydantic models. Keep these simple and
