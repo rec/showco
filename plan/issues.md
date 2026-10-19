@@ -25,17 +25,6 @@ across invocations is not a requirement.
 
 ## Operational correctness and recovery
 
-### 7. P2: Monitoring-history write failures are omitted from live status
-
-`runtime/monitoring.py:171`, `PerformanceMonitor._write()`, retains history-write
-failures in `storage_error`. `ShowcoApp.status()` at `runtime/app.py:145` includes
-`observation_error` but never this field in `monitoring_error`. Live values can
-look healthy while no history is retained, including on a full filesystem. The
-operator only gets a log warning.
-
-Include the storage failure in published status. Check an unwritable history
-directory while system and recs sampling remain successful.
-
 ### 8. P2: Music failures never become active faults
 
 `runtime/incidents.py:130`, `fault_details()`, considers readiness and audio-write

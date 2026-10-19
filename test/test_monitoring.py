@@ -9,7 +9,8 @@ from tempfile import TemporaryDirectory
 from threading import Event
 from unittest import mock
 
-from showco.runtime import models
+from showco.runtime import models, rehearsal
+from showco.runtime.app import ShowcoApp
 from showco.runtime.monitoring import PerformanceMonitor
 from showco.runtime.recs_snapshot import SnapshotStatus
 from showco.runtime.system import SystemMonitor
@@ -208,3 +209,26 @@ def at(hour: int, minute: int, second: int) -> datetime:
 
 if __name__ == '__main__':
     unittest.main()
+
+
+def test_history_failure_is_reported_and_clears_after_writes_recover(
+    tmp_path: Path,
+) -> None:
+    history = tmp_path / 'history'
+    history.write_text('not a directory')
+    recs = rehearsal.RehearsalRecsClient()
+    monitor = PerformanceMonitor(
+        rehearsal.RehearsalSystemMonitor(),
+        lambda: snapshot(free=900),
+        directory=history,
+    )
+    app = ShowcoApp(recs, None, monitor, rehearsal.RehearsalMixersMonitor())
+    monitor.sample(at(12, 0, 0))
+    monitor.sample(at(12, 1, 0))
+    assert monitor.storage_error
+    assert monitor.storage_error in str(app.status().monitoring_error)
+    assert app.status().system.cpu_percent is not None
+    monitor.directory = tmp_path / 'recovered'
+    monitor.sample(at(12, 2, 0))
+    assert monitor.storage_error is None
+    assert app.status().monitoring_error is None

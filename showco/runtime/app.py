@@ -171,6 +171,9 @@ class ShowcoApp:
                             self.system.observation_error
                             if isinstance(self.system, PerformanceMonitor)
                             else None,
+                            self.system.storage_error
+                            if isinstance(self.system, PerformanceMonitor)
+                            else None,
                         )
                         if error
                     )
