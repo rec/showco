@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import secrets
 import sys
+import tomllib
 import webbrowser
 from pathlib import Path
 from typing import Annotated
@@ -225,29 +226,47 @@ def request_http(http_request: request.Request) -> HttpResponse:
 
 
 def write_toml_value(path: Path, section: str, name: str, value: str) -> None:
-    lines = path.read_text().splitlines() if path.exists() else []
-    replacement = f'{name} = {json.dumps(value)}'
-    section_header = f'[{section}]'
+    text = path.read_text() if path.exists() else ''
+    tomllib.loads(text)
+    lines = iter(text.splitlines(keepends=True))
+    replacement = f'{name} = {json.dumps(value)}\n'
+    header = tomllib.loads(f'[{section}]')
+    result: list[str] = []
     in_section = False
-    last_section_line = -1
-    for i, line in enumerate(lines):
-        if line == section_header:
-            in_section = True
-            last_section_line = i
+    found_section = False
+    changed = False
+    for line in lines:
+        statement = line
+        while True:
+            try:
+                parsed = tomllib.loads(statement)
+                break
+            except tomllib.TOMLDecodeError:
+                statement += next(lines)
+        if statement.lstrip().startswith('['):
+            if in_section and not changed:
+                result.append(replacement)
+                changed = True
+            in_section = parsed == header
+            found_section |= in_section
+        elif in_section and name in parsed:
+            result.append(replacement)
+            changed = True
             continue
-        if in_section and line.startswith('['):
-            lines.insert(i, replacement)
-            break
-        if in_section and line.startswith(f'{name} ='):
-            lines[i] = replacement
-            break
-    else:
-        if last_section_line == -1:
-            if lines:
-                lines.append('')
-            lines.append(section_header)
-        lines.append(replacement)
-    path.write_text('\n'.join(lines) + '\n')
+        result.append(statement if statement.endswith('\n') else statement + '\n')
+    if not changed:
+        if not found_section:
+            result.append(f'\n[{section}]\n')
+        result.append(replacement)
+    updated = ''.join(result)
+    try:
+        tomllib.loads(updated)
+    except tomllib.TOMLDecodeError:
+        raise ValueError(
+            f'Cannot update {section}.{name} in this TOML layout; file unchanged'
+        ) from None
+    with atomic_output(path) as temporary:
+        temporary.write_text(updated)
 
 
 def require_value(env: dict[str, object], name: str, path: Path | None = None) -> str:

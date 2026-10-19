@@ -29,17 +29,6 @@ across invocations is not a requirement.
 
 ## Configuration, authentication, and reporting
 
-### 24. P2: TOML updates corrupt valid alternative formatting
-
-`streamo/auth.py:200`, `write_toml_value()`, recognizes a key only if the line
-starts with exactly `name =`, and a table only if its whole line equals
-`[section]`. Valid `access_token="old"`, indented assignments, or
-`[stream] # comment` are missed. Appending a duplicate key/table makes previously
-valid TOML unreadable. `streamo/config.py` also uses this writer for credentials.
-
-Handle supported TOML syntax consistently and validate before replacing the
-original. Check spacing and comments, not just the writer's own output.
-
 ### 25. P2: Broadcast-duration arithmetic can join unrelated encoder attempts
 
 `deployment/report_scan.py:log_evidence()` sorts progress records by time and
