@@ -19,6 +19,8 @@ unless the user explicitly asks for that direction.
 - `showco/runtime/app.py`: dependency composition, action ownership, and status assembly.
 - `showco/runtime/recs_actions.py`: recs form parsing and dispatch.
 - `showco/runtime/workflows.py`: workflow commands with concrete dependencies.
+- `showco/runtime/music.py`: normal show transitions, phase persistence, and music assembly.
+- `showco/runtime/closing.py`: closing operation, observer, finalization, and recovery.
 - `showco/runtime/views.py`: HTML rendering. Static CSS and JavaScript live in `site/`.
 - `showco/runtime/waveforms.py`: waveform subscriptions and bounded event history.
 - `showco/runtime/models.py`: shared status/result Pydantic models. Keep these simple and

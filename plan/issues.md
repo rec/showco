@@ -2,9 +2,6 @@
 
 No outstanding functional findings remain from the 2026-10-19 review.
 
-Remaining structural cleanup is planned in
-[music-controller-decomp.md](music-controller-decomp.md).
-
 Keep this file for outstanding findings only. Remove each issue's section in the
 commit that completes it rather than retaining resolution notes.
 
