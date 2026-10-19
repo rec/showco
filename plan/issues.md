@@ -25,17 +25,6 @@ across invocations is not a requirement.
 
 ## Operational correctness and recovery
 
-### 10. P2: Provisioning subprocess timeouts can hang in output cleanup
-
-`provision/ssh.py:305`, `run_command()`, starts a new session, kills only the
-direct process on timeout or interruption, then unconditionally joins the output
-reader. If a descendant inherited stdout and remains alive, the pipe stays open
-and `reader.join()` has no deadline. Commands spawning helpers, including rsync's
-SSH transport, can therefore exceed the configured timeout indefinitely.
-
-Terminate the owned process group and bound output draining. Check a child that
-leaves a descendant holding its pipe open, without any remote connection.
-
 ### 11. P2: A single run's diagnostic capture grows without a bound
 
 `cli.py:119`, `main()`, redirects output into a temporary file and attaches a

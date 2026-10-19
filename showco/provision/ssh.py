@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import os
 import re
 import shutil
+import signal
 import sys
 import tempfile
 import time
@@ -335,15 +337,23 @@ def run_command(
                     if line.startswith('==> '):
                         progress.set_description_str(line[4:].strip())
 
-            reader = Thread(target=collect_output)
+            reader = Thread(target=collect_output, daemon=True)
             reader.start()
             try:
                 returncode = process.wait(timeout=timeout_seconds)
             finally:
-                if process.poll() is None:
-                    process.kill()
+                reader.join(timeout=0 if process.poll() is None else 1)
+                if process.poll() is None or reader.is_alive():
+                    try:
+                        os.killpg(process.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
                     process.wait()
-                reader.join()
+                    reader.join(timeout=1)
+                if reader.is_alive():
+                    raise TimeoutError(
+                        'Command output did not close after process group termination'
+                    )
                 progress.close()
                 if returncode != 0:
                     record.flush()
