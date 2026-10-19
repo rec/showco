@@ -4,7 +4,7 @@ from unittest import mock
 
 import pytest
 
-from showco.runtime import gui_schema, lighting, models, rehearsal, views, workflows
+from showco.runtime import gui_schema, lighting, models, rehearsal, views
 from showco.runtime.app import ShowcoApp
 from showco.runtime.lyte import LyteClient
 
@@ -56,7 +56,7 @@ def test_forward_back_reconnect_and_external_selection(tmp_path: Path) -> None:
     app.lyte.select_animation('idle')
     with mock.patch('showco.runtime.workflows.refresh_soundcheck'):
         for _ in range(2):
-            snapshot = workflows.status(app)
+            snapshot = app.workflow_status()
             assert snapshot.lighting.current == 0
             assert snapshot.show.lyte.active_animation == 'idle'
     restored = application(tmp_path)
@@ -205,7 +205,7 @@ def test_browser_lighting_controls_and_reconnect(tmp_path: Path) -> None:
     app = application(tmp_path)
     prepare(app)
     with mock.patch('showco.runtime.workflows.refresh_soundcheck'):
-        payload = workflows.status(app)
+        payload = app.workflow_status()
     subprocess.run(
         ['node', 'test/browser_lighting.cjs'],
         input=payload.model_dump_json(),
