@@ -206,7 +206,10 @@ def _gui_enabled(
 
 def _gui_disabled(element: gui_schema.Element, status: models.ShowStatus) -> bool:
     if element.action in {'recs-pause-recording', 'recs-resume-recording'}:
-        return not status.recording_controls_available or not status.recs.service.fresh
+        return (
+            not status.recording_controls_available
+            or status.recs.service.state != 'connected'
+        )
     if element.action == 'music-teardown':
         return not status.end_show_available
     if element.action == 'music-restart':
@@ -304,15 +307,9 @@ def _gui_status_text(element: gui_schema.Element, status: models.ShowStatus) -> 
                 )
             return f'{value.state}: {value.message}'
         case 'shutdown_recs' if isinstance(value, models.RecsStatus):
-            if value.service.state != 'connected':
+            if value.service.state != 'connected' or not value.snapshot_available:
                 return 'state unavailable'
-            return (
-                'paused'
-                if value.paused
-                else 'recording'
-                if value.recording
-                else 'stopped'
-            )
+            return 'paused' if value.paused else 'recording enabled'
         case 'shutdown_streamo' if isinstance(value, models.StreamoStatus):
             return value.stream_state
     raise ValueError(f'unsupported status format {element.format!r}')
@@ -480,15 +477,13 @@ def _stereo_enabled(
 
 
 def _recording_text(status: models.ShowStatus) -> str:
-    if status.recs.service.state != 'connected':
+    if status.recs.service.state != 'connected' or not status.recs.snapshot_available:
         return 'recording state unavailable'
-    if not status.recs.recording:
-        return 'stopped'
     elapsed = _duration(status.recs.elapsed_seconds)
     files = status.recs.file_count if status.recs.file_count is not None else '?'
     if status.recs.paused:
         return f'paused after {elapsed}, {files} files'
-    return f'recording for {elapsed}, {files} files'
+    return f'recording enabled for {elapsed}, {files} files'
 
 
 def _streaming_text(status: models.ShowStatus) -> str:

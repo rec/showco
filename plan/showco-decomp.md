@@ -1,6 +1,7 @@
 # showCo decomposition plan
 
-Planning only. No structural or naming changes are implemented by this document.
+Implementation in progress. Status and OAuth naming are complete; remaining
+steps below are being implemented without changing MusicController's structure.
 This plan takes over review items 26, 28, 29, and 30 and the application portion
 of item 27. Music lifecycle decomposition is specified in
 [music-controller-decomp.md](music-controller-decomp.md).

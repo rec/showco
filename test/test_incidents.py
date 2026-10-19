@@ -16,14 +16,14 @@ class IncidentTimelineTests(unittest.TestCase):
 
         observed = timeline.observe(status(paused=True))
 
-        self.assertEqual(observed[0].message, 'Recording: recording to paused')
+        self.assertEqual(observed[0].message, 'Recording: enabled to paused')
 
 
 def status(*, paused: bool = False) -> models.ShowStatus:
     return models.ShowStatus(
         recs=models.RecsStatus(
             service=models.ServiceStatus(name='recs', state='connected'),
-            recording=True,
+            snapshot_available=True,
             paused=paused,
         ),
         streamo=models.StreamoStatus(

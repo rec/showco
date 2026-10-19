@@ -15,7 +15,7 @@ def status(connected: bool = True) -> models.ShowStatus:
             service=models.ServiceStatus(
                 name='recs', state='connected' if connected else 'offline'
             ),
-            recording=True,
+            snapshot_available=True,
             disk=models.RecordingDiskStatus(
                 path='/recordings', used_bytes=0, free_bytes=100, total_bytes=100
             ),
@@ -33,11 +33,11 @@ def test_fault_history_acknowledgment_and_recovery_survive_restart(
 ) -> None:
     path = tmp_path / 'incidents.json'
     timeline = incidents.IncidentTimeline(path)
-    timeline.observe(status(False))
+    initial = timeline.observe(status(False))
     fault = timeline.faults[0]
     for _ in range(5):
         timeline.observe(status(False))
-    assert len(timeline.incidents) == 1
+    assert timeline.incidents == initial
     assert timeline.faults[0].started_at == fault.started_at
     serialized = fault.model_dump(mode='json')['started_at']
     timeline.acknowledge(fault.name, serialized)

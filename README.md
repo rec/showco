@@ -31,6 +31,15 @@ status snapshot, and `GET /waveforms` provides the waveform event stream.
 Every page shows the persistent performance lock and active-fault banner. The target
 monitors services without an open browser and retains its latest 100 incident events.
 
+In `/status`, `recs.service.state` reports connectivity, `recs.snapshot_available`
+reports whether a snapshot has been received (including retained data), and
+`recs.paused` reports the recording switch. `recording_progress` separately
+reports whether recorded audio is advancing. There is no derived `recs.recording`
+boolean claiming that connectivity proves capture.
+
+OAuth exchange requires the full callback URL in `stream.callback_url`, with the
+state from the pending authorization. Raw authorization codes are not accepted.
+
 ## Commands
 
 Run these on the provisioning machine unless stated otherwise:

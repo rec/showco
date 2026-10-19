@@ -10,13 +10,17 @@ from showco.runtime import gui_schema, models, views
 
 
 @pytest.mark.parametrize('connected', [True, False])
-def test_initial_and_refreshed_status_use_the_same_text(connected: bool) -> None:
+@pytest.mark.parametrize('snapshot_available', [True, False])
+@pytest.mark.parametrize('paused', [True, False])
+def test_initial_and_refreshed_status_use_the_same_text(
+    connected: bool, snapshot_available: bool, paused: bool
+) -> None:
     state = 'connected' if connected else 'offline'
     status = models.ShowStatus(
         recs=models.RecsStatus(
             service=models.ServiceStatus(name='recs', state=state),
-            recording=connected,
-            paused=False,
+            snapshot_available=snapshot_available,
+            paused=paused,
             elapsed_seconds=3672.4 if connected else None,
             file_count=3 if connected else None,
             snapshot_error=None if connected else 'snapshot lost',

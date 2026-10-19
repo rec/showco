@@ -27,6 +27,6 @@ class RecordingProgressTests(unittest.TestCase):
 def recs(recorded_seconds: float) -> models.RecsStatus:
     return models.RecsStatus(
         service=models.ServiceStatus(name='recs', state='connected'),
-        recording=True,
+        snapshot_available=True,
         recorded_seconds=recorded_seconds,
     )

@@ -156,7 +156,7 @@ class Soundcheck:
             disk = status.recs.disk
             passed = bool(
                 confirmation
-                and status.recs.service.fresh
+                and status.recs.service.state == 'connected'
                 and disk
                 and self.identity(disk.path)
                 and disk.free_bytes > 0
@@ -178,7 +178,7 @@ class Soundcheck:
                 or not channels[k].on
                 or channels[k].state not in {'present', 'healthy'}
             ]
-            passed = status.recs.service.fresh and not failed
+            passed = status.recs.service.state == 'connected' and not failed
             evidence = (
                 'Measured signal without clipping on all expected recording inputs'
                 if passed
@@ -190,7 +190,7 @@ class Soundcheck:
                 status.recs.recorded_seconds,
             )
             passed = bool(
-                status.recs.service.fresh
+                status.recs.service.state == 'connected'
                 and baseline is not None
                 and current is not None
                 and current >= baseline + 1
@@ -214,7 +214,7 @@ class Soundcheck:
                 'then confirm what you heard'
             )
         elif step == 'lights':
-            passed = confirmation and status.lyte.service.fresh
+            passed = confirmation and status.lyte.service.state == 'connected'
             evidence = (
                 'Operator saw the expected light-test output'
                 if passed
@@ -224,7 +224,7 @@ class Soundcheck:
         elif step == 'stream':
             passed = (
                 confirmation
-                and status.streamo.service.fresh
+                and status.streamo.service.state == 'connected'
                 and status.streamo.ffmpeg_alive
             )
             evidence = (

@@ -134,7 +134,8 @@ def fault_details(status: models.ShowStatus) -> list[tuple[str, str, str]]:
         if not c.ok
     ]
     if (
-        status.recs.recording
+        status.recs.service.state == 'connected'
+        and status.recs.snapshot_available
         and not status.recs.paused
         and not status.recording_progress.ok
     ):
@@ -171,11 +172,10 @@ def states(status: models.ShowStatus) -> dict[str, str]:
     recording = (
         'unknown'
         if status.recs.service.state != 'connected'
+        or not status.recs.snapshot_available
         else 'paused'
         if status.recs.paused
-        else 'recording'
-        if status.recs.recording
-        else 'stopped'
+        else 'enabled'
     )
     disk_state = (
         'unavailable'

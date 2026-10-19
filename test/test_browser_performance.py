@@ -8,7 +8,7 @@ def test_performance_browser_controls_pins_and_disconnection() -> None:
     status = models.ShowStatus(
         recs=models.RecsStatus(
             service=models.ServiceStatus(name='recs', state='connected'),
-            recording=True,
+            snapshot_available=True,
             channels=[
                 models.ChannelLevel(
                     name='Vocal', device='X18', channels=[1], state='healthy', on=True

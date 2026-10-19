@@ -58,7 +58,7 @@ async function test() {
     vm.runInContext(fs.readFileSync(`site/${file}`, 'utf8'), context);
   }
   await flush();
-  assert.match(elements.get('performance-recording').textContent, /recording reported active/);
+  assert.match(elements.get('performance-recording').textContent, /recording enabled/);
   assert.match(elements.get('performance-disk').textContent, /recordings/);
   status.recs.snapshot_error = 'recs unavailable';
   context.currentStatus = status;

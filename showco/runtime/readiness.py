@@ -8,15 +8,16 @@ def status(value: models.ShowStatus) -> models.ReadinessStatus:
         _service_check('recs', value.recs.service),
         models.ReadinessCheck(
             name='Recording',
-            ok=value.recs.recording and not value.recs.paused,
+            ok=value.recs.service.state == 'connected'
+            and value.recs.snapshot_available
+            and not value.recs.paused,
             message=(
-                'recording reported; check audio writes separately'
-                if value.recs.recording and not value.recs.paused
-                else 'recording is paused'
-                if value.recs.recording and value.recs.paused
-                else 'recording state unavailable'
+                'recording state unavailable'
                 if value.recs.service.state != 'connected'
-                else 'not recording'
+                or not value.recs.snapshot_available
+                else 'recording is paused'
+                if value.recs.paused
+                else 'recording enabled; check audio writes separately'
             ),
         ),
         _disk_check(value.recs),

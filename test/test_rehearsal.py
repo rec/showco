@@ -12,7 +12,7 @@ class RehearsalTests(unittest.TestCase):
         status = recs.status()
 
         self.assertEqual(status.service.state, 'connected')
-        self.assertTrue(status.recording)
+        self.assertTrue(status.snapshot_available)
         self.assertEqual(len(status.channels), 18)
         self.assertIn('healthy', {c.state for c in status.channels})
 
