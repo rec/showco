@@ -184,3 +184,12 @@ class FakeStreamoClient(StreamoClient):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+def test_invalid_stream_states_are_not_healthy() -> None:
+    client = StreamoClient()
+    for payload in [{}, {'state': None}, {'state': 'unknown'}]:
+        with mock.patch.object(client, '_call', return_value=payload):
+            status = client.status()
+        assert status.service.state == 'error'
+        assert 'invalid state' in str(status.service.last_error)

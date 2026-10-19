@@ -93,7 +93,23 @@ class StreamoClient:
                     last_error='streamo status reply is not an object',
                 )
             )
-        stream_state = _string(status.get('state')) or 'unknown'
+        stream_state = _string(status.get('state'))
+        if stream_state not in {
+            'stopped',
+            'starting',
+            'streaming',
+            'muted',
+            'stopping',
+            'failed',
+        }:
+            return StreamoStatus(
+                service=ServiceStatus(
+                    name='streamo',
+                    state='error',
+                    last_error='streamO status reply has invalid state',
+                )
+            )
+        assert stream_state is not None
         last_error = _health_error(status, stream_state)
         service_state = 'error' if last_error else 'connected'
         return StreamoStatus(

@@ -89,3 +89,12 @@ class LyteClientTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+def test_missing_or_inactive_lyte_running_state_is_not_healthy() -> None:
+    client = LyteClient(enabled=True)
+    for payload in [{}, {'running': 'true'}, {'running': False}]:
+        with mock.patch.object(client, '_call', return_value=payload):
+            status = client.status()
+        assert status.service.state == 'error'
+        assert status.service.last_error
