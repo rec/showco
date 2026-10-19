@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import subprocess
 import threading
 import time
@@ -30,6 +29,7 @@ from . import (
     readiness,
     recording_progress,
     recovery,
+    recs_actions,
     services,
     setlist,
     soundcheck,
@@ -371,42 +371,8 @@ class ShowcoApp:
                     self.soundcheck_error = (
                         f'Soundcheck invalidation not saved: {error}'
                     )
-        if action == 'recs-calibrate':
-            device = form.get('device', '')
-            channels = _channel_numbers(form.get('channels', ''))
-            if device or channels:
-                return self.recs.calibrate(device, channels)
-            return self.recs.calibrate()
-        if action in {'recs-musician-add', 'recs-musician-edit'}:
-            return self._save_musician(action, form)
-        if action == 'recs-track-name':
-            return self.recs.set_track_name(
-                form.get('device', ''),
-                form.get('channel', ''),
-                form.get('track_name', ''),
-                form.get('expected_name'),
-            )
-        if action == 'recs-set-stereo':
-            return self.recs.set_stereo(
-                form.get('device', ''), _channel_numbers(form.get('channels', ''))
-            )
-        if action == 'recs-set-attr':
-            try:
-                value = json.loads(form.get('value', ''))
-            except json.JSONDecodeError:
-                return models.ActionResult(
-                    ok=False,
-                    message='recs attribute value must be valid JSON',
-                )
-            return self.recs.set_attr(form.get('address', ''), value)
-        if action == 'recs-shutdown':
-            if form.get('confirmation') == 'shutdown':
-                return self.recs.shutdown()
-            return models.ActionResult(ok=True, message='recs shutdown canceled')
-        if action == 'recs-playback-play':
-            return self.recs.play()
-        if action in RECS_ACTIONS:
-            return self.recs.action(RECS_ACTIONS[action], **_recs_fields(form))
+        if action.startswith('recs-'):
+            return recs_actions.run(self.recs, action, form)
         if action == 'streamo-toggle':
             if self.streamo is None:
                 return models.ActionResult(ok=False, message='streamO is disabled')
@@ -498,22 +464,6 @@ class ShowcoApp:
             return self.streamo.action(STREAMO_ACTIONS[action], **_streamo_fields(form))
         return models.ActionResult(ok=False, message=f'unknown action {action}')
 
-    def _save_musician(self, action: str, form: dict[str, str]) -> models.ActionResult:
-        name = form.get('name', '').strip()
-        if not name:
-            return models.ActionResult(ok=False, message='Musician name is required')
-        other_names = _text_lines(form.get('other_names', ''))
-        copyright_name = form.get('copyright_name', '').strip() or None
-        public_keys = (
-            _text_lines(form['public_keys']) if 'public_keys' in form else None
-        )
-        links = _text_lines(form.get('links', ''))
-        if action == 'recs-musician-add':
-            return self.recs.add_musician(
-                name, other_names, copyright_name, public_keys or [], links
-            )
-        return self.recs.edit_musician(name, other_names, public_keys, links)
-
     def recent_actions(self) -> list[models.ActionLogEntry]:
         with self.action_log_lock:
             return list(self.action_log)
@@ -552,17 +502,6 @@ def error_timestamp(value: str) -> float | None:
         return None
 
 
-def _channel_numbers(value: str) -> list[int]:
-    if not value.strip():
-        return []
-    try:
-        return [int(n) for n in value.split(',')]
-    except ValueError:
-        raise ValueError(
-            'channels must be a comma-separated list of integers'
-        ) from None
-
-
 def action_log_entry(action: str, result: models.ActionResult) -> models.ActionLogEntry:
     service, separator, command = action.partition('-')
     if not separator:
@@ -579,30 +518,6 @@ def _streamo_fields(form: dict[str, str]) -> dict[str, object]:
     return {k: v for k, v in form.items() if k != 'action' and v}
 
 
-def _recs_fields(form: dict[str, str]) -> dict[str, object]:
-    fields: dict[str, object] = {}
-    for k, v in form.items():
-        if k == 'action' or not v:
-            continue
-        if k in {'noise_floor', 'seconds'}:
-            try:
-                fields[k] = float(v)
-            except ValueError:
-                raise ValueError(f'{k} must be a number') from None
-        elif k in {'offset', 'session'}:
-            try:
-                fields[k] = int(v)
-            except ValueError:
-                raise ValueError(f'{k} must be an integer') from None
-        else:
-            fields[k] = v
-    return fields
-
-
-def _text_lines(value: str) -> list[str]:
-    return [line.strip() for line in value.splitlines() if line.strip()]
-
-
 RECORDING_ACTIONS = {
     'recs-pause-recording',
     'recs-resume-recording',
@@ -610,24 +525,6 @@ RECORDING_ACTIONS = {
     'soundcheck-pause-recording',
 }
 
-
-RECS_ACTIONS = {
-    'recs-capabilities': 'capabilities',
-    'recs-disk-status': 'disk_status',
-    'recs-key-label': 'set_key_label',
-    'recs-list-devices': 'list_devices',
-    'recs-marker': 'mark',
-    'recs-new-session': 'new_session',
-    'recs-pause-recording': 'pause_recording',
-    'recs-playback-jump': 'jump_playback',
-    'recs-playback-jump-session': 'jump_session',
-    'recs-playback-pause': 'pause_playback',
-    'recs-playback-stop': 'stop_playback',
-    'recs-reload-profiles': 'reload_profiles',
-    'recs-resume-recording': 'resume_recording',
-    'recs-set-noise-floor': 'set_noise_floor',
-    'recs-status-snapshot': 'status_snapshot',
-}
 
 STREAMO_ACTIONS = {
     'streamo-mute': 'mute',
