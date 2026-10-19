@@ -1,132 +1,109 @@
-# MusicController decomposition plan
+# MusicController decomposition
 
-Implementation extracted and verified. This document takes over the music
-portion of review item 27 and complements [showco-decomp.md](showco-decomp.md).
-The final ownership documentation and outstanding-list update are being completed.
-
-Confirmed decision: Resume show may interrupt running credits. Explicit abandon
-and manual-finish recovery still reject matching credits that are running.
+Implementation complete. This work covers the music portion of review item 27
+and complements [showco-decomp.md](showco-decomp.md).
 
 ## Additional work beyond the prompt
 
 None.
 
-## Purpose
-
-Separate normal show transitions from the closing-operation observer and its
-recovery state. Make ownership and failure ordering explicit while retaining one
-implementation of each transition and the existing RPC/player/routing adapters.
-Do not introduce an event bus, async runtime, retry engine, generic state machine,
-controller inheritance, or additional background workers.
-
-## Existing behavior that must survive
-
-- Setup stops broadcasting, pauses recs, starts configured setup audio, and
-  establishes the appropriate return routing.
-- Record stops incidental music, starts a new recs session, resumes recording,
-  and then starts broadcasting. Failure to resume recording prevents broadcasting.
-- Repeating Record in normal Record mode preserves the session and stream.
-- End show requests closing credits exactly once and continues recording until
-  streamO confirms completion. Elapsed time or socket loss is not completion.
-- Room fading, recording pause, instrument isolation, and teardown playback
-  follow the existing confirmed closing boundaries in
-  [closing-credits.md](closing-credits.md).
-- Abandoning failed closing restarts recording and broadcasting through the same
-  Resume show transition. Restore room routing first; clear closing evidence only
-  after success. It must not merely label paused recording as Record mode.
-- Manual finish still requires explicit confirmation that the broadcast stopped.
-  Reject recovery while matching credits are still running.
-- Failure to persist a closing failure must still publish the in-memory fault,
-  failed operation, persistence error, and recovery information, and log the error.
-- Shutdown waits for the observer to exit before stopping the player or muting
-  returns. A slow in-flight operation may delay shutdown; there is no timed join
-  followed by competing cleanup.
-- Existing saved operation IDs and room scenes remain the basis for restart
-  recovery. Restart must observe an existing operation rather than resubmit it.
-
-## Proposed boundaries
+## Ownership
 
 | Owner | Responsibility |
 | --- | --- |
-| `runtime/music.py:MusicController` | Setup/Record/Resume/teardown entry points, normal show-phase transitions, and shutdown ordering |
-| `runtime/closing.py:ClosingController` | Closing request/operation identity, observer lifecycle, credits progress, finalization, and closing recovery |
-| `runtime/music.py:MusicConfig` and factory | Existing music configuration and assembly from mixer specifications |
-| `x18/music.py:MusicPlayer` | Playlist decoding, playback thread, level fading, player status |
+| `runtime/music.py:MusicController` | Setup/Record/Resume/teardown entry points, normal show-phase persistence, combined MusicStatus, and shutdown ordering |
+| `runtime/closing.py:ClosingController` | Closing request identity, room-scene evidence, observation, local finalization, recovery checks, closing persistence, and fault publication |
+| `runtime/closing.py:ClosingSnapshot` | Immutable local record, separately observed remote result, error, and observer ownership |
+| `runtime/music.py:MusicConfig` and factory | Music configuration and assembly from mixer specifications |
+| `x18/music.py:MusicPlayer` | Playlist decoding, playback thread, level fading, and player status |
 | `x18/music.py:X18MusicRouting` | Confirmed mixer reads/writes, captured room scene, and room routing operations |
 | Existing recs and streamO clients | Service-specific transport and acknowledgement interpretation |
 
-`ClosingController` is a cohesive owner, not a wrapper around methods left in
-`MusicController`. Move the closing record, observer, persistence, and failure
-handling together. Keep normal mode configuration and factory code in music.py
-unless a later concrete consumer justifies another module.
+ClosingController receives concrete clients, player, routing, fade duration,
+teardown paths, its storage path, and a narrow phase-save callback. The callback
+uses a weak reference to the normal phase owner; the controllers do not retain
+each other. closing.py does not import music.py.
 
-Supply existing concrete clients/player/routing objects and narrow callbacks
-where closing must publish a normal show-phase result. Do not pass the whole
-application or make the two controllers retain each other. MusicController owns
-normal show-phase persistence; ClosingController owns closing-operation
-persistence. A callback may request a phase change through its owner, rather
-than both classes writing the same file or mutable field directly.
+MusicController alone writes `music.json`. ClosingController alone writes
+`closing.json`. Existing locations and saved JSON shapes are unchanged. There
+are no new persisted fields, migration readers, dependencies, workers, or retries.
+The closing methods and record model were removed from music.py completely.
 
-## API and state ownership
+## Transitions and recovery
 
-- The application calls normal show methods through MusicController. It does not
-  start, join, or mutate the closing worker itself.
-- ClosingController exposes a small explicit request, recovery, status, and stop
-  lifecycle. Replace the ambiguous `recover_closing(finish: bool)` boundary with
-  named recovery choices when moving it; keep one canonical implementation of
-  Resume show and one implementation of finalization.
-- Keep the distinction between streamO's remote closing result and showCo's local
-  finalization state. A completed broadcast can coexist with failed local routing
-  or paused recording; neither state should overwrite the other's evidence.
-- Publish immutable status snapshots with explicit operation identity, phase,
-  and error. Derive the combined MusicStatus in one place instead of allowing
-  both controllers to assign a shared display-mode string independently.
-- Preserve current file locations and JSON shapes during the mechanical
-  extraction. No new schema fields, migrations, or compatibility readers are
-  justified by moving ownership alone.
+- Setup stops broadcasting, pauses recs, restores a retained room scene, starts
+  configured setup audio, and establishes the return routing.
+- Record stops incidental music, mutes its returns, restores the room scene,
+  starts a new recs session, resumes recording, then starts broadcasting. Failure
+  to resume recs prevents broadcasting. Repeating ordinary Record preserves its
+  session and stream.
+- End show persists one operation ID before requesting credits. Duplicate
+  requests cannot resubmit it. Recording continues until the matching remote
+  operation reports completion; elapsed time and connection loss cannot imply it.
+- The final black interval owns the room fade. Confirmed broadcast completion
+  leads to recording pause, playback stop, instrument isolation, and teardown
+  playback. Missing the interval still silences the room before finalization.
+- Resume show, `record(restart=True)`, may interrupt running credits. This is the
+  explicit user decision made during implementation. It stops and waits for the
+  observer before using the same canonical Record transition.
+- `abandon_closing()` and `finish_closing()` replace boolean recovery selection.
+  Both reject matching credits that are still running. Abandon uses the canonical
+  Resume show transition. Manual finish still requires the application's explicit
+  broadcast-stopped confirmation.
+- Closing evidence clears only after a successful normal transition. Failure to
+  restore routing or resume recs retains that evidence. Successful manual finish
+  clears its local saved error so restart does not resurrect a resolved fault.
 
-## Concurrency and liveness
+## Status and persistence failures
 
-Document which operation owns playback, mixer routing, and recording changes at
-all times. The normal transition and closing finalization paths must not operate
-those outputs concurrently. Keep the application's immediate recording-control
-rejection and UI availability rules intact.
+MusicController derives the combined MusicStatus in one place. Normal transition
+errors, local closing faults, player errors, and streamO's remote closing result
+retain separate owners. A local routing failure after remote completion leaves
+that remote result completed while MusicStatus reports the local fault.
 
-Use short critical sections for operation identity and published state, with
-external I/O outside the status-publication lock. Never hold a lock needed by the
-observer while joining it. Observer shutdown means signal, wait for exit, then
-output cleanup, in that order. Handle storage failure without losing in-memory
-truth or attempting an unrequested replay of side effects.
+A saved local phase does not fabricate a remote result. Before matching remote
+status is observed after restart, MusicStatus carries the saved operation identity
+and local phase with remote state `unknown`. The response model's fields remain
+unchanged. Existing operation IDs and captured room scenes remain authoritative
+for observation and recovery; restart never resubmits credits.
 
-Do not add automatic restarts of failed transitions. Preserve the explicit
-operator recovery choices and their uncertainty messages. Any requirement to
-change those choices is a new behavior decision, not part of decomposition.
+ClosingSnapshot is immutable. Publication locks protect short in-memory updates,
+not RPCs, routing, playback, filesystem writes, or joins. Storage failure while
+saving a closing fault still publishes the failed local record, operation ID,
+persistence error, and recovery information, and logs the error. This also holds
+when restart discovers an interrupted finalization and cannot save its fault.
 
-## Implementation sequence
+An active observer retains closing output ownership even if restart also loaded
+an interrupted normal-transition error. The error stays visible, while closing
+mode continues to block conflicting manual recording controls.
 
-1. Use the existing music, app, incident, and browser tests to establish the
-   behavior above. Add only missing behavior coverage needed by the extraction.
-2. Identify all closing-owned fields and methods, including constructor restart
-   observation, normal transitions' restoration hooks, and shutdown joins.
-3. Extract ClosingController with its state/persistence/observer as one coherent
-   change. Remove the moved implementation from MusicController completely.
-4. Connect normal transitions through narrow collaborators and a single owner for
-   phase publication. Keep dependency direction acyclic.
-5. Replace boolean recovery selection at the controller boundary and update its
-   action-dispatch callers in the same commit; do not retain two public spellings.
-6. Review lock ordering and publish-status behavior under blocked RPC, routing
-   failure, unwritable storage, and shutdown during finalization.
+## Concurrency and shutdown
 
-## Acceptance
+Application actions remain serialized by ShowcoApp. Normal transitions cannot
+change outputs while closing observation/finalization owns them. Ordinary mode
+changes reject an unresolved operation. Resume and explicit recovery signal and
+join the observer first; their bounded wait rejects the action without output
+changes if the worker is still active.
 
-Focused tests must cover request acknowledgement loss, duplicate closing requests,
-restart with an existing operation, missed black interval, finalization failure
-after recording pauses, failed persistence of the fault itself, explicit Resume
-show, failure to resume recs, and shutdown blocked beyond the former five-second
-cutoff. Keep the current regressions instead of duplicating them for every private
-method or file move.
+Shutdown uses an unbounded observer join: signal, wait for exit, then stop the
+player and mute returns. No publication lock is held during that join. Player
+shutdown failure still mutes returns. The application does not manage the worker
+or bypass its lifecycle. No additional background worker or event framework was
+introduced.
 
-Run the full suite and required Python checks for every implementation commit.
-Fake clients and routing/player controls verify ownership and ordering; they do
-not prove venue timing or audible output. Do not launch services, perform a
-deployment, or run physical X18/streaming checks without explicit authorization.
+## Verification
+
+Existing regressions were retained and updated to inject collaborators at
+construction and observe public status rather than moved worker fields. Coverage
+includes lost request acknowledgement, duplicate requests, saved-operation
+observation, missed black intervals, finalization failure after recording pause,
+unwritable fault storage, explicit recovery, recs-resume failure, blocked RPCs,
+and shutdown beyond the former five-second cutoff.
+
+Focused regressions also cover distinct Resume/recovery choices during running
+credits, status availability during blocked finalization, successful manual-finish
+persistence, and observer ownership after an interrupted Resume show.
+
+The full suite, Ruff, ty, pyupgrade, and diff checks pass. No application,
+deployment, service restart, or physical X18/streaming flow was launched. The
+user's successful show already supplied hardware acceptance.

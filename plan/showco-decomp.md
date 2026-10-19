@@ -1,8 +1,8 @@
 # showCo decomposition
 
 Implementation complete. This work covers review items 26, 28, 29, and 30 and
-application ownership from item 27. MusicController's lifecycle structure is
-unchanged; its separate work remains in
+application ownership from item 27. MusicController's lifecycle decomposition
+is documented separately in
 [music-controller-decomp.md](music-controller-decomp.md).
 
 ## Additional work beyond the prompt
