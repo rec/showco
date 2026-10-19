@@ -1351,3 +1351,56 @@ def test_recording_controls_wait_for_final_phase_save_and_failure_cleanup(
             release.set()
             finish_cleanup.set()
             value.close()
+
+
+@pytest.mark.parametrize('phase', ['failed', 'teardown-music-playing'])
+def test_resume_preserves_record_mode_when_old_evidence_cannot_be_deleted(
+    tmp_path: Path, phase: str
+) -> None:
+    from showco.runtime.app import ShowcoApp
+
+    path = tmp_path / 'closing.json'
+    evidence = closing.ClosingRecord(
+        operation_id='previous-closing',
+        phase=phase,
+        error='old closing failure' if phase == 'failed' else None,
+        room_scene=x18_music.RoomScene(master_fader=0.7, input_lr=[1] * 18),
+    )
+    path.write_text(evidence.model_dump_json())
+    stream = mock.Mock()
+    value, recs, player, routing = controller(path=path, streamo=stream)
+    restart = mock.Mock(return_value=result())
+    value.streamo_restart = restart
+    original_unlink = Path.unlink
+
+    def unlink(p: Path, missing_ok: bool = False) -> None:
+        if p == path:
+            raise PermissionError('cannot remove old closing evidence')
+        original_unlink(p, missing_ok=missing_ok)
+
+    try:
+        app = ShowcoApp(recs, stream, mock.Mock(), mock.Mock(), music_controller=value)
+        with mock.patch.object(Path, 'unlink', autospec=True, side_effect=unlink):
+            outcome = app.run_action({'action': 'music-restart'})
+        assert not outcome.ok
+        assert 'cannot remove old closing evidence' in outcome.message
+        assert closing.ClosingRecord.model_validate_json(path.read_text()) == evidence
+        snapshot = value.status()
+        assert snapshot.mode == 'record'
+        assert snapshot.closing is None
+        assert snapshot.error is None
+        assert (
+            music.MusicState.model_validate_json(
+                (tmp_path / 'music.json').read_text()
+            ).mode
+            == 'record'
+        )
+        assert app.run_action({'action': 'music-record'}).ok
+        assert recs.action.call_args_list == [
+            mock.call('new_session'),
+            mock.call('resume_recording'),
+        ]
+        restart.assert_called_once_with()
+        routing.restore_room.assert_called_once_with(evidence.room_scene)
+    finally:
+        value.close()

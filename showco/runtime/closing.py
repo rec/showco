@@ -168,12 +168,13 @@ class ClosingController:
             return models.ActionResult(ok=False, message=str(error))
 
     def clear(self) -> None:
-        # Preserve recovery evidence if deletion fails after a successful transition.
-        if self.path is not None:
-            self.path.unlink(missing_ok=True)
+        # The normal transition succeeded. Any file left behind is diagnostic
+        # evidence, not an operation that still owns the current show phase.
         with self._lock:
             self._snapshot = ClosingSnapshot()
         self._black_fade_done = False
+        if self.path is not None:
+            self.path.unlink(missing_ok=True)
 
     def stop(self, timeout: float | None = None) -> bool:
         self._stop.set()
