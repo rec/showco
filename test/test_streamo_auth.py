@@ -6,6 +6,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import mock
 
+import pytest
+
 from showco.provision import config
 from showco.streamo import auth
 
@@ -108,9 +110,11 @@ def config_paths(directory: Path) -> tuple[Path, Path]:
         '[stream]\n'
         'client_id = "client-id"\n'
         'redirect_uri = "http://localhost/callback"\n'
+        'state = "test-state"\n'
     )
     secrets_path.write_text(
-        '[stream]\nclient_secret = "client-secret"\ncallback_url_or_code = "code"\n'
+        '[stream]\nclient_secret = "client-secret"\n'
+        'callback_url_or_code = "http://localhost/callback?code=code&state=test-state"\n'
     )
     return config_path, secrets_path
 
@@ -146,3 +150,25 @@ def test_token_files_and_directory_are_private_even_when_replacing_existing_file
     assert directory.stat().st_mode & 0o777 == 0o700
     for path in [secrets_path, *directory.iterdir()]:
         assert path.stat().st_mode & 0o777 == 0o600
+
+
+def test_invalid_oauth_callbacks_are_rejected_before_network_request(
+    tmp_path: Path,
+) -> None:
+    config_path, secrets_path = config_paths(tmp_path)
+    callbacks = [
+        'raw-code',
+        'http://localhost/callback?code=code&state=wrong',
+        'http://other/callback?code=code&state=test-state',
+        'http://localhost/callback?state=test-state',
+        'http://localhost/callback?code=a&code=b&state=test-state',
+        'http://localhost/callback?error=access_denied&state=test-state',
+    ]
+    with mock.patch.object(auth, 'request_http') as request:
+        for callback in callbacks:
+            auth.write_toml_value(
+                secrets_path, 'stream', 'callback_url_or_code', callback
+            )
+            with pytest.raises(ValueError, match='OAuth'):
+                auth.exchange_code(config_path, secrets_path)
+        request.assert_not_called()

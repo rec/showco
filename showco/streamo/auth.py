@@ -108,6 +108,7 @@ def exchange_code(config_path: Path, secrets_path: Path) -> int:
     client_secret = require_value(stream, 'client_secret')
     redirect_uri = require_value(stream, 'redirect_uri')
     callback = require_value(stream, 'callback_url_or_code')
+    code = callback_code(callback, require_value(stream, 'state'), redirect_uri)
     config_dir = Path.home() / '.config/streamo'
     config_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
     config_dir.chmod(0o700)
@@ -116,7 +117,7 @@ def exchange_code(config_path: Path, secrets_path: Path) -> int:
         {
             'client_id': client_id,
             'client_secret': client_secret,
-            'code': callback_code(callback),
+            'code': code,
             'grant_type': 'authorization_code',
             'redirect_uri': redirect_uri,
         }
@@ -191,12 +192,26 @@ def validate_token(values: dict[str, object]) -> int:
     return 0
 
 
-def callback_code(value: str) -> str:
-    if value.startswith(('http://', 'https://')):
-        url = parse.urlparse(value)
-        params = parse.parse_qs(url.query)
-        return params['code'][0]
-    return value
+def callback_code(value: str, state: str, redirect_uri: str) -> str:
+    url = parse.urlsplit(value)
+    expected = parse.urlsplit(redirect_uri)
+    if url.scheme not in {'http', 'https'} or (url.scheme, url.netloc, url.path) != (
+        expected.scheme,
+        expected.netloc,
+        expected.path,
+    ):
+        raise ValueError('Paste the full OAuth callback URL matching redirect_uri')
+    params = parse.parse_qs(url.query, keep_blank_values=True)
+    if params.get('state') != [state] or not state:
+        raise ValueError(
+            'OAuth callback state does not match the pending authorization'
+        )
+    if 'error' in params:
+        raise ValueError('OAuth authorization was denied: ' + params['error'][0])
+    codes = params.get('code', [])
+    if len(codes) != 1 or not codes[0]:
+        raise ValueError('OAuth callback must contain exactly one nonempty code')
+    return codes[0]
 
 
 def request_http(http_request: request.Request) -> HttpResponse:

@@ -29,18 +29,6 @@ across invocations is not a requirement.
 
 ## Configuration, authentication, and reporting
 
-### 22. P2: OAuth callback state is generated but never checked
-
-`streamo/auth.py:81,184`, `authorize_url()` saves random state, but
-`callback_code()` extracts only `code`, and `exchange_code()` never compares
-returned state with the saved value. A callback from a different authorization
-attempt is accepted. A denial callback without `code` raises `KeyError` instead
-of explaining the authorization error.
-
-Validate callback URLs against pending state and report denials/missing fields.
-Make the intended raw-code policy explicit. Check mismatch, denial, and valid
-callbacks with fake HTTP.
-
 ### 23. P2: OAuth HTTP requests have no timeout
 
 `streamo/auth.py:192`, `request_http()`, calls `urlopen()` without a timeout.
