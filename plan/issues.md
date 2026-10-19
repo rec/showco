@@ -29,15 +29,6 @@ across invocations is not a requirement.
 
 ## Configuration, authentication, and reporting
 
-### 23. P2: OAuth HTTP requests have no timeout
-
-`streamo/auth.py:192`, `request_http()`, calls `urlopen()` without a timeout.
-Exchange and validation can block on stalled connections indefinitely. Expected
-transport failures also escape without the command's own diagnostic context.
-
-Give requests a finite deadline and useful transport-error messages. Verify
-with a fake opener; no real authorization request is needed.
-
 ### 24. P2: TOML updates corrupt valid alternative formatting
 
 `streamo/auth.py:200`, `write_toml_value()`, recognizes a key only if the line
