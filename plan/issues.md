@@ -29,17 +29,6 @@ across invocations is not a requirement.
 
 ## Configuration, authentication, and reporting
 
-### 20. P2: Removing a managed movie leaves the old movie configured
-
-`provision/media.py:246`, `stream_media_configuration()`, replaces `video` only
-when `movie` is non-null. Removing a saved movie from `media.toml` supplies no
-movie argument and retains the old managed `video` path in streamO. Photos have
-an explicit removal branch; movies do not. Streaming can keep using an asset
-removed from the desired configuration.
-
-Reconcile removal of managed movie paths without clearing independently managed
-video settings. Check configuration with a movie followed by no movie selection.
-
 ### 21. P2: OAuth token files use ambient filesystem permissions
 
 `streamo/auth.py:103`, `exchange_code()`, uses plain `write_text()` for the full

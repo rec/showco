@@ -140,7 +140,8 @@ migrate_streamo_configuration() {
 
 configure_streamo_media() {
   if [[ -z "$SHOWCO_STREAM_MEDIA_ARGS" && -z "$SHOWCO_STREAM_SETTINGS" ]] && ! grep -Fq \
-    "/home/$SHOW_USER/.local/share/showco/media/photos/" \
+    -e "/home/$SHOW_USER/.local/share/showco/media/photos/" \
+    -e "/home/$SHOW_USER/.local/share/showco/media/movie/" \
     "/home/$SHOW_USER/.config/streamo/config.toml" 2>/dev/null; then
     return
   fi
