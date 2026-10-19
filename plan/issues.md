@@ -27,18 +27,6 @@ across invocations is not a requirement.
 
 ## Browser and waveform behavior
 
-### 19. P2: Performance disk values lose their stale-data warning
-
-`site/performance.js:37`, `renderPerformance()`, renders `recs.disk` whenever
-present, ignoring `disk_error` and `snapshot_error`. Recs intentionally retains
-the last disk snapshot after transport failure. The performance page keeps
-showing old free space and remaining minutes without marking those figures stale.
-`site/status-script.js:updatePerformance()` handles these errors, so the two
-presentations disagree for the same response.
-
-Label retained values stale on the performance page. Check a successful disk
-sample followed by transport failure.
-
 ## Configuration, authentication, and reporting
 
 ### 20. P2: Removing a managed movie leaves the old movie configured

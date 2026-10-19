@@ -60,6 +60,14 @@ async function test() {
   await flush();
   assert.match(elements.get('performance-recording').textContent, /recording reported active/);
   assert.match(elements.get('performance-disk').textContent, /recordings/);
+  status.recs.snapshot_error = 'recs unavailable';
+  context.currentStatus = status;
+  vm.runInContext('renderPerformance(currentStatus)', context);
+  assert.match(elements.get('performance-disk').textContent, /stale: recs unavailable/);
+  assert.equal(elements.get('performance-disk').className, 'failed');
+  status.recs.snapshot_error = null;
+  vm.runInContext('renderPerformance(currentStatus)', context);
+  assert.doesNotMatch(elements.get('performance-disk').textContent, /stale/);
   assert.ok(actionButtons.every(button => !button.disabled));
   status.recording_controls_available = false;
   context.currentStatus = status;
