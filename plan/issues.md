@@ -27,18 +27,6 @@ across invocations is not a requirement.
 
 ## Browser and waveform behavior
 
-### 16. P2: Empty service status replies are classified as healthy
-
-`streamo/client.py:50`, `StreamoClient.status()`, accepts an empty dictionary,
-assigns stream state `unknown`, and publishes service state `connected` because
-`_health_error()` only checks active states and explicit errors. Similarly,
-`runtime/lyte.py:LyteClient.status()` accepts an empty dictionary as connected
-while setting `running=False`. Readiness uses service connectivity, so these
-unusable replies pass the service checks rather than reporting invalid status.
-
-Require the existing status contract's essential fields before declaring health.
-Check empty replies and missing state/running fields with fake RPC clients.
-
 ### 17. P2: Concurrent waveform arrivals can be delivered twice
 
 `runtime/server.py:120`, `_waveforms()`, gets `updated` from `wait_for_change()`,

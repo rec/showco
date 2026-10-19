@@ -41,7 +41,13 @@ class LyteClient:
             )
         animations = result.get('animations')
         strings = _string_statuses(result.get('strings'))
-        error = _status_error(result, strings)
+        error = (
+            'lyte status reply has invalid running state'
+            if not isinstance(result.get('running'), bool)
+            else 'lyte installation is not running'
+            if result['running'] is False
+            else _status_error(result, strings)
+        )
         return models.LyteStatus(
             service=models.ServiceStatus(
                 name='lyte',
