@@ -1636,7 +1636,7 @@ visible_when = "music_enabled"
 [[pages.sections.elements]]
 name = "music-close-cancel"
 kind = "action_button"
-label = "Abandon a failed closing sequence; keep recording"
+label = "Abandon a failed closing sequence; restart recording and broadcasting"
 action = "music-close-cancel"
 visible_when = "music_enabled"
 

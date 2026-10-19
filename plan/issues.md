@@ -34,7 +34,14 @@ currently asserts the incorrect boundary using a fake runner.
 Choose a range containing the affected target commits. Verify with a disposable
 Git history where a target and fixup are separated by ordinary commits.
 
-### 2. P1: Closing recovery can claim Record mode with recording paused
+### 2. Resolved: Closing recovery can claim Record mode with recording paused
+
+Abandoning closing now uses the existing Resume show transition: restore the
+room, start a new recording session, resume recording, and restart broadcasting.
+Closing evidence is cleared only after success; failed recording resumption
+keeps recovery evidence and does not start broadcasting. This follows the user's
+explicit recovery decision. Validation: music regressions, full pytest suite,
+Ruff, ty, pyupgrade, and diff checks.
 
 `runtime/music.py:409`, `MusicController.recover_closing(False)`, restores room
 routing, clears closing evidence, and saves mode `record`. It does not resume
