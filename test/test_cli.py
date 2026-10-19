@@ -337,3 +337,15 @@ class CliTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+def test_diagnostic_capture_keeps_only_last_two_mebibytes() -> None:
+    capture = cli.DiagnosticCapture()
+    capture.write('old prefix\n')
+    capture.write('é' * cli.MAX_DIAGNOSTIC_BYTES)
+    capture.write('\nlast error\n')
+    value = capture.getvalue()
+    assert value.startswith('[Earlier output truncated;')
+    assert 'old prefix' not in value
+    assert value.endswith('\nlast error\n')
+    assert len(capture.buffer) == cli.MAX_DIAGNOSTIC_BYTES

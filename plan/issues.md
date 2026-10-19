@@ -25,18 +25,6 @@ across invocations is not a requirement.
 
 ## Operational correctness and recovery
 
-### 11. P2: A single run's diagnostic capture grows without a bound
-
-`cli.py:119`, `main()`, redirects output into a temporary file and attaches a
-root log handler to it for the whole command. For `showco run`, log records
-accumulate until server exit, without a size limit. A long run or repeated
-failure can fill temporary storage, worsening the original incident. This is
-about capture size within one invocation, not retaining earlier runs.
-
-Bound the in-run capture while preserving the intentional last-run-only
-diagnostic. Check capture size under repeated output without starting the
-application.
-
 ### 14. P2: Malformed channels silently change calibration scope
 
 `runtime/app.py:530`, `_channel_numbers()`, returns an empty list for malformed
