@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 
 from pydantic import BaseModel, Field, ValidationError
+from reccy.runtime.files import atomic_output
 
 from . import models
 
@@ -115,14 +116,14 @@ class IncidentTimeline:
 
     def save(self) -> None:
         if self.path is not None:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            temporary = self.path.with_suffix('.tmp')
-            temporary.write_text(
-                IncidentHistory(
-                    previous=self.previous, incidents=self.incidents, faults=self.faults
-                ).model_dump_json()
-            )
-            temporary.replace(self.path)
+            with atomic_output(self.path) as temporary:
+                temporary.write_text(
+                    IncidentHistory(
+                        previous=self.previous,
+                        incidents=self.incidents,
+                        faults=self.faults,
+                    ).model_dump_json()
+                )
         self.pending_save = False
         self.storage_error = self.load_error
 

@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 from pydantic import BaseModel, Field, ValidationError
+from reccy.runtime.files import atomic_output
 
 from . import models, workflow_storage
 
@@ -44,10 +45,8 @@ class Soundcheck:
 
     def save(self, state: SoundcheckState) -> None:
         if self.path is not None:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            temporary = self.path.with_suffix('.tmp')
-            temporary.write_text(state.model_dump_json())
-            temporary.replace(self.path)
+            with atomic_output(self.path) as temporary:
+                temporary.write_text(state.model_dump_json())
         self.state = state
         self.pending_save = False
 
