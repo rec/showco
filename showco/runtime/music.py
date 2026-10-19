@@ -440,13 +440,7 @@ class MusicController:
             ) as error:
                 self._fail_closing(str(error))
                 return models.ActionResult(ok=False, message=str(error))
-        self.routing.restore_room(record.room_scene)
-        self._clear_closing()
-        self._save_mode('record')
-        return models.ActionResult(
-            ok=True,
-            message='Closing abandoned; verify recs recording state before continuing',
-        )
+        return self.record(restart=True)
 
     def _require_no_closing(self) -> None:
         if self.closing_record is not None and self.closing_record.phase not in {

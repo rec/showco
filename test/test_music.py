@@ -982,3 +982,65 @@ def test_large_finite_weights_do_not_overflow() -> None:
 def test_invalid_shuffle_weights_are_rejected(weights: list[float]) -> None:
     with pytest.raises(ValueError, match='finite and nonnegative'):
         x18_music.Files(files=[Path('a.wav')], shuffle=weights)
+
+
+@pytest.mark.parametrize('resume_ok', [True, False])
+def test_abandon_closing_restarts_show_only_after_recording_resumes(
+    tmp_path: Path, resume_ok: bool
+) -> None:
+    value, recs, player, routing = controller()
+    path = tmp_path / 'closing.json'
+    scene = x18_music.RoomScene(master_fader=0.7, input_lr=[1] * 18)
+    path.write_text(
+        music.ClosingRecord(
+            operation_id='failed-show',
+            phase='failed',
+            room_scene=scene,
+            error='Finalization failed after pausing recs',
+        ).model_dump_json()
+    )
+    stream = mock.Mock()
+    stream.status.return_value = models.StreamoStatus(
+        service=models.ServiceStatus(name='streamo', state='connected'),
+        stream_state='stopped',
+    )
+    restart = mock.Mock(return_value=result())
+    restored = music.MusicController(
+        recs,
+        player,
+        routing,
+        music.MusicConfig(),
+        streamo=stream,
+        streamo_restart=restart,
+        closing_state_path=path,
+    )
+    recs.action.side_effect = lambda command: (
+        models.ActionResult(ok=False, message='cannot resume')
+        if command == 'resume_recording' and not resume_ok
+        else result()
+    )
+
+    if resume_ok:
+        assert restored.recover_closing(False).ok
+        assert restored.status().mode == 'record'
+        assert restored.closing_record is None
+        assert not path.exists()
+        restart.assert_called_once_with()
+        assert (
+            music.MusicState.model_validate_json(
+                (tmp_path / 'music.json').read_text()
+            ).mode
+            == 'record'
+        )
+    else:
+        with pytest.raises(ValueError, match='cannot resume'):
+            restored.recover_closing(False)
+        assert restored.status().mode == 'fault'
+        assert restored.closing_record is not None
+        assert path.exists()
+        restart.assert_not_called()
+    routing.restore_room.assert_called_once_with(scene)
+    assert recs.action.call_args_list == [
+        mock.call('new_session'),
+        mock.call('resume_recording'),
+    ]
