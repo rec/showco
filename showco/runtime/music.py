@@ -619,7 +619,7 @@ class MusicController:
             self.closing_thread is not None
             and threading.current_thread() is not self.closing_thread
         ):
-            self.closing_thread.join(timeout=5)
+            self.closing_thread.join()
         try:
             self.player.stop(fade_seconds)
         finally:
