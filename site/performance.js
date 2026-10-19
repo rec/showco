@@ -51,7 +51,9 @@ function renderPerformance(status) {
   if (stream) stream.textContent =
     `streamO ${status.streamo.service.state}; ${status.streamo.stream_state}${status.streamo.muted ? '; muted' : ''}`;
   document.querySelectorAll('[data-performance-action]').forEach(button => {
-    button.disabled = performanceBusy || recs.service.state !== 'connected';
+    button.disabled = performanceBusy || recs.service.state !== 'connected'
+      || (['recs-pause-recording', 'recs-resume-recording'].includes(button.dataset.performanceAction)
+        && !status.recording_controls_available);
   });
   const signature = JSON.stringify(recs.channels.map(channel => [inputKey(channel), channel.name]));
   const choices = document.getElementById('input-pins');

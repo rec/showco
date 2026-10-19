@@ -306,6 +306,7 @@ class ShowStatus(BaseModel, frozen=True):
     revision: str | None = None
     run_started_at: float = 0.0
     performance_locked: bool = False
+    recording_controls_available: bool = True
     active_faults: list[ActiveFault] = Field(default_factory=list)
     observed_at: datetime | None = None
     monitoring_error: str | None = None

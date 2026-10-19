@@ -5,7 +5,6 @@ import subprocess
 import threading
 import time
 from collections.abc import Callable
-from contextlib import nullcontext
 from datetime import datetime
 from pathlib import Path
 
@@ -78,6 +77,7 @@ class ShowcoApp:
         self.run_started_at = time.time()
         self.action_log: list[models.ActionLogEntry] = []
         self.action_lock = threading.Lock()
+        self.action_in_progress = False
         self.action_log_lock = threading.Lock()
         self.cable_test_lock = threading.Lock()
         self.cable_test_value = models.CableTestStatus()
@@ -148,6 +148,10 @@ class ShowcoApp:
                 else:
                     self.soundcheck_error = None
             observed = self.incidents.observe(status)
+            music_status = (
+                self.music.status() if self.music is not None else models.MusicStatus()
+            )
+            cable_status = self.cable_test_status()
             return status.model_copy(
                 update={
                     'incidents': observed,
@@ -172,10 +176,11 @@ class ShowcoApp:
                     )
                     or None,
                     'input_checks': input_check.checks(recs.channels),
-                    'music': self.music.status()
-                    if self.music is not None
-                    else models.MusicStatus(),
-                    'cable_test': self.cable_test_status(),
+                    'music': music_status,
+                    'cable_test': cable_status,
+                    'recording_controls_available': not self.action_in_progress
+                    and music_status.mode not in {'closing', 'transitioning'}
+                    and cable_status.state != 'running',
                 }
             )
 
@@ -273,27 +278,35 @@ class ShowcoApp:
 
     def run_action(self, form: dict[str, str]) -> models.ActionResult:
         action = form.get('action', '')
-        lock = (
-            nullcontext()
-            if action in {'recs-pause-recording', 'recs-resume-recording'}
-            else self.action_lock
-        )
-        with lock:
-            try:
-                result = self._dispatch_action(action, form)
-            except (
-                ConnectionError,
-                OSError,
-                subprocess.SubprocessError,
-                TimeoutError,
-                ValidationError,
-                ValueError,
-            ) as error:
-                result = models.ActionResult(ok=False, message=str(error))
-            with self.action_log_lock:
-                entry = action_log_entry(action, result)
-                self.action_log = [entry, *self.action_log[:9]]
-            return result
+        acquired = self.action_lock.acquire(blocking=action not in RECORDING_ACTIONS)
+        try:
+            if not acquired:
+                result = models.ActionResult(
+                    ok=False,
+                    message='Another action is in progress; '
+                    'retry recording controls when it finishes',
+                )
+            else:
+                self.action_in_progress = True
+                try:
+                    result = self._dispatch_action(action, form)
+                except (
+                    ConnectionError,
+                    OSError,
+                    subprocess.SubprocessError,
+                    TimeoutError,
+                    ValidationError,
+                    ValueError,
+                ) as error:
+                    result = models.ActionResult(ok=False, message=str(error))
+        finally:
+            if acquired:
+                self.action_in_progress = False
+                self.action_lock.release()
+        with self.action_log_lock:
+            entry = action_log_entry(action, result)
+            self.action_log = [entry, *self.action_log[:9]]
+        return result
 
     def _dispatch_action(
         self, action: str, form: dict[str, str]
@@ -333,6 +346,16 @@ class ShowcoApp:
                 )
             return models.ActionResult(
                 ok=True, message='Fault acknowledged; it remains active until recovery'
+            )
+        if (
+            action in RECORDING_ACTIONS
+            and self.music is not None
+            and self.music.status().mode in {'closing', 'transitioning'}
+        ):
+            return models.ActionResult(
+                ok=False,
+                message='A show transition is in progress; '
+                'retry recording controls when it finishes',
             )
         if action.startswith(('setlist-', 'soundcheck-', 'recovery-', 'lighting-')):
             return workflows.run(self, form)
@@ -572,6 +595,14 @@ def _recs_fields(form: dict[str, str]) -> dict[str, object]:
 
 def _text_lines(value: str) -> list[str]:
     return [line.strip() for line in value.splitlines() if line.strip()]
+
+
+RECORDING_ACTIONS = {
+    'recs-pause-recording',
+    'recs-resume-recording',
+    'soundcheck-start-recording',
+    'soundcheck-pause-recording',
+}
 
 
 RECS_ACTIONS = {

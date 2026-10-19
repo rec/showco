@@ -64,7 +64,7 @@
 {% elif element.kind == 'link' %}
   <p><a href="{{ element.value }}"{% if element.download %} download{% endif %}>{{ element.label }}</a></p>
 {% elif element.kind == 'performance_button' %}
-  <button type="button"{% if element.action %} data-performance-action="{{ element.action }}"{% else %} id="{{ element.name }}"{% endif %}>{{ element.label }}</button>
+  <button type="button"{% if element.action %} data-performance-action="{{ element.action }}"{% if is_disabled(element, status) %} disabled{% endif %}{% else %} id="{{ element.name }}"{% endif %}>{{ element.label }}</button>
 {% elif element.kind == 'performance_checkbox' %}
   <label><input type="checkbox" id="{{ element.name }}"> {{ element.label }}</label>
 {% endif %}

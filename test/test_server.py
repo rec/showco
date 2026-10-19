@@ -597,7 +597,7 @@ class ServerTests(unittest.TestCase):
                 tester.run.assert_not_called()
                 self.assertEqual(app.cable_test_status().state, 'idle')
 
-    def test_urgent_recording_pause_does_not_wait_for_unrelated_action(self) -> None:
+    def test_recording_pause_rejects_busy_action_without_waiting(self) -> None:
         recs = mock.Mock()
         recs.action.return_value = models.ActionResult(ok=True, message='paused')
         app = ShowcoApp(
@@ -607,9 +607,10 @@ class ServerTests(unittest.TestCase):
             rehearsal.RehearsalMixersMonitor(),
         )
         finished = Event()
+        results: list[models.ActionResult] = []
 
         def pause() -> None:
-            app.run_action({'action': 'recs-pause-recording'})
+            results.append(app.run_action({'action': 'recs-pause-recording'}))
             finished.set()
 
         app.action_lock.acquire()
@@ -620,7 +621,9 @@ class ServerTests(unittest.TestCase):
         finally:
             app.action_lock.release()
             worker.join(timeout=1)
-        recs.action.assert_called_once_with('pause_recording')
+        recs.action.assert_not_called()
+        self.assertFalse(results[0].ok)
+        self.assertIn('Another action is in progress', results[0].message)
 
     def test_lyte_light_test_uses_lyte_client(self) -> None:
         app = ShowcoApp(

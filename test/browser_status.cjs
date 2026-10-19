@@ -65,6 +65,11 @@ const toggle = {
   hasAttribute() {return this.busy;},
   closest() {return {dataset: {disabledWhen: 'streamo_unavailable'}};},
 };
+const recordingButtons = ['recs-pause-recording', 'recs-resume-recording'].map(action => ({
+  disabled: false,
+  hasAttribute() {return false;},
+  closest() {return {dataset: {action}};},
+}));
 const elements = new Map([
   'streamo-health', 'bitrate', 'temperature', 'readiness-state',
   'readiness-checks', 'incidents', 'input-checks', 'osc-recorders', 'connection-status', 'lyte-health', 'playback-state',
@@ -88,7 +93,8 @@ const context = vm.createContext({
     querySelectorAll: selector => selector === 'p[data-value]'
       ? [...elements.values()].filter(element => element.dataset?.value)
       : selector === '[data-layout="list"]' ? [osc]
-      : selector === 'form[data-disabled-when] button' ? [toggle] : [],
+      : selector === 'form[data-disabled-when] button' ? [toggle, ...recordingButtons]
+      : selector.includes('form[data-action="recs-pause-recording"]') ? recordingButtons : [],
     createElement: () => ({append() {}}),
   },
   fetch: async () => ({ok: true, json: async () => status}),
@@ -102,6 +108,16 @@ vm.runInContext(fs.readFileSync('site/channel-controls.js', 'utf8'), context);
 vm.runInContext(fs.readFileSync('site/status-script.js', 'utf8'), context);
 vm.runInContext('updateStatus()', context).then(async () => {
   await checkTeardownConfirmation();
+  const recordingState = {...status, recs: {...status.recs, service: {state: 'connected'}}};
+  context.recordingState = recordingState;
+  recordingState.recording_controls_available = false;
+  vm.runInContext('updateConfiguredActions(recordingState)', context);
+  assert.ok(recordingButtons.every(button => button.disabled));
+  recordingState.recording_controls_available = true;
+  vm.runInContext('updateConfiguredActions(recordingState)', context);
+  assert.ok(recordingButtons.every(button => !button.disabled));
+  vm.runInContext('showControlsUnavailable()', context);
+  assert.ok(recordingButtons.every(button => button.disabled));
   assert.equal(elements.get('streamo-health').textContent,
     `streamo: ${status.streamo.service.state}`);
   assert.equal(elements.get('bitrate').textContent,

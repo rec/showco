@@ -1,10 +1,12 @@
+from html.parser import HTMLParser
 from pathlib import Path
+from threading import Event, Thread
 from unittest import mock
 
 import pytest
 
 from showco.runtime import gui_schema, models, performance, rehearsal, views
-from showco.runtime.app import ShowcoApp
+from showco.runtime.app import RECORDING_ACTIONS, ShowcoApp
 
 
 def app(directory: Path) -> ShowcoApp:
@@ -121,3 +123,95 @@ def test_performance_controls_and_protection_are_present_on_all_pages() -> None:
         assert 'id="performance-lock-state"' in content
         assert 'id="fault-banner"' in content
         assert 'id="connection-status"' in content
+
+
+@pytest.mark.parametrize('action', sorted(RECORDING_ACTIONS))
+def test_recording_controls_are_unavailable_until_show_transition_finishes(
+    tmp_path: Path, action: str
+) -> None:
+    application = app(tmp_path)
+    music = mock.Mock()
+    application.music = music
+    music.status.return_value = models.MusicStatus(mode='record')
+    entered = Event()
+    release = Event()
+
+    def record() -> models.ActionResult:
+        music.status.return_value = models.MusicStatus(mode='transitioning')
+        entered.set()
+        assert release.wait(timeout=5)
+        music.status.return_value = models.MusicStatus(mode='record')
+        return models.ActionResult(ok=True, message='Recording resumed')
+
+    music.record.side_effect = record
+    worker = Thread(target=application.run_action, args=({'action': 'music-record'},))
+    with mock.patch.object(application.recs, 'action') as recorder:
+        worker.start()
+        try:
+            assert entered.wait(timeout=5)
+            assert not application.status().recording_controls_available
+            outcome = application.run_action({'action': action})
+            assert not outcome.ok
+            recorder.assert_not_called()
+        finally:
+            release.set()
+            worker.join(timeout=5)
+        assert not worker.is_alive()
+        assert application.status().recording_controls_available
+        recorder.return_value = models.ActionResult(ok=True, message='ok')
+        if action.startswith('recs-'):
+            assert application.run_action({'action': action}).ok
+            recorder.assert_called_once()
+
+
+@pytest.mark.parametrize('action', sorted(RECORDING_ACTIONS))
+def test_closing_disables_recording_controls_between_actions(
+    tmp_path: Path, action: str
+) -> None:
+    application = app(tmp_path)
+    application.music = mock.Mock()
+    application.music.status.return_value = models.MusicStatus(mode='closing')
+    with mock.patch.object(application.recs, 'action') as recorder:
+        assert not application.status().recording_controls_available
+        outcome = application.run_action({'action': action})
+        assert not outcome.ok
+        assert 'show transition is in progress' in outcome.message
+        recorder.assert_not_called()
+
+
+@pytest.mark.parametrize('page_name', ['actions', 'performance'])
+def test_initial_page_disables_unavailable_recording_controls(page_name: str) -> None:
+    class Buttons(HTMLParser):
+        def __init__(self) -> None:
+            super().__init__()
+            self.buttons: list[dict[str, str | None]] = []
+            self.action: str | None = None
+
+        def handle_starttag(
+            self, tag: str, attrs: list[tuple[str, str | None]]
+        ) -> None:
+            values = dict(attrs)
+            if tag == 'form':
+                self.action = values.get('data-action')
+            if tag == 'button':
+                values['action'] = values.get('data-performance-action') or self.action
+                self.buttons.append(values)
+
+    show = models.ShowStatus(
+        recs=models.RecsStatus(
+            service=models.ServiceStatus(name='recs', state='connected')
+        ),
+        streamo=models.StreamoStatus(
+            service=models.ServiceStatus(name='streamo', state='disabled')
+        ),
+        recording_controls_available=False,
+    )
+    parser = Buttons()
+    parser.feed(views.configured_page(gui_schema.current_gui().page(page_name), show))
+    buttons = [
+        b
+        for b in parser.buttons
+        if b['action'] in {'recs-pause-recording', 'recs-resume-recording'}
+    ]
+    assert len(buttons) == 2
+    assert all('disabled' in b for b in buttons)

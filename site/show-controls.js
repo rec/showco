@@ -13,6 +13,8 @@ function showControlsUnavailable() {
       button.disabled = true;
       button.textContent = 'Twitch status unavailable';
     });
+  document.querySelectorAll('form[data-action="recs-pause-recording"] button, form[data-action="recs-resume-recording"] button')
+    .forEach(button => {button.disabled = true;});
 }
 
 async function showAction(fields) {

@@ -107,6 +107,8 @@ function renderWorkflows(data) {
     const cue = action.startsWith('setlist-') && action !== 'setlist-save';
     const protectedAction = !cue && action !== 'recovery-refresh';
     button.disabled = workflowBusy || (protectedAction && data.show.performance_locked)
+      || (['soundcheck-start-recording', 'soundcheck-pause-recording'].includes(action)
+        && !data.show.recording_controls_available)
       || (cue && Boolean(state.pending) !== ['setlist-accept', 'setlist-retry'].includes(action));
     if (['setlist-next', 'setlist-skip'].includes(action) && state.next_index >= state.songs.length) button.disabled = true;
     if (action === 'setlist-repeat' && state.current < 0) button.disabled = true;

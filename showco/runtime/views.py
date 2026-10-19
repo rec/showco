@@ -205,6 +205,8 @@ def _gui_enabled(
 
 
 def _gui_disabled(element: gui_schema.Element, status: models.ShowStatus) -> bool:
+    if element.action in {'recs-pause-recording', 'recs-resume-recording'}:
+        return not status.recording_controls_available or not status.recs.service.fresh
     if element.action == 'music-teardown':
         return not status.end_show_available
     if element.action == 'music-restart':
