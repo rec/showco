@@ -102,3 +102,24 @@ def test_slow_and_truncated_action_bodies_return_clear_errors() -> None:
     handler.rfile.read.return_value = b'action'
     with pytest.raises(ValueError, match='incomplete'):
         handler._form()
+
+
+def test_busy_workflow_poll_releases_health_capacity_immediately() -> None:
+    handler = object.__new__(ShowcoHandler)
+    handler.path = '/workflow-status'
+    handler.app = mock.Mock()
+    handler.app.action_lock = threading.Lock()
+    handler.server = mock.Mock()
+    handler.server.status_slots = threading.BoundedSemaphore(2)
+    handler.send_error = mock.Mock()
+    handler.app.action_lock.acquire()
+    try:
+        for _ in range(3):
+            handler.do_GET()
+        assert handler.send_error.call_count == 3
+        assert handler.send_error.call_args.args[0] == 503
+        assert handler.server.status_slots.acquire(blocking=False)
+        assert handler.server.status_slots.acquire(blocking=False)
+        handler.app.status.assert_not_called()
+    finally:
+        handler.app.action_lock.release()
