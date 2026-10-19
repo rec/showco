@@ -10,11 +10,17 @@ to `showco/` unless prefixed with `site/` or `test/`.
 
 ## Additional work beyond the prompt
 
-None. Suggested fixes and checks below are future work, not implemented changes.
+None. Resolved findings record their implementation and verification below;
+suggested work for the remaining findings has not been implemented.
 
 ## Operational correctness and recovery
 
-### 1. P1: Autosquash excludes the commit that needs the fixup
+### 1. Resolved: Autosquash excludes the commit that needs the fixup
+
+Fixed by rebasing from the parent of the oldest matching fixup target, including
+`--root` when the target is the first commit. Regression coverage uses real
+temporary Git histories with a separated fixup and both root/non-root targets.
+Validation: focused tests, full pytest suite, Ruff, ty, pyupgrade, and diff checks.
 
 `deployment/publication.py:172`, `autosquash_program()` and
 `oldest_fixup_commit()`, choose the parent of the oldest **fixup**, rather than

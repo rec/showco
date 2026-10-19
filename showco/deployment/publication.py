@@ -202,16 +202,26 @@ def autosquash_program(
                 + '\nNo rebase was started.'
             ),
         )
-    if (fixup_commit := oldest_fixup_commit(recent_commits.output)) is None:
+    if (target := oldest_fixup_target(recent_commits.output)) is None:
         return None
     parent = update.run_step(
         program.name,
-        'fixup parent',
-        ['git', '-C', str(program.directory), 'rev-parse', f'{fixup_commit}^'],
+        'fixup target parents',
+        [
+            'git',
+            '-C',
+            str(program.directory),
+            'rev-list',
+            '--parents',
+            '-n',
+            '1',
+            target,
+        ],
         run_command,
     )
     if not parent.ok:
         return parent
+    parents = parent.output.split()
     return update.run_step(
         program.name,
         'autosquash',
@@ -222,19 +232,16 @@ def autosquash_program(
             'rebase',
             '--interactive',
             '--autosquash',
-            parent.output.strip(),
+            parents[1] if len(parents) > 1 else '--root',
         ],
         run_command,
     )
 
 
-def oldest_fixup_commit(output: str) -> str | None:
-    fixups = [
-        commit
-        for commit, subject in log_commits(output)
-        if subject.startswith('fixup! ')
-    ]
-    return fixups[-1] if fixups else None
+def oldest_fixup_target(output: str) -> str | None:
+    commits = log_commits(output)
+    targets = {s.removeprefix('fixup! ') for _, s in commits if s.startswith('fixup! ')}
+    return next((c for c, s in reversed(commits) if s in targets), None)
 
 
 def missing_fixup_targets(output: str) -> list[str]:
