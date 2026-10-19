@@ -441,13 +441,13 @@ class ShowcoApp:
                         )
                     return self.music.record(restart=True)
                 case 'music-close-cancel':
-                    return self.music.recover_closing(False)
+                    return self.music.abandon_closing()
                 case 'music-close-finish':
                     if form.get('confirmation') != 'broadcast-stopped':
                         return models.ActionResult(
                             ok=True, message='Manual closing recovery canceled'
                         )
-                    return self.music.recover_closing(True)
+                    return self.music.finish_closing()
                 case 'music-stop':
                     if form.get('confirmation') != 'shutdown':
                         return models.ActionResult(

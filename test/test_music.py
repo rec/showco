@@ -10,7 +10,7 @@ from unittest import mock
 
 import pytest
 
-from showco.runtime import models, music
+from showco.runtime import closing, models, music
 from showco.x18 import music as x18_music
 
 
@@ -18,7 +18,12 @@ def result() -> models.ActionResult:
     return models.ActionResult(ok=True, message='ok')
 
 
-def controller() -> tuple[music.MusicController, mock.Mock, mock.Mock, mock.Mock]:
+def controller(
+    *,
+    streamo: mock.Mock | None = None,
+    path: Path | None = None,
+    with_audio: bool = True,
+) -> tuple[music.MusicController, mock.Mock, mock.Mock, mock.Mock]:
     recs = mock.Mock()
     recs.pause_recording.return_value = True
     recs.action.return_value = result()
@@ -30,8 +35,10 @@ def controller() -> tuple[music.MusicController, mock.Mock, mock.Mock, mock.Mock
         player,
         routing,
         music.MusicConfig(),
-        setup=[Path('/music/setup')],
-        teardown=[Path('/music/teardown')],
+        setup=[Path('/music/setup')] if with_audio else [],
+        teardown=[Path('/music/teardown')] if with_audio else [],
+        streamo=streamo,
+        closing_state_path=path,
     )
     return controller, recs, player, routing
 
@@ -39,9 +46,8 @@ def controller() -> tuple[music.MusicController, mock.Mock, mock.Mock, mock.Mock
 def test_record_phase_survives_restart_without_restarting_recording(
     tmp_path: Path,
 ) -> None:
-    value, recs, player, routing = controller()
     path = tmp_path / 'closing.json'
-    value.closing_state_path = path
+    value, recs, player, routing = controller(path=path)
     assert value.record().ok
     recs.reset_mock()
     restored = music.MusicController(
@@ -72,8 +78,7 @@ def test_restart_during_transition_reports_uncertain_phase(tmp_path: Path) -> No
 
 
 def test_phase_storage_failure_prevents_transition_side_effects(tmp_path: Path) -> None:
-    value, recs, player, routing = controller()
-    value.closing_state_path = tmp_path / 'closing.json'
+    value, recs, player, routing = controller(path=tmp_path / 'closing.json')
     with mock.patch.object(Path, 'write_text', side_effect=OSError('disk full')):
         with pytest.raises(OSError, match='disk full'):
             value.record()
@@ -86,11 +91,11 @@ def test_phase_storage_failure_prevents_transition_side_effects(tmp_path: Path) 
 def test_repeated_record_preserves_session_and_stream(
     tmp_path: Path, restart: bool
 ) -> None:
-    value, recs, player, routing = controller()
-    value.closing_state_path = tmp_path / 'closing.json'
     stream = mock.Mock()
     restart_stream = mock.Mock(return_value=result())
-    value.streamo = stream
+    value, recs, player, routing = controller(
+        path=tmp_path / 'closing.json', streamo=stream
+    )
     value.streamo_restart = restart_stream
     assert value.record().ok
     if restart:
@@ -127,10 +132,9 @@ def test_setup_pauses_recording_starts_music_and_routes_it_to_main_lr() -> None:
 
 
 def test_setup_stops_streamo() -> None:
-    value, _, _, _ = controller()
     streamo = mock.Mock()
     streamo.action.return_value = result()
-    value.streamo = streamo
+    value, _, _, _ = controller(streamo=streamo)
 
     value.setup()
 
@@ -153,9 +157,8 @@ def test_record_fades_music_before_starting_a_new_session() -> None:
 
 
 def test_record_starts_streamo_after_the_new_recording_session() -> None:
-    value, recs, _, routing = controller()
     restart = mock.Mock(return_value=result())
-    value.streamo = mock.Mock()
+    value, recs, _, routing = controller(streamo=mock.Mock())
     value.streamo_restart = restart
     calls = mock.Mock()
     calls.attach_mock(routing.route_main_to_usb, 'route')
@@ -172,8 +175,7 @@ def test_record_starts_streamo_after_the_new_recording_session() -> None:
 
 
 def test_stream_does_not_start_when_usb_routing_is_unconfirmed() -> None:
-    value, recs, player, routing = controller()
-    value.streamo = mock.Mock()
+    value, recs, player, routing = controller(streamo=mock.Mock())
     value.streamo_restart = mock.Mock(return_value=result())
     routing.route_main_to_usb.side_effect = ValueError('USB routing not confirmed')
 
@@ -200,13 +202,12 @@ def test_teardown_pauses_recording_stops_playback_and_starts_music() -> None:
 
 @pytest.mark.parametrize('mode', ['stopped', 'record'])
 def test_teardown_requests_credits_without_stopping_recs(mode: str) -> None:
-    value, recs, _, routing = controller()
     streamo = mock.Mock()
     streamo.status.return_value = models.StreamoStatus(
         service=models.ServiceStatus(name='streamo', state='connected'),
         closing=models.ClosingStatus(),
     )
-    value.streamo = streamo
+    value, recs, _, routing = controller(streamo=streamo)
     value.mode = mode
     routing.capture_room.return_value = x18_music.RoomScene(
         master_fader=0.7, input_lr=[1] * 18
@@ -217,19 +218,16 @@ def test_teardown_requests_credits_without_stopping_recs(mode: str) -> None:
     assert outcome.ok
     streamo.start_closing.assert_called_once()
     recs.pause_recording.assert_not_called()
-    value.closing_stop.set()
-    assert value.closing_thread is not None
-    value.closing_thread.join(timeout=5)
+    assert value.closing.stop(timeout=5)
 
 
 def test_teardown_with_twitch_already_stopped_starts_music_without_credits() -> None:
-    value, recs, player, routing = controller()
     stream = mock.Mock()
     stream.status.return_value = models.StreamoStatus(
         service=models.ServiceStatus(name='streamo', state='connected'),
         stream_state='stopped',
     )
-    value.streamo = stream
+    value, recs, player, routing = controller(streamo=stream)
 
     assert value.teardown().ok
 
@@ -242,25 +240,32 @@ def test_teardown_with_twitch_already_stopped_starts_music_without_credits() -> 
 
 
 def test_restart_during_credits_stops_observer_and_starts_record_mode() -> None:
-    value, recs, player, routing = controller()
     stream = mock.Mock()
     stream.status.return_value = models.StreamoStatus(
         service=models.ServiceStatus(name='streamo', state='connected'),
         stream_state='streaming',
         closing=models.ClosingStatus(),
     )
-    value.streamo = stream
+    value, recs, player, routing = controller(streamo=stream)
     value.streamo_restart = mock.Mock(return_value=result())
     scene = x18_music.RoomScene(master_fader=0.7, input_lr=[1] * 18)
     routing.capture_room.return_value = scene
     assert value.teardown().ok
     assert value.status().restart_available
 
+    record = value.closing.status().record
+    assert record is not None
+    stream.status.return_value = models.StreamoStatus(
+        service=models.ServiceStatus(name='streamo', state='connected'),
+        stream_state='streaming',
+        closing=models.ClosingStatus(operation_id=record.operation_id, state='running'),
+    )
+    assert not value.abandon_closing().ok
+    assert not value.finish_closing().ok
     assert value.record(restart=True).ok
 
-    assert value.closing_thread is not None
-    assert not value.closing_thread.is_alive()
-    assert value.closing_record is None
+    assert value.closing.stop(timeout=5)
+    assert value.closing.status().record is None
     assert value.status().mode == 'record'
     assert not value.status().restart_available
     recs.pause_recording.assert_not_called()
@@ -307,7 +312,7 @@ def test_live_broadcast_can_end_again_after_saved_teardown(tmp_path: Path) -> No
     path = tmp_path / 'closing.json'
     scene = x18_music.RoomScene(master_fader=0.7, input_lr=[1] * 18)
     path.write_text(
-        music.ClosingRecord(
+        closing.ClosingRecord(
             operation_id='previous-show',
             phase='teardown-music-playing',
             room_scene=scene,
@@ -330,7 +335,7 @@ def test_live_broadcast_can_end_again_after_saved_teardown(tmp_path: Path) -> No
     try:
         assert value.status().mode == 'teardown'
         assert value.teardown().ok
-        saved = music.ClosingRecord.model_validate_json(path.read_text())
+        saved = closing.ClosingRecord.model_validate_json(path.read_text())
         assert saved.operation_id != 'previous-show'
         assert saved.room_scene == scene
         stream.start_closing.assert_called_once_with(saved.operation_id)
@@ -341,23 +346,43 @@ def test_live_broadcast_can_end_again_after_saved_teardown(tmp_path: Path) -> No
 
 
 def test_restart_waits_for_closing_observer_before_changing_recording() -> None:
-    value, recs, player, routing = controller()
-    value.closing_thread = mock.Mock()
-    value.closing_thread.is_alive.return_value = True
+    entered = threading.Event()
+    release = threading.Event()
+    requested = threading.Event()
+    stream = mock.Mock()
 
-    outcome = value.record(restart=True)
+    def status() -> models.StreamoStatus:
+        if requested.is_set():
+            entered.set()
+            assert release.wait(timeout=15)
+        return models.StreamoStatus(
+            service=models.ServiceStatus(name='streamo', state='connected')
+        )
 
-    assert not outcome.ok
-    assert 'observer is still active' in outcome.message
-    recs.action.assert_not_called()
-    player.stop.assert_not_called()
-    routing.disable.assert_not_called()
+    stream.status.side_effect = status
+    stream.start_closing.side_effect = lambda operation: requested.set()
+    value, recs, player, routing = controller(streamo=stream)
+    routing.capture_room.return_value = x18_music.RoomScene(
+        master_fader=0.7, input_lr=[1] * 18
+    )
+    try:
+        assert value.teardown().ok
+        assert entered.wait(timeout=5)
+        outcome = value.record(restart=True)
+        assert not outcome.ok
+        assert 'observer is still active' in outcome.message
+        assert value.status().mode == 'closing'
+        recs.action.assert_not_called()
+        player.stop.assert_not_called()
+        routing.disable.assert_not_called()
+    finally:
+        release.set()
+        value.close()
 
 
 def test_restart_does_not_start_twitch_when_recording_cannot_resume() -> None:
-    value, recs, _, _ = controller()
+    (value, recs, _, _) = controller(streamo=mock.Mock())
     value.mode = 'teardown'
-    value.streamo = mock.Mock()
     restart_stream = mock.Mock(return_value=result())
     value.streamo_restart = restart_stream
     recs.action.side_effect = [
@@ -376,23 +401,21 @@ def test_restart_does_not_start_twitch_when_recording_cannot_resume() -> None:
 def test_credits_keep_recs_running_until_broadcast_completes(
     tmp_path: Path, with_audio: bool
 ) -> None:
-    value, recs, player, routing = controller()
-    if not with_audio:
-        value.teardown_audio = []
     streamo = mock.Mock()
     streamo.status.return_value = models.StreamoStatus(
         service=models.ServiceStatus(name='streamo', state='connected'),
         closing=models.ClosingStatus(),
     )
-    value.streamo = streamo
-    value.closing_state_path = tmp_path / 'closing.json'
+    value, recs, player, routing = controller(
+        with_audio=with_audio, streamo=streamo, path=tmp_path / 'closing.json'
+    )
     value.mode = 'record'
     scene = x18_music.RoomScene(master_fader=0.7, input_lr=[1] * 18)
     routing.capture_room.return_value = scene
     assert value.teardown().ok
-    assert value.closing_record is not None
-    operation_id = value.closing_record.operation_id
-    assert value.closing_state_path.is_file()
+    assert value.closing.status().record is not None
+    operation_id = value.closing.status().record.operation_id
+    assert value.closing.path.is_file()
     recs.pause_recording.assert_not_called()
     player.start.assert_not_called()
 
@@ -417,9 +440,9 @@ def test_credits_keep_recs_running_until_broadcast_completes(
         service=models.ServiceStatus(name='streamo', state='connected'),
         closing=models.ClosingStatus(operation_id=operation_id, state='completed'),
     )
-    while value.mode != 'teardown' and time.monotonic() < deadline:
+    while value.status().mode != 'teardown' and time.monotonic() < deadline:
         time.sleep(0.01)
-    assert value.mode == 'teardown'
+    assert value.status().mode == 'teardown'
     recs.pause_recording.assert_called_once()
     if with_audio:
         player.start.assert_called_once_with([Path('/music/teardown')], 0)
@@ -436,14 +459,14 @@ def test_credits_keep_recs_running_until_broadcast_completes(
 def test_uncertain_closing_request_preserves_recording_and_operation(
     tmp_path: Path,
 ) -> None:
-    value, recs, player, routing = controller()
     streamo = mock.Mock()
     streamo.start_closing.side_effect = TimeoutError('reply lost')
     streamo.status.return_value = models.StreamoStatus(
         service=models.ServiceStatus(name='streamo', state='offline')
     )
-    value.streamo = streamo
-    value.closing_state_path = tmp_path / 'closing.json'
+    value, recs, player, routing = controller(
+        streamo=streamo, path=tmp_path / 'closing.json'
+    )
     value.mode = 'record'
     routing.capture_room.return_value = x18_music.RoomScene(
         master_fader=0.7, input_lr=[1] * 18
@@ -453,39 +476,41 @@ def test_uncertain_closing_request_preserves_recording_and_operation(
 
     assert not outcome.ok
     assert 'uncertain' in outcome.message
-    assert value.closing_record is not None
-    assert value.closing_record.operation_id in value.closing_state_path.read_text()
+    assert value.status().mode == 'closing'
+    assert not value.teardown().ok
+    streamo.start_closing.assert_called_once()
+    assert value.closing.status().record is not None
+    assert value.closing.status().record.operation_id in value.closing.path.read_text()
     recs.pause_recording.assert_not_called()
     player.start.assert_not_called()
     value.close()
 
 
 def test_failed_credits_leave_recs_recording_and_room_music_off() -> None:
-    value, recs, player, routing = controller()
     streamo = mock.Mock()
     streamo.status.return_value = models.StreamoStatus(
         service=models.ServiceStatus(name='streamo', state='connected'),
         closing=models.ClosingStatus(),
     )
-    value.streamo = streamo
+    value, recs, player, routing = controller(streamo=streamo)
     value.mode = 'record'
     routing.capture_room.return_value = x18_music.RoomScene(
         master_fader=0.7, input_lr=[1] * 18
     )
     assert value.teardown().ok
-    assert value.closing_record is not None
+    assert value.closing.status().record is not None
     streamo.status.return_value = models.StreamoStatus(
         service=models.ServiceStatus(name='streamo', state='connected'),
         closing=models.ClosingStatus(
-            operation_id=value.closing_record.operation_id,
+            operation_id=value.closing.status().record.operation_id,
             state='failed',
             error='encoder stopped',
         ),
     )
     deadline = time.monotonic() + 5
-    while value.mode != 'fault' and time.monotonic() < deadline:
+    while value.status().mode != 'fault' and time.monotonic() < deadline:
         time.sleep(0.01)
-    assert value.mode == 'fault'
+    assert value.status().mode == 'fault'
     assert 'encoder stopped' in str(value.status().error)
     recs.pause_recording.assert_not_called()
     player.start.assert_not_called()
@@ -498,7 +523,7 @@ def test_showco_restart_observes_existing_closing_without_resending(
 ) -> None:
     state_path = tmp_path / 'closing.json'
     scene = x18_music.RoomScene(master_fader=0.7, input_lr=[1] * 18)
-    record = music.ClosingRecord(
+    record = closing.ClosingRecord(
         operation_id='show-1', phase='credits-running', room_scene=scene
     )
     state_path.write_text(record.model_dump_json())
@@ -542,7 +567,7 @@ def test_restart_after_broadcast_stops_finishes_teardown_in_order(
     state_path = tmp_path / 'closing.json'
     scene = x18_music.RoomScene(master_fader=0.7, input_lr=[1] * 18)
     state_path.write_text(
-        music.ClosingRecord(
+        closing.ClosingRecord(
             operation_id='finished-show',
             phase=phase,
             room_scene=scene,
@@ -569,9 +594,9 @@ def test_restart_after_broadcast_stops_finishes_teardown_in_order(
     )
     try:
         deadline = time.monotonic() + 5
-        while value.mode == 'closing' and time.monotonic() < deadline:
+        while value.status().mode == 'closing' and time.monotonic() < deadline:
             time.sleep(0.01)
-        assert value.mode == 'teardown'
+        assert value.status().mode == 'teardown'
         assert calls.mock_calls == [
             mock.call.fade_main(0.0, 0),
             mock.call.pause_recording(),
@@ -580,7 +605,7 @@ def test_restart_after_broadcast_stops_finishes_teardown_in_order(
         ]
         streamo.start_closing.assert_not_called()
         assert (
-            music.ClosingRecord.model_validate_json(state_path.read_text()).phase
+            closing.ClosingRecord.model_validate_json(state_path.read_text()).phase
             == 'teardown-music-playing'
         )
     finally:
@@ -913,9 +938,7 @@ def test_music_configuration_overrides_fade_and_return_channels(
 
 @pytest.mark.parametrize('phase', ['setup', 'teardown'])
 def test_unconfigured_segment_stays_silent(phase: str) -> None:
-    value, recs, player, routing = controller()
-    value.setup_audio = []
-    value.teardown_audio = []
+    value, recs, player, routing = controller(with_audio=False)
 
     outcome = value.setup() if phase == 'setup' else value.teardown()
 
@@ -992,7 +1015,7 @@ def test_abandon_closing_restarts_show_only_after_recording_resumes(
     path = tmp_path / 'closing.json'
     scene = x18_music.RoomScene(master_fader=0.7, input_lr=[1] * 18)
     path.write_text(
-        music.ClosingRecord(
+        closing.ClosingRecord(
             operation_id='failed-show',
             phase='failed',
             room_scene=scene,
@@ -1021,9 +1044,9 @@ def test_abandon_closing_restarts_show_only_after_recording_resumes(
     )
 
     if resume_ok:
-        assert restored.recover_closing(False).ok
+        assert restored.abandon_closing().ok
         assert restored.status().mode == 'record'
-        assert restored.closing_record is None
+        assert restored.closing.status().record is None
         assert not path.exists()
         restart.assert_called_once_with()
         assert (
@@ -1034,9 +1057,9 @@ def test_abandon_closing_restarts_show_only_after_recording_resumes(
         )
     else:
         with pytest.raises(ValueError, match='cannot resume'):
-            restored.recover_closing(False)
+            restored.abandon_closing()
         assert restored.status().mode == 'fault'
-        assert restored.closing_record is not None
+        assert restored.closing.status().record is not None
         assert path.exists()
         restart.assert_not_called()
     routing.restore_room.assert_called_once_with(scene)
@@ -1050,23 +1073,21 @@ def test_abandon_closing_restarts_show_only_after_recording_resumes(
 def test_closing_fault_is_reported_when_failure_record_cannot_be_saved(
     tmp_path: Path, finalizing: bool
 ) -> None:
-    value, recs, _, routing = controller()
-    value.closing_state_path = tmp_path / 'closing.json'
     stream = mock.Mock()
     stream.status.return_value = models.StreamoStatus(
         service=models.ServiceStatus(name='streamo', state='connected'),
     )
-    value.streamo = stream
+    value, recs, _, routing = controller(path=tmp_path / 'closing.json', streamo=stream)
     routing.capture_room.return_value = x18_music.RoomScene(
         master_fader=0.7, input_lr=[1] * 18
     )
     assert value.teardown().ok
-    assert value.closing_record is not None
-    operation = value.closing_record.operation_id
+    assert value.closing.status().record is not None
+    operation = value.closing.status().record.operation_id
     original_write = Path.write_text
 
     def write(path: Path, data: str) -> int:
-        record = music.ClosingRecord.model_validate_json(data)
+        record = closing.ClosingRecord.model_validate_json(data)
         if record.phase == 'failed':
             raise OSError('disk full')
         return original_write(path, data)
@@ -1081,25 +1102,26 @@ def test_closing_fault_is_reported_when_failure_record_cannot_be_saved(
                 error=None if finalizing else 'encoder failed',
             ),
         )
-        assert value.closing_thread is not None
-        value.closing_thread.join(timeout=5)
-        assert not value.closing_thread.is_alive()
+        deadline = time.monotonic() + 5
+        while value.status().mode != 'fault' and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert value.closing.stop(timeout=5)
 
     status = value.status()
     assert status.mode == 'fault'
-    assert status.closing is not None and status.closing.state == 'failed'
+    assert status.closing is not None
+    assert status.closing.state == ('completed' if finalizing else 'failed')
     assert status.closing.operation_id == operation
     assert 'could not be saved: disk full' in str(status.error)
     assert ('routing failed' if finalizing else 'encoder failed') in str(status.error)
-    assert value.closing_record is not None
-    assert value.closing_record.phase == 'failed'
-    assert value.closing_record.error == status.error
+    assert value.closing.status().record is not None
+    assert value.closing.status().record.phase == 'failed'
+    assert value.closing.status().record.error == status.error
     assert recs.pause_recording.called == finalizing
     value.close()
 
 
 def test_shutdown_waits_for_finalization_before_muting_returns() -> None:
-    value, recs, player, routing = controller()
     paused = threading.Event()
     release = threading.Event()
     closed = threading.Event()
@@ -1109,6 +1131,12 @@ def test_shutdown_waits_for_finalization_before_muting_returns() -> None:
         assert release.wait(timeout=15)
         return True
 
+    stream = mock.Mock()
+    stream.status.return_value = models.StreamoStatus(
+        service=models.ServiceStatus(name='streamo', state='connected'),
+    )
+    value, recs, player, routing = controller(streamo=stream)
+
     def close() -> None:
         value.close()
         closed.set()
@@ -1117,20 +1145,18 @@ def test_shutdown_waits_for_finalization_before_muting_returns() -> None:
     routing.capture_room.return_value = x18_music.RoomScene(
         master_fader=0.7, input_lr=[1] * 18
     )
-    stream = mock.Mock()
-    stream.status.return_value = models.StreamoStatus(
-        service=models.ServiceStatus(name='streamo', state='connected'),
-    )
-    value.streamo = stream
     assert value.teardown().ok
-    assert value.closing_record is not None
+    assert value.closing.status().record is not None
     stream.status.return_value = models.StreamoStatus(
         service=models.ServiceStatus(name='streamo', state='connected'),
         closing=models.ClosingStatus(
-            operation_id=value.closing_record.operation_id, state='completed'
+            operation_id=value.closing.status().record.operation_id, state='completed'
         ),
     )
     assert paused.wait(timeout=5)
+    status = value.status()
+    assert status.mode == 'closing'
+    assert status.closing is not None and status.closing.state == 'completed'
     shutdown = threading.Thread(target=close)
     shutdown.start()
     try:
@@ -1145,5 +1171,118 @@ def test_shutdown_waits_for_finalization_before_muting_returns() -> None:
     player.start.assert_called_once()
     player.stop.assert_called_once_with(0.0)
     routing.disable.assert_called_once_with()
-    assert value.closing_thread is not None
-    assert not value.closing_thread.is_alive()
+    assert value.closing.stop(timeout=5)
+
+
+def test_restarted_finalization_fault_survives_unwritable_storage(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / 'closing.json'
+    record = closing.ClosingRecord(
+        operation_id='interrupted-finalization',
+        phase='finalizing',
+        room_scene=x18_music.RoomScene(master_fader=0.7, input_lr=[1] * 18),
+    )
+    path.write_text(record.model_dump_json())
+    with mock.patch.object(Path, 'write_text', side_effect=OSError('disk full')):
+        value, recs, player, routing = controller(path=path)
+    status = value.status()
+    assert status.mode == 'fault'
+    assert status.restart_available
+    assert 'restarted during finalization' in str(status.error)
+    assert 'could not be saved: disk full' in str(status.error)
+    assert status.closing is not None
+    assert status.closing.operation_id == record.operation_id
+    assert status.closing.state == 'unknown'
+    local = value.closing.status()
+    assert local.record is not None and local.record.phase == 'failed'
+    assert local.remote is None
+    recs.action.assert_not_called()
+    player.start.assert_not_called()
+    routing.disable.assert_not_called()
+    value.close()
+
+
+def test_manual_finish_preserves_remote_result_and_clears_local_fault(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / 'closing.json'
+    record = closing.ClosingRecord(
+        operation_id='locally-failed',
+        phase='failed',
+        error='routing failed',
+        room_scene=x18_music.RoomScene(master_fader=0.7, input_lr=[1] * 18),
+    )
+    path.write_text(record.model_dump_json())
+    stream = mock.Mock()
+    remote = models.ClosingStatus(operation_id=record.operation_id, state='completed')
+    stream.status.return_value = models.StreamoStatus(
+        service=models.ServiceStatus(name='streamo', state='connected'),
+        stream_state='stopped',
+        closing=remote,
+    )
+    value, recs, player, routing = controller(path=path, streamo=stream)
+    assert value.finish_closing().ok
+    assert value.status().mode == 'teardown'
+    assert value.status().error is None
+    assert value.status().closing == remote
+    saved = closing.ClosingRecord.model_validate_json(path.read_text())
+    assert saved.phase == 'teardown-music-playing'
+    assert saved.error is None
+    assert (
+        music.MusicState.model_validate_json((tmp_path / 'music.json').read_text()).mode
+        == 'teardown'
+    )
+    stream.start_closing.assert_not_called()
+    recs.pause_recording.assert_called_once()
+    value.close()
+    restored, _, _, _ = controller(path=path, streamo=stream)
+    assert restored.status().mode == 'teardown'
+    assert restored.status().error is None
+    restored.close()
+
+
+def test_resumed_observer_keeps_output_ownership_after_interrupted_resume(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / 'music.json').write_text(
+        music.MusicState(mode='transitioning').model_dump_json()
+    )
+    path = tmp_path / 'closing.json'
+    record = closing.ClosingRecord(
+        operation_id='interrupted-resume',
+        phase='credits-running',
+        room_scene=x18_music.RoomScene(master_fader=0.7, input_lr=[1] * 18),
+    )
+    path.write_text(record.model_dump_json())
+    entered = threading.Event()
+    release = threading.Event()
+    stream = mock.Mock()
+
+    def status() -> models.StreamoStatus:
+        entered.set()
+        assert release.wait(timeout=5)
+        return models.StreamoStatus(
+            service=models.ServiceStatus(name='streamo', state='connected'),
+            closing=models.ClosingStatus(
+                operation_id=record.operation_id, state='running'
+            ),
+        )
+
+    stream.status.side_effect = status
+    value, recs, player, routing = controller(path=path, streamo=stream)
+    try:
+        assert entered.wait(timeout=2)
+        snapshot = value.status()
+        assert snapshot.mode == 'closing'
+        assert 'restarted during a show transition' in str(snapshot.error)
+        assert value.closing.status().observing
+        with pytest.raises(ValueError, match='Resolve the closing operation'):
+            value.record()
+        recs.action.assert_not_called()
+        player.stop.assert_not_called()
+        routing.disable.assert_not_called()
+        stream.start_closing.assert_not_called()
+    finally:
+        release.set()
+        value.close()

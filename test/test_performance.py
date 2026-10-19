@@ -51,7 +51,8 @@ def test_lock_prevents_stream_and_closing_recovery_side_effects(
     assert 'Performance lock blocks' in result.message
     application.streamo.action.assert_not_called()
     application.streamo_restart.assert_not_called()
-    application.music.recover_closing.assert_not_called()
+    application.music.abandon_closing.assert_not_called()
+    application.music.finish_closing.assert_not_called()
 
 
 def test_lock_survives_restart_and_unlock_does_not_replay_actions(

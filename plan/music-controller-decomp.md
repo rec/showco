@@ -1,8 +1,11 @@
 # MusicController decomposition plan
 
-Planning only. This document takes over the music portion of review item 27.
-It complements [showco-decomp.md](showco-decomp.md); neither plan implements a
-refactor or changes show behavior.
+Implementation extracted and verified. This document takes over the music
+portion of review item 27 and complements [showco-decomp.md](showco-decomp.md).
+The final ownership documentation and outstanding-list update are being completed.
+
+Confirmed decision: Resume show may interrupt running credits. Explicit abandon
+and manual-finish recovery still reject matching credits that are running.
 
 ## Additional work beyond the prompt
 
