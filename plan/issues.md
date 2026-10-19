@@ -27,16 +27,6 @@ across invocations is not a requirement.
 
 ## Browser and waveform behavior
 
-### 15. P2: Transport actions have no browser timeout
-
-`site/playback-script.js:14` uses raw `fetch()` without an abort deadline. A
-stalled response leaves the transport button `aria-busy` and disabled indefinitely,
-even while status polling succeeds. This also affects the Twitch transport.
-`showAction()` already implements a bounded request and an unknown-outcome message,
-but this path bypasses it.
-
-Reuse the existing action request behavior. Check a request that never resolves.
-
 ### 16. P2: Empty service status replies are classified as healthy
 
 `streamo/client.py:50`, `StreamoClient.status()`, accepts an empty dictionary,
