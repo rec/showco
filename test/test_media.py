@@ -406,3 +406,21 @@ def test_movie_must_be_an_existing_file(tmp_path: Path, exists: bool) -> None:
         media.resolve_sources(
             tmp_path / 'config.toml', provision.DeployOptions(movie=source)
         )
+
+
+def test_removing_required_managed_movie_demands_replacement() -> None:
+    original = (
+        'video = "/home/t/.local/share/showco/media/movie/000/show.mp4"\n'
+        '[streaming_service.encoding.video]\ncodec = "h264"\n'
+    )
+    with pytest.raises(ValueError, match='replacement movie is required'):
+        media.stream_media_configuration(original, [])
+    replacement = media.stream_media_configuration(original, [], Path('/new.mp4'))
+    assert tomllib.loads(replacement)['video'] == '/new.mp4'
+
+
+def test_movie_removal_preserves_independent_video_settings() -> None:
+    custom = 'video = "/custom.mp4"\n'
+    assert media.stream_media_configuration(custom, []) == custom
+    managed = 'video = "/home/t/.local/share/showco/media/movie/000/show.mp4"\n'
+    assert 'video' not in tomllib.loads(media.stream_media_configuration(managed, []))

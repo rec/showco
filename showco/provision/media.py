@@ -176,7 +176,9 @@ def configure_stream_media(provision_config: config.Config) -> None:
     command = f'SHOWCO_STREAM_SETTINGS={shlex.quote(settings)} {command}'
     if not arguments and not settings:
         command = (
-            f'if grep -Fq -- {shlex.quote("/.local/share/showco/media/photos/")} '
+            'if grep -Fq '
+            f'-e {shlex.quote("/.local/share/showco/media/photos/")} '
+            f'-e {shlex.quote("/.local/share/showco/media/movie/")} '
             f'{shlex.quote(str(path))} 2>/dev/null; then {command}; fi'
         )
     ssh.run_ssh(
@@ -252,6 +254,19 @@ def stream_media_configuration(
 ) -> str:
     """Replace root media settings without reserializing credentials or tables."""
     values = tomllib.loads(text)
+    previous_movie = values.get('video')
+    remove_movie = (
+        movie is None
+        and isinstance(previous_movie, str)
+        and '/.local/share/showco/media/movie/' in previous_movie
+    )
+    if remove_movie:
+        encoding = values.get('streaming_service', {}).get('encoding', {})
+        if encoding.get('video') is not None:
+            raise ValueError(
+                'A replacement movie is required for video streaming; '
+                'configuration was not changed'
+            )
     replacements: dict[str, object] = {'video': str(movie)} if movie is not None else {}
     if photos:
         replacements['image_dir'] = [str(p) for p in photos]
@@ -281,7 +296,9 @@ def stream_media_configuration(
         if recs_source
         else set()
     )
-    if not replacements and not recs_source:
+    if remove_movie:
+        removed.add('video')
+    if not replacements and not recs_source and not removed:
         return text
     lines = text.splitlines(keepends=True)
     kept = []
