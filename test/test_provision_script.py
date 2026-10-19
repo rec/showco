@@ -438,12 +438,13 @@ def test_generated_network_files_are_readable_and_preserve_addresses(
 
 
 @pytest.mark.parametrize('previous', ['missing', 'installed', 'masked'])
-def test_disabling_lyte_stops_and_persistently_masks_existing_service(
-    tmp_path: Path, previous: str
+@pytest.mark.parametrize('service', ['lyte', 'streamo'])
+def test_disabling_optional_service_stops_and_persistently_masks_it(
+    tmp_path: Path, previous: str, service: str
 ) -> None:
-    unit = tmp_path / 'lyte.service'
+    unit = tmp_path / f'{service}.service'
     if previous == 'installed':
-        unit.write_text('[Service]\nExecStart=lyte\n')
+        unit.write_text(f'[Service]\nExecStart={service}\n')
     elif previous == 'masked':
         unit.symlink_to('/dev/null')
     commands = tmp_path / 'commands'
@@ -466,23 +467,25 @@ sudo() { shift 3; command "$@"; }
 user_systemctl() {
   printf '%s\n' "$*" >> "$TEST_COMMANDS"
   if [[ "$1" == show ]]; then
-    if [[ -L "$TEST_UNIT_DIRECTORY/lyte.service" ]]; then
+    if [[ -L "$TEST_UNIT_DIRECTORY/$TEST_SERVICE.service" ]]; then
       printf 'masked\n'
-    elif [[ -f "$TEST_UNIT_DIRECTORY/lyte.service" ]]; then
+    elif [[ -f "$TEST_UNIT_DIRECTORY/$TEST_SERVICE.service" ]]; then
       printf 'loaded\n'
     else
       printf 'not-found\n'
     fi
   fi
 }
-install_lyte_service
-install_lyte_service
+"install_${TEST_SERVICE}_service"
+"install_${TEST_SERVICE}_service"
 """,
         ],
         env={
             **os.environ,
             'SHOW_USER': 'test',
             'LYTE_ENABLED': 'false',
+            'STREAMO_ENABLED': 'false',
+            'TEST_SERVICE': service,
             'TEST_UNIT_DIRECTORY': str(tmp_path),
             'TEST_COMMANDS': str(commands),
         },
@@ -493,7 +496,54 @@ install_lyte_service
     assert unit.is_symlink()
     assert unit.readlink() == Path('/dev/null')
     recorded = commands.read_text().splitlines()
-    assert ('disable --now lyte.service' in recorded) == (previous == 'installed')
-    assert 'stop lyte.service' in recorded
+    assert (f'disable --now {service}.service' in recorded) == (previous == 'installed')
+    assert f'stop {service}.service' in recorded
     assert recorded.count('daemon-reload') == 2
     assert not any(c.startswith(('start ', 'restart ')) for c in recorded)
+
+
+def test_enabling_streamo_unmasks_before_installing_and_starting(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / 'config.toml'
+    config_path.write_text('')
+    source = (
+        (script.SCRIPT_DIR / 'templates/services.sh')
+        .read_text()
+        .replace(
+            'config_path="/home/$SHOW_USER/.config/streamo/config.toml"',
+            'config_path="$TEST_CONFIG"',
+        )
+    )
+    completed = subprocess.run(
+        [
+            'bash',
+            '-eu',
+            '-c',
+            source
+            + """
+user_systemctl() { printf 'systemctl %s\n' "$*"; }
+sudo() { printf 'install\n'; }
+id() { printf '1000\n'; }
+git() { printf 'revision\n'; }
+service_is_current() { return 1; }
+record_service_state() { :; }
+install_streamo_service
+""",
+        ],
+        env={
+            **os.environ,
+            'SHOW_USER': 'test',
+            'ROOT': str(tmp_path),
+            'STREAMO_ENABLED': 'true',
+            'TEST_CONFIG': str(config_path),
+        },
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert completed.stdout.splitlines() == [
+        'systemctl unmask streamo.service',
+        'install',
+        'systemctl restart streamo.service',
+    ]
