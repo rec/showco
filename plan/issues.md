@@ -92,7 +92,16 @@ playback and re-enable returns after cleanup has muted them.
 End ownership of finalization before cleanup, or implement cancellation boundaries
 inside the transition. Check close during a blocked finalization step with fakes.
 
-### 5. P1: Recording controls bypass show-transition serialization
+### 5. Resolved: Recording controls bypass show-transition serialization
+
+Pause/resume now acquire the action lock without waiting and reject busy
+requests instead of executing or queuing them. Closing also blocks these controls
+between requests. Status publishes recording-control availability; the Actions
+and Performance pages disable pause/resume during actions, transitions, cable
+tests, or loss of live status, including initial rendering. Regression coverage
+checks concurrent actions, closing, browser disabling/re-enabling, and existing
+cable-test conflicts. Validation: focused tests, full pytest suite, Ruff, ty,
+pyupgrade, and diff checks.
 
 `runtime/app.py:274`, `ShowcoApp.run_action()`, exempts pause/resume from
 `action_lock`. They can interleave with `music-record`, setup, or teardown and

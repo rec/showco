@@ -12,7 +12,8 @@ const elements = new Map(['cue-position', 'cue-notes', 'cue-elapsed', 'cue-messa
   'cue-resolution', 'workflow-result', 'expected-inputs', 'soundcheck-scope',
   'soundcheck-results', 'recovery-options', 'recovery-state'].map(id => [id, new Element()]));
 const buttons = ['setlist-next', 'setlist-repeat', 'setlist-accept', 'setlist-retry',
-  'soundcheck-begin', 'recovery-refresh'].map(action => {
+  'soundcheck-begin', 'recovery-refresh', 'soundcheck-start-recording',
+  'soundcheck-pause-recording'].map(action => {
     const button = new Element(); button.dataset.workflowAction = action; return button;
   });
 const payload = JSON.parse(fs.readFileSync(0, 'utf8'));
@@ -38,6 +39,14 @@ async function test() {
   assert.equal(buttons[0].disabled, false);
   assert.equal(buttons[1].disabled, true);
   assert.equal(elements.get('recovery-options').children.length, 0);
+  payload.show.recording_controls_available = false;
+  await vm.runInContext('refreshWorkflows()', context);
+  assert.ok(buttons.slice(6).every(button => button.disabled));
+  await buttons[6].listeners.click();
+  assert.equal(posts.length, 0);
+  payload.show.recording_controls_available = true;
+  await vm.runInContext('refreshWorkflows()', context);
+  assert.ok(buttons.slice(6).every(button => !button.disabled));
   const first = buttons[0].listeners.click();
   const duplicate = buttons[0].listeners.click();
   await flush();

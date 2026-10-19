@@ -61,6 +61,17 @@ async function test() {
   assert.match(elements.get('performance-recording').textContent, /recording reported active/);
   assert.match(elements.get('performance-disk').textContent, /recordings/);
   assert.ok(actionButtons.every(button => !button.disabled));
+  status.recording_controls_available = false;
+  context.currentStatus = status;
+  vm.runInContext('renderPerformance(currentStatus)', context);
+  assert.equal(actionButtons[0].disabled, false);
+  assert.ok(actionButtons.slice(1).every(button => button.disabled));
+  await actionButtons[1].listeners.click();
+  await actionButtons[2].listeners.click();
+  assert.equal(posts.length, 0);
+  status.recording_controls_available = true;
+  vm.runInContext('renderPerformance(currentStatus)', context);
+  assert.ok(actionButtons.every(button => !button.disabled));
   assert.match(elements.get('performance-lock-state').textContent, /protected actions locked/);
   assert.equal(lockButtons[0].disabled, true);
   assert.equal(lockButtons[1].disabled, false);

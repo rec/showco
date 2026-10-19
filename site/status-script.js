@@ -171,6 +171,8 @@
         button.textContent = status.streamo.toggle_label;
       }
       button.disabled = button.hasAttribute("aria-busy")
+        || (["recs-pause-recording", "recs-resume-recording"].includes(form.dataset.action)
+          && (!status.recording_controls_available || status.recs.service.state !== "connected"))
         || (form.dataset.action === "music-teardown" && !status.end_show_available)
         || (form.dataset.action === "music-restart"
           && (!status.music.restart_available || status.performance_locked))
