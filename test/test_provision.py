@@ -288,13 +288,14 @@ class ProvisionTests(unittest.TestCase):
                 terminal = StringIO()
                 with (
                     mock.patch.object(ssh, 'Popen', return_value=process),
+                    mock.patch.object(ssh.os, 'killpg') as kill_group,
                     mock.patch('sys.stdout', terminal),
                     self.assertRaises(type(error)),
                 ):
                     ssh.run_command(['ssh'], timeout_seconds=20)
 
                 self.assertIn('==> configuring Wi-Fi', terminal.getvalue())
-                process.kill.assert_called_once()
+                kill_group.assert_called_once_with(process.pid, ssh.signal.SIGKILL)
                 self.assertTrue(process.stdout.closed)
 
     def test_ssh_timeout_reports_actual_operation_deadline(self) -> None:

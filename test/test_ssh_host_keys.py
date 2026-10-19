@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import subprocess
+import time
 from pathlib import Path
 from unittest import mock
 
@@ -94,3 +95,17 @@ def test_provisioning_state_check_continues_after_key_approval() -> None:
     ):
         assert remote.applied_provisioning_fingerprint(config) is None
     approve.assert_called_once_with(config, changed)
+
+
+@pytest.mark.parametrize('wait_for_child', [False, True])
+def test_command_cleanup_terminates_descendants_holding_output(
+    wait_for_child: bool,
+) -> None:
+    started = time.monotonic()
+    command = ['sh', '-c', 'sleep 30 &' + (' wait' if wait_for_child else '')]
+    if wait_for_child:
+        with pytest.raises(subprocess.TimeoutExpired):
+            ssh.run_command(command, timeout_seconds=1)
+    else:
+        assert ssh.run_command(command, timeout_seconds=1).returncode == 0
+    assert time.monotonic() - started < 5
