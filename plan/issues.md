@@ -212,18 +212,6 @@ using the explicit `clear-logs` command.
 Separate command-local capture from retained failure history. Check failure
 followed by a successful unrelated invocation.
 
-### 13. P2: Non-finite recs totals can break the status response
-
-`runtime/recs.py:32`, `RecsClient.status()`, uses `_int()` for `file_count`.
-`_int()` accepts floats and calls `int(value)`, which raises on NaN or infinity.
-`runtime/recs_snapshot.py:snapshot_status()` requires rows to be dictionaries
-but does not validate their numeric totals, so this payload passes the snapshot
-boundary. The exception escapes the HTTP status path instead of becoming an
-invalid-snapshot diagnostic. The other floating-point row fields already use
-`recs_channels._float()`, which rejects non-finite values; file counts do not.
-
-Validate totals at the snapshot boundary. Check non-finite counts and metrics.
-
 ### 14. P2: Malformed channels silently change calibration scope
 
 `runtime/app.py:530`, `_channel_numbers()`, returns an empty list for malformed
