@@ -11,21 +11,11 @@
       }
       const result = document.querySelector("[data-action-result]");
       try {
-        const response = await fetch("/actions", {
-          method: "POST",
-          headers: {
-            Accept: "application/json",
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-          body: new URLSearchParams(new FormData(form)),
-        });
-        if (!response.ok) throw new Error(`Action request failed: ${response.status}`);
-        const action = await response.json();
+        const message = await showAction(Object.fromEntries(new FormData(form)));
         if (result) {
-          result.textContent = action.message;
-          result.className = action.ok ? "ok" : "failed";
+          result.textContent = message;
+          result.className = "ok";
         }
-        await globalThis.refreshShowStatus();
       } catch (error) {
         if (result) {
           result.textContent = error.message;

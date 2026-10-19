@@ -19,20 +19,30 @@ async function checkTeardownConfirmation() {
   let approved = false;
   let requests = 0;
   const result = {};
+  let deadline;
+  let stalled = false;
   const browser = vm.createContext({
-    document: {querySelectorAll: () => [form], querySelector: () => result},
+    document: {
+      getElementById: () => null,
+      querySelectorAll: selector => selector === '[data-transport] form' || selector === 'form[method=post]' ? [form] : [],
+      querySelector: () => result,
+    },
     confirm(message) {assert.equal(message, 'Are you sure?'); return approved;},
     FormData: class { *[Symbol.iterator]() {yield ['action', 'music-teardown'];} },
-    URLSearchParams,
+    URLSearchParams, AbortController,
+    setTimeout(callback) {deadline = callback;}, clearTimeout() {},
     async fetch(_url, options) {
       requests++;
+      if (stalled) return new Promise((_resolve, reject) => {
+        options.signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), {name: 'AbortError'})));
+      });
       assert.equal(new URLSearchParams(options.body).get('action'), 'music-teardown');
       return {ok: true, json: async () => ({ok: true, message: 'Closing credits started'})};
     },
     async refreshShowStatus() {button.disabled = false;},
     statusFailed(error) {throw error;},
   });
-  for (const script of ['shutdown-action.js', 'playback-script.js']) {
+  for (const script of ['show-controls.js', 'shutdown-action.js', 'playback-script.js']) {
     vm.runInContext(fs.readFileSync(`site/${script}`, 'utf8'), browser);
   }
   async function submit() {
@@ -56,6 +66,14 @@ async function checkTeardownConfirmation() {
   assert.equal(requests, 1);
   assert.equal(result.textContent, 'Closing credits started');
   assert.equal(button.disabled, false);
+  stalled = true;
+  const pending = submit();
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+  deadline();
+  await pending;
+  assert.match(result.textContent, /outcome unknown/);
+  assert.equal(button.disabled, false);
+  assert.equal(attributes.has('aria-busy'), false);
 }
 
 const status = JSON.parse(fs.readFileSync(0, 'utf8'));
