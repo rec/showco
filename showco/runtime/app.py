@@ -553,10 +553,14 @@ def error_timestamp(value: str) -> float | None:
 
 
 def _channel_numbers(value: str) -> list[int]:
-    try:
-        return [int(number) for number in value.split(',') if number]
-    except ValueError:
+    if not value.strip():
         return []
+    try:
+        return [int(n) for n in value.split(',')]
+    except ValueError:
+        raise ValueError(
+            'channels must be a comma-separated list of integers'
+        ) from None
 
 
 def action_log_entry(action: str, result: models.ActionResult) -> models.ActionLogEntry:
