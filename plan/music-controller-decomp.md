@@ -60,6 +60,8 @@ MusicController derives the combined MusicStatus in one place. Normal transition
 errors, local closing faults, player errors, and streamO's remote closing result
 retain separate owners. A local routing failure after remote completion leaves
 that remote result completed while MusicStatus reports the local fault.
+Normal-transition and closing errors are both included when they coexist, so a
+restart warning cannot hide a later routing or fault-persistence failure.
 
 A saved local phase does not fabricate a remote result. Before matching remote
 status is observed after restart, MusicStatus carries the saved operation identity
@@ -102,7 +104,11 @@ and shutdown beyond the former five-second cutoff.
 
 Focused regressions also cover distinct Resume/recovery choices during running
 credits, status availability during blocked finalization, successful manual-finish
-persistence, and observer ownership after an interrupted Resume show.
+persistence, and observer ownership after an interrupted Resume show. Recording
+controls remain blocked through the final phase save and failure cleanup. Failed
+deletion of old evidence after Resume show preserves the current Record mode and
+does not replay the session or stream. Combined errors remain visible in status
+and incident reporting even if closing fault persistence fails.
 
 The full suite, Ruff, ty, pyupgrade, and diff checks pass. No application,
 deployment, service restart, or physical X18/streaming flow was launched. The

@@ -134,7 +134,7 @@ class MusicController:
             state=player.state,
             directory=player.directory,
             track=player.track,
-            error=error or closing.error or player.error,
+            error='; '.join(e for e in [error, closing.error] if e) or player.error,
             closing=remote,
         )
 
