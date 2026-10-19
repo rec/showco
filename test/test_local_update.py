@@ -8,6 +8,7 @@ from io import StringIO
 from pathlib import Path
 from unittest import mock
 
+import pytest
 from update_helpers import make_config
 
 from showco.deployment import local_update, publication, update
@@ -320,7 +321,7 @@ class LocalUpdateTests(unittest.TestCase):
         self.assertIn('repository is on feature, expected main', output.getvalue())
         remote_update.assert_not_called()
 
-    def test_provisioning_update_autosquashes_from_oldest_fixup_parent(self) -> None:
+    def test_provisioning_update_includes_oldest_fixup_target(self) -> None:
         commands: list[list[str]] = []
 
         def run_command(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
@@ -335,8 +336,10 @@ class LocalUpdateTests(unittest.TestCase):
                     'fixup! older\0older-commit\0older\0',
                     '',
                 )
-            if command[-2:] == ['rev-parse', 'old^']:
-                return subprocess.CompletedProcess(command, 0, 'parent\n', '')
+            if command[-5:] == ['rev-list', '--parents', '-n', '1', 'older-commit']:
+                return subprocess.CompletedProcess(
+                    command, 0, 'older-commit parent\n', ''
+                )
             if command[-2:] == ['status', '--porcelain']:
                 return subprocess.CompletedProcess(command, 0, '', '')
             if command[-1:] == ['@{upstream}']:
@@ -461,8 +464,8 @@ class LocalUpdateTests(unittest.TestCase):
                     'new\0fixup! target\0\nold\0target\0',
                     '',
                 )
-            if command[-2:] == ['rev-parse', 'new^']:
-                return subprocess.CompletedProcess(command, 0, 'parent\n', '')
+            if command[-5:] == ['rev-list', '--parents', '-n', '1', 'old']:
+                return subprocess.CompletedProcess(command, 0, 'old parent\n', '')
             return subprocess.CompletedProcess(command, 0, '', '')
 
         result = publication.autosquash_program(program, 50, run_command)
@@ -474,8 +477,11 @@ class LocalUpdateTests(unittest.TestCase):
                 'git',
                 '-C',
                 '/code/showco',
-                'rev-parse',
-                'new^',
+                'rev-list',
+                '--parents',
+                '-n',
+                '1',
+                'old',
             ],
             commands,
         )
@@ -598,8 +604,8 @@ class LocalUpdateTests(unittest.TestCase):
                 return subprocess.CompletedProcess(
                     command, 0, 'fixup\0fixup! feature\0feature\0feature\0', ''
                 )
-            if command[-2:] == ['rev-parse', 'fixup^']:
-                return subprocess.CompletedProcess(command, 0, 'parent\n', '')
+            if command[-5:] == ['rev-list', '--parents', '-n', '1', 'feature']:
+                return subprocess.CompletedProcess(command, 0, 'feature parent\n', '')
             if command[-3:] == ['push', 'origin', 'HEAD:main']:
                 return subprocess.CompletedProcess(command, 1, '', 'rejected\n')
             return subprocess.CompletedProcess(command, 0, '', '')
@@ -1176,3 +1182,47 @@ class LocalUpdateTests(unittest.TestCase):
             )
 
         self.assertEqual(result, 1)
+
+
+@pytest.mark.parametrize('root_target', [False, True])
+def test_autosquash_combines_separated_fixup_with_target(
+    tmp_path: Path, root_target: bool
+) -> None:
+    def git(*arguments: str) -> str:
+        return subprocess.run(
+            ['git', '-C', str(tmp_path), *arguments],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+
+    git('init')
+    git('config', 'user.name', 'Test')
+    git('config', 'user.email', 'test@example.invalid')
+    if not root_target:
+        git('commit', '--allow-empty', '-m', 'Base')
+    document = tmp_path / 'document'
+    document.write_text('original\n')
+    git('add', 'document')
+    git('commit', '-m', 'Target')
+    target = git('rev-parse', 'HEAD')
+    other = tmp_path / 'other'
+    other.write_text('unrelated\n')
+    git('add', 'other')
+    git('commit', '-m', 'Other')
+    document.write_text('corrected\n')
+    git('add', 'document')
+    git('commit', f'--fixup={target}')
+    program = update.Program(name='test', directory=tmp_path, service_names=[])
+
+    result = publication.autosquash_program(
+        program, 50, update.run_command_with_timeout
+    )
+
+    assert result is not None and result.ok, result
+    assert git('log', '--format=%s').splitlines() == (
+        ['Other', 'Target'] if root_target else ['Other', 'Target', 'Base']
+    )
+    assert document.read_text() == 'corrected\n'
+    assert other.read_text() == 'unrelated\n'
+    assert git('show', 'HEAD~1:document') == 'corrected'
