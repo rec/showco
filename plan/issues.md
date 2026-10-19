@@ -2,10 +2,8 @@
 
 No outstanding functional findings remain from the 2026-10-19 review.
 
-Naming and structural cleanup is planned, not implemented, in:
-
-- [showco-decomp.md](showco-decomp.md)
-- [music-controller-decomp.md](music-controller-decomp.md)
+Remaining structural cleanup is planned in
+[music-controller-decomp.md](music-controller-decomp.md).
 
 Keep this file for outstanding findings only. Remove each issue's section in the
 commit that completes it rather than retaining resolution notes.
