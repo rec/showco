@@ -45,6 +45,7 @@ class WaveformBridge:
         )
         self.condition = threading.Condition()
         self.changed = 0
+        self.reset_at = 0
         self.stopped = threading.Event()
         self.reconnect = threading.Event()
         self.thread: threading.Thread | None = None
@@ -88,6 +89,8 @@ class WaveformBridge:
         self, changed: int
     ) -> tuple[bool, list[tuple[int, str, WaveformLayoutData | WaveformBatchData]]]:
         with self.condition:
+            if changed < self.reset_at:
+                return True, []
             if self.events and changed < self.events[0][0] - 1:
                 return True, []
             return False, [event for event in self.events if event[0] > changed]
@@ -134,11 +137,17 @@ class WaveformBridge:
                 ):
                     LOGGER.warning('recs waveform subscription failed: %s', error)
                     self.last_failure_log_time = time.monotonic()
-                self.stopped.wait(WAVEFORM_RECONNECT_SECONDS)
             finally:
                 if events is not None:
                     events.close()
-            if self.reconnect.is_set() and not self.stopped.is_set():
+                with self.condition:
+                    self.layouts.clear()
+                    self.batches.clear()
+                    self.events.clear()
+                    self.changed += 1
+                    self.reset_at = self.changed
+                    self.condition.notify_all()
+            if not self.stopped.is_set():
                 self.stopped.wait(WAVEFORM_RECONNECT_SECONDS)
 
     def _event_client(self, receive: Callable[[rpc.Event], None]) -> rpc.EventClient:

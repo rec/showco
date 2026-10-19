@@ -27,18 +27,6 @@ across invocations is not a requirement.
 
 ## Browser and waveform behavior
 
-### 18. P2: Waveform reconnection retains removed sources indefinitely
-
-`runtime/waveforms.py`, `WaveformBridge._run()`, `_layout()`, and `snapshot()`,
-never clear layouts or batches on disconnection or a new subscription. A layout
-only replaces samples for the same source. After recs restarts with a source
-removed or renamed, its old layout and samples remain in every new browser
-snapshot. Storage is unbounded across distinct source names even though each
-deque is bounded.
-
-Define subscription-generation reset behavior and notify browsers. Check
-reconnection from sources A/B to A only.
-
 ### 19. P2: Performance disk values lose their stale-data warning
 
 `site/performance.js:37`, `renderPerformance()`, renders `recs.disk` whenever
