@@ -29,11 +29,6 @@ class HttpResponse(BaseModel, frozen=True):
     text: str
 
 
-class AuthOptions(BaseModel, frozen=True):
-    config: Path
-    secrets: Path
-
-
 def main(argv: list[str] | None = None) -> int:
     return tyro.extras.subcommand_cli_from_dict(
         {
@@ -47,35 +42,25 @@ def main(argv: list[str] | None = None) -> int:
     )
 
 
-def auth_options(
-    config: Path = DEFAULT_CONFIG_PATH,
-    secrets: Path = DEFAULT_SECRETS_PATH,
-) -> AuthOptions:
-    return AuthOptions(config=config, secrets=secrets)
-
-
 def authorize_url_command(
     config_path: Annotated[Path, tyro.conf.arg(name='config')] = DEFAULT_CONFIG_PATH,
     secrets: Path = DEFAULT_SECRETS_PATH,
 ) -> int:
-    options = auth_options(config_path, secrets)
-    return authorize_url(options.config, config.read_toml(options.config))
+    return authorize_url(config_path, config.read_toml(config_path))
 
 
 def exchange_code_command(
     config_path: Annotated[Path, tyro.conf.arg(name='config')] = DEFAULT_CONFIG_PATH,
     secrets: Path = DEFAULT_SECRETS_PATH,
 ) -> int:
-    options = auth_options(config_path, secrets)
-    return exchange_code(options.config, options.secrets)
+    return exchange_code(config_path, secrets)
 
 
 def validate_token_command(
     config_path: Annotated[Path, tyro.conf.arg(name='config')] = DEFAULT_CONFIG_PATH,
     secrets: Path = DEFAULT_SECRETS_PATH,
 ) -> int:
-    options = auth_options(config_path, secrets)
-    return validate_token(config.load_values(options.config, options.secrets))
+    return validate_token(config.load_values(config_path, secrets))
 
 
 def authorize_url(config_path: Path, values: dict[str, object]) -> int:
@@ -278,10 +263,6 @@ def require_value(env: dict[str, object], name: str, path: Path | None = None) -
     if path is None:
         sys.exit(f'Set {name} first.')
     sys.exit(f'Edit {path} and set {name} first.')
-
-
-def provision_dir() -> Path:
-    return PROVISION_DIR
 
 
 if __name__ == '__main__':

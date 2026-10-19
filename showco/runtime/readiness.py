@@ -31,6 +31,18 @@ def status(value: models.ShowStatus) -> models.ReadinessStatus:
     )
 
 
+def input_checks(channels: list[models.ChannelLevel]) -> list[models.InputCheck]:
+    return [
+        models.InputCheck(
+            name=f'{c.device} {c.name}'.strip(),
+            ok=c.state in {'present', 'healthy'},
+            message='signal present' if c.state in {'present', 'healthy'} else c.state,
+        )
+        for c in channels
+        if c.on
+    ]
+
+
 def _service_check(name: str, service: models.ServiceStatus) -> models.ReadinessCheck:
     return models.ReadinessCheck(
         name=name,

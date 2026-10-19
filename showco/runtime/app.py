@@ -21,7 +21,6 @@ from ..x18.cable_test import (
 )
 from . import (
     incidents,
-    input_check,
     lighting,
     models,
     music,
@@ -178,7 +177,7 @@ class ShowcoApp:
                         if error
                     )
                     or None,
-                    'input_checks': input_check.checks(recs.channels),
+                    'input_checks': readiness.input_checks(recs.channels),
                     'cable_test': cable_status,
                     'recording_controls_available': not self.action_in_progress
                     and status.music.mode not in {'closing', 'transitioning'}
