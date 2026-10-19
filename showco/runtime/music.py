@@ -117,11 +117,13 @@ class MusicController:
                 phase=closing.record.phase,
             )
         if mode != 'transitioning':
-            if (closing.error and closing.record is None) or (
+            if closing.observing:
+                mode = 'closing'
+            elif (closing.error and closing.record is None) or (
                 closing.record is not None and closing.record.phase == 'failed'
             ):
                 mode = 'fault'
-            elif closing.record is not None and (not error or closing.observing):
+            elif closing.record is not None and not error:
                 mode = (
                     'teardown'
                     if closing.record.phase == 'teardown-music-playing'

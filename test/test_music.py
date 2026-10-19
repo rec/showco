@@ -1286,3 +1286,68 @@ def test_resumed_observer_keeps_output_ownership_after_interrupted_resume(
     finally:
         release.set()
         value.close()
+
+
+@pytest.mark.parametrize('save_ok', [True, False])
+def test_recording_controls_wait_for_final_phase_save_and_failure_cleanup(
+    tmp_path: Path, save_ok: bool
+) -> None:
+    from showco.runtime.app import ShowcoApp
+
+    path = tmp_path / 'closing.json'
+    path.write_text(
+        closing.ClosingRecord(
+            operation_id='pending-phase-save',
+            phase='credits-running',
+            room_scene=x18_music.RoomScene(master_fader=0.7, input_lr=[1] * 18),
+        ).model_dump_json()
+    )
+    entered = threading.Event()
+    release = threading.Event()
+    cleaning = threading.Event()
+    finish_cleanup = threading.Event()
+    stream = mock.Mock()
+    stream.status.return_value = models.StreamoStatus(
+        service=models.ServiceStatus(name='streamo', state='connected'),
+        closing=models.ClosingStatus(
+            operation_id='pending-phase-save', state='completed'
+        ),
+    )
+    original_write = Path.write_text
+
+    def write(p: Path, text: str) -> int:
+        if p.name.startswith('.music-'):
+            entered.set()
+            assert release.wait(timeout=5)
+            if not save_ok:
+                raise OSError('phase save failed')
+        return original_write(p, text)
+
+    def cleanup(seconds: float) -> None:
+        cleaning.set()
+        assert finish_cleanup.wait(timeout=5)
+
+    with mock.patch.object(Path, 'write_text', autospec=True, side_effect=write):
+        value, recs, player, routing = controller(path=path, streamo=stream)
+        player.stop.side_effect = cleanup
+        try:
+            assert entered.wait(timeout=2)
+            app = ShowcoApp(
+                recs, stream, mock.Mock(), mock.Mock(), music_controller=value
+            )
+            for action in ['recs-pause-recording', 'recs-resume-recording']:
+                assert not app.run_action({'action': action}).ok
+            assert value.status().mode == 'closing'
+            recs.action.assert_called_once_with('stop_playback')
+            release.set()
+            if not save_ok:
+                assert cleaning.wait(timeout=2)
+                assert value.status().mode == 'closing'
+                assert not app.run_action({'action': 'recs-resume-recording'}).ok
+            finish_cleanup.set()
+            assert value.closing.stop(timeout=5)
+            assert value.status().mode == ('teardown' if save_ok else 'fault')
+        finally:
+            release.set()
+            finish_cleanup.set()
+            value.close()
