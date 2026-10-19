@@ -37,7 +37,8 @@ class RecsTests(unittest.TestCase):
         status = RecsClient(control=control, snapshot_cache_seconds=0).status()
 
         self.assertEqual(status.service.state, 'connected')
-        self.assertTrue(status.recording)
+        self.assertTrue(status.snapshot_available)
+        self.assertNotIn('recording', status.model_dump())
         self.assertTrue(status.paused)
         self.assertEqual(status.elapsed_seconds, 4.0)
         self.assertEqual(status.recorded_seconds, 3.0)
@@ -70,9 +71,9 @@ class RecsTests(unittest.TestCase):
         stale = client.status()
 
         self.assertTrue(live.snapshot_available)
-        self.assertTrue(live.recording)
+        self.assertTrue(live.snapshot_available)
         self.assertTrue(stale.snapshot_available)
-        self.assertFalse(stale.recording)
+        self.assertNotEqual(stale.service.state, 'connected')
         self.assertEqual(stale.service.state, 'stale')
 
     def test_pause_recording_reports_whether_showco_must_resume(self) -> None:

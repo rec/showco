@@ -38,7 +38,7 @@ function renderPerformance(status) {
   const recs = status.recs;
   const recording = document.getElementById('performance-recording');
   if (recording) recording.textContent =
-    `recs ${recs.service.state}; recording ${recs.service.state !== 'connected' ? 'state unavailable' : recs.paused ? 'paused' : recs.recording ? 'reported active' : 'stopped'}`;
+    `recs ${recs.service.state}; recording ${recs.service.state !== 'connected' || !recs.snapshot_available ? 'state unavailable' : recs.paused ? 'paused' : 'enabled'}`;
   const disk = recs.disk;
   const destination = document.getElementById('performance-disk');
   if (destination) destination.textContent = disk

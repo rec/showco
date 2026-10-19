@@ -114,7 +114,7 @@ def config_paths(directory: Path) -> tuple[Path, Path]:
     )
     secrets_path.write_text(
         '[stream]\nclient_secret = "client-secret"\n'
-        'callback_url_or_code = "http://localhost/callback?code=code&state=test-state"\n'
+        'callback_url = "http://localhost/callback?code=code&state=test-state"\n'
     )
     return config_path, secrets_path
 
@@ -166,9 +166,7 @@ def test_invalid_oauth_callbacks_are_rejected_before_network_request(
     ]
     with mock.patch.object(auth, 'request_http') as request:
         for callback in callbacks:
-            auth.write_toml_value(
-                secrets_path, 'stream', 'callback_url_or_code', callback
-            )
+            auth.write_toml_value(secrets_path, 'stream', 'callback_url', callback)
             with pytest.raises(ValueError, match='OAuth'):
                 auth.exchange_code(config_path, secrets_path)
         request.assert_not_called()

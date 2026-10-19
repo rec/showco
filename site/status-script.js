@@ -5,12 +5,11 @@
   }
 
   function recordingText(recs) {
-    if (recs.service.state !== "connected") return "recording state unavailable";
-    if (!recs.recording) return "stopped";
+    if (recs.service.state !== "connected" || !recs.snapshot_available) return "recording state unavailable";
     const seconds = recs.elapsed_seconds;
     if (seconds === null) return recs.paused
       ? "paused after unknown time, ? files"
-      : "recording for unknown time, ? files";
+      : "recording enabled for unknown time, ? files";
     const minutes = Math.floor(seconds / 60);
     const hours = Math.floor(minutes / 60);
     const duration = hours
@@ -18,7 +17,7 @@
           Math.floor(seconds % 60),
         ).padStart(2, "0")}`
       : `${minutes}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
-    return `${recs.paused ? "paused after" : "recording for"} ${duration}, ${
+    return `${recs.paused ? "paused after" : "recording enabled for"} ${duration}, ${
       recs.file_count ?? "?"
     } files`;
   }
@@ -123,8 +122,8 @@
       case "cable_test": return value.state === "running"
         ? `Running: ${Math.floor(value.elapsed_seconds)}s elapsed of ${value.duration_seconds}s requested. ${value.message}`
         : `${value.state}: ${value.message}`;
-      case "shutdown_recs": return value.service.state !== "connected"
-        ? "state unavailable" : value.paused ? "paused" : value.recording ? "recording" : "stopped";
+      case "shutdown_recs": return value.service.state !== "connected" || !value.snapshot_available
+        ? "state unavailable" : value.paused ? "paused" : "recording enabled";
       case "shutdown_streamo": return value.stream_state;
     }
     throw new Error(`unknown status format: ${format}`);

@@ -33,7 +33,7 @@ class RehearsalRecsClient(RecsClient):
                 name='recs',
                 state='connected',
             ),
-            recording=True,
+            snapshot_available=True,
             elapsed_seconds=elapsed,
             recorded_seconds=max(0.0, elapsed - 0.2),
             file_size=elapsed * 9_000_000,

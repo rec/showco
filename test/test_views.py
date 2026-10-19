@@ -131,7 +131,7 @@ class ViewsTests(unittest.TestCase):
             models.ShowStatus(
                 recs=models.RecsStatus(
                     service=models.ServiceStatus(name='recs', state='connected'),
-                    recording=True,
+                    snapshot_available=True,
                     paused=True,
                     elapsed_seconds=65,
                     file_count=3,

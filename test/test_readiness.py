@@ -56,7 +56,7 @@ def show_status(
     return models.ShowStatus(
         recs=models.RecsStatus(
             service=models.ServiceStatus(name='recs', state='connected'),
-            recording=True,
+            snapshot_available=True,
             paused=paused,
             disk=models.RecordingDiskStatus(
                 path='/recordings', used_bytes=1, free_bytes=2, total_bytes=3

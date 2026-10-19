@@ -56,7 +56,7 @@ class Stream(BaseModel, frozen=True):
     stream_key: str = ''
     client_secret: str = ''
     access_token: str = ''
-    callback_url_or_code: str = ''
+    callback_url: str = ''
 
 
 class Lyte(BaseModel, frozen=True):
@@ -381,7 +381,7 @@ def stream_value(values: dict[str, object]) -> Stream:
         stream_key=string_value(values, 'stream_key'),
         client_secret=string_value(values, 'client_secret'),
         access_token=string_value(values, 'access_token'),
-        callback_url_or_code=string_value(values, 'callback_url_or_code'),
+        callback_url=string_value(values, 'callback_url'),
     )
 
 

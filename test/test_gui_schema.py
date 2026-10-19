@@ -169,7 +169,7 @@ def test_actions_page_shows_shutdown_impact_and_defaults_to_cancel() -> None:
     status = models.ShowStatus(
         recs=models.RecsStatus(
             service=models.ServiceStatus(name='recs', state='connected'),
-            recording=True,
+            snapshot_available=True,
         ),
         streamo=models.StreamoStatus(
             service=models.ServiceStatus(name='streamo', state='connected'),
@@ -181,7 +181,7 @@ def test_actions_page_shows_shutdown_impact_and_defaults_to_cancel() -> None:
         document.page('actions'), status, features={'music_enabled'}
     )
 
-    assert 'recs recording: recording' in html
+    assert 'recs recording: recording enabled' in html
     assert 'streamO broadcast: live' in html
     assert 'recording and streaming will be interrupted' in html
     assert html.index('value="cancel"') < html.index('value="shutdown"')

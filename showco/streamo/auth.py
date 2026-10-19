@@ -97,7 +97,7 @@ def authorize_url(config_path: Path, values: dict[str, object]) -> int:
     webbrowser.open(url)
     print(
         'After approving it, copy the full localhost callback URL from the browser\n'
-        'address bar and paste it into stream.callback_url_or_code in secrets.toml.'
+        'address bar and paste it into stream.callback_url in secrets.toml.'
     )
     return 0
 
@@ -108,7 +108,7 @@ def exchange_code(config_path: Path, secrets_path: Path) -> int:
     client_id = require_value(stream, 'client_id')
     client_secret = require_value(stream, 'client_secret')
     redirect_uri = require_value(stream, 'redirect_uri')
-    callback = require_value(stream, 'callback_url_or_code')
+    callback = require_value(stream, 'callback_url')
     code = callback_code(callback, require_value(stream, 'state'), redirect_uri)
     config_dir = Path.home() / '.config/streamo'
     config_dir.mkdir(mode=0o700, parents=True, exist_ok=True)

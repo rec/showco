@@ -40,7 +40,6 @@ class RecsClient:
                 last_error=snapshot.error,
             ),
             snapshot_available=snapshot.has_snapshot,
-            recording=snapshot.has_snapshot and snapshot.service_state == 'connected',
             paused=snapshot.paused,
             elapsed_seconds=recs_channels._float(totals.get('time')),
             recorded_seconds=recs_channels._float(totals.get('recorded')),

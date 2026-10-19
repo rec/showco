@@ -23,10 +23,6 @@ class ServiceStatus(BaseModel, frozen=True):
     state: str
     last_error: str | None = None
 
-    @property
-    def fresh(self) -> bool:
-        return self.state == 'connected'
-
 
 class ChannelLevel(BaseModel, frozen=True):
     name: str
@@ -85,7 +81,6 @@ class PlaybackStatus(BaseModel, frozen=True):
 class RecsStatus(BaseModel, frozen=True):
     service: ServiceStatus
     snapshot_available: bool = False
-    recording: bool = False
     paused: bool = False
     elapsed_seconds: float | None = None
     recorded_seconds: float | None = None
@@ -137,7 +132,7 @@ class StreamoStatus(BaseModel, frozen=True):
             return 'Twitch disabled'
         if self.service.state == 'error':
             return 'Retry Twitch (error)'
-        if not self.service.fresh:
+        if self.service.state != 'connected':
             return 'Retry Twitch (status unavailable)'
         if self.closing is not None and self.closing.state not in {
             'idle',
@@ -160,7 +155,7 @@ class StreamoStatus(BaseModel, frozen=True):
     def toggle_starts_stream(self) -> bool:
         return (
             self.stream_state in {'stopped', 'failed'}
-            or not self.service.fresh
+            or self.service.state != 'connected'
             or self.service.last_error is not None
         )
 
