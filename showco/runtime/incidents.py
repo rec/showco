@@ -147,6 +147,22 @@ def fault_details(status: models.ShowStatus) -> list[tuple[str, str, str]]:
                 'do not restart solely because files stopped growing.',
             )
         )
+    music = status.music
+    if (
+        music.mode == 'fault'
+        or music.state == 'failed'
+        or (music.closing is not None and music.closing.state == 'failed')
+    ):
+        faults.append(
+            (
+                'Music',
+                music.error
+                or (music.closing.error if music.closing else None)
+                or 'Music or closing sequence failed',
+                'Open Actions to inspect music and explicitly recover '
+                'the show transition.',
+            )
+        )
     return faults
 
 

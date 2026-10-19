@@ -135,6 +135,9 @@ class ShowcoApp:
                 ),
                 revision=self.revision,
                 run_started_at=self.run_started_at,
+                music=self.music.status()
+                if self.music is not None
+                else models.MusicStatus(),
             )
             status = status.model_copy(update={'readiness': readiness.status(status)})
             status = status.model_copy(
@@ -148,9 +151,6 @@ class ShowcoApp:
                 else:
                     self.soundcheck_error = None
             observed = self.incidents.observe(status)
-            music_status = (
-                self.music.status() if self.music is not None else models.MusicStatus()
-            )
             cable_status = self.cable_test_status()
             return status.model_copy(
                 update={
@@ -179,10 +179,9 @@ class ShowcoApp:
                     )
                     or None,
                     'input_checks': input_check.checks(recs.channels),
-                    'music': music_status,
                     'cable_test': cable_status,
                     'recording_controls_available': not self.action_in_progress
-                    and music_status.mode not in {'closing', 'transitioning'}
+                    and status.music.mode not in {'closing', 'transitioning'}
                     and cable_status.state != 'running',
                 }
             )
