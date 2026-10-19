@@ -2,8 +2,9 @@
 
 Initial static review of checkout `5125349` on 2026-10-19. This replaces the
 previous issue list. That review ran no application, service, deployment, hardware
-flow, or test suite. Subsequent fixes and automated verification are recorded
-under the resolved findings. The original findings are not failures observed on
+flow, or test suite. This plan contains outstanding findings only; remove
+completed findings rather than retaining resolution notes. The findings are not
+failures observed on
 the Pi. P1 means potentially disruptive or misleading during operation, P2 means
 an ordinary correctness or recovery problem, and P3 means a maintainability
 concern. Line numbers refer to the reviewed checkout. Paths below are relative
@@ -11,139 +12,18 @@ to `showco/` unless prefixed with `site/` or `test/`.
 
 ## Additional work beyond the prompt
 
-None. Resolved findings record their implementation and verification below;
-suggested work for the remaining findings has not been implemented.
+None.
+
+## Intended behavior and scope
+
+Cable testing is a separate utility, not an expected runtime workflow. Its
+results do not need to become live-show faults.
+
+`showco-errors.txt` intentionally describes exactly the last invocation. Starting
+another invocation replaces the previous diagnostic; retaining failure history
+across invocations is not a requirement.
 
 ## Operational correctness and recovery
-
-### 1. Resolved: Autosquash excludes the commit that needs the fixup
-
-Fixed by rebasing from the parent of the oldest matching fixup target, including
-`--root` when the target is the first commit. Regression coverage uses real
-temporary Git histories with a separated fixup and both root/non-root targets.
-Validation: focused tests, full pytest suite, Ruff, ty, pyupgrade, and diff checks.
-
-Original finding before the fix:
-
-`deployment/publication.py:172`, `autosquash_program()` and
-`oldest_fixup_commit()`, choose the parent of the oldest **fixup**, rather than
-its target, as the rebase boundary. In history `A (target), B, C (fixup! A)`,
-rebasing `C^` excludes A, so Git cannot squash C into A. Preflight checks that A
-appears in the log but not that it is inside the rebase range. Publication can
-report a successful autosquash while leaving fixups outstanding.
-`test/test_local_update.py:test_provisioning_update_autosquashes_from_oldest_fixup_parent`
-currently asserts the incorrect boundary using a fake runner.
-
-Choose a range containing the affected target commits. Verify with a disposable
-Git history where a target and fixup are separated by ordinary commits.
-
-### 2. Resolved: Closing recovery can claim Record mode with recording paused
-
-Abandoning closing now uses the existing Resume show transition: restore the
-room, start a new recording session, resume recording, and restart broadcasting.
-Closing evidence is cleared only after success; failed recording resumption
-keeps recovery evidence and does not start broadcasting. This follows the user's
-explicit recovery decision. Validation: music regressions, full pytest suite,
-Ruff, ty, pyupgrade, and diff checks.
-
-Original finding before the fix:
-
-`runtime/music.py:409`, `MusicController.recover_closing(False)`, restores room
-routing, clears closing evidence, and saves mode `record`. It does not resume
-recs or restart the stream. A reachable trigger is failure in
-`_finish_closing()` after `_pause_recording()` succeeds. The cancellation message
-asks the operator to check recs, but a subsequent `record()` returns “Already
-in Record mode” without repairing anything (`runtime/music.py:161`). Deleting
-closing evidence also removes the closing-recovery controls.
-
-Preserve an unresolved state until recording is reconciled, or make explicit
-recovery perform and verify the intended transition. Cover failure after pausing
-recs, then cancellation and a Record request.
-
-### 3. Resolved: Failure to save closing failure can kill its only observer
-
-Closing failure handling now retains the failed operation in memory, publishes
-fault/failed status and the persistence error, and logs the failure even when
-storage rejects the failure record. Regression coverage exercises stream failure
-and finalization failure with an unwritable failure record. Validation: music
-tests, full pytest suite, Ruff, ty, pyupgrade, and diff checks.
-
-Original finding before the fix:
-
-`runtime/music.py:298,376`, `_observe_closing()` and `_fail_closing()`: after
-catching an operational or persistence error, the observer calls `_fail_closing()`.
-That performs another unguarded `_save_closing()` before assigning mode `fault`
-and its error message. Full or unwritable state storage makes this second write
-raise out of the thread. The controller can remain in closing mode with no
-observer, no automatic restart, and no published finalization-failure message.
-The same problem occurs when streamO reports failure and saving it fails.
-
-Publish the in-memory fault even if persistence fails, and expose observer death.
-Check failed saves during both finalization and failure handling.
-
-### 4. Resolved: Closing cleanup races an observer that has not stopped
-
-As requested, shutdown now waits for the closing observer to exit before
-stopping playback or muting returns. A regression holds finalization beyond the
-old five-second timeout and verifies cleanup occurs only after it is released.
-Validation: music tests, full pytest suite, Ruff, ty, pyupgrade, and diff checks.
-Shutdown can consequently take as long as an in-flight observer operation.
-
-Original finding before the fix:
-
-`runtime/music.py:613`, `MusicController.close()`, joins the observer for five
-seconds, then proceeds without checking `is_alive()`. Unlike `record(restart=True)`
-and `recover_closing()`, it stops the player and disables returns even if the
-observer is still in `_finish_closing()`. That method does not check cancellation
-between its RPC, routing, and playback steps. It can subsequently start teardown
-playback and re-enable returns after cleanup has muted them.
-
-End ownership of finalization before cleanup, or implement cancellation boundaries
-inside the transition. Check close during a blocked finalization step with fakes.
-
-### 5. Resolved: Recording controls bypass show-transition serialization
-
-Pause/resume now acquire the action lock without waiting and reject busy
-requests instead of executing or queuing them. Closing also blocks these controls
-between requests. Status publishes recording-control availability; the Actions
-and Performance pages disable pause/resume during actions, transitions, cable
-tests, or loss of live status, including initial rendering. Regression coverage
-checks concurrent actions, closing, browser disabling/re-enabling, and existing
-cable-test conflicts. Validation: focused tests, full pytest suite, Ruff, ty,
-pyupgrade, and diff checks.
-
-Original finding before the fix:
-
-`runtime/app.py:274`, `ShowcoApp.run_action()`, exempts pause/resume from
-`action_lock`. They can interleave with `music-record`, setup, or teardown and
-undo the recording state those sequences just established. The cable-test check
-is also separate from the RPC: resume can pass the check before
-`start_cable_test()` marks the test running, then resume recs during the test.
-`RecsControlClient.lock` serializes individual RPCs, not checks and transitions.
-
-Define recording ownership across transitions and cable tests while preserving
-intended pause/resume responsiveness. Check interleavings with barriers, including
-resume crossing cable-test startup and pause crossing Record mode.
-
-### 6. Resolved: Disabling streamO leaves an existing broadcaster running
-
-Provisioning now matches lyte: stop/disable any existing streamO unit, persistently
-mask it, and reload systemd. Enabling streamO unmasks it before installation.
-Shell regressions use fake controllers and temporary unit directories to cover
-missing, installed, and already masked units for both optional services, including
-repeat provisioning. Validation: provisioning tests, full pytest suite, Ruff, ty,
-pyupgrade, shell syntax, and diff checks. No actual service was changed.
-
-Original finding before the fix:
-
-`provision/templates/services.sh:161`, `install_streamo_service()`, prints that
-streamO is disabled and returns when `STREAMO_ENABLED` is false. It never stops
-or disables an existing unit. showCo then hides streamO while an existing
-broadcast can continue. `install_lyte_service()` explicitly stops and masks its
-disabled service, so these flags have materially different meanings.
-
-Reconcile the existing streamO service with the disabled configuration. Check
-an enabled-to-disabled transition with an existing active unit using fakes.
 
 ### 7. P2: Monitoring-history write failures are omitted from live status
 
@@ -156,11 +36,11 @@ operator only gets a log warning.
 Include the storage failure in published status. Check an unwritable history
 directory while system and recs sampling remain successful.
 
-### 8. P2: Music and cable-test failures never become active faults
+### 8. P2: Music failures never become active faults
 
 `runtime/incidents.py:130`, `fault_details()`, considers readiness and audio-write
-progress only. `ShowcoApp.status()` observes incidents before adding music and
-cable-test state to the response. A failed player, failed cable test, or faulted
+progress only. `ShowcoApp.status()` observes incidents before adding music
+state to the response. A failed player or faulted
 closing transition can coexist with the global “No active observed faults”
 banner. Detailed errors on another page do not enter the shared incident history.
 
@@ -190,27 +70,17 @@ SSH transport, can therefore exceed the configured timeout indefinitely.
 Terminate the owned process group and bound output draining. Check a child that
 leaves a descendant holding its pipe open, without any remote connection.
 
-### 11. P2: CLI diagnostics grow for the entire web-server lifetime
+### 11. P2: A single run's diagnostic capture grows without a bound
 
 `cli.py:119`, `main()`, redirects output into a temporary file and attaches a
 root log handler to it for the whole command. For `showco run`, log records
-accumulate until server exit, without a size limit or rotation. This duplicates
-normal logging and can fill temporary storage during a long run or repeated
-failure, worsening the original incident.
+accumulate until server exit, without a size limit. A long run or repeated
+failure can fill temporary storage, worsening the original incident. This is
+about capture size within one invocation, not retaining earlier runs.
 
-Bound retained diagnostics or use the existing rotated logs. Check retained size
-under repeated output without starting the application.
-
-### 12. P2: Successful helpers erase earlier failure reports
-
-`cli.py:119`, `main()`, unlinks the shared `showco-errors.txt` at entry and again
-after success. All subcommands use the same path. A successful health check,
-log fetch, or service command deletes earlier diagnostics, and overlapping
-processes can delete each other's evidence. This happens without the operator
-using the explicit `clear-logs` command.
-
-Separate command-local capture from retained failure history. Check failure
-followed by a successful unrelated invocation.
+Bound the in-run capture while preserving the intentional last-run-only
+diagnostic. Check capture size under repeated output without starting the
+application.
 
 ### 14. P2: Malformed channels silently change calibration scope
 
@@ -367,11 +237,11 @@ than adding parallel flags with the same semantics.
 ### 27. P3: Action dispatch and music lifecycle concentrate too many contracts
 
 `runtime/app.py` is 629 lines. `_dispatch_action()` combines performance
-protection, cable ownership, workflows, recs configuration, musicians, service
+protection, workflows, recs configuration, musicians, service
 lifecycle, lighting, and music. `runtime/music.py` is 678 lines and combines
 configuration, persistence, synchronous transitions, an observer thread, closing
 recovery, and shutdown. Ownership rules are spread across string sets, locks,
-and controller methods; findings 2-5 demonstrate the resulting inconsistencies.
+and controller methods, making the transition contracts difficult to follow.
 The problem is mixed responsibility rather than line count alone.
 
 Make the existing ownership/transition contracts explicit when fixing these
@@ -417,9 +287,8 @@ implementation or a browser framework.
 
 ## Review limits
 
-This source review is not exhaustive execution coverage. Resolved findings list
-the automated checks performed for their fixes; checks suggested for unresolved
-findings have not been run.
+This source review is not exhaustive execution coverage. Checks suggested for
+the outstanding findings have not been run.
 Pi networking, X18 routing, broadcast delivery, and physical audio acceptance
 still require the existing hardware plans. Previous lack of physical verification
 is not evidence of a newly discovered code defect.
