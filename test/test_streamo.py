@@ -256,3 +256,33 @@ def test_fresh_twitch_live_confirmation_is_healthy() -> None:
         }
     ).status()
     assert status.service.state == 'connected'
+
+
+def test_stopped_process_reports_its_saved_startup_failure(tmp_path: Path) -> None:
+    from reccy.reccy import ErrorRecord, ReccyStatus
+    from reccy.services import paths
+    from streamo.config import STREAMO_SERVICE
+
+    service_paths = paths.service_paths(STREAMO_SERVICE, paths.current_platform())
+    status_path = tmp_path / 'status.json'
+    status_path.write_text(
+        ReccyStatus(
+            running=False,
+            errors=[ErrorRecord(message='No internet connectivity detected')],
+        ).model_dump_json()
+    )
+    service_paths = service_paths.model_copy(update={'status': status_path})
+    client = StreamoClient(control_endpoint=service_paths.control_endpoint)
+    with (
+        mock.patch(
+            'showco.streamo.client.paths.service_paths', return_value=service_paths
+        ),
+        mock.patch('showco.streamo.client.sys.platform', 'darwin'),
+        mock.patch.object(client, '_call', side_effect=ConnectionError('not running')),
+    ):
+        status = client.status()
+    assert status.service.state == 'offline'
+    assert (
+        status.service.last_error
+        == 'Last streamO failure: No internet connectivity detected'
+    )
