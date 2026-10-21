@@ -1,4 +1,4 @@
-"""Fetch a read-only account of the latest show from its target."""
+"""Fetch a read-only account of a qualifying show from its target."""
 
 from __future__ import annotations
 
@@ -21,16 +21,25 @@ class ReportOptions(BaseModel, frozen=True):
 
 
 def main(argv: list[str] | None = None) -> int:
-    options = tyro.cli(
+    options, selectors = tyro.cli(
         ReportOptions,
         args=argv,
-        description='Report the latest show from saved target evidence',
+        description='Report the newest show with more than one minute of '
+        'captured audio. '
+        'Use one of -1, -2, -3, -4, -5, -6, -7, -8, -9 for an older qualifying '
+        'show (-1 is the previous show).',
+        return_unknown_args=True,
     )
+    if len(selectors) > 1 or any(
+        s not in {f'-{n}' for n in range(1, 10)} for s in selectors
+    ):
+        sys.exit('Choose at most one history flag: -1 through -9.')
+    older = -int(selectors[0]) if selectors else 0
     machine_role.require_provisioning_machine('showco report')
     cfg = update.provisioning_config()
     root = shlex.quote(str(cfg.paths.root / 'showco'))
-    command = f'cd {root} && .venv/bin/python - {options.gap_hours}'
-    print(f'Reading latest show on {cfg.ssh_target}...', file=sys.stderr)
+    command = f'cd {root} && .venv/bin/python - {options.gap_hours} {older}'
+    print(f'Reading qualifying show on {cfg.ssh_target}...', file=sys.stderr)
     try:
         result = subprocess.run(
             ssh.ssh_command(cfg, cfg.ssh_target, command),
@@ -63,13 +72,13 @@ def duration(seconds: float) -> str:
 
 def render(report: report_scan.Report) -> str:
     if not report.sessions:
-        return 'No latest show found.\n' + '\n'.join(
+        return 'No qualifying show found.\n' + '\n'.join(
             f'- {i}' for i in report.limitations
         )
     start = min(s.started_at for s in report.sessions)
     end = max(s.ended_at for s in report.sessions)
     lines = [
-        'Latest show (UTC)',
+        'Show (UTC)',
         f'{start:%Y-%m-%d %H:%M:%S} to {end:%Y-%m-%d %H:%M:%S}',
         f'{len(report.sessions)} recording sessions; '
         f'elapsed {duration((end - start).total_seconds())}',
