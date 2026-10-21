@@ -1,5 +1,7 @@
+import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from unittest import mock
 
 import numpy as np
 import pytest
@@ -18,11 +20,23 @@ from showco.deployment import report, report_scan
 START = datetime(2026, 10, 16, 18, tzinfo=UTC)
 
 
-def session(name: str, start: float, end: float) -> report_scan.Session:
+def session(
+    name: str, start: float, end: float, captured_seconds: float | None = None
+) -> report_scan.Session:
     return report_scan.Session(
         path=name,
         started_at=START + timedelta(hours=start),
         ended_at=START + timedelta(hours=end),
+        audio_files=1,
+        total_bytes=100,
+        captured_seconds=(end - start) * 3600
+        if captured_seconds is None
+        else captured_seconds,
+        tracks={
+            'X18: 1': (end - start) * 3600
+            if captured_seconds is None
+            else captured_seconds
+        },
     )
 
 
@@ -94,7 +108,13 @@ def test_error_messages_redact_credentials_and_terminal_controls() -> None:
 
 @pytest.fixture
 def recording_directory(tmp_path: Path) -> Path:
-    soundfile.write(tmp_path / 'take.wav', np.zeros((48_000, 2)), 48_000)
+    return make_recording(tmp_path)
+
+
+def make_recording(tmp_path: Path, seconds: int = 1) -> Path:
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    frames = seconds * 48_000
+    soundfile.write(tmp_path / 'take.wav', np.zeros((frames, 2)), 48_000)
     document = recording.RecordingScore(
         name='report-test',
         title='Report test',
@@ -103,22 +123,22 @@ def recording_directory(tmp_path: Path) -> Path:
         body=recording.Recording(
             state='sealed',
             started_at=START.isoformat(),
-            ended_at=(START + timedelta(seconds=2)).isoformat(),
-            observed_duration_seconds=2,
+            ended_at=(START + timedelta(seconds=seconds + 1)).isoformat(),
+            observed_duration_seconds=seconds + 1,
             streams=[
                 recording.AudioStream(
                     name='stereo',
                     source_id='X18',
                     track_name='17-18',
                     stream=AudioType(timebase='clock', channels=['left', 'right']),
-                    end=96_000,
+                    end=frames + 48_000,
                     fragments=[
-                        recording.AudioFragment(asset='audio', start=0, count=48_000)
+                        recording.AudioFragment(asset='audio', start=0, count=frames)
                     ],
                     gaps=[
                         recording.Gap(
-                            start=48_000,
-                            end=96_000,
+                            start=frames,
+                            end=frames + 48_000,
                             reason=recording.GapReason.input_overflow,
                         )
                     ],
@@ -193,13 +213,13 @@ def test_report_separates_elapsed_time_from_overlapping_tracks(
 
 
 def test_collected_report_filters_saved_histories_to_the_show(
-    recording_directory: Path,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import json
     import subprocess
 
+    recording_directory = make_recording(tmp_path / 'recordings', seconds=61)
     monkeypatch.setattr(
         report_scan, 'recording_roots', lambda home, limits: [recording_directory]
     )
@@ -292,3 +312,127 @@ def test_open_recording_uses_saved_evidence_not_report_time(
     saved = report_scan.recording_sessions([recording_directory], [])[0]
     assert saved.audio_files == 1
     assert 'Open session end unknown: journal unreadable' in saved.issues
+
+
+def test_show_selection_skips_empty_and_trivial_groups_but_keeps_interruptions() -> (
+    None
+):
+    first = session('first', 0, 0.1, 30)
+    interruption = session('interruption', 0.5, 0.6, 1)
+    resumed = session('resumed', 1, 1.1, 30)
+    exactly_one_minute = session('one-minute', 24, 25, 60)
+    idle = session('idle', 48, 49, 0)
+    midi_only = session('midi-only', 72, 73, 3600).model_copy(
+        update={'audio_files': 0, 'midi_messages': 500}
+    )
+    no_media = session('no-media', 96, 97, 3600).model_copy(update={'total_bytes': 0})
+    selected = report_scan.select_sessions(
+        [first, interruption, resumed, exactly_one_minute, idle, midi_only, no_media], 3
+    )
+    assert [s.path for s in selected] == ['first', 'interruption', 'resumed']
+
+
+def test_parallel_tracks_do_not_inflate_show_duration() -> None:
+    parallel = session('parallel', 24, 25, 40).model_copy(
+        update={'tracks': {'X18: 1': 40, 'X18: 2': 40}}
+    )
+    selected = report_scan.select_sessions([session('older', 0, 1), parallel], 3)
+    assert [s.path for s in selected] == ['older']
+
+
+@pytest.mark.parametrize('older', range(10))
+def test_history_offsets_count_only_qualifying_shows(older: int) -> None:
+    sessions = [
+        session(str(n), n * 24, n * 24 + 1, 61 if n % 2 == 0 else 60) for n in range(20)
+    ]
+    selected = report_scan.select_sessions(sessions[::-1], 3, older)
+    assert [s.path for s in selected] == [str(18 - older * 2)]
+    assert report_scan.select_sessions(sessions, 3, 10) == []
+
+
+@pytest.mark.parametrize(
+    'arguments,older',
+    [
+        ([], 0),
+        *[([f'-{n}'], n) for n in range(1, 10)],
+        (['--gap-hours', '2.5', '-1'], 1),
+        (['-9', '--gap-hours', '2.5'], 9),
+    ],
+)
+def test_report_cli_passes_history_choice_to_collector(
+    tmp_path: Path, arguments: list[str], older: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cfg = mock.Mock()
+    cfg.paths.root = tmp_path
+    cfg.ssh_target = 'test-target'
+    monkeypatch.setattr(
+        report.machine_role, 'require_provisioning_machine', mock.Mock()
+    )
+    monkeypatch.setattr(report.update, 'provisioning_config', lambda: cfg)
+    ssh_command = mock.Mock(return_value=['fake-ssh'])
+    monkeypatch.setattr(report.ssh, 'ssh_command', ssh_command)
+    monkeypatch.setattr(
+        report.subprocess,
+        'run',
+        mock.Mock(
+            return_value=subprocess.CompletedProcess(
+                [], 0, report_scan.Report(sessions=[]).model_dump_json(), ''
+            )
+        ),
+    )
+    assert report.main(arguments) == 1
+    command = ssh_command.call_args.args[2]
+    assert command.endswith(f' {older}')
+    assert '.venv/bin/python - ' in command
+
+
+@pytest.mark.parametrize(
+    'arguments', [['-1', '-2'], ['-1', '-1'], ['-0'], ['-10'], ['--unknown']]
+)
+def test_report_rejects_invalid_or_combined_history_flags_before_connecting(
+    arguments: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    require_role = mock.Mock()
+    monkeypatch.setattr(
+        report.machine_role, 'require_provisioning_machine', require_role
+    )
+    with pytest.raises(SystemExit):
+        report.main(arguments)
+    require_role.assert_not_called()
+
+
+def test_same_named_parallel_tracks_do_not_inflate_captured_duration(
+    recording_directory: Path,
+) -> None:
+    from recs.recording.read import read_recording
+
+    path = recording_directory / 'recording.toml'
+    document = read_recording(path)
+    streams = document.body.streams
+    duplicate = streams[0].model_copy(update={'name': 'duplicate'})
+    document = document.model_copy(
+        update={
+            'body': document.body.model_copy(update={'streams': [*streams, duplicate]})
+        }
+    )
+    path.write_text(score_toml(document))
+    saved = report_scan.recording_sessions([recording_directory], [])[0]
+    assert saved.tracks['X18: 17-18'] == 2
+    assert saved.captured_seconds == 1
+
+
+def test_unavailable_history_does_not_fall_back_to_latest_show(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(report_scan, 'recording_roots', lambda home, limits: [])
+    monkeypatch.setattr(
+        report_scan,
+        'recording_sessions',
+        lambda roots, limits: [session('latest', 0, 1)],
+    )
+    run = mock.Mock()
+    monkeypatch.setattr(report_scan.subprocess, 'run', run)
+    saved = report_scan.collect(3, tmp_path, older=1)
+    assert saved.sessions == []
+    assert 'No qualifying show at history offset 1.' in saved.limitations
+    run.assert_not_called()

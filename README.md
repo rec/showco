@@ -54,10 +54,18 @@ showco --push [repository ...] # publish local histories only
 showco --sync [repository ...] # publish and synchronize internal lockfiles
 showco logs [service ...]      # read target service log files
 showco clear-logs              # clear target service log files without restarting
-showco report                  # summarize the latest show from saved target evidence
+showco report                  # latest show with more than 60 seconds of captured audio
+showco report -1               # previous qualifying show (-2 through -9 go further back)
 showco python 'CODE'           # run one Python expression on the target
 showco prepare-card            # prepare and eject an Imager-written SD card
 ```
+
+Reports retain the existing grouping of recording sessions separated by less
+than three hours (`--gap-hours` changes that threshold). Empty and trivial show
+groups are skipped before counting history offsets. Captured duration is the
+sum of each session's longest captured track, so parallel channels do not
+multiply the duration. MIDI-only and metadata-only groups do not qualify; short
+sessions within a qualifying group remain in its report.
 
 Ordinary provisioning installs missing packages without running `apt-get upgrade`; add `--upgrade` when a package upgrade is intended.
 

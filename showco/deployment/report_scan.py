@@ -22,6 +22,7 @@ class Session(BaseModel, frozen=True):
     open: bool = False
     metadata_available: bool = True
     audio_files: int = 0
+    captured_seconds: float = 0.0
     total_bytes: int = 0
     midi_messages: int = 0
     tracks: dict[str, float] = Field(default_factory=dict)
@@ -44,8 +45,10 @@ def timestamp(value: str) -> datetime:
     return result.astimezone(UTC)
 
 
-def select_sessions(sessions: list[Session], gap_hours: float) -> list[Session]:
-    """Group overlapping sessions and gaps strictly shorter than the threshold."""
+def select_sessions(
+    sessions: list[Session], gap_hours: float, older: int = 0
+) -> list[Session]:
+    """Select a qualifying show after grouping sessions by their end-to-start gaps."""
     if not math.isfinite(gap_hours) or gap_hours <= 0:
         raise ValueError('gap hours must be finite and greater than zero')
     groups: list[list[Session]] = []
@@ -55,7 +58,13 @@ def select_sessions(sessions: list[Session], gap_hours: float) -> list[Session]:
             groups.append([])
         groups[-1].append(session)
         end = max(end, session.ended_at) if end else session.ended_at
-    return groups[-1] if groups else []
+    qualifying = [
+        g
+        for g in groups
+        if sum(s.captured_seconds for s in g if s.audio_files > 0 and s.total_bytes > 0)
+        > 60
+    ]
+    return qualifying[-1 - older] if 0 <= older < len(qualifying) else []
 
 
 def safe_message(message: str) -> str:
@@ -238,6 +247,9 @@ def recording_sessions(roots: list[Path], limitations: list[str]) -> list[Sessio
                     ended_at=ended_at,
                     open=summary.state != 'sealed',
                     audio_files=audio_files,
+                    captured_seconds=max(
+                        (t.captured_seconds for t in quality.tracks), default=0.0
+                    ),
                     total_bytes=media_bytes,
                     midi_messages=summary.midi_messages,
                     tracks=tracks,
@@ -257,7 +269,7 @@ def recording_sessions(roots: list[Path], limitations: list[str]) -> list[Sessio
     return sessions
 
 
-def collect(gap_hours: float, home: Path | None = None) -> Report:
+def collect(gap_hours: float, home: Path | None = None, older: int = 0) -> Report:
     home = home or Path.home()
     limitations = [
         'Track durations include pre-roll/tails, not exact audible activity. '
@@ -268,14 +280,22 @@ def collect(gap_hours: float, home: Path | None = None) -> Report:
         'between sources.',
         'Broadcast duration is unknown: retained encoder progress lacks reliable '
         'attempt identifiers and does not prove Twitch delivery.',
+        'Shows qualify with more than 60 seconds of captured audio, using the '
+        'longest captured track per session and summing across grouped sessions. '
+        'Sessions without saved audio files do not contribute.',
     ]
     sessions = select_sessions(
-        recording_sessions(recording_roots(home, limitations), limitations), gap_hours
+        recording_sessions(recording_roots(home, limitations), limitations),
+        gap_hours,
+        older,
     )
     if not sessions:
         return Report(
             sessions=[],
-            limitations=[*limitations, 'No readable recording sessions found.'],
+            limitations=[
+                *limitations,
+                f'No qualifying show at history offset {older}.',
+            ],
         )
     start = min(s.started_at for s in sessions)
     end = max(s.ended_at for s in sessions)
@@ -389,6 +409,6 @@ def collect(gap_hours: float, home: Path | None = None) -> Report:
 
 if __name__ == '__main__':
     try:
-        print(collect(float(sys.argv[1])).model_dump_json())
+        print(collect(float(sys.argv[1]), older=int(sys.argv[2])).model_dump_json())
     except (ImportError, OSError, ValueError) as error:
         sys.exit(f'ERROR: cannot collect show report: {safe_message(str(error))}')
