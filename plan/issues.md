@@ -3,6 +3,14 @@
 Keep this file for outstanding findings only. Remove each issue's section in the
 commit that completes it rather than retaining resolution notes.
 
+## October 17 show recording lost without a front-page warning
+
+The user saw no errors on the front Show page and initially found only rehearsal
+material. Boot-relative evidence now identifies a likely show session despite
+its misleading clock labels; audio identity and coverage remain unverified.
+Confirmed recording, reporting, and warning defects, the updated investigation,
+and the prevention plan are in [recording-failure.md](recording-failure.md).
+
 ## Slow Pi connections over showbox Wi-Fi
 
 Connecting to the Pi through showCo was slow on **showbox Wi-Fi**. The cause
