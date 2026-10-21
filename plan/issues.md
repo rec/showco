@@ -3,6 +3,13 @@
 Keep this file for outstanding findings only. Remove each issue's section in the
 commit that completes it rather than retaining resolution notes.
 
+## October 17 show recording lost without a front-page warning
+
+The show ran from 15:00 to 19:00. The user found only rehearsal material in the
+available recordings and saw no errors on the front Show page. Confirmed
+recording, reporting, and warning defects, unresolved causality, and the ordered
+prevention plan are in [recording-failure.md](recording-failure.md).
+
 ## Slow Pi connections over showbox Wi-Fi
 
 Connecting to the Pi through showCo was slow on **showbox Wi-Fi**. The cause
