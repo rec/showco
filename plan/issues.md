@@ -11,6 +11,13 @@ its misleading clock labels; audio identity and coverage remain unverified.
 Confirmed recording, reporting, and warning defects, the updated investigation,
 and the prevention plan are in [recording-failure.md](recording-failure.md).
 
+## streamO publishes automatically at boot without ready audio
+
+The device-free October 21 boot created an unwanted short Twitch broadcast.
+Provisioning and deployment start a publisher that waits for audio only after
+launching. The default-off lifecycle, readiness checks, open decisions, and
+regression/acceptance plan are in [streamo-startup.md](streamo-startup.md).
+
 ## Slow Pi connections over showbox Wi-Fi
 
 Connecting to the Pi through showCo was slow on **showbox Wi-Fi**. The cause
