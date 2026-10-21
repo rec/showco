@@ -130,6 +130,11 @@ class StreamoStatus(BaseModel, frozen=True):
     def toggle_label(self) -> str:
         if self.service.state == 'disabled':
             return 'Twitch disabled'
+        if self.stream_state == 'publishing' and self.service.state in {
+            'connected',
+            'error',
+        }:
+            return 'Stop Twitch (unconfirmed)'
         if self.service.state == 'error':
             return 'Retry Twitch (error)'
         if self.service.state != 'connected':
@@ -153,6 +158,8 @@ class StreamoStatus(BaseModel, frozen=True):
     @computed_field
     @property
     def toggle_starts_stream(self) -> bool:
+        if self.stream_state == 'publishing':
+            return False
         return (
             self.stream_state in {'stopped', 'failed'}
             or self.service.state != 'connected'
@@ -168,7 +175,8 @@ class StreamoStatus(BaseModel, frozen=True):
             and (
                 self.service.state in {'offline', 'error'}
                 or self.service.last_error is not None
-                or self.stream_state in {'stopped', 'streaming', 'muted', 'failed'}
+                or self.stream_state
+                in {'stopped', 'publishing', 'streaming', 'muted', 'failed'}
             )
             and (
                 self.closing is None
@@ -314,6 +322,6 @@ class ShowStatus(BaseModel, frozen=True):
             and self.music.mode not in {'closing', 'transitioning', 'fault'}
             and (
                 self.music.mode != 'teardown'
-                or self.streamo.stream_state in {'streaming', 'muted'}
+                or self.streamo.stream_state in {'publishing', 'streaming', 'muted'}
             )
         )

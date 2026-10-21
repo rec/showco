@@ -193,3 +193,66 @@ def test_invalid_stream_states_are_not_healthy() -> None:
             status = client.status()
         assert status.service.state == 'error'
         assert 'invalid state' in str(status.service.last_error)
+
+
+def test_unconfirmed_twitch_is_visible_as_a_fault_and_can_still_be_stopped() -> None:
+    client = FakeStreamoClient(
+        {
+            'state': 'publishing',
+            'service': 'twitch',
+            'ffmpeg_alive': True,
+            'last_audio_at': time.time(),
+            'remote_health': {
+                'state': 'offline',
+                'detail': 'Twitch reports the channel offline',
+            },
+        }
+    )
+    status = client.status()
+    assert status.service.state == 'error'
+    assert status.service.last_error == 'Twitch reports the channel offline'
+    assert status.toggle_available
+    assert not status.toggle_starts_stream
+    assert status.toggle_label == 'Stop Twitch (unconfirmed)'
+
+
+def test_twitch_confirmation_errors_and_staleness_are_not_healthy() -> None:
+    for extra, expected in [
+        (
+            {'remote_health_error': 'Provider health unavailable'},
+            'Provider health unavailable',
+        ),
+        (
+            {
+                'remote_health': {'state': 'live'},
+                'remote_health_updated_at': time.time() - 91,
+            },
+            'Twitch live confirmation is stale',
+        ),
+        ({}, 'Twitch broadcast has not been confirmed live'),
+    ]:
+        status = FakeStreamoClient(
+            {
+                'state': 'streaming',
+                'service': 'twitch',
+                'ffmpeg_alive': True,
+                'last_audio_at': time.time(),
+                **extra,
+            }
+        ).status()
+        assert status.service.state == 'error'
+        assert status.service.last_error == expected
+
+
+def test_fresh_twitch_live_confirmation_is_healthy() -> None:
+    status = FakeStreamoClient(
+        {
+            'state': 'streaming',
+            'service': 'twitch',
+            'ffmpeg_alive': True,
+            'last_audio_at': time.time(),
+            'remote_health': {'state': 'live'},
+            'remote_health_updated_at': time.time(),
+        }
+    ).status()
+    assert status.service.state == 'connected'

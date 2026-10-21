@@ -15,7 +15,7 @@ from ..deployment import machine_role
 from ..runtime.models import ActionResult, ClosingStatus, ServiceStatus, StreamoStatus
 
 AUDIO_STALE_SECONDS = 5.0
-ACTIVE_STREAM_STATES = {'streaming', 'muted'}
+ACTIVE_STREAM_STATES = {'publishing', 'streaming', 'muted'}
 LOCAL_ACTIONS = {'mute', 'unmute', 'stop'}
 STREAM_API_ACTIONS = {'update_stream_info', 'chat', 'announce', 'clip', 'marker'}
 
@@ -97,6 +97,7 @@ class StreamoClient:
         if stream_state not in {
             'stopped',
             'starting',
+            'publishing',
             'streaming',
             'muted',
             'stopping',
@@ -191,6 +192,17 @@ def _closing(value: object) -> ClosingStatus | None:
 def _health_error(status: dict[str, object], stream_state: str) -> str | None:
     if error := _string(status.get('last_error')):
         return error
+    if stream_state in ACTIVE_STREAM_STATES and status.get('service') == 'twitch':
+        if error := _string(status.get('remote_health_error')):
+            return error
+        health = _dictionary(status.get('remote_health'))
+        if health is None or health.get('state') != 'live':
+            return (
+                _string(health.get('detail')) if health is not None else None
+            ) or 'Twitch broadcast has not been confirmed live'
+        checked_at = _float(status.get('remote_health_updated_at'))
+        if checked_at is None or time.time() - checked_at >= 90:
+            return 'Twitch live confirmation is stale'
     if stream_state == 'failed':
         return 'streamO stream failed'
     if stream_state not in ACTIVE_STREAM_STATES:
