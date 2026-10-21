@@ -5,10 +5,11 @@ commit that completes it rather than retaining resolution notes.
 
 ## October 17 show recording lost without a front-page warning
 
-The show ran from 15:00 to 19:00. The user found only rehearsal material in the
-available recordings and saw no errors on the front Show page. Confirmed
-recording, reporting, and warning defects, unresolved causality, and the ordered
-prevention plan are in [recording-failure.md](recording-failure.md).
+The user saw no errors on the front Show page and initially found only rehearsal
+material. Boot-relative evidence now identifies a likely show session despite
+its misleading clock labels; audio identity and coverage remain unverified.
+Confirmed recording, reporting, and warning defects, the updated investigation,
+and the prevention plan are in [recording-failure.md](recording-failure.md).
 
 ## Slow Pi connections over showbox Wi-Fi
 

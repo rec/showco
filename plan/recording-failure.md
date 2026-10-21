@@ -2,12 +2,17 @@
 
 ## Outcome and scope
 
-The October 17, 2026 show ran from 15:00 to 19:00 local time. The user
-inspected the available recordings and identified them as rehearsal material,
-not the show. The front Show page remained open and displayed no errors.
-Treat the incident as loss of the show recording, together with failure to
-warn the operator. Do not treat existing rehearsal audio as successful capture
-of the show.
+The October 17, 2026 show was initially described as running from 15:00 to
+19:00 local time. The user subsequently placed Pi startup between 14:00 and
+15:00 and shutdown around 18:30. The user inspected available recordings and
+identified them as rehearsal material. The front Show page remained open and
+displayed no errors.
+
+Later boot-relative evidence strongly identifies a session with misleading
+calendar labels as a show candidate; see the follow-up below. Do not declare
+the show recovered without identifying and validating the actual audio. Do not
+declare it absent based on folder dates. The recording and warning failures
+remain open while the content and saved coverage are established.
 
 This plan covers investigation and changes to recs and showCo. Implementation,
 deployment, and runtime qualification are separate work. Preserve silence
@@ -69,6 +74,46 @@ possible failure.
   state must be distinguished from the revisions and settings used at the show.
 
 ## What is established, and what is not
+
+### Follow-up after the user supplied power-on and power-off times
+
+The last boot before today lasted approximately 4 hours 23 minutes. recs started
+13 seconds after boot, crashed at roughly 4 minutes 31 seconds, and restarted
+five seconds later. The ensuing recording journal spans approximately
+4 hours 18 minutes and ends at shutdown. This closely matches startup around
+14:07 and shutdown around 18:30 on October 17. This alignment is inferred from
+the user's approximate times, not established by the Pi's civil timestamps.
+
+That boot has no logged successful clock synchronization. Unlike today's
+expected clock correction alone, its boot-relative lifecycle together with the
+user's times provides evidence that the session labelled
+`2026/10/17/00-02-11` may belong to the show. Earlier statements excluding it
+because its date/time labels precede the afternoon were not justified.
+
+The journal's audio timelines cover approximately 15,516.58 seconds for all
+nine stereo pairs. Pairs 1–8 have captured media; pairs 9–18 are almost entirely
+labelled silence-suppressed. Header/journal matching audio totals are:
+
+| Inputs | Matching audio seconds | Files with header/count disagreement |
+| --- | ---: | --- |
+| 1–2 | 4,155.74 | None |
+| 3–4 | 6,434.78 | `3-4 + 20261017-041823.flac` |
+| 5–6 | 2,426.58 | None |
+| 7–8 | 13,425.74 | `7-8 + 20261017-041823.flac` |
+
+Each mismatched file reports 9,223,372,036,854,775,807 frames through
+libsndfile, against 7,025,280 frames recorded in the journal. Do not use that
+sentinel-like header value as an actual duration. Matching header counts do not
+prove complete decodability, correct performance content, or continuous show
+coverage. These totals are per input pair and must not be added as elapsed time.
+
+Next: identify performance content in the candidate session from the backup,
+decode its files, and reconcile native-frame intervals, silence suppression,
+missing intervals, and the two mismatched files. Use copies for any repair.
+The evidence now supports recs running for most of the likely show boot,
+including an early crash/restart, rather than assuming it never ran.
+
+### Remaining causal limits
 
 There are reproducible recording-finalization defects and a confirmed recorder
 crash in retained evidence. There is a confirmed report-discovery limitation.
