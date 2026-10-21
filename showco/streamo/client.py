@@ -8,6 +8,7 @@ from pathlib import Path
 import tyro
 from pydantic import BaseModel
 from reccy.protocol import rpc
+from reccy.reccy import ReccyStatus
 from reccy.services import controller, paths
 from streamo.config import STREAMO_SERVICE
 
@@ -51,9 +52,10 @@ class StreamoClient:
         try:
             status = self._call('status')
         except (ConnectionError, OSError, TimeoutError, ValueError) as error:
-            default_endpoint = paths.service_paths(
+            service_paths = paths.service_paths(
                 STREAMO_SERVICE, paths.current_platform()
-            ).control_endpoint
+            )
+            default_endpoint = service_paths.control_endpoint
             if sys.platform == 'linux' and self.control_endpoint == default_endpoint:
                 try:
                     service = controller.ServiceController(
@@ -71,17 +73,33 @@ class StreamoClient:
                             service=ServiceStatus(name='streamo', state='connected'),
                             stream_state='stopped',
                         )
+            last_failure = None
+            if self.control_endpoint == default_endpoint:
+                try:
+                    saved = ReccyStatus.model_validate_json(
+                        service_paths.status.read_bytes()
+                    )
+                except (OSError, ValueError):
+                    pass
+                else:
+                    if not saved.running and saved.errors:
+                        last_failure = (
+                            f'Last streamO failure: {saved.errors[-1].message}'
+                        )
             return StreamoStatus(
                 service=ServiceStatus(
                     name='streamo',
                     state='offline',
                     last_error=(
-                        f'streamO is not responding: its control socket '
-                        f'{self.control_endpoint} does not exist. The service may '
-                        'not be running or may have failed during startup. '
-                        'Check the streamO service log for the cause.'
-                        if isinstance(error, FileNotFoundError)
-                        else str(error)
+                        last_failure
+                        or (
+                            f'streamO is not responding: its control socket '
+                            f'{self.control_endpoint} does not exist. The service may '
+                            'not be running or may have failed during startup. '
+                            'Check the streamO service log for the cause.'
+                            if isinstance(error, FileNotFoundError)
+                            else str(error)
+                        )
                     ),
                 )
             )
