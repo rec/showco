@@ -11,12 +11,13 @@ approved recording, audio, and clock prerequisites only; lighting readiness must
 not block publishing. Keep silence filtering. Quiet input with fresh samples
 is valid; absent or stalled capture is not.
 
-Pending user decisions:
+After an explicitly started broadcast fails, the user approved automatic
+recovery only after fresh readiness checks, with at most **three automatic
+relaunches**. Once that allowance is used, remain off until explicit Retry.
+Neither boot nor maintenance may resurrect previous broadcast intent.
 
-- Confirm explicit Start rather than automatic publication on becoming ready.
-- After an authorized broadcast crashes, remain off until explicit Retry, or
-  recover automatically only after fresh prerequisites pass. Neither option
-  permits boot or maintenance to resurrect previous broadcast intent.
+Pending user decision: confirm explicit Start rather than automatic publication
+on initially becoming ready.
 
 This is a planning change. It does not disable autostart on the current Pi.
 
@@ -67,8 +68,9 @@ activation removed through a tested provisioning/update step; changing only
 new-install defaults leaves current Pis unsafe.
 
 Verification must accept the intended inactive/manual state without broadcasting.
-Apply the selected crash-recovery policy to the service restart behavior too.
-Stop must remain stopped.
+Apply the bounded recovery policy below to service restart behavior too.
+Stop must remain stopped. An unrestricted systemd restart loop must not bypass
+the readiness gate or the three-attempt limit.
 
 ### 2. Share one non-publishing readiness decision
 
@@ -125,6 +127,29 @@ opening that output, with bounded failure and no publication while waiting.
 Scope this small publisher-side prerequisite explicitly before implementation;
 do not claim a showCo-only precheck protects direct daemon starts.
 
+#### Bounded recovery after an intentional start
+
+- Allow three automatic relaunches in addition to the initial explicit start.
+  Charge an attempt when a relaunch is initiated, even if it subsequently fails.
+- Run fresh recording/audio/clock readiness checks before each relaunch. Failed
+  checks leave publishing off without consuming an attempt; any readiness
+  polling must use bounded, interruptible waits, not a busy loop.
+- A successful automatic recovery does not replenish the budget. A later
+  failure in the same deliberately started broadcast uses the next attempt.
+- After the third automatic attempt, a further failure stays off. Explicit
+  Start/Retry establishes a new budget only after its readiness checks pass.
+- Preserve the used allowance through controller or publisher process restarts
+  within the same authorized run. Losing recovery state must not silently grant
+  another three attempts or authorize publishing.
+- Stop, show teardown, reboot, provisioning, and deployment cancel pending
+  recovery. A recovered network or input cannot override an explicit Stop or
+  rearm a broadcast after boot.
+- Use one recovery owner and attempt budget. Coordinate showCo, the service
+  restart policy, and streamO's own retry behavior so nested retries cannot
+  multiply the allowed number or bypass fresh checks.
+- Show each failure, the used/remaining attempts, readiness blockers, and the
+  exhausted/off state on the front page. Recovery never restores missed audio.
+
 ### 4. Keep the front page explicit and truthful
 
 Display **Twitch off** after boot and show specific unmet prerequisites. Disable
@@ -152,14 +177,17 @@ recovery, naming cleanup, or recording-date migration into this change.
    Test missing devices, wrong pair, stale capture, paused recs, bad storage,
    missing/invalid sample evidence, untrusted clock, stale POSTs, and concurrent
    starts. Quiet fresh samples must pass when other prerequisites pass. Stop
-   must remain available.
+   must remain available. Test exactly three automatic relaunches and no fourth;
+   failed readiness must launch nothing, successful recovery must not reset the
+   budget, and explicit Retry must start a new budget. Cover process restarts,
+   lost recovery state, concurrent requests, and Stop cancelling pending retries.
 4. Commit any approved publisher-side first-audio protection with tests proving
    no provider connection opens while waiting for real input.
 5. Run required project checks for each code commit. Separately authorize target
    acceptance: cold boot with no devices creates no Twitch session; attaching
    devices and passing readiness still creates none; only intentional Start
    publishes. Exercise Stop, reboot, update, rollback, startup input loss, and
-   the selected crash-recovery policy.
+   the three-attempt crash-recovery policy, including exhaustion and manual Retry.
 
 No deployment, service changes, hardware checks, or test broadcasts are performed
 by creating this plan. Implementation and target acceptance remain outstanding.
