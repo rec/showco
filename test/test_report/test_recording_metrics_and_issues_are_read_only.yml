@@ -2,8 +2,7 @@ audio_files: 1
 captured_seconds: 1.0
 ended_at: '2026-10-16T18:00:02Z'
 issues:
-- 'input_overflow: body.streams[stereo].gaps[0]'
-metadata_available: true
+- 'input_overflow: audio:X18:17-18, frames 48000-96000'
 midi_messages: 0
 open: false
 started_at: '2026-10-16T18:00:00Z'
