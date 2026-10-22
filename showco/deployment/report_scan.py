@@ -20,7 +20,6 @@ class Session(BaseModel, frozen=True):
     started_at: datetime
     ended_at: datetime
     open: bool = False
-    metadata_available: bool = True
     audio_files: int = 0
     captured_seconds: float = 0.0
     total_bytes: int = 0
@@ -135,11 +134,6 @@ def recording_roots(home: Path, limitations: list[str]) -> list[Path]:
 
 
 def recording_sessions(roots: list[Path], limitations: list[str]) -> list[Session]:
-    from recs.recording import legacy, session_browser, session_quality, session_record
-    from recs.recording.files import asset_content, asset_path
-    from recs.recording.read import read_recording
-    from ufor.recording import AudioStream
-
     directories: set[Path] = set()
 
     def unreadable(error: OSError) -> None:
@@ -147,126 +141,149 @@ def recording_sessions(roots: list[Path], limitations: list[str]) -> list[Sessio
 
     for root in roots:
         for directory, _, files in os.walk(root, onerror=unreadable):
-            if 'recording.toml' in files or 'session-record.jsonl' in files:
+            if 'session-record.jsonl' in files:
                 directories.add(Path(directory).resolve())
     sessions: list[Session] = []
     for path in sorted(directories):
         try:
-            summary = session_browser.summarize(path)
-            if summary is None:
-                journal_path = path / 'session-record.jsonl'
-                if not journal_path.is_file():
-                    limitations.append(f'Unreadable recording document: {path}')
-                    continue
-                journal = session_record.read(journal_path)
-                sessions.append(
-                    Session(
-                        path=str(path),
-                        started_at=timestamp(journal.started_at),
-                        ended_at=timestamp(journal.ended_at)
-                        if journal.ended_at
-                        else max(
-                            [
-                                timestamp(journal.started_at),
-                                *(timestamp(e.timestamp) for e in journal.events),
-                                *(timestamp(f.timestamp) for f in journal.files),
-                            ]
-                        ),
-                        open=journal.ended_at is None,
-                        metadata_available=False,
-                        issues=[
-                            'Recording document unavailable; audio totals unknown',
-                            *journal.errors,
-                            *journal.warnings,
-                        ],
-                    )
-                )
-                continue
-            quality = session_quality.inspect(path)
-            document = read_recording(path / 'recording.toml')
-            ended_at = (
-                timestamp(summary.ended_at)
-                if summary.ended_at
-                else timestamp(summary.started_at)
-                + timedelta(seconds=summary.duration or 0)
-            )
-            media_issues: list[str] = []
-            if summary.ended_at is None and document.body.journal is not None:
-                try:
-                    asset = next(
-                        a for a in document.assets if a.name == document.body.journal
-                    )
-                    journal_path = path / asset_path(asset)
-                    journal = (
-                        legacy.read(journal_path)
-                        if asset.encoding == 'recs-session-v3'
-                        else session_record.read(journal_path)
-                    )
-                    ended_at = max(
-                        [
-                            ended_at,
-                            *(timestamp(e.timestamp) for e in journal.events),
-                            *(timestamp(f.timestamp) for f in journal.files),
-                        ]
-                    )
-                except (OSError, ValueError):
-                    media_issues.append('Open session end unknown: journal unreadable')
-            audio_assets = {
-                f.asset
-                for s in document.body.streams
-                if isinstance(s, AudioStream)
-                for f in [*s.fragments, *s.unmapped_fragments]
-            }
-            media_assets = {
-                f.asset for s in document.body.streams for f in s.fragments
-            } | audio_assets
-            media_bytes = 0
-            audio_files = 0
-            for asset in document.assets:
-                if asset.name not in media_assets:
-                    continue
-                try:
-                    size = (path / asset_path(asset)).stat().st_size
-                    media_bytes += size
-                    audio_files += asset.name in audio_assets
-                    if size != asset_content(asset).byte_length:
-                        media_issues.append(f'Media size changed: {asset.name}')
-                except (OSError, ValueError):
-                    media_issues.append(f'Media missing or unreadable: {asset.name}')
-            tracks: dict[str, float] = {}
-            for track in quality.tracks:
-                name = (
-                    f'{track.source_name or track.source_id}: '
-                    f'{track.track_name or track.stream}'
-                )
-                tracks[name] = tracks.get(name, 0.0) + track.captured_seconds
-            sessions.append(
-                Session(
-                    path=str(path),
-                    started_at=timestamp(summary.started_at),
-                    ended_at=ended_at,
-                    open=summary.state != 'sealed',
-                    audio_files=audio_files,
-                    captured_seconds=max(
-                        (t.captured_seconds for t in quality.tracks), default=0.0
-                    ),
-                    total_bytes=media_bytes,
-                    midi_messages=summary.midi_messages,
-                    tracks=tracks,
-                    issues=[
-                        *media_issues,
-                        *summary.warnings,
-                        *(
-                            f'{f.kind}: {f.evidence}'
-                            for f in quality.findings
-                            if f.severity in ('warning', 'error')
-                        ),
-                    ],
-                )
-            )
+            sessions.append(recording_session(path))
         except (OSError, ValueError) as error:
             limitations.append(f'Cannot read {path}: {safe_message(str(error))}')
     return sessions
+
+
+def recording_session(path: Path) -> Session:
+    from recs.recording import session_record
+
+    entries, issues = session_record.read_entries(path / 'session-record.jsonl')
+    header = next(
+        (e for e in entries if isinstance(e, session_record.SessionHeader)), None
+    )
+    if header is None:
+        raise ValueError('Session recording has no header')
+    footer = next(
+        (e for e in reversed(entries) if isinstance(e, session_record.SessionFooter)),
+        None,
+    )
+    times = [timestamp(header.started_at)]
+    rates: dict[str, float] = {}
+    files: dict[
+        tuple[str, str], session_record.AudioFileRecord | session_record.EventFileRecord
+    ] = {}
+    for entry in entries:
+        if isinstance(entry, session_record.ClockRecord):
+            rates.update(
+                {t.name: t.rate.numerator / t.rate.denominator for t in entry.timebases}
+            )
+        elif isinstance(entry, session_record.AudioTimelineRecord):
+            if entry.sample_rate is not None:
+                rates.setdefault(entry.clock_id, entry.sample_rate)
+            issues.extend(
+                f'{g.reason}: {entry.stream_id}, frames {g.start}-{g.end}'
+                for g in entry.gaps
+                if g.reason not in {'silence_suppressed', 'short_capture'}
+            )
+        elif isinstance(entry, session_record.SessionFooter):
+            times.append(timestamp(entry.ended_at))
+        elif not isinstance(entry, session_record.SessionHeader):
+            times.append(timestamp(entry.timestamp))
+            if isinstance(entry, session_record.WarningRecord):
+                issues.append(entry.message)
+            elif isinstance(entry, session_record.EventRecord):
+                if entry.type == 'source_online' and entry.sample_rate is not None:
+                    if entry.clock_id is not None:
+                        rates.setdefault(entry.clock_id, entry.sample_rate)
+                if entry.type in {
+                    'error',
+                    'source_offline',
+                    'source_failed',
+                    'source_stopped',
+                    'midi_source_failed',
+                    'midi_source_stopped',
+                    'buffer_overflow',
+                }:
+                    issues.append(
+                        f'{entry.type}: {entry.source or "recs"} at {entry.timestamp}'
+                        + (f': {entry.reason}' if entry.reason else '')
+                        + (f': {entry.value}' if isinstance(entry.value, str) else '')
+                    )
+            elif isinstance(
+                entry, session_record.AudioFileRecord | session_record.EventFileRecord
+            ):
+                file_key = entry.stream_id, entry.path
+                previous = files.get(file_key)
+                # Replayed starts must not erase an already completed file count.
+                if (
+                    entry.type != 'file_started'
+                    or previous is None
+                    or previous.type != 'file_finished'
+                ):
+                    files[file_key] = entry
+
+    audio_files = midi_messages = 0
+    sizes: dict[Path, int] = {}
+    captures: dict[str, dict[tuple[str, int | str, int], float]] = {}
+    labels: dict[str, str] = {}
+    for entry in files.values():
+        if entry.type == 'file_discarded':
+            continue
+        media = (path / entry.path).resolve()
+        try:
+            if not media.is_relative_to(path):
+                raise ValueError('Media path escapes session directory')
+            if not media.is_file():
+                raise ValueError('Media path is not a file')
+            size = media.stat().st_size
+        except (OSError, ValueError):
+            issues.append(f'Media missing or unreadable: {entry.path}')
+            continue
+        sizes[media] = size
+        if entry.type != 'file_finished':
+            issues.append(f'Unfinished media; totals incomplete: {entry.path}')
+        if isinstance(entry, session_record.EventFileRecord):
+            if entry.media_type == 'midi' and entry.type == 'file_finished':
+                midi_messages += entry.quantity_count or 0
+            continue
+        audio_files += 1
+        source, track = session_record.audio_stream_parts(entry.stream_id)
+        labels[entry.stream_id] = (
+            f'{entry.source or source}: {entry.track_name or track}'
+        )
+        if entry.type != 'file_finished':
+            continue
+        rate = entry.sample_rate or rates.get(entry.clock_id)
+        if rate is None or entry.quantity_count is None:
+            issues.append(
+                f'Audio duration unknown; frame count or rate missing: {entry.path}'
+            )
+            continue
+        if size > 0:
+            # Encoding variants share a clock, native end, and captured frame count.
+            capture = (
+                entry.clock_id,
+                entry.frame_count if entry.frame_count is not None else entry.path,
+                entry.quantity_count,
+            )
+            captures.setdefault(entry.stream_id, {})[capture] = (
+                entry.quantity_count / rate
+            )
+    durations = {k: sum(v.values()) for k, v in captures.items()}
+    tracks: dict[str, float] = {}
+    for key, duration in durations.items():
+        tracks[labels[key]] = tracks.get(labels[key], 0.0) + duration
+    total_bytes = sum(sizes.values())
+    return Session(
+        path=str(path),
+        started_at=times[0],
+        ended_at=timestamp(footer.ended_at) if footer is not None else max(times),
+        open=footer is None,
+        audio_files=audio_files,
+        captured_seconds=max(durations.values(), default=0.0),
+        total_bytes=total_bytes,
+        midi_messages=midi_messages,
+        tracks=tracks,
+        issues=list(dict.fromkeys(issues)),
+    )
 
 
 def collect(gap_hours: float, home: Path | None = None, older: int = 0) -> Report:
@@ -274,7 +291,8 @@ def collect(gap_hours: float, home: Path | None = None, older: int = 0) -> Repor
     limitations = [
         'Track durations include pre-roll/tails, not exact audible activity. '
         'Overlapping tracks are not added as show duration.',
-        'Recording durations come from metadata, without decoding all media. '
+        'Recording durations come only from session-record.jsonl frame counts '
+        'and rates; media contents and audio headers are not verified. '
         'Unmounted disks are not searched.',
         'Histories have finite retention; issue observations can overlap '
         'between sources.',
