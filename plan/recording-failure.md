@@ -238,16 +238,14 @@ when no show qualifies. Surface missing/invalid metadata and media errors even
 when those sessions cannot qualify. Preserve the existing three-hour grouping,
 greater-than-60-second audio rule, and historical selectors.
 
-Use journal evidence and verified media where sufficient to account for
-incomplete sessions without changing the originals. Keep unknown duration
-explicit when evidence is insufficient. Do not add parallel-track durations
-together or qualify MIDI-only sessions. Recovery is an explicit separate
-operation on copies, not a side effect of reporting.
+The collector now uses only session recording journals for recording metadata;
+finalized documents are outside its input contract. Media content verification
+and explicit recovery remain separate from reporting. Do not add a dependency
+on finalized documents back into this path.
 
-Acceptance: regression fixtures for journal-only audio, incomplete FLAC headers,
-missing media, duplicated lifecycle entries, invalid recording documents, and
-mixed valid/incomplete sessions. The actual incident layouts must produce useful
-diagnostics instead of only `No qualifying show found`.
+Remaining acceptance: when no group qualifies, report scanned roots and candidate
+exclusion reasons, including unknown duration and missing media, instead of only
+`No qualifying show found`.
 
 ### 6. Retain a useful recording incident history
 

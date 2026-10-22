@@ -353,8 +353,9 @@ journals, monitoring history and saved incidents. This removes evidence used by
 `showco report`, so generate any needed report first.
 
 `showco report` reads the target without restarting services or changing recordings.
-It starts with the latest recs session and includes preceding sessions until a gap
-of three hours or more. Change that threshold with `showco report --gap-hours 2`.
+It groups recs sessions using a gap of three hours or more and selects the latest
+group with more than 60 seconds of captured audio. `-1` through `-9` select older
+qualifying groups. Change the gap with `showco report --gap-hours 2`.
 Gaps are measured from a session's end to the next session's start, including overlap.
 Sessions are ordered by capture timestamps, not file modification times.
 
@@ -363,14 +364,20 @@ MIDI messages, saved duration per source/track, recording-quality issues, servic
 warnings, and available CPU/disk history. Stereo pairs remain single tracks. Saved
 track durations include recs pre-roll and tails; they do not establish exactly how
 long a channel had audible sound. Overlapping track durations are not show duration.
-Open or unfinalized sessions are marked provisional or incomplete.
+Recording metadata comes only from `session-record.jsonl`; `recording.toml` is
+neither required nor read. Durations use recorded frame counts and sample rates,
+including rates declared in journal clock records. Missing media does not
+contribute audio duration. Encoding variants do not add duplicate captured time.
+Open sessions and unfinished files are marked provisional or incomplete; files
+without a recorded frame count or sample rate have unknown duration.
 
-Broadcast duration is a lower bound from retained streamO FFmpeg progress, not proof
-that Twitch received the stream. Missing progress is reported as unknown. Rotated-away
+Broadcast duration is unknown: retained streamO FFmpeg progress lacks reliable
+attempt identities and does not prove Twitch delivery. Rotated-away
 logs, unmounted recording disks, and expired monitoring/incident history cannot be
-reconstructed. Recording metrics use recs metadata without a full media integrity
-check. Errors are restricted to the selected show window; repeated observations are
-grouped, with the ten most frequent issue types displayed. Counts from different
+reconstructed. Media file existence and sizes are checked, but contents and audio
+headers are not verified. Errors are restricted to the selected show window;
+repeated observations are grouped, with the ten most frequent issue types displayed.
+Counts from different
 sources can describe the same incident. URLs and common credential fields are redacted.
 
 Logs are retained on the target at `~/.local/state/SERVICE/SERVICE.log` for `showco`, `recs`, `streamo`, and `lyte`. showCo itself keeps only the current process's recs errors and ten recent action results.

@@ -92,10 +92,6 @@ def render(report: report_scan.Report) -> str:
             'Recording still open: totals are provisional; '
             'window ends at the latest saved recording evidence.'
         )
-    if any(not s.metadata_available for s in report.sessions):
-        lines.append(
-            'Some sessions lack recording metadata; saved media totals are incomplete.'
-        )
     lines.append(
         'Broadcast output observed: '
         + (
