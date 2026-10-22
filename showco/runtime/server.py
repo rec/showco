@@ -30,6 +30,7 @@ from .app import ShowcoApp
 from .lyte import LyteClient
 from .mixer import MixersMonitor, MixerSpec
 from .monitoring import PerformanceMonitor
+from .network import ExternalWifi
 from .recs import RecsClient
 from .system import SystemMonitor
 from .waveforms import WaveformBridge
@@ -368,7 +369,10 @@ def make_server(
     mixer_specs: list[MixerSpec] | None = None,
     setup: list[Path] | None = None,
     teardown: list[Path] | None = None,
+    external_wifi: ExternalWifi | None = None,
 ) -> ThreadingHTTPServer:
+    if external_wifi is not None:
+        external_wifi.connect()
     handler = type('ConfiguredShowcoHandler', (ShowcoHandler,), {})
     recs_client = recs or RecsClient()
     streamo_client = (streamo or StreamoClient()) if streamo_enabled else None
@@ -415,6 +419,7 @@ def make_server(
         state_directory=Path.home() / '.local/state/showco'
         if performance_enabled
         else None,
+        external_wifi=external_wifi,
     )
     handler.app = app
     server = ShowcoServer((host, port), handler)

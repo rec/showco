@@ -37,6 +37,7 @@ from . import (
 from .lyte import LyteClient
 from .mixer import MixersMonitor
 from .monitoring import PerformanceMonitor
+from .network import ExternalWifi
 from .recs import RecsClient
 from .system import SystemMonitor
 from .waveforms import WaveformBridge
@@ -57,6 +58,7 @@ class ShowcoApp:
         cable_tester: CableTester | None = None,
         music_controller: music.MusicController | None = None,
         state_directory: Path | None = None,
+        external_wifi: ExternalWifi | None = None,
     ) -> None:
         self.recs = recs
         self.streamo = streamo
@@ -72,6 +74,7 @@ class ShowcoApp:
         self.lyte = lyte
         self.cable_tester = cable_tester
         self.music = music_controller
+        self.external_wifi = external_wifi
         self.revision = source_revision()
         self.run_started_at = time.time()
         self.action_log: list[models.ActionLogEntry] = []
@@ -128,6 +131,7 @@ class ShowcoApp:
                 streamo=streamo,
                 lyte=lyte,
                 system=self.system.status(),
+                network=self.external_wifi.status() if self.external_wifi else None,
                 mixers=self.mixers.status(
                     {channel.device for channel in recs.channels},
                     {midi.name: midi.state for midi in recs.midi},

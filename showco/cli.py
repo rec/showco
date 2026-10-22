@@ -22,6 +22,7 @@ from .deployment import bundle, card, deploy, logs, machine_role, panel, python,
 from .provision import network
 from .runtime import gui_schema, rehearsal, services
 from .runtime.mixer import MixersMonitor, load_mixer_specs
+from .runtime.network import ExternalWifi
 from .runtime.server import make_server
 from .streamo import auth, client, config
 from .x18 import cable_test
@@ -127,6 +128,7 @@ def run_web_ui(options: WebUiOptions) -> int:
             streamo_enabled=options.streamo_enabled,
             lyte_enabled=options.lyte_enabled,
             performance_enabled=True,
+            external_wifi=ExternalWifi(),
             setup=options.setup or options.audio,
             teardown=options.teardown or options.audio,
         )
