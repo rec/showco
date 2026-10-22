@@ -25,6 +25,15 @@ def status(value: models.ShowStatus) -> models.ReadinessStatus:
         _optional_service_check('lyte', value.lyte.service),
         _optional_service_check('streamO', value.streamo.service),
     ]
+    if value.network is not None:
+        checks.insert(
+            0,
+            models.ReadinessCheck(
+                name='External Wi-Fi',
+                ok=value.network.connected,
+                message=value.network.message,
+            ),
+        )
     return models.ReadinessStatus(
         checks=checks,
         ready=all(check.ok for check in checks),

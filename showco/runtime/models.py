@@ -290,6 +290,11 @@ class CableTestStatus(BaseModel, frozen=True):
     duration_seconds: float = 0.0
 
 
+class NetworkStatus(BaseModel, frozen=True):
+    connected: bool = False
+    message: str
+
+
 class ShowStatus(BaseModel, frozen=True):
     recs: RecsStatus
     streamo: StreamoStatus
@@ -299,6 +304,7 @@ class ShowStatus(BaseModel, frozen=True):
         )
     )
     system: SystemStatus = Field(default_factory=SystemStatus)
+    network: NetworkStatus | None = None
     mixers: list[MixerStatus] = Field(default_factory=list)
     readiness: ReadinessStatus = Field(default_factory=ReadinessStatus)
     incidents: list[Incident] = Field(default_factory=list)

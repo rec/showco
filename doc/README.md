@@ -271,6 +271,19 @@ own adapter. The existing single `[networks.external.wifi]` table must be replac
 with named tables, including its matching password table. After provisioning, verify
 connection at both locations and after a reboot.
 
+At normal showCo startup, the saved `showco-external-*` NetworkManager profiles
+are checked. An existing external Wi-Fi connection is preserved. If disconnected,
+showCo explicitly tries those profiles in priority order within a 30-second total
+startup deadline, without replacing a hotspot. Failures are logged and appear
+in the front-page fault banner and Health readiness checks; the control panel
+still starts. Connection status is subsequently refreshed without repeated
+activation attempts. Rehearsal mode does not manage networking, and installations
+without saved external profiles skip this check. A connected Wi-Fi adapter does
+not establish Internet access, clock synchronization, or Twitch delivery.
+Activation uses non-interactive `sudo -n nmcli`, relying on the target's existing
+passwordless-sudo provisioning requirement; permission errors are reported rather
+than prompting for credentials.
+
 `network.topology` may be `public`, `private`, `mixed`, or empty. Public uses a saved external Wi-Fi network and puts an X18 on Ethernet. Private creates the internal access point and bridges it to X18 Ethernet. Mixed uses one Wi-Fi interface for the private bridged network and a second for the external network. When empty, showCo selects a topology from the configured external network, available Wi-Fi interfaces, and whether streaming is enabled.
 
 This installation sets `network.restrict_external_ingress = true`. The policy allows incoming connections on the Pi's private network; other interfaces accept SSH on the configured port and mDNS discovery on UDP 5353 so `t.local` remains usable. Outbound traffic and its replies continue to work. Provisioning installs a persistent nftables ingress rule and rejects `public` topology, which has no private hotspot. Put a long, random private Wi-Fi password in the ignored `showco/provision/secrets.toml`. To reach the web UI, join the private Wi-Fi; from the external Wi-Fi, use SSH only. Verify access from both networks after provisioning.
