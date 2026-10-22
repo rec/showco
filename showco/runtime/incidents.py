@@ -130,7 +130,13 @@ class IncidentTimeline:
 
 def fault_details(status: models.ShowStatus) -> list[tuple[str, str, str]]:
     faults = [
-        (c.name, c.message, 'Open Health to inspect the service and recording disk.')
+        (
+            c.name,
+            c.message,
+            'Check the external Wi-Fi network and saved connection profile.'
+            if c.name == 'External Wi-Fi'
+            else 'Open Health to inspect the service and recording disk.',
+        )
         for c in status.readiness.checks
         if not c.ok
     ]
