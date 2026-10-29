@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 import pytest
+from reccy.configuration import settings
 
 from showco.runtime import closing, models, music
 from showco.x18 import music as x18_music
@@ -61,8 +62,8 @@ def test_record_phase_survives_restart_without_restarting_recording(
 
 
 def test_restart_during_transition_reports_uncertain_phase(tmp_path: Path) -> None:
-    (tmp_path / 'music.json').write_text(
-        music.MusicState(mode='transitioning').model_dump_json()
+    settings.write_json_model(
+        tmp_path / 'music.json', music.MusicState(mode='transitioning')
     )
     value, recs, player, routing = controller()
     restored = music.MusicController(
@@ -311,12 +312,13 @@ def test_repeated_end_show_does_not_restart_teardown_music() -> None:
 def test_live_broadcast_can_end_again_after_saved_teardown(tmp_path: Path) -> None:
     path = tmp_path / 'closing.json'
     scene = x18_music.RoomScene(master_fader=0.7, input_lr=[1] * 18)
-    path.write_text(
+    settings.write_json_model(
+        path,
         closing.ClosingRecord(
             operation_id='previous-show',
             phase='teardown-music-playing',
             room_scene=scene,
-        ).model_dump_json()
+        ),
     )
     _, recs, player, routing = controller()
     stream = mock.Mock()
@@ -526,7 +528,7 @@ def test_showco_restart_observes_existing_closing_without_resending(
     record = closing.ClosingRecord(
         operation_id='show-1', phase='credits-running', room_scene=scene
     )
-    state_path.write_text(record.model_dump_json())
+    settings.write_json_model(state_path, record)
     recs = mock.Mock()
     recs.pause_recording.return_value = True
     recs.action.return_value = result()
@@ -566,12 +568,13 @@ def test_restart_after_broadcast_stops_finishes_teardown_in_order(
 ) -> None:
     state_path = tmp_path / 'closing.json'
     scene = x18_music.RoomScene(master_fader=0.7, input_lr=[1] * 18)
-    state_path.write_text(
+    settings.write_json_model(
+        state_path,
         closing.ClosingRecord(
             operation_id='finished-show',
             phase=phase,
             room_scene=scene,
-        ).model_dump_json()
+        ),
     )
     _, recs, player, routing = controller()
     streamo = mock.Mock()
@@ -1014,13 +1017,14 @@ def test_abandon_closing_restarts_show_only_after_recording_resumes(
     value, recs, player, routing = controller()
     path = tmp_path / 'closing.json'
     scene = x18_music.RoomScene(master_fader=0.7, input_lr=[1] * 18)
-    path.write_text(
+    settings.write_json_model(
+        path,
         closing.ClosingRecord(
             operation_id='failed-show',
             phase='failed',
             room_scene=scene,
             error='Finalization failed after pausing recs',
-        ).model_dump_json()
+        ),
     )
     stream = mock.Mock()
     stream.status.return_value = models.StreamoStatus(
@@ -1183,7 +1187,7 @@ def test_restarted_finalization_fault_survives_unwritable_storage(
         phase='finalizing',
         room_scene=x18_music.RoomScene(master_fader=0.7, input_lr=[1] * 18),
     )
-    path.write_text(record.model_dump_json())
+    settings.write_json_model(path, record)
     with mock.patch.object(Path, 'write_text', side_effect=OSError('disk full')):
         value, recs, player, routing = controller(path=path)
     status = value.status()
@@ -1213,7 +1217,7 @@ def test_manual_finish_preserves_remote_result_and_clears_local_fault(
         error='routing failed',
         room_scene=x18_music.RoomScene(master_fader=0.7, input_lr=[1] * 18),
     )
-    path.write_text(record.model_dump_json())
+    settings.write_json_model(path, record)
     stream = mock.Mock()
     remote = models.ClosingStatus(operation_id=record.operation_id, state='completed')
     stream.status.return_value = models.StreamoStatus(
@@ -1245,8 +1249,8 @@ def test_manual_finish_preserves_remote_result_and_clears_local_fault(
 def test_resumed_observer_keeps_output_ownership_after_interrupted_resume(
     tmp_path: Path,
 ) -> None:
-    (tmp_path / 'music.json').write_text(
-        music.MusicState(mode='transitioning').model_dump_json()
+    settings.write_json_model(
+        tmp_path / 'music.json', music.MusicState(mode='transitioning')
     )
     path = tmp_path / 'closing.json'
     record = closing.ClosingRecord(
@@ -1254,7 +1258,7 @@ def test_resumed_observer_keeps_output_ownership_after_interrupted_resume(
         phase='credits-running',
         room_scene=x18_music.RoomScene(master_fader=0.7, input_lr=[1] * 18),
     )
-    path.write_text(record.model_dump_json())
+    settings.write_json_model(path, record)
     entered = threading.Event()
     release = threading.Event()
     stream = mock.Mock()
@@ -1295,12 +1299,13 @@ def test_recording_controls_wait_for_final_phase_save_and_failure_cleanup(
     from showco.runtime.app import ShowcoApp
 
     path = tmp_path / 'closing.json'
-    path.write_text(
+    settings.write_json_model(
+        path,
         closing.ClosingRecord(
             operation_id='pending-phase-save',
             phase='credits-running',
             room_scene=x18_music.RoomScene(master_fader=0.7, input_lr=[1] * 18),
-        ).model_dump_json()
+        ),
     )
     entered = threading.Event()
     release = threading.Event()
@@ -1366,7 +1371,7 @@ def test_resume_preserves_record_mode_when_old_evidence_cannot_be_deleted(
         error='old closing failure' if phase == 'failed' else None,
         room_scene=x18_music.RoomScene(master_fader=0.7, input_lr=[1] * 18),
     )
-    path.write_text(evidence.model_dump_json())
+    settings.write_json_model(path, evidence)
     stream = mock.Mock()
     value, recs, player, routing = controller(path=path, streamo=stream)
     restart = mock.Mock(return_value=result())
@@ -1412,16 +1417,17 @@ def test_closing_failure_remains_visible_after_interrupted_resume(
 ) -> None:
     from showco.runtime.incidents import fault_details
 
-    (tmp_path / 'music.json').write_text(
-        music.MusicState(mode='transitioning').model_dump_json()
+    settings.write_json_model(
+        tmp_path / 'music.json', music.MusicState(mode='transitioning')
     )
     path = tmp_path / 'closing.json'
-    path.write_text(
+    settings.write_json_model(
+        path,
         closing.ClosingRecord(
             operation_id='resumed-closing',
             phase='credits-running',
             room_scene=x18_music.RoomScene(master_fader=0.7, input_lr=[1] * 18),
-        ).model_dump_json()
+        ),
     )
     stream = mock.Mock()
     stream.status.return_value = models.StreamoStatus(

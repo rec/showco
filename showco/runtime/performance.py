@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from pydantic import BaseModel, ValidationError
-from reccy.runtime.files import atomic_output
+from pydantic import BaseModel
+from reccy.configuration import settings
 
 
 class PerformanceState(BaseModel, frozen=True):
@@ -15,12 +15,12 @@ class PerformanceLock:
         self.locked = False
         if path is not None:
             try:
-                self.locked = PerformanceState.model_validate_json(
-                    path.read_text()
+                self.locked = PerformanceState.model_validate(
+                    settings.read(path)
                 ).locked
             except FileNotFoundError:
                 pass
-            except (OSError, ValidationError) as error:
+            except (OSError, ValueError) as error:
                 self.locked = True
                 self.error = (
                     f'Cannot read performance lock; protected actions blocked: {error}'
@@ -28,8 +28,7 @@ class PerformanceLock:
 
     def set(self, locked: bool) -> None:
         if self.path is not None:
-            with atomic_output(self.path) as temporary:
-                temporary.write_text(PerformanceState(locked=locked).model_dump_json())
+            settings.write_json_model(self.path, PerformanceState(locked=locked))
         self.locked = locked
         self.error = None
 

@@ -4,9 +4,10 @@ import sys
 import tomllib
 from enum import StrEnum, auto
 from pathlib import Path
-from typing import TextIO
+from typing import TextIO, cast
 from urllib.parse import urlparse
 
+from reccy.configuration import settings
 from tqdm import tqdm
 
 from ..provision import config, provision, ssh
@@ -450,7 +451,7 @@ def github_sources(program: update.Program) -> dict[str, str | None]:
     path = program.directory / 'pyproject.toml'
     if not path.is_file():
         return {}
-    data = tomllib.loads(path.read_text())
+    data = cast(dict[str, object], settings.read(path))
     tool = data.get('tool')
     uv = tool.get('uv') if isinstance(tool, dict) else None
     sources = uv.get('sources') if isinstance(uv, dict) else None

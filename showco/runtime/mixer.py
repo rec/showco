@@ -3,11 +3,11 @@ from __future__ import annotations
 import socket
 import threading
 import time
-import tomllib
 from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from reccy.configuration import settings
 from reccy.device import AudioMidiDeviceSpec
 
 from .models import MixerStatus
@@ -98,7 +98,7 @@ class MixerSpecs(BaseModel):
 def load_mixer_specs(path: Path) -> list[MixerSpec]:
     if not path.name:
         return []
-    return MixerSpecs.model_validate(tomllib.loads(path.read_text())).mixers
+    return MixerSpecs.model_validate(settings.read(path)).mixers
 
 
 class MixerMonitor:

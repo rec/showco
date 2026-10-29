@@ -7,9 +7,9 @@ from collections.abc import Callable
 from pathlib import Path
 
 import sounddevice
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
+from reccy.configuration import settings
 from reccy.runtime import logging
-from reccy.runtime.files import atomic_output
 
 from ..streamo.client import StreamoClient
 from ..x18.music import MusicPlayer, RoomScene, X18MusicRouting
@@ -190,18 +190,17 @@ class ClosingController:
 
     def _save(self, record: ClosingRecord) -> None:
         if self.path is not None:
-            with atomic_output(self.path) as temporary:
-                temporary.write_text(record.model_dump_json())
+            settings.write_json_model(self.path, record)
         self._publish(record=record)
 
     def _load(self) -> None:
         if self.path is None:
             return
         try:
-            record = ClosingRecord.model_validate_json(self.path.read_text())
+            record = ClosingRecord.model_validate(settings.read(self.path))
         except FileNotFoundError:
             return
-        except (OSError, ValidationError) as error:
+        except (OSError, ValueError) as error:
             self._publish(error=f'Closing state cannot be read: {error}')
             return
         self._publish(record=record)

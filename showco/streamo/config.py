@@ -7,6 +7,7 @@ from typing import Annotated
 
 import tyro
 from pydantic import BaseModel
+from reccy.configuration.settings import read, write_text_atomically
 from reccy.runtime.files import atomic_output
 
 from .auth import write_toml_value
@@ -25,13 +26,13 @@ def main(argv: list[str] | None = None) -> int:
 
 def convert_twitcho_config(source: Path, target: Path) -> None:
     try:
-        values = json.loads(source.read_text())
+        values = read(source)
     except json.JSONDecodeError as error:
         raise ValueError(f'{source} is not valid JSON: {error}') from error
     if not isinstance(values, dict):
         raise ValueError(f'{source} must contain a JSON object')
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(streamo_toml(values))
+    write_text_atomically(target, streamo_toml(values))
 
 
 def configure_stream_settings(target: Path, settings: dict[str, str]) -> None:
@@ -41,7 +42,7 @@ def configure_stream_settings(target: Path, settings: dict[str, str]) -> None:
     if service.get('service', 'twitch') != 'twitch':
         raise ValueError('showCo Twitch credentials require a Twitch streaming_service')
     with atomic_output(target) as temporary:
-        temporary.write_text(text)
+        write_text_atomically(temporary, text)
         write_toml_value(temporary, 'streaming_service', 'service', 'twitch')
         for name, value in settings.items():
             section = (

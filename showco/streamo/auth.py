@@ -12,6 +12,7 @@ from urllib import error, parse, request
 
 import tyro
 from pydantic import BaseModel
+from reccy.configuration import settings
 from reccy.runtime.files import atomic_output
 
 from ..provision import config
@@ -140,7 +141,7 @@ def exchange_code(config_path: Path, secrets_path: Path) -> int:
         raise ValueError('Stream returned an invalid access token')
     with atomic_output(secrets_path) as temporary:
         if secrets_path.exists():
-            temporary.write_text(secrets_path.read_text())
+            settings.write_text_atomically(temporary, secrets_path.read_text())
         write_toml_value(temporary, 'stream', 'access_token', access_token)
     write_private(config_dir / 'oauth-token', access_token + '\n')
     if refresh_token := response.get('refresh_token'):
@@ -156,8 +157,7 @@ def exchange_code(config_path: Path, secrets_path: Path) -> int:
 
 
 def write_private(path: Path, value: str) -> None:
-    with atomic_output(path) as temporary:
-        temporary.write_text(value)
+    settings.write_text_atomically(path, value)
 
 
 def validate_token(values: dict[str, object]) -> int:
@@ -250,8 +250,7 @@ def write_toml_value(path: Path, section: str, name: str, value: str) -> None:
         raise ValueError(
             f'Cannot update {section}.{name} in this TOML layout; file unchanged'
         ) from None
-    with atomic_output(path) as temporary:
-        temporary.write_text(updated)
+    settings.write_text_atomically(path, updated)
 
 
 def require_value(env: dict[str, object], name: str, path: Path | None = None) -> str:

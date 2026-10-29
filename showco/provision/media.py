@@ -14,9 +14,9 @@ from subprocess import CalledProcessError, TimeoutExpired
 from typing import TYPE_CHECKING, Annotated
 
 import tyro
-from pydantic import BaseModel, Field, TypeAdapter
-from reccy.configuration import units
-from reccy.runtime.files import atomic_output
+from pydantic import BaseModel, Field, RootModel, TypeAdapter
+from reccy.configuration import settings, units
+from reccy.errors import ReccyError
 
 from ..runtime.recs_control import RecsControlClient
 from ..streamo.config import configure_stream_settings
@@ -67,7 +67,7 @@ def resolve_sources(config_path: Path, options: DeployOptions) -> config.Media:
                     sys.exit(f'ERROR: movie must be a file: {source}')
                 score = source / 'score.toml'
                 if name != 'photos' and source.is_dir() and score.is_file():
-                    playlist = Files.model_validate(tomllib.loads(score.read_text()))
+                    playlist = Files.model_validate(settings.read(score))
                     for entry in playlist.files:
                         if entry.is_absolute() or not (
                             source / entry
@@ -89,15 +89,11 @@ def save_sources(config_path: Path, sources: config.Media) -> None:
     path = config_path.expanduser().resolve().with_name('media.toml')
     if not path.exists() and not any(sources.sources.values()):
         return
-    text = ''.join(
-        f'{n} = {json.dumps(v, ensure_ascii=False)}\n'
-        for n, v in sources.model_dump(mode='json').items()
-        if v is not None
-    )
     try:
-        with atomic_output(path) as temporary:
-            temporary.write_text(text)
-    except OSError as error:
+        settings.save(
+            path, RootModel(sources.model_dump(mode='json', exclude_none=True))
+        )
+    except ReccyError as error:
         sys.exit(f'ERROR: cannot save media selections to {path}: {error}')
 
 
@@ -355,10 +351,9 @@ def main() -> None:
             text, options.photos, options.movie, recs_source=source
         )
         if updated != text:
-            with atomic_output(path) as temporary:
-                temporary.write_text(updated)
-        if settings := os.environ.get('SHOWCO_STREAM_SETTINGS'):
-            stream = config.Stream.model_validate_json(settings)
+            settings.write_text_atomically(path, updated)
+        if stream_settings := os.environ.get('SHOWCO_STREAM_SETTINGS'):
+            stream = config.Stream.model_validate_json(stream_settings)
             configure_stream_settings(
                 path,
                 {

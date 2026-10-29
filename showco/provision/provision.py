@@ -9,6 +9,7 @@ from typing import Annotated
 
 import tyro
 from pydantic import BaseModel, Field
+from reccy.configuration import settings
 
 from ..runtime import gui_schema
 from . import config, media, remote, script, state
@@ -159,16 +160,18 @@ def persist_config_value(config_path: Path, table: str, key: str, value: str) ->
     value_line = f'{key} = {toml_string(value)}'
     table_index_value = table_index(lines, f'[{table}]')
     if table_index_value is None:
-        path.write_text(f'[{table}]\n' + value_line + '\n\n' + '\n'.join(lines) + '\n')
+        settings.write_text_atomically(
+            path, f'[{table}]\n' + value_line + '\n\n' + '\n'.join(lines) + '\n'
+        )
         return
     next_table = next_table_index(lines, table_index_value + 1)
     for index in range(table_index_value + 1, next_table):
         if lines[index].lstrip().startswith(key):
             lines[index] = value_line
-            path.write_text('\n'.join(lines) + '\n')
+            settings.write_text_atomically(path, '\n'.join(lines) + '\n')
             return
     lines.insert(table_index_value + 1, value_line)
-    path.write_text('\n'.join(lines) + '\n')
+    settings.write_text_atomically(path, '\n'.join(lines) + '\n')
 
 
 def table_index(lines: list[str], table: str) -> int | None:

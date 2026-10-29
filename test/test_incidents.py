@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 from unittest import mock
 
 import pytest
@@ -62,3 +63,15 @@ def test_music_faults_reach_live_status_and_record_recovery(
     recovered = app.status()
     assert not any(f.name == 'Music' for f in recovered.active_faults)
     assert any(i.message == 'Music: recovered' for i in recovered.incidents)
+
+
+def test_empty_observed_baseline_survives_restart(tmp_path: Path) -> None:
+    path = tmp_path / 'incidents.json'
+    timeline = incidents.IncidentTimeline(path)
+    timeline.previous = {}
+    timeline.save()
+
+    restored = incidents.IncidentTimeline(path)
+
+    assert restored.previous == {}
+    assert restored.load_error is None

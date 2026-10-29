@@ -7,7 +7,8 @@ from pathlib import Path
 from tempfile import mkdtemp
 
 import tyro
-from pydantic import BaseModel
+from pydantic import BaseModel, RootModel
+from reccy.configuration import settings
 
 from . import machine_role
 
@@ -68,7 +69,9 @@ def create_bundle(
         'truncated': truncated,
         'omitted': omitted,
     }
-    (destination / 'bundle.json').write_text(json.dumps(manifest, indent=2) + '\n')
+    settings.write_json_model(
+        destination / 'bundle.json', RootModel(manifest), indent=2
+    )
     return destination
 
 
@@ -112,7 +115,7 @@ def recording_status(path: Path) -> Path | None:
     try:
         if path.stat().st_size > MAX_FILE_BYTES:
             return None
-        value = json.loads(path.read_text())
+        value = settings.read(path)
     except json.JSONDecodeError:
         return None
     record_path = value.get('record_path') if isinstance(value, dict) else None

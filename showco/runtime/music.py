@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import subprocess
 import threading
-import tomllib
 from collections.abc import Callable
 from functools import partial
 from pathlib import Path
@@ -10,8 +9,8 @@ from typing import Literal
 from weakref import proxy
 
 import sounddevice
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
-from reccy.runtime.files import atomic_output
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from reccy.configuration import settings
 
 from ..streamo.client import StreamoClient
 from ..x18.music import MusicPlayer, X18MusicRouting
@@ -292,10 +291,10 @@ class MusicController:
         if self.state_path is None:
             return
         try:
-            state = MusicState.model_validate_json(self.state_path.read_text())
+            state = MusicState.model_validate(settings.read(self.state_path))
         except FileNotFoundError:
             return
-        except (OSError, ValidationError) as error:
+        except (OSError, ValueError) as error:
             self.mode = 'fault'
             self.transition_error = f'Show phase cannot be read: {error}'
             return
@@ -313,8 +312,7 @@ class MusicController:
         if self.state_path is not None:
             path = self.state_path
             path.parent.mkdir(parents=True, exist_ok=True)
-            with atomic_output(path) as temporary:
-                temporary.write_text(state.model_dump_json())
+            settings.write_json_model(path, state)
         with self.phase_lock:
             self.mode = state.mode
             self.transition_error = state.error
@@ -430,6 +428,6 @@ def controller_from_specs(
 
 def load_config(path: Path) -> MusicConfig:
     try:
-        return MusicConfig.model_validate(tomllib.loads(path.read_text()))
+        return MusicConfig.model_validate(settings.read(path))
     except FileNotFoundError:
         return MusicConfig()

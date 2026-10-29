@@ -6,9 +6,10 @@ import tomllib
 from functools import cached_property
 from ipaddress import IPv4Address, IPv4Network, ip_network
 from pathlib import Path
-from typing import TypeIs
+from typing import TypeIs, cast
 
 from pydantic import BaseModel, Field
+from reccy.configuration import settings
 
 from ..runtime.mixer import MixerSpec, MixerSpecs
 
@@ -412,7 +413,7 @@ def read_toml(path: Path) -> dict[str, object]:
     if not path.exists():
         return {}
     try:
-        parsed = tomllib.loads(path.read_text())
+        parsed = cast(dict[str, object], settings.read(path))
     except tomllib.TOMLDecodeError as e:
         sys.exit(f'ERROR: Cannot parse {path}: {e}')
     return {k: toml_value(v) for k, v in parsed.items()}

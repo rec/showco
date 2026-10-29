@@ -4,7 +4,6 @@ import random
 import subprocess
 import threading
 import time
-import tomllib
 from collections.abc import Callable, Sequence
 from contextlib import AbstractContextManager
 from math import isclose, isfinite
@@ -13,6 +12,7 @@ from pathlib import Path
 import numpy as np
 import sounddevice
 from pydantic import BaseModel, Field, field_validator
+from reccy.configuration import settings
 from reccy.device import DeviceDict
 
 from .cable_test import X18_CHANNELS, OscControl, X18OscClient, find_audio_device
@@ -363,7 +363,7 @@ def audio_files(paths: list[Path]) -> list[Files]:
         elif p.is_dir():
             score_path = p / 'score.toml'
             if score_path.is_file():
-                score = Files.model_validate(tomllib.loads(score_path.read_text()))
+                score = Files.model_validate(settings.read(score_path))
                 score = score.model_copy(update={'files': [p / f for f in score.files]})
             else:
                 score = Files(

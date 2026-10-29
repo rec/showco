@@ -5,6 +5,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from reccy.configuration import settings
+
 from showco.streamo.client import StreamoClient
 
 
@@ -265,11 +267,12 @@ def test_stopped_process_reports_its_saved_startup_failure(tmp_path: Path) -> No
 
     service_paths = paths.service_paths(STREAMO_SERVICE, paths.current_platform())
     status_path = tmp_path / 'status.json'
-    status_path.write_text(
+    settings.write_json_model(
+        status_path,
         ReccyStatus(
             running=False,
             errors=[ErrorRecord(message='No internet connectivity detected')],
-        ).model_dump_json()
+        ),
     )
     service_paths = service_paths.model_copy(update={'status': status_path})
     client = StreamoClient(control_endpoint=service_paths.control_endpoint)
