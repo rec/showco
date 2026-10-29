@@ -3,8 +3,8 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
-from pydantic import BaseModel, Field, ValidationError
-from reccy.runtime.files import atomic_output
+from pydantic import BaseModel, Field
+from reccy.configuration import settings
 
 from . import models
 
@@ -26,13 +26,13 @@ class IncidentTimeline:
         self.pending_save = False
         if path is not None:
             try:
-                history = IncidentHistory.model_validate_json(path.read_text())
+                history = IncidentHistory.model_validate(settings.read(path))
                 self.previous = history.previous
                 self.incidents = history.incidents[:100]
                 self.faults = history.faults[:100]
             except FileNotFoundError:
                 pass
-            except (OSError, ValidationError) as error:
+            except (OSError, ValueError) as error:
                 self.load_error = f'Cannot read incident history: {error}'
                 self.storage_error = self.load_error
 
@@ -116,14 +116,13 @@ class IncidentTimeline:
 
     def save(self) -> None:
         if self.path is not None:
-            with atomic_output(self.path) as temporary:
-                temporary.write_text(
-                    IncidentHistory(
-                        previous=self.previous,
-                        incidents=self.incidents,
-                        faults=self.faults,
-                    ).model_dump_json()
-                )
+            settings.write_json_model(
+                self.path,
+                IncidentHistory(
+                    previous=self.previous, incidents=self.incidents, faults=self.faults
+                ),
+                write_empty_dicts=True,
+            )
         self.pending_save = False
         self.storage_error = self.load_error
 

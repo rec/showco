@@ -2,8 +2,8 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
-from pydantic import BaseModel, Field, ValidationError
-from reccy.runtime.files import atomic_output
+from pydantic import BaseModel, Field
+from reccy.configuration import settings
 
 from . import workflow_storage
 from .models import ActionResult
@@ -40,16 +40,15 @@ class SetListController:
         self.load_error: str | None = None
         if path is not None:
             try:
-                self.state = SetList.model_validate_json(path.read_text())
+                self.state = SetList.model_validate(settings.read(path))
             except FileNotFoundError:
                 pass
-            except (OSError, UnicodeError, ValidationError) as error:
+            except (OSError, ValueError) as error:
                 self.load_error = workflow_storage.quarantine(path, error)
 
     def save(self, state: SetList) -> None:
         if self.path is not None:
-            with atomic_output(self.path) as temporary:
-                temporary.write_text(state.model_dump_json())
+            settings.write_json_model(self.path, state)
         self.state = state
 
     def act(

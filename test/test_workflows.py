@@ -477,3 +477,15 @@ def test_second_diagnostics_download_is_rejected() -> None:
     handler.send_error.assert_called_once_with(
         429, 'A diagnostic download is already in progress'
     )
+
+
+def test_soundcheck_round_trip_restores_omitted_empty_results(tmp_path: Path) -> None:
+    path = tmp_path / 'soundcheck.json'
+    check = soundcheck.Soundcheck(path)
+    state = soundcheck.SoundcheckState(scope='current show', destination='/recordings')
+    check.save(state)
+
+    assert 'results' not in json.loads(path.read_text())
+    restored = soundcheck.Soundcheck(path)
+    assert restored.state == state
+    assert restored.load_error is None
