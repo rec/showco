@@ -20,8 +20,10 @@ class RecsControlClient:
         command: str,
         parameters: dict[str, object] | None = None,
         *,
-        timeout: float = CONTROL_TIMEOUT_SECONDS,
+        timeout: float | None = None,
     ) -> object:
+        if timeout is None:
+            timeout = 21.0 if command == 'calibrate' else CONTROL_TIMEOUT_SECONDS
         deadline = time.monotonic() + timeout
         if not self.lock.acquire(timeout=timeout):
             raise TimeoutError(

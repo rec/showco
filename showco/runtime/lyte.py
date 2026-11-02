@@ -25,7 +25,13 @@ class LyteClient:
             )
         try:
             result = self._call('status')
-        except (ConnectionError, OSError, TimeoutError, ValueError) as error:
+        except (
+            rpc.RemoteError,
+            ConnectionError,
+            OSError,
+            TimeoutError,
+            ValueError,
+        ) as error:
             return models.LyteStatus(
                 service=models.ServiceStatus(
                     name='lyte', state='offline', last_error=str(error)
@@ -79,7 +85,13 @@ class LyteClient:
             result = self._call(
                 'test', level=LIGHT_TEST_LEVEL, duration=LIGHT_TEST_DURATION
             )
-        except (ConnectionError, OSError, TimeoutError, ValueError) as error:
+        except (
+            rpc.RemoteError,
+            ConnectionError,
+            OSError,
+            TimeoutError,
+            ValueError,
+        ) as error:
             return models.ActionResult(ok=False, message=f'lyte test failed: {error}')
         if isinstance(result, dict) and result.get('state') == 'queued':
             return models.ActionResult(ok=True, message='lyte light test queued')

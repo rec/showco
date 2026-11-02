@@ -6,6 +6,7 @@ import time
 from typing import TypeIs
 
 from pydantic import BaseModel, Field, ValidationError
+from reccy.protocol import rpc
 
 from . import models
 from .recs_control import RecsControlClient
@@ -56,7 +57,7 @@ class RecsSnapshotClient:
                 return self._transport_failure(
                     f'recs status_snapshot timed out: {error}'
                 )
-            except (ConnectionError, OSError) as error:
+            except (rpc.RemoteError, ConnectionError, OSError) as error:
                 return self._transport_failure(f'recs status_snapshot failed: {error}')
             except (ValidationError, ValueError) as error:
                 return self._invalid(f'recs status_snapshot failed: {error}')

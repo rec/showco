@@ -128,7 +128,7 @@ def recording_roots(home: Path, limitations: list[str]) -> list[Path]:
                 if isinstance(value := snapshot.get(key), str) and value:
                     path = Path(value)
                     roots.append(path.parent if path.suffix else path)
-    except (OSError, ValueError, TimeoutError) as error:
+    except (rpc.RemoteError, OSError, ValueError, TimeoutError) as error:
         limitations.append(f'Live recs status unavailable: {safe_message(str(error))}')
     return sorted({p.resolve() for p in roots if p.is_dir()})
 

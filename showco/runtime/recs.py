@@ -5,6 +5,7 @@ import threading
 
 from pydantic import ValidationError
 from reccy.entities import Musician
+from reccy.protocol import rpc
 
 from . import models, recs_channels, recs_control, recs_snapshot
 
@@ -432,6 +433,7 @@ class RecsClient:
                 return self.control.call(command)
             return self.control.call(command, parameters)
         except (
+            rpc.RemoteError,
             ConnectionError,
             OSError,
             TimeoutError,

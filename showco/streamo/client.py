@@ -51,7 +51,13 @@ class StreamoClient:
     def status(self) -> StreamoStatus:
         try:
             status = self._call('status')
-        except (ConnectionError, OSError, TimeoutError, ValueError) as error:
+        except (
+            rpc.RemoteError,
+            ConnectionError,
+            OSError,
+            TimeoutError,
+            ValueError,
+        ) as error:
             service_paths = paths.service_paths(
                 STREAMO_SERVICE, paths.current_platform()
             )
@@ -160,7 +166,13 @@ class StreamoClient:
     def action(self, command: str, **fields: object) -> ActionResult:
         try:
             result = self._call(command, **fields)
-        except (ConnectionError, OSError, TimeoutError, ValueError) as error:
+        except (
+            rpc.RemoteError,
+            ConnectionError,
+            OSError,
+            TimeoutError,
+            ValueError,
+        ) as error:
             return ActionResult(
                 ok=False,
                 message=str(error),
