@@ -131,7 +131,7 @@ Explicitly confirm and resume recording to begin a sample in the current session
 
 Lighting tests require an explicit output confirmation and button press; they leave the lights off. Confirm lighting by watching it and streaming by receiving the stream externally. Optional steps can be skipped with a reason and remain visibly skipped, never passed. Opening or refreshing the page starts no test.
 
-Results and timestamps persist in `~/.local/state/showco/soundcheck.json`. Background observations invalidate them when the date, mount identity, observed input layout, service state, saved recs settings, or deployed showCo revision changes. Relevant showCo configuration actions also invalidate results. External physical changes, including mixer gain or cabling changes, require a fresh soundcheck. Checks are observations at a stated time, not continuing guarantees. Cable testing remains separate pending [hardware validation](../plan/hardware.md).
+Results and timestamps persist in `~/.local/state/showco/soundcheck.json`. Background observations invalidate them when the date, mount identity, observed input layout, service state, saved recs settings, or deployed showCo revision changes. Relevant showCo configuration actions also invalidate results. External physical changes, including mixer gain or cabling changes, require a fresh soundcheck. Checks are observations at a stated time, not continuing guarantees. Cable testing remains separate pending [hardware validation](https://github.com/rec/showco/blob/main/plan/hardware.md).
 
 ### Guided recovery
 
