@@ -1,0 +1,3701 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="🎪 Local show control for recs and streamo 🎪">
+      
+      
+      
+        <link rel="canonical" href="https://rec.github.io/showco/reference/showco/streamo/config/">
+      
+      
+      
+        <link rel="prev" href="../client/">
+      
+      
+        <link rel="next" href="../../x18/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../../assets/images/favicon.png">
+      <meta name="generator" content="zensical-0.0.73">
+    
+    
+      
+        <title>config - showco</title>
+      
+    
+    
+      
+        
+      
+      <link rel="stylesheet" href="../../../../assets/stylesheets/modern/main.4ab2de0c.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,500,500i,700,700i%7CJetBrains+Mono:400,400i,700,700i&amp;display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../../../..",location),__md_scope.pathname.endsWith("/")||(__md_scope=new URL(__md_scope.pathname+"/",location)),__md_hash=e=>[...e].reduce(((e,t)=>(e<<5)-e+t.charCodeAt(0)),0),__md_get=(e,t=localStorage,_=__md_scope)=>JSON.parse(t.getItem(_.pathname+"."+e)),__md_set=(e,t,_=localStorage,a=__md_scope)=>{try{_.setItem(a.pathname+"."+e,JSON.stringify(t))}catch(e){}},document.documentElement.setAttribute("data-platform",navigator.platform)</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer" aria-hidden="true"></label>
+    <div data-md-component="skip">
+      <a href="#__skip" class="md-skip">
+        Skip to content
+      </a>
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../../.." title="showco" class="md-header__button md-logo" aria-label="showco" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-book-open" viewBox="0 0 24 24"><path d="M12 5v16M20.001 19A2 2 0 0 0 22 17V5a2 2 0 0 0-1.999-2L16 3.002A5 5 0 0 0 12 5a5 5 0 0 0-4-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 1.999 2H8a5 5 0 0 1 4 2 5 5 0 0 1 4-2z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-menu" viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h16"/></svg>
+      <span class="md-visually-hidden">Navigation</span>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            showco
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              config
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-search" viewBox="0 0 24 24"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
+          <span class="md-visually-hidden">Search</span>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog" aria-label="Search">
+  <button type="button" class="md-search__button">
+    Search
+  </button>
+</div>
+      
+    
+    <div class="md-header__source">
+      
+    </div>
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../../.." title="showco" class="md-nav__button md-logo" aria-label="showco" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-book-open" viewBox="0 0 24 24"><path d="M12 5v16M20.001 19A2 2 0 0 0 22 17V5a2 2 0 0 0-1.999-2L16 3.002A5 5 0 0 0 12 5a5 5 0 0 0-4-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 1.999 2H8a5 5 0 0 1 4 2 5 5 0 0 1 4-2z"/></svg>
+
+    </a>
+    showco
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  showCo
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  showco
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../handover/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Handover
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  API Reference
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        
+          <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+            <label class="md-nav__title" for="__nav_4">
+              <span class="md-nav__icon md-icon"></span>
+              
+  
+  API Reference
+
+            </label>
+            <ul class="md-nav__list" data-md-scrollfix>
+              
+                
+                  
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_1" checked>
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  showco
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4_1" id="__nav_4_1_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        
+          <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_1_label" aria-expanded="true">
+            <label class="md-nav__title" for="__nav_4_1">
+              <span class="md-nav__icon md-icon"></span>
+              
+  
+  showco
+
+            </label>
+            <ul class="md-nav__list" data-md-scrollfix>
+              
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../__main__/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  __main__
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  cli
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_1_4" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../deployment/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  deployment
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4_1_4" id="__nav_4_1_4_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        
+          <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_1_4_label" aria-expanded="false">
+            <label class="md-nav__title" for="__nav_4_1_4">
+              <span class="md-nav__icon md-icon"></span>
+              
+  
+  deployment
+
+            </label>
+            <ul class="md-nav__list" data-md-scrollfix>
+              
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/bootstrap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  bootstrap
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/bundle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  bundle
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/card/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  card
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/deploy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  deploy
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/local_update/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  local_update
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/logs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  logs
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/machine_role/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  machine_role
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/panel/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  panel
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/publication/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  publication
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/python/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  python
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/report/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  report
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/report_scan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  report_scan
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/repositories/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  repositories
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/target_update/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  target_update
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/update/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  update
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+            </ul>
+          </nav>
+        
+      
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_1_5" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../provision/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  provision
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4_1_5" id="__nav_4_1_5_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        
+          <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_1_5_label" aria-expanded="false">
+            <label class="md-nav__title" for="__nav_4_1_5">
+              <span class="md-nav__icon md-icon"></span>
+              
+  
+  provision
+
+            </label>
+            <ul class="md-nav__list" data-md-scrollfix>
+              
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../provision/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  config
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../provision/media/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  media
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../provision/media_package/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  media_package
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../provision/network/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  network
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../provision/provision/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  provision
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../provision/remote/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  remote
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../provision/script/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  script
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../provision/ssh/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  ssh
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../provision/state/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  state
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../provision/verify/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  verify
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+            </ul>
+          </nav>
+        
+      
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_1_6" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../runtime/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  runtime
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4_1_6" id="__nav_4_1_6_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        
+          <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_1_6_label" aria-expanded="false">
+            <label class="md-nav__title" for="__nav_4_1_6">
+              <span class="md-nav__icon md-icon"></span>
+              
+  
+  runtime
+
+            </label>
+            <ul class="md-nav__list" data-md-scrollfix>
+              
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../runtime/app/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  app
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../runtime/closing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  closing
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../runtime/gui_schema/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  gui_schema
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../runtime/incidents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  incidents
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../runtime/lighting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  lighting
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../runtime/lyte/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  lyte
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../runtime/mixer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  mixer
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../runtime/models/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  models
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../runtime/monitoring/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  monitoring
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../runtime/music/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  music
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../runtime/network/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  network
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../runtime/performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  performance
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../runtime/readiness/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  readiness
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../runtime/recording_progress/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  recording_progress
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../runtime/recovery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  recovery
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../runtime/recs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  recs
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../runtime/recs_actions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  recs_actions
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../runtime/recs_channels/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  recs_channels
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../runtime/recs_control/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  recs_control
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../runtime/recs_snapshot/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  recs_snapshot
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../runtime/rehearsal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  rehearsal
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../runtime/revision/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  revision
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../runtime/server/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  server
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../runtime/services/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  services
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../runtime/setlist/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  setlist
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../runtime/soundcheck/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  soundcheck
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../runtime/system/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  system
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../runtime/views/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  views
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../runtime/waveforms/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  waveforms
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../runtime/workflow_storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  workflow_storage
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../runtime/workflows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  workflows
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+            </ul>
+          </nav>
+        
+      
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_1_7" checked>
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  streamo
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4_1_7" id="__nav_4_1_7_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        
+          <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_1_7_label" aria-expanded="true">
+            <label class="md-nav__title" for="__nav_4_1_7">
+              <span class="md-nav__icon md-icon"></span>
+              
+  
+  streamo
+
+            </label>
+            <ul class="md-nav__list" data-md-scrollfix>
+              
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../auth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  auth
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  client
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      
+      
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  config
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="././" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  config
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+
+<nav class="md-nav md-nav--secondary" aria-label="On this page">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      On this page
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#showco.streamo.config" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        config
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#showco.streamo.config.OVERLAY_DEFAULTS" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        OVERLAY_DEFAULTS
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#showco.streamo.config.StreamoConfigOptions" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        StreamoConfigOptions
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="StreamoConfigOptions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#showco.streamo.config.StreamoConfigOptions.source" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        source
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#showco.streamo.config.StreamoConfigOptions.target" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        target
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#showco.streamo.config.main" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        main
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#showco.streamo.config.convert_twitcho_config" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        convert_twitcho_config
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#showco.streamo.config.configure_stream_settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        configure_stream_settings
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#showco.streamo.config.streamo_toml" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        streamo_toml
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#showco.streamo.config.assignment" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        assignment
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#showco.streamo.config.optional_assignment" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        optional_assignment
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#showco.streamo.config.required_text" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        required_text
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#showco.streamo.config.optional_text" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        optional_text
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#showco.streamo.config.text" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        text
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#showco.streamo.config.positive_int" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        positive_int
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#showco.streamo.config.protocol" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        protocol
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+                
+              
+            </ul>
+          </nav>
+        
+      
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_1_8" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../x18/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  x18
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4_1_8" id="__nav_4_1_8_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        
+          <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_1_8_label" aria-expanded="false">
+            <label class="md-nav__title" for="__nav_4_1_8">
+              <span class="md-nav__icon md-icon"></span>
+              
+  
+  x18
+
+            </label>
+            <ul class="md-nav__list" data-md-scrollfix>
+              
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../x18/cable_test/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  cable_test
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../x18/music/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  music
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+            </ul>
+          </nav>
+        
+      
+    </li>
+  
+
+                
+              
+            </ul>
+          </nav>
+        
+      
+    </li>
+  
+
+                
+              
+            </ul>
+          </nav>
+        
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  
+                    
+                    
+                    
+                    
+                      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+                      <div class="md-sidebar-button__wrapper">
+                        <label class="md-sidebar-button" for="__toc"></label>
+                      </div>
+                    
+                  
+                  <div class="md-sidebar__inner">
+                    
+
+
+<nav class="md-nav md-nav--secondary" aria-label="On this page">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      On this page
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#showco.streamo.config" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        config
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#showco.streamo.config.OVERLAY_DEFAULTS" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        OVERLAY_DEFAULTS
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#showco.streamo.config.StreamoConfigOptions" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        StreamoConfigOptions
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="StreamoConfigOptions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#showco.streamo.config.StreamoConfigOptions.source" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        source
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#showco.streamo.config.StreamoConfigOptions.target" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        target
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#showco.streamo.config.main" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        main
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#showco.streamo.config.convert_twitcho_config" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        convert_twitcho_config
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#showco.streamo.config.configure_stream_settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        configure_stream_settings
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#showco.streamo.config.streamo_toml" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        streamo_toml
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#showco.streamo.config.assignment" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        assignment
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#showco.streamo.config.optional_assignment" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        optional_assignment
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#showco.streamo.config.required_text" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        required_text
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#showco.streamo.config.optional_text" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        optional_text
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#showco.streamo.config.text" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        text
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#showco.streamo.config.positive_int" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        positive_int
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#showco.streamo.config.protocol" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        protocol
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                <a id="__skip" tabindex="-1"></a>
+                
+                  
+
+
+  <h1>config</h1>
+
+<div class="doc doc-object doc-module">
+
+
+
+<a id="showco.streamo.config"></a>
+    <div class="doc doc-contents first">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h2 id="showco.streamo.config.OVERLAY_DEFAULTS" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">OVERLAY_DEFAULTS</span> <span class="o">=</span> <span class="p">{</span><span class="s1">'title_interval'</span><span class="p">:</span> <span class="mf">180.0</span><span class="p">,</span> <span class="s1">'title_duration'</span><span class="p">:</span> <span class="mf">8.0</span><span class="p">,</span> <span class="s1">'title_fade'</span><span class="p">:</span> <span class="mf">2.0</span><span class="p">,</span> <span class="s1">'image_interval'</span><span class="p">:</span> <span class="mf">0.0</span><span class="p">,</span> <span class="s1">'image_duration'</span><span class="p">:</span> <span class="mf">8.0</span><span class="p">,</span> <span class="s1">'image_fade'</span><span class="p">:</span> <span class="mf">2.0</span><span class="p">}</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-module-attribute"><code>module-attribute</code></small>
+  </span>
+
+<a href="#showco.streamo.config.OVERLAY_DEFAULTS" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents ">
+
+    </div>
+
+</div>
+
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="showco.streamo.config.StreamoConfigOptions" class="doc doc-heading">
+            <code>StreamoConfigOptions</code>
+
+
+<a href="#showco.streamo.config.StreamoConfigOptions" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents ">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="pydantic.BaseModel">BaseModel</span></code></p>
+
+
+
+
+
+
+
+
+
+
+              <details class="mkdocstrings-source">
+                <summary>Source code in <code>showco/streamo/config.py</code></summary>
+                <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#showco.streamo.config.StreamoConfigOptions--source--__codelineno-0-16">16</a></span>
+<span class="normal"><a href="#showco.streamo.config.StreamoConfigOptions--source--__codelineno-0-17">17</a></span>
+<span class="normal"><a href="#showco.streamo.config.StreamoConfigOptions--source--__codelineno-0-18">18</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="showco.streamo.config.StreamoConfigOptions--source--__span-0-16"><a id="showco.streamo.config.StreamoConfigOptions--source--__codelineno-0-16" name="showco.streamo.config.StreamoConfigOptions--source--__codelineno-0-16"></a><span class="k">class</span><span class="w"> </span><span class="nc">StreamoConfigOptions</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">,</span> <span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+</span><span id="showco.streamo.config.StreamoConfigOptions--source--__span-0-17"><a id="showco.streamo.config.StreamoConfigOptions--source--__codelineno-0-17" name="showco.streamo.config.StreamoConfigOptions--source--__codelineno-0-17"></a>    <span class="n">source</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="n">Path</span><span class="p">,</span> <span class="n">tyro</span><span class="o">.</span><span class="n">conf</span><span class="o">.</span><span class="n">arg</span><span class="p">(</span><span class="n">help</span><span class="o">=</span><span class="s1">'Existing Twitcho JSON configuration'</span><span class="p">)]</span>
+</span><span id="showco.streamo.config.StreamoConfigOptions--source--__span-0-18"><a id="showco.streamo.config.StreamoConfigOptions--source--__codelineno-0-18" name="showco.streamo.config.StreamoConfigOptions--source--__codelineno-0-18"></a>    <span class="n">target</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="n">Path</span><span class="p">,</span> <span class="n">tyro</span><span class="o">.</span><span class="n">conf</span><span class="o">.</span><span class="n">arg</span><span class="p">(</span><span class="n">help</span><span class="o">=</span><span class="s1">'New streamO TOML configuration'</span><span class="p">)]</span>
+</span></code></pre></div></td></tr></table></div>
+              </details>
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="showco.streamo.config.StreamoConfigOptions.source" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">source</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="n">Path</span><span class="p">,</span> <span class="n">tyro</span><span class="o">.</span><span class="n">conf</span><span class="o">.</span><span class="n">arg</span><span class="p">(</span><span class="n">help</span><span class="o">=</span><span class="s1">'Existing Twitcho JSON configuration'</span><span class="p">)]</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+  </span>
+
+<a href="#showco.streamo.config.StreamoConfigOptions.source" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="showco.streamo.config.StreamoConfigOptions.target" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">target</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="n">Path</span><span class="p">,</span> <span class="n">tyro</span><span class="o">.</span><span class="n">conf</span><span class="o">.</span><span class="n">arg</span><span class="p">(</span><span class="n">help</span><span class="o">=</span><span class="s1">'New streamO TOML configuration'</span><span class="p">)]</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+  </span>
+
+<a href="#showco.streamo.config.StreamoConfigOptions.target" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+    </div>
+
+</div>
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="showco.streamo.config.main" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">main</span><span class="p">(</span><span class="n">argv</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span></code>
+
+<a href="#showco.streamo.config.main" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents ">
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>showco/streamo/config.py</code></summary>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#showco.streamo.config.main--source--__codelineno-0-21">21</a></span>
+<span class="normal"><a href="#showco.streamo.config.main--source--__codelineno-0-22">22</a></span>
+<span class="normal"><a href="#showco.streamo.config.main--source--__codelineno-0-23">23</a></span>
+<span class="normal"><a href="#showco.streamo.config.main--source--__codelineno-0-24">24</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="showco.streamo.config.main--source--__span-0-21"><a id="showco.streamo.config.main--source--__codelineno-0-21" name="showco.streamo.config.main--source--__codelineno-0-21"></a><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">(</span><span class="n">argv</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+</span><span id="showco.streamo.config.main--source--__span-0-22"><a id="showco.streamo.config.main--source--__codelineno-0-22" name="showco.streamo.config.main--source--__codelineno-0-22"></a>    <span class="n">options</span> <span class="o">=</span> <span class="n">tyro</span><span class="o">.</span><span class="n">cli</span><span class="p">(</span><span class="n">StreamoConfigOptions</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="n">argv</span><span class="p">)</span>
+</span><span id="showco.streamo.config.main--source--__span-0-23"><a id="showco.streamo.config.main--source--__codelineno-0-23" name="showco.streamo.config.main--source--__codelineno-0-23"></a>    <span class="n">convert_twitcho_config</span><span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">source</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">target</span><span class="p">)</span>
+</span><span id="showco.streamo.config.main--source--__span-0-24"><a id="showco.streamo.config.main--source--__codelineno-0-24" name="showco.streamo.config.main--source--__codelineno-0-24"></a>    <span class="k">return</span> <span class="mi">0</span>
+</span></code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="showco.streamo.config.convert_twitcho_config" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">convert_twitcho_config</span><span class="p">(</span><span class="n">source</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">target</span><span class="p">:</span> <span class="n">Path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span></code>
+
+<a href="#showco.streamo.config.convert_twitcho_config" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents ">
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>showco/streamo/config.py</code></summary>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#showco.streamo.config.convert_twitcho_config--source--__codelineno-0-27">27</a></span>
+<span class="normal"><a href="#showco.streamo.config.convert_twitcho_config--source--__codelineno-0-28">28</a></span>
+<span class="normal"><a href="#showco.streamo.config.convert_twitcho_config--source--__codelineno-0-29">29</a></span>
+<span class="normal"><a href="#showco.streamo.config.convert_twitcho_config--source--__codelineno-0-30">30</a></span>
+<span class="normal"><a href="#showco.streamo.config.convert_twitcho_config--source--__codelineno-0-31">31</a></span>
+<span class="normal"><a href="#showco.streamo.config.convert_twitcho_config--source--__codelineno-0-32">32</a></span>
+<span class="normal"><a href="#showco.streamo.config.convert_twitcho_config--source--__codelineno-0-33">33</a></span>
+<span class="normal"><a href="#showco.streamo.config.convert_twitcho_config--source--__codelineno-0-34">34</a></span>
+<span class="normal"><a href="#showco.streamo.config.convert_twitcho_config--source--__codelineno-0-35">35</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="showco.streamo.config.convert_twitcho_config--source--__span-0-27"><a id="showco.streamo.config.convert_twitcho_config--source--__codelineno-0-27" name="showco.streamo.config.convert_twitcho_config--source--__codelineno-0-27"></a><span class="k">def</span><span class="w"> </span><span class="nf">convert_twitcho_config</span><span class="p">(</span><span class="n">source</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">target</span><span class="p">:</span> <span class="n">Path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="showco.streamo.config.convert_twitcho_config--source--__span-0-28"><a id="showco.streamo.config.convert_twitcho_config--source--__codelineno-0-28" name="showco.streamo.config.convert_twitcho_config--source--__codelineno-0-28"></a>    <span class="k">try</span><span class="p">:</span>
+</span><span id="showco.streamo.config.convert_twitcho_config--source--__span-0-29"><a id="showco.streamo.config.convert_twitcho_config--source--__codelineno-0-29" name="showco.streamo.config.convert_twitcho_config--source--__codelineno-0-29"></a>        <span class="n">values</span> <span class="o">=</span> <span class="n">read</span><span class="p">(</span><span class="n">source</span><span class="p">)</span>
+</span><span id="showco.streamo.config.convert_twitcho_config--source--__span-0-30"><a id="showco.streamo.config.convert_twitcho_config--source--__codelineno-0-30" name="showco.streamo.config.convert_twitcho_config--source--__codelineno-0-30"></a>    <span class="k">except</span> <span class="n">json</span><span class="o">.</span><span class="n">JSONDecodeError</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
+</span><span id="showco.streamo.config.convert_twitcho_config--source--__span-0-31"><a id="showco.streamo.config.convert_twitcho_config--source--__codelineno-0-31" name="showco.streamo.config.convert_twitcho_config--source--__codelineno-0-31"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">'</span><span class="si">{</span><span class="n">source</span><span class="si">}</span><span class="s1"> is not valid JSON: </span><span class="si">{</span><span class="n">error</span><span class="si">}</span><span class="s1">'</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">error</span>
+</span><span id="showco.streamo.config.convert_twitcho_config--source--__span-0-32"><a id="showco.streamo.config.convert_twitcho_config--source--__codelineno-0-32" name="showco.streamo.config.convert_twitcho_config--source--__codelineno-0-32"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+</span><span id="showco.streamo.config.convert_twitcho_config--source--__span-0-33"><a id="showco.streamo.config.convert_twitcho_config--source--__codelineno-0-33" name="showco.streamo.config.convert_twitcho_config--source--__codelineno-0-33"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">'</span><span class="si">{</span><span class="n">source</span><span class="si">}</span><span class="s1"> must contain a JSON object'</span><span class="p">)</span>
+</span><span id="showco.streamo.config.convert_twitcho_config--source--__span-0-34"><a id="showco.streamo.config.convert_twitcho_config--source--__codelineno-0-34" name="showco.streamo.config.convert_twitcho_config--source--__codelineno-0-34"></a>    <span class="n">target</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="showco.streamo.config.convert_twitcho_config--source--__span-0-35"><a id="showco.streamo.config.convert_twitcho_config--source--__codelineno-0-35" name="showco.streamo.config.convert_twitcho_config--source--__codelineno-0-35"></a>    <span class="n">write_text_atomically</span><span class="p">(</span><span class="n">target</span><span class="p">,</span> <span class="n">streamo_toml</span><span class="p">(</span><span class="n">values</span><span class="p">))</span>
+</span></code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="showco.streamo.config.configure_stream_settings" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">configure_stream_settings</span><span class="p">(</span><span class="n">target</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">settings</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span></code>
+
+<a href="#showco.streamo.config.configure_stream_settings" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents ">
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>showco/streamo/config.py</code></summary>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#showco.streamo.config.configure_stream_settings--source--__codelineno-0-38">38</a></span>
+<span class="normal"><a href="#showco.streamo.config.configure_stream_settings--source--__codelineno-0-39">39</a></span>
+<span class="normal"><a href="#showco.streamo.config.configure_stream_settings--source--__codelineno-0-40">40</a></span>
+<span class="normal"><a href="#showco.streamo.config.configure_stream_settings--source--__codelineno-0-41">41</a></span>
+<span class="normal"><a href="#showco.streamo.config.configure_stream_settings--source--__codelineno-0-42">42</a></span>
+<span class="normal"><a href="#showco.streamo.config.configure_stream_settings--source--__codelineno-0-43">43</a></span>
+<span class="normal"><a href="#showco.streamo.config.configure_stream_settings--source--__codelineno-0-44">44</a></span>
+<span class="normal"><a href="#showco.streamo.config.configure_stream_settings--source--__codelineno-0-45">45</a></span>
+<span class="normal"><a href="#showco.streamo.config.configure_stream_settings--source--__codelineno-0-46">46</a></span>
+<span class="normal"><a href="#showco.streamo.config.configure_stream_settings--source--__codelineno-0-47">47</a></span>
+<span class="normal"><a href="#showco.streamo.config.configure_stream_settings--source--__codelineno-0-48">48</a></span>
+<span class="normal"><a href="#showco.streamo.config.configure_stream_settings--source--__codelineno-0-49">49</a></span>
+<span class="normal"><a href="#showco.streamo.config.configure_stream_settings--source--__codelineno-0-50">50</a></span>
+<span class="normal"><a href="#showco.streamo.config.configure_stream_settings--source--__codelineno-0-51">51</a></span>
+<span class="normal"><a href="#showco.streamo.config.configure_stream_settings--source--__codelineno-0-52">52</a></span>
+<span class="normal"><a href="#showco.streamo.config.configure_stream_settings--source--__codelineno-0-53">53</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="showco.streamo.config.configure_stream_settings--source--__span-0-38"><a id="showco.streamo.config.configure_stream_settings--source--__codelineno-0-38" name="showco.streamo.config.configure_stream_settings--source--__codelineno-0-38"></a><span class="k">def</span><span class="w"> </span><span class="nf">configure_stream_settings</span><span class="p">(</span><span class="n">target</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">settings</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="showco.streamo.config.configure_stream_settings--source--__span-0-39"><a id="showco.streamo.config.configure_stream_settings--source--__codelineno-0-39" name="showco.streamo.config.configure_stream_settings--source--__codelineno-0-39"></a>    <span class="n">text</span> <span class="o">=</span> <span class="n">target</span><span class="o">.</span><span class="n">read_text</span><span class="p">()</span> <span class="k">if</span> <span class="n">target</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span> <span class="k">else</span> <span class="s1">''</span>
+</span><span id="showco.streamo.config.configure_stream_settings--source--__span-0-40"><a id="showco.streamo.config.configure_stream_settings--source--__codelineno-0-40" name="showco.streamo.config.configure_stream_settings--source--__codelineno-0-40"></a>    <span class="n">values</span> <span class="o">=</span> <span class="n">tomllib</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+</span><span id="showco.streamo.config.configure_stream_settings--source--__span-0-41"><a id="showco.streamo.config.configure_stream_settings--source--__codelineno-0-41" name="showco.streamo.config.configure_stream_settings--source--__codelineno-0-41"></a>    <span class="n">service</span> <span class="o">=</span> <span class="n">values</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'streaming_service'</span><span class="p">,</span> <span class="p">{})</span>
+</span><span id="showco.streamo.config.configure_stream_settings--source--__span-0-42"><a id="showco.streamo.config.configure_stream_settings--source--__codelineno-0-42" name="showco.streamo.config.configure_stream_settings--source--__codelineno-0-42"></a>    <span class="k">if</span> <span class="n">service</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'service'</span><span class="p">,</span> <span class="s1">'twitch'</span><span class="p">)</span> <span class="o">!=</span> <span class="s1">'twitch'</span><span class="p">:</span>
+</span><span id="showco.streamo.config.configure_stream_settings--source--__span-0-43"><a id="showco.streamo.config.configure_stream_settings--source--__codelineno-0-43" name="showco.streamo.config.configure_stream_settings--source--__codelineno-0-43"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">'showCo Twitch credentials require a Twitch streaming_service'</span><span class="p">)</span>
+</span><span id="showco.streamo.config.configure_stream_settings--source--__span-0-44"><a id="showco.streamo.config.configure_stream_settings--source--__codelineno-0-44" name="showco.streamo.config.configure_stream_settings--source--__codelineno-0-44"></a>    <span class="k">with</span> <span class="n">atomic_output</span><span class="p">(</span><span class="n">target</span><span class="p">)</span> <span class="k">as</span> <span class="n">temporary</span><span class="p">:</span>
+</span><span id="showco.streamo.config.configure_stream_settings--source--__span-0-45"><a id="showco.streamo.config.configure_stream_settings--source--__codelineno-0-45" name="showco.streamo.config.configure_stream_settings--source--__codelineno-0-45"></a>        <span class="n">write_text_atomically</span><span class="p">(</span><span class="n">temporary</span><span class="p">,</span> <span class="n">text</span><span class="p">)</span>
+</span><span id="showco.streamo.config.configure_stream_settings--source--__span-0-46"><a id="showco.streamo.config.configure_stream_settings--source--__codelineno-0-46" name="showco.streamo.config.configure_stream_settings--source--__codelineno-0-46"></a>        <span class="n">write_toml_value</span><span class="p">(</span><span class="n">temporary</span><span class="p">,</span> <span class="s1">'streaming_service'</span><span class="p">,</span> <span class="s1">'service'</span><span class="p">,</span> <span class="s1">'twitch'</span><span class="p">)</span>
+</span><span id="showco.streamo.config.configure_stream_settings--source--__span-0-47"><a id="showco.streamo.config.configure_stream_settings--source--__codelineno-0-47" name="showco.streamo.config.configure_stream_settings--source--__codelineno-0-47"></a>        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">settings</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+</span><span id="showco.streamo.config.configure_stream_settings--source--__span-0-48"><a id="showco.streamo.config.configure_stream_settings--source--__codelineno-0-48" name="showco.streamo.config.configure_stream_settings--source--__codelineno-0-48"></a>            <span class="n">section</span> <span class="o">=</span> <span class="p">(</span>
+</span><span id="showco.streamo.config.configure_stream_settings--source--__span-0-49"><a id="showco.streamo.config.configure_stream_settings--source--__codelineno-0-49" name="showco.streamo.config.configure_stream_settings--source--__codelineno-0-49"></a>                <span class="s1">'streaming_service.ingest'</span>
+</span><span id="showco.streamo.config.configure_stream_settings--source--__span-0-50"><a id="showco.streamo.config.configure_stream_settings--source--__codelineno-0-50" name="showco.streamo.config.configure_stream_settings--source--__codelineno-0-50"></a>                <span class="k">if</span> <span class="n">name</span> <span class="o">==</span> <span class="s1">'stream_key'</span>
+</span><span id="showco.streamo.config.configure_stream_settings--source--__span-0-51"><a id="showco.streamo.config.configure_stream_settings--source--__codelineno-0-51" name="showco.streamo.config.configure_stream_settings--source--__codelineno-0-51"></a>                <span class="k">else</span> <span class="s1">'streaming_service'</span>
+</span><span id="showco.streamo.config.configure_stream_settings--source--__span-0-52"><a id="showco.streamo.config.configure_stream_settings--source--__codelineno-0-52" name="showco.streamo.config.configure_stream_settings--source--__codelineno-0-52"></a>            <span class="p">)</span>
+</span><span id="showco.streamo.config.configure_stream_settings--source--__span-0-53"><a id="showco.streamo.config.configure_stream_settings--source--__codelineno-0-53" name="showco.streamo.config.configure_stream_settings--source--__codelineno-0-53"></a>            <span class="n">write_toml_value</span><span class="p">(</span><span class="n">temporary</span><span class="p">,</span> <span class="n">section</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+</span></code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="showco.streamo.config.streamo_toml" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">streamo_toml</span><span class="p">(</span><span class="n">values</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">object</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">str</span></code>
+
+<a href="#showco.streamo.config.streamo_toml" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents ">
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>showco/streamo/config.py</code></summary>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-56"> 56</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-57"> 57</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-58"> 58</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-59"> 59</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-60"> 60</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-61"> 61</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-62"> 62</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-63"> 63</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-64"> 64</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-65"> 65</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-66"> 66</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-67"> 67</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-68"> 68</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-69"> 69</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-70"> 70</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-71"> 71</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-72"> 72</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-73"> 73</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-74"> 74</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-75"> 75</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-76"> 76</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-77"> 77</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-78"> 78</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-79"> 79</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-80"> 80</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-81"> 81</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-82"> 82</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-83"> 83</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-84"> 84</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-85"> 85</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-86"> 86</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-87"> 87</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-88"> 88</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-89"> 89</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-90"> 90</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-91"> 91</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-92"> 92</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-93"> 93</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-94"> 94</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-95"> 95</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-96"> 96</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-97"> 97</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-98"> 98</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-99"> 99</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-100">100</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-101">101</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-102">102</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-103">103</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-104">104</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-105">105</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-106">106</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-107">107</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-108">108</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-109">109</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-110">110</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-111">111</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-112">112</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-113">113</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-114">114</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-115">115</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-116">116</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-117">117</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-118">118</a></span>
+<span class="normal"><a href="#showco.streamo.config.streamo_toml--source--__codelineno-0-119">119</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="showco.streamo.config.streamo_toml--source--__span-0-56"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-56" name="showco.streamo.config.streamo_toml--source--__codelineno-0-56"></a><span class="k">def</span><span class="w"> </span><span class="nf">streamo_toml</span><span class="p">(</span><span class="n">values</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">object</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-57"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-57" name="showco.streamo.config.streamo_toml--source--__codelineno-0-57"></a>    <span class="n">sample_rate</span> <span class="o">=</span> <span class="n">positive_int</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="s1">'sample_rate'</span><span class="p">,</span> <span class="mi">48_000</span><span class="p">)</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-58"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-58" name="showco.streamo.config.streamo_toml--source--__codelineno-0-58"></a>    <span class="n">resolution</span> <span class="o">=</span> <span class="n">text</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="s1">'video_resolution'</span><span class="p">,</span> <span class="s1">'640x360'</span><span class="p">)</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-59"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-59" name="showco.streamo.config.streamo_toml--source--__codelineno-0-59"></a>    <span class="n">frame_rate</span> <span class="o">=</span> <span class="n">positive_int</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="s1">'video_frame_rate'</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-60"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-60" name="showco.streamo.config.streamo_toml--source--__codelineno-0-60"></a>    <span class="n">lines</span> <span class="o">=</span> <span class="p">[</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-61"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-61" name="showco.streamo.config.streamo_toml--source--__codelineno-0-61"></a>        <span class="n">assignment</span><span class="p">(</span><span class="s1">'device_name'</span><span class="p">,</span> <span class="n">required_text</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="s1">'device_name'</span><span class="p">)),</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-62"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-62" name="showco.streamo.config.streamo_toml--source--__codelineno-0-62"></a>        <span class="n">assignment</span><span class="p">(</span><span class="s1">'channel'</span><span class="p">,</span> <span class="n">positive_int</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="s1">'channel'</span><span class="p">)),</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-63"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-63" name="showco.streamo.config.streamo_toml--source--__codelineno-0-63"></a>    <span class="p">]</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-64"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-64" name="showco.streamo.config.streamo_toml--source--__codelineno-0-64"></a>    <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">'video'</span><span class="p">,</span> <span class="s1">'title_card'</span><span class="p">):</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-65"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-65" name="showco.streamo.config.streamo_toml--source--__codelineno-0-65"></a>        <span class="k">if</span> <span class="n">value</span> <span class="o">:=</span> <span class="n">optional_text</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-66"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-66" name="showco.streamo.config.streamo_toml--source--__codelineno-0-66"></a>            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">assignment</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">))</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-67"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-67" name="showco.streamo.config.streamo_toml--source--__codelineno-0-67"></a>    <span class="n">lines</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-68"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-68" name="showco.streamo.config.streamo_toml--source--__codelineno-0-68"></a>        <span class="p">[</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-69"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-69" name="showco.streamo.config.streamo_toml--source--__codelineno-0-69"></a>            <span class="n">assignment</span><span class="p">(</span><span class="s1">'sample_rate'</span><span class="p">,</span> <span class="n">sample_rate</span><span class="p">),</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-70"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-70" name="showco.streamo.config.streamo_toml--source--__codelineno-0-70"></a>            <span class="n">assignment</span><span class="p">(</span><span class="s1">'overlay_resolution'</span><span class="p">,</span> <span class="n">resolution</span><span class="p">),</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-71"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-71" name="showco.streamo.config.streamo_toml--source--__codelineno-0-71"></a>            <span class="n">assignment</span><span class="p">(</span><span class="s1">'overlay_frame_rate'</span><span class="p">,</span> <span class="n">frame_rate</span><span class="p">),</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-72"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-72" name="showco.streamo.config.streamo_toml--source--__codelineno-0-72"></a>        <span class="p">]</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-73"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-73" name="showco.streamo.config.streamo_toml--source--__codelineno-0-73"></a>    <span class="p">)</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-74"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-74" name="showco.streamo.config.streamo_toml--source--__codelineno-0-74"></a>    <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">default</span> <span class="ow">in</span> <span class="n">OVERLAY_DEFAULTS</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-75"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-75" name="showco.streamo.config.streamo_toml--source--__codelineno-0-75"></a>        <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">values</span><span class="p">:</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-76"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-76" name="showco.streamo.config.streamo_toml--source--__codelineno-0-76"></a>            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">assignment</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">values</span><span class="p">[</span><span class="n">name</span><span class="p">]))</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-77"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-77" name="showco.streamo.config.streamo_toml--source--__codelineno-0-77"></a>        <span class="k">elif</span> <span class="n">name</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">'title_'</span><span class="p">)</span> <span class="ow">and</span> <span class="s1">'title_card'</span> <span class="ow">in</span> <span class="n">values</span><span class="p">:</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-78"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-78" name="showco.streamo.config.streamo_toml--source--__codelineno-0-78"></a>            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">assignment</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">default</span><span class="p">))</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-79"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-79" name="showco.streamo.config.streamo_toml--source--__codelineno-0-79"></a>        <span class="k">elif</span> <span class="n">name</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">'image_'</span><span class="p">)</span> <span class="ow">and</span> <span class="s1">'image_dir'</span> <span class="ow">in</span> <span class="n">values</span><span class="p">:</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-80"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-80" name="showco.streamo.config.streamo_toml--source--__codelineno-0-80"></a>            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">assignment</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">default</span><span class="p">))</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-81"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-81" name="showco.streamo.config.streamo_toml--source--__codelineno-0-81"></a>    <span class="n">lines</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-82"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-82" name="showco.streamo.config.streamo_toml--source--__codelineno-0-82"></a>        <span class="p">[</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-83"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-83" name="showco.streamo.config.streamo_toml--source--__codelineno-0-83"></a>            <span class="s1">''</span><span class="p">,</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-84"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-84" name="showco.streamo.config.streamo_toml--source--__codelineno-0-84"></a>            <span class="s1">'[streaming_service]'</span><span class="p">,</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-85"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-85" name="showco.streamo.config.streamo_toml--source--__codelineno-0-85"></a>            <span class="n">assignment</span><span class="p">(</span><span class="s1">'service'</span><span class="p">,</span> <span class="s1">'twitch'</span><span class="p">),</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-86"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-86" name="showco.streamo.config.streamo_toml--source--__codelineno-0-86"></a>            <span class="n">optional_assignment</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="s1">'twitch_client_id'</span><span class="p">,</span> <span class="s1">'client_id'</span><span class="p">),</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-87"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-87" name="showco.streamo.config.streamo_toml--source--__codelineno-0-87"></a>            <span class="n">optional_assignment</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="s1">'twitch_access_token'</span><span class="p">,</span> <span class="s1">'access_token'</span><span class="p">),</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-88"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-88" name="showco.streamo.config.streamo_toml--source--__codelineno-0-88"></a>            <span class="n">optional_assignment</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="s1">'twitch_broadcaster_id'</span><span class="p">,</span> <span class="s1">'broadcaster_id'</span><span class="p">),</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-89"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-89" name="showco.streamo.config.streamo_toml--source--__codelineno-0-89"></a>            <span class="n">optional_assignment</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="s1">'twitch_sender_id'</span><span class="p">,</span> <span class="s1">'sender_id'</span><span class="p">),</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-90"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-90" name="showco.streamo.config.streamo_toml--source--__codelineno-0-90"></a>            <span class="n">optional_assignment</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="s1">'twitch_moderator_id'</span><span class="p">,</span> <span class="s1">'moderator_id'</span><span class="p">),</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-91"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-91" name="showco.streamo.config.streamo_toml--source--__codelineno-0-91"></a>            <span class="n">optional_assignment</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="s1">'twitch_api_url'</span><span class="p">,</span> <span class="s1">'api_url'</span><span class="p">),</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-92"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-92" name="showco.streamo.config.streamo_toml--source--__codelineno-0-92"></a>            <span class="s1">''</span><span class="p">,</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-93"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-93" name="showco.streamo.config.streamo_toml--source--__codelineno-0-93"></a>            <span class="s1">'[streaming_service.ingest]'</span><span class="p">,</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-94"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-94" name="showco.streamo.config.streamo_toml--source--__codelineno-0-94"></a>            <span class="n">assignment</span><span class="p">(</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-95"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-95" name="showco.streamo.config.streamo_toml--source--__codelineno-0-95"></a>                <span class="s1">'protocol'</span><span class="p">,</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-96"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-96" name="showco.streamo.config.streamo_toml--source--__codelineno-0-96"></a>                <span class="n">protocol</span><span class="p">(</span><span class="n">required_text</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="s1">'twitch_url'</span><span class="p">)),</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-97"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-97" name="showco.streamo.config.streamo_toml--source--__codelineno-0-97"></a>            <span class="p">),</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-98"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-98" name="showco.streamo.config.streamo_toml--source--__codelineno-0-98"></a>            <span class="n">assignment</span><span class="p">(</span><span class="s1">'server_url'</span><span class="p">,</span> <span class="n">required_text</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="s1">'twitch_url'</span><span class="p">)),</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-99"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-99" name="showco.streamo.config.streamo_toml--source--__codelineno-0-99"></a>            <span class="n">assignment</span><span class="p">(</span><span class="s1">'stream_key'</span><span class="p">,</span> <span class="n">required_text</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="s1">'twitch_key'</span><span class="p">)),</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-100"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-100" name="showco.streamo.config.streamo_toml--source--__codelineno-0-100"></a>            <span class="s1">''</span><span class="p">,</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-101"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-101" name="showco.streamo.config.streamo_toml--source--__codelineno-0-101"></a>            <span class="s1">'[streaming_service.encoding]'</span><span class="p">,</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-102"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-102" name="showco.streamo.config.streamo_toml--source--__codelineno-0-102"></a>            <span class="n">assignment</span><span class="p">(</span><span class="s1">'container'</span><span class="p">,</span> <span class="s1">'flv'</span><span class="p">),</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-103"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-103" name="showco.streamo.config.streamo_toml--source--__codelineno-0-103"></a>            <span class="s1">''</span><span class="p">,</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-104"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-104" name="showco.streamo.config.streamo_toml--source--__codelineno-0-104"></a>            <span class="s1">'[streaming_service.encoding.audio]'</span><span class="p">,</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-105"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-105" name="showco.streamo.config.streamo_toml--source--__codelineno-0-105"></a>            <span class="n">assignment</span><span class="p">(</span><span class="s1">'codec'</span><span class="p">,</span> <span class="s1">'aac'</span><span class="p">),</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-106"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-106" name="showco.streamo.config.streamo_toml--source--__codelineno-0-106"></a>            <span class="n">assignment</span><span class="p">(</span><span class="s1">'bitrate'</span><span class="p">,</span> <span class="n">text</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="s1">'audio_bitrate'</span><span class="p">,</span> <span class="s1">'160k'</span><span class="p">)),</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-107"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-107" name="showco.streamo.config.streamo_toml--source--__codelineno-0-107"></a>            <span class="n">assignment</span><span class="p">(</span><span class="s1">'sample_rate'</span><span class="p">,</span> <span class="n">sample_rate</span><span class="p">),</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-108"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-108" name="showco.streamo.config.streamo_toml--source--__codelineno-0-108"></a>            <span class="n">assignment</span><span class="p">(</span><span class="s1">'channels'</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-109"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-109" name="showco.streamo.config.streamo_toml--source--__codelineno-0-109"></a>            <span class="s1">''</span><span class="p">,</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-110"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-110" name="showco.streamo.config.streamo_toml--source--__codelineno-0-110"></a>            <span class="s1">'[streaming_service.encoding.video]'</span><span class="p">,</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-111"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-111" name="showco.streamo.config.streamo_toml--source--__codelineno-0-111"></a>            <span class="n">assignment</span><span class="p">(</span><span class="s1">'codec'</span><span class="p">,</span> <span class="s1">'h264'</span><span class="p">),</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-112"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-112" name="showco.streamo.config.streamo_toml--source--__codelineno-0-112"></a>            <span class="n">assignment</span><span class="p">(</span><span class="s1">'bitrate'</span><span class="p">,</span> <span class="n">text</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="s1">'video_bitrate'</span><span class="p">,</span> <span class="s1">'150k'</span><span class="p">)),</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-113"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-113" name="showco.streamo.config.streamo_toml--source--__codelineno-0-113"></a>            <span class="n">assignment</span><span class="p">(</span><span class="s1">'resolution'</span><span class="p">,</span> <span class="n">resolution</span><span class="p">),</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-114"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-114" name="showco.streamo.config.streamo_toml--source--__codelineno-0-114"></a>            <span class="n">assignment</span><span class="p">(</span><span class="s1">'frame_rate'</span><span class="p">,</span> <span class="n">frame_rate</span><span class="p">),</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-115"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-115" name="showco.streamo.config.streamo_toml--source--__codelineno-0-115"></a>            <span class="n">assignment</span><span class="p">(</span><span class="s1">'keyframe_interval'</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-116"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-116" name="showco.streamo.config.streamo_toml--source--__codelineno-0-116"></a>            <span class="n">assignment</span><span class="p">(</span><span class="s1">'pixel_format'</span><span class="p">,</span> <span class="s1">'yuv420p'</span><span class="p">),</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-117"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-117" name="showco.streamo.config.streamo_toml--source--__codelineno-0-117"></a>        <span class="p">]</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-118"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-118" name="showco.streamo.config.streamo_toml--source--__codelineno-0-118"></a>    <span class="p">)</span>
+</span><span id="showco.streamo.config.streamo_toml--source--__span-0-119"><a id="showco.streamo.config.streamo_toml--source--__codelineno-0-119" name="showco.streamo.config.streamo_toml--source--__codelineno-0-119"></a>    <span class="k">return</span> <span class="s1">'</span><span class="se">\n</span><span class="s1">'</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">line</span> <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">lines</span> <span class="k">if</span> <span class="n">line</span><span class="p">)</span> <span class="o">+</span> <span class="s1">'</span><span class="se">\n</span><span class="s1">'</span>
+</span></code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="showco.streamo.config.assignment" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">assignment</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="nb">object</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span></code>
+
+<a href="#showco.streamo.config.assignment" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents ">
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>showco/streamo/config.py</code></summary>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#showco.streamo.config.assignment--source--__codelineno-0-122">122</a></span>
+<span class="normal"><a href="#showco.streamo.config.assignment--source--__codelineno-0-123">123</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="showco.streamo.config.assignment--source--__span-0-122"><a id="showco.streamo.config.assignment--source--__codelineno-0-122" name="showco.streamo.config.assignment--source--__codelineno-0-122"></a><span class="k">def</span><span class="w"> </span><span class="nf">assignment</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="nb">object</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+</span><span id="showco.streamo.config.assignment--source--__span-0-123"><a id="showco.streamo.config.assignment--source--__codelineno-0-123" name="showco.streamo.config.assignment--source--__codelineno-0-123"></a>    <span class="k">return</span> <span class="sa">f</span><span class="s1">'</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s1"> = </span><span class="si">{</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">value</span><span class="p">)</span><span class="si">}</span><span class="s1">'</span>
+</span></code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="showco.streamo.config.optional_assignment" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">optional_assignment</span><span class="p">(</span><span class="n">values</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">object</span><span class="p">],</span> <span class="n">source</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">target</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span></code>
+
+<a href="#showco.streamo.config.optional_assignment" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents ">
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>showco/streamo/config.py</code></summary>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#showco.streamo.config.optional_assignment--source--__codelineno-0-126">126</a></span>
+<span class="normal"><a href="#showco.streamo.config.optional_assignment--source--__codelineno-0-127">127</a></span>
+<span class="normal"><a href="#showco.streamo.config.optional_assignment--source--__codelineno-0-128">128</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="showco.streamo.config.optional_assignment--source--__span-0-126"><a id="showco.streamo.config.optional_assignment--source--__codelineno-0-126" name="showco.streamo.config.optional_assignment--source--__codelineno-0-126"></a><span class="k">def</span><span class="w"> </span><span class="nf">optional_assignment</span><span class="p">(</span><span class="n">values</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">object</span><span class="p">],</span> <span class="n">source</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">target</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+</span><span id="showco.streamo.config.optional_assignment--source--__span-0-127"><a id="showco.streamo.config.optional_assignment--source--__codelineno-0-127" name="showco.streamo.config.optional_assignment--source--__codelineno-0-127"></a>    <span class="n">value</span> <span class="o">=</span> <span class="n">optional_text</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="n">source</span><span class="p">)</span>
+</span><span id="showco.streamo.config.optional_assignment--source--__span-0-128"><a id="showco.streamo.config.optional_assignment--source--__codelineno-0-128" name="showco.streamo.config.optional_assignment--source--__codelineno-0-128"></a>    <span class="k">return</span> <span class="n">assignment</span><span class="p">(</span><span class="n">target</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span> <span class="k">if</span> <span class="n">value</span> <span class="k">else</span> <span class="s1">''</span>
+</span></code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="showco.streamo.config.required_text" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">required_text</span><span class="p">(</span><span class="n">values</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">object</span><span class="p">],</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span></code>
+
+<a href="#showco.streamo.config.required_text" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents ">
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>showco/streamo/config.py</code></summary>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#showco.streamo.config.required_text--source--__codelineno-0-131">131</a></span>
+<span class="normal"><a href="#showco.streamo.config.required_text--source--__codelineno-0-132">132</a></span>
+<span class="normal"><a href="#showco.streamo.config.required_text--source--__codelineno-0-133">133</a></span>
+<span class="normal"><a href="#showco.streamo.config.required_text--source--__codelineno-0-134">134</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="showco.streamo.config.required_text--source--__span-0-131"><a id="showco.streamo.config.required_text--source--__codelineno-0-131" name="showco.streamo.config.required_text--source--__codelineno-0-131"></a><span class="k">def</span><span class="w"> </span><span class="nf">required_text</span><span class="p">(</span><span class="n">values</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">object</span><span class="p">],</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+</span><span id="showco.streamo.config.required_text--source--__span-0-132"><a id="showco.streamo.config.required_text--source--__codelineno-0-132" name="showco.streamo.config.required_text--source--__codelineno-0-132"></a>    <span class="k">if</span> <span class="n">value</span> <span class="o">:=</span> <span class="n">optional_text</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+</span><span id="showco.streamo.config.required_text--source--__span-0-133"><a id="showco.streamo.config.required_text--source--__codelineno-0-133" name="showco.streamo.config.required_text--source--__codelineno-0-133"></a>        <span class="k">return</span> <span class="n">value</span>
+</span><span id="showco.streamo.config.required_text--source--__span-0-134"><a id="showco.streamo.config.required_text--source--__codelineno-0-134" name="showco.streamo.config.required_text--source--__codelineno-0-134"></a>    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">'Twitcho configuration requires </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s1">'</span><span class="p">)</span>
+</span></code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="showco.streamo.config.optional_text" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">optional_text</span><span class="p">(</span><span class="n">values</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">object</span><span class="p">],</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span></code>
+
+<a href="#showco.streamo.config.optional_text" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents ">
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>showco/streamo/config.py</code></summary>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#showco.streamo.config.optional_text--source--__codelineno-0-137">137</a></span>
+<span class="normal"><a href="#showco.streamo.config.optional_text--source--__codelineno-0-138">138</a></span>
+<span class="normal"><a href="#showco.streamo.config.optional_text--source--__codelineno-0-139">139</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="showco.streamo.config.optional_text--source--__span-0-137"><a id="showco.streamo.config.optional_text--source--__codelineno-0-137" name="showco.streamo.config.optional_text--source--__codelineno-0-137"></a><span class="k">def</span><span class="w"> </span><span class="nf">optional_text</span><span class="p">(</span><span class="n">values</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">object</span><span class="p">],</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="showco.streamo.config.optional_text--source--__span-0-138"><a id="showco.streamo.config.optional_text--source--__codelineno-0-138" name="showco.streamo.config.optional_text--source--__codelineno-0-138"></a>    <span class="n">value</span> <span class="o">=</span> <span class="n">values</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+</span><span id="showco.streamo.config.optional_text--source--__span-0-139"><a id="showco.streamo.config.optional_text--source--__codelineno-0-139" name="showco.streamo.config.optional_text--source--__codelineno-0-139"></a>    <span class="k">return</span> <span class="n">value</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">and</span> <span class="n">value</span> <span class="k">else</span> <span class="kc">None</span>
+</span></code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="showco.streamo.config.text" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">text</span><span class="p">(</span><span class="n">values</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">object</span><span class="p">],</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">default</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span></code>
+
+<a href="#showco.streamo.config.text" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents ">
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>showco/streamo/config.py</code></summary>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#showco.streamo.config.text--source--__codelineno-0-142">142</a></span>
+<span class="normal"><a href="#showco.streamo.config.text--source--__codelineno-0-143">143</a></span>
+<span class="normal"><a href="#showco.streamo.config.text--source--__codelineno-0-144">144</a></span>
+<span class="normal"><a href="#showco.streamo.config.text--source--__codelineno-0-145">145</a></span>
+<span class="normal"><a href="#showco.streamo.config.text--source--__codelineno-0-146">146</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="showco.streamo.config.text--source--__span-0-142"><a id="showco.streamo.config.text--source--__codelineno-0-142" name="showco.streamo.config.text--source--__codelineno-0-142"></a><span class="k">def</span><span class="w"> </span><span class="nf">text</span><span class="p">(</span><span class="n">values</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">object</span><span class="p">],</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">default</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+</span><span id="showco.streamo.config.text--source--__span-0-143"><a id="showco.streamo.config.text--source--__codelineno-0-143" name="showco.streamo.config.text--source--__codelineno-0-143"></a>    <span class="n">value</span> <span class="o">=</span> <span class="n">values</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">default</span><span class="p">)</span>
+</span><span id="showco.streamo.config.text--source--__span-0-144"><a id="showco.streamo.config.text--source--__codelineno-0-144" name="showco.streamo.config.text--source--__codelineno-0-144"></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">and</span> <span class="n">value</span><span class="p">:</span>
+</span><span id="showco.streamo.config.text--source--__span-0-145"><a id="showco.streamo.config.text--source--__codelineno-0-145" name="showco.streamo.config.text--source--__codelineno-0-145"></a>        <span class="k">return</span> <span class="n">value</span>
+</span><span id="showco.streamo.config.text--source--__span-0-146"><a id="showco.streamo.config.text--source--__codelineno-0-146" name="showco.streamo.config.text--source--__codelineno-0-146"></a>    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">'Twitcho configuration </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s1"> must be a non-empty string'</span><span class="p">)</span>
+</span></code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="showco.streamo.config.positive_int" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">positive_int</span><span class="p">(</span><span class="n">values</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">object</span><span class="p">],</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">default</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span></code>
+
+<a href="#showco.streamo.config.positive_int" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents ">
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>showco/streamo/config.py</code></summary>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#showco.streamo.config.positive_int--source--__codelineno-0-149">149</a></span>
+<span class="normal"><a href="#showco.streamo.config.positive_int--source--__codelineno-0-150">150</a></span>
+<span class="normal"><a href="#showco.streamo.config.positive_int--source--__codelineno-0-151">151</a></span>
+<span class="normal"><a href="#showco.streamo.config.positive_int--source--__codelineno-0-152">152</a></span>
+<span class="normal"><a href="#showco.streamo.config.positive_int--source--__codelineno-0-153">153</a></span>
+<span class="normal"><a href="#showco.streamo.config.positive_int--source--__codelineno-0-154">154</a></span>
+<span class="normal"><a href="#showco.streamo.config.positive_int--source--__codelineno-0-155">155</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="showco.streamo.config.positive_int--source--__span-0-149"><a id="showco.streamo.config.positive_int--source--__codelineno-0-149" name="showco.streamo.config.positive_int--source--__codelineno-0-149"></a><span class="k">def</span><span class="w"> </span><span class="nf">positive_int</span><span class="p">(</span>
+</span><span id="showco.streamo.config.positive_int--source--__span-0-150"><a id="showco.streamo.config.positive_int--source--__codelineno-0-150" name="showco.streamo.config.positive_int--source--__codelineno-0-150"></a>    <span class="n">values</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">object</span><span class="p">],</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">default</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="showco.streamo.config.positive_int--source--__span-0-151"><a id="showco.streamo.config.positive_int--source--__codelineno-0-151" name="showco.streamo.config.positive_int--source--__codelineno-0-151"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+</span><span id="showco.streamo.config.positive_int--source--__span-0-152"><a id="showco.streamo.config.positive_int--source--__codelineno-0-152" name="showco.streamo.config.positive_int--source--__codelineno-0-152"></a>    <span class="n">value</span> <span class="o">=</span> <span class="n">values</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">default</span><span class="p">)</span>
+</span><span id="showco.streamo.config.positive_int--source--__span-0-153"><a id="showco.streamo.config.positive_int--source--__codelineno-0-153" name="showco.streamo.config.positive_int--source--__codelineno-0-153"></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">bool</span><span class="p">)</span> <span class="ow">and</span> <span class="n">value</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+</span><span id="showco.streamo.config.positive_int--source--__span-0-154"><a id="showco.streamo.config.positive_int--source--__codelineno-0-154" name="showco.streamo.config.positive_int--source--__codelineno-0-154"></a>        <span class="k">return</span> <span class="n">value</span>
+</span><span id="showco.streamo.config.positive_int--source--__span-0-155"><a id="showco.streamo.config.positive_int--source--__codelineno-0-155" name="showco.streamo.config.positive_int--source--__codelineno-0-155"></a>    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">'Twitcho configuration </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s1"> must be a positive integer'</span><span class="p">)</span>
+</span></code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="showco.streamo.config.protocol" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">protocol</span><span class="p">(</span><span class="n">url</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span></code>
+
+<a href="#showco.streamo.config.protocol" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents ">
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>showco/streamo/config.py</code></summary>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#showco.streamo.config.protocol--source--__codelineno-0-158">158</a></span>
+<span class="normal"><a href="#showco.streamo.config.protocol--source--__codelineno-0-159">159</a></span>
+<span class="normal"><a href="#showco.streamo.config.protocol--source--__codelineno-0-160">160</a></span>
+<span class="normal"><a href="#showco.streamo.config.protocol--source--__codelineno-0-161">161</a></span>
+<span class="normal"><a href="#showco.streamo.config.protocol--source--__codelineno-0-162">162</a></span>
+<span class="normal"><a href="#showco.streamo.config.protocol--source--__codelineno-0-163">163</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="showco.streamo.config.protocol--source--__span-0-158"><a id="showco.streamo.config.protocol--source--__codelineno-0-158" name="showco.streamo.config.protocol--source--__codelineno-0-158"></a><span class="k">def</span><span class="w"> </span><span class="nf">protocol</span><span class="p">(</span><span class="n">url</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+</span><span id="showco.streamo.config.protocol--source--__span-0-159"><a id="showco.streamo.config.protocol--source--__codelineno-0-159" name="showco.streamo.config.protocol--source--__codelineno-0-159"></a>    <span class="k">if</span> <span class="n">url</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">'rtmps://'</span><span class="p">):</span>
+</span><span id="showco.streamo.config.protocol--source--__span-0-160"><a id="showco.streamo.config.protocol--source--__codelineno-0-160" name="showco.streamo.config.protocol--source--__codelineno-0-160"></a>        <span class="k">return</span> <span class="s1">'rtmps'</span>
+</span><span id="showco.streamo.config.protocol--source--__span-0-161"><a id="showco.streamo.config.protocol--source--__codelineno-0-161" name="showco.streamo.config.protocol--source--__codelineno-0-161"></a>    <span class="k">if</span> <span class="n">url</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">'rtmp://'</span><span class="p">):</span>
+</span><span id="showco.streamo.config.protocol--source--__span-0-162"><a id="showco.streamo.config.protocol--source--__codelineno-0-162" name="showco.streamo.config.protocol--source--__codelineno-0-162"></a>        <span class="k">return</span> <span class="s1">'rtmp'</span>
+</span><span id="showco.streamo.config.protocol--source--__span-0-163"><a id="showco.streamo.config.protocol--source--__codelineno-0-163" name="showco.streamo.config.protocol--source--__codelineno-0-163"></a>    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">'Twitcho configuration twitch_url must use rtmp:// or rtmps://'</span><span class="p">)</span>
+</span></code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://zensical.org/" target="_blank" rel="noopener">
+      Zensical
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog" role="status" aria-atomic="true">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      
+      
+        
+        
+      <script id="__config" type="application/json">{"annotate":null,"base":"../../../..","features":["navigation.indexes","content.code.copy"],"redirect":null,"search":"../../../../assets/javascripts/workers/search.c47bb847.min.js","tags":null,"translations":{"clipboard.copied":"Copied to clipboard","clipboard.copy":"Copy to clipboard","clipboard.error":"Could not copy to clipboard","search.result.more.one":"1 more on this page","search.result.more.other":"# more on this page","search.result.none":"No matching documents","search.result.one":"1 matching document","search.result.other":"# matching documents","search.result.placeholder":"Type to start searching","search.result.term.missing":"Missing","select.version":"Select version"},"version":null}</script>
+    
+    
+      <script src="../../../../assets/javascripts/bundle.77dd0ce9.min.js"></script>
+      
+    
+  </body>
+</html>
