@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shlex
@@ -12,16 +13,19 @@ from pathlib import Path
 from shutil import which
 from subprocess import CalledProcessError, TimeoutExpired
 from typing import TYPE_CHECKING, Annotated
+from uuid import uuid4
 
 import tyro
 from pydantic import BaseModel, Field, RootModel, TypeAdapter
 from reccy.configuration import settings, units
 from reccy.errors import ReccyError
+from reccy.runtime.assets import AssetCacheError
 
 from ..runtime.recs_control import RecsControlClient
 from ..streamo.config import configure_stream_settings
 from ..x18.music import Files
 from . import config, ssh
+from .media_package import stage_media
 
 if TYPE_CHECKING:
     from .provision import DeployOptions
@@ -98,11 +102,13 @@ def save_sources(config_path: Path, sources: config.Media) -> None:
 
 
 def target_paths(sources: config.Media, user: str, kind: str) -> list[Path]:
-    root = Path('/home') / user / '.local/share/showco/media' / kind
-    return [
-        root / f'{i:03d}' / p.name if p.is_file() else root / f'{i:03d}'
-        for i, p in enumerate(sources.sources[kind])
-    ]
+    root = (
+        Path('/home')
+        / user
+        / '.local/share/showco/media/versions'
+        / sources.package.version
+    )
+    return [root / p for p in sources.package.targets[kind]]
 
 
 def synchronize(provision_config: config.Config) -> None:
@@ -111,45 +117,63 @@ def synchronize(provision_config: config.Config) -> None:
         return
     if not which('rsync'):
         sys.exit('ERROR: rsync is required on the development machine to copy media')
-    # rsync is also in the normal base-package list, but a new card needs it
-    # before the provisioning script installs and starts the media consumers.
-    ssh.run_ssh(
-        provision_config,
-        'command -v rsync >/dev/null || '
-        '{ sudo apt-get update && sudo apt-get install -y rsync; }',
-        timeout_seconds=300,
-    )
     transport = shlex.join(
         ssh.ssh_command(provision_config, provision_config.ssh_target, '')[:-2]
     )
-    for kind, paths in sources.sources.items():
-        targets = target_paths(sources, provision_config.network.user, kind)
-        for source, target in zip(paths, targets, strict=True):
-            directory = target.parent if source.is_file() else target
-            ssh.run_ssh(provision_config, f'mkdir -p -- {shlex.quote(str(directory))}')
-            command = [
-                'rsync',
-                '-rtL',
-                '--checksum',
-                '--timeout=60',
-                '-e',
-                transport,
-            ]
-            if source.is_dir():
-                command.append('--delete')
-            if kind == 'photos':
-                command.extend(['--exclude=/incoming/', '--exclude=/.streamo-*'])
-            command.extend(
+    root = Path('/home') / provision_config.network.user / '.local/share/showco/media'
+    destination = root / 'versions' / sources.package.version
+    staging = root / 'versions' / f'.staging-{uuid4().hex}'
+    try:
+        with stage_media(sources.package) as local:
+            checksums = hashlib.sha256((local / 'SHA256SUMS').read_bytes()).hexdigest()
+            ssh.run_ssh(
+                provision_config,
+                'command -v rsync >/dev/null || '
+                '{ sudo apt-get update && sudo apt-get install -y rsync; }',
+                timeout_seconds=300,
+            )
+            ssh.run_ssh(provision_config, f'mkdir -p -- {shlex.quote(str(staging))}')
+            ssh.run_command(
                 [
-                    str(source) + ('/' if source.is_dir() else ''),
-                    f'{provision_config.ssh_target}:{shlex.quote(str(directory))}/',
+                    'rsync',
+                    '-rt',
+                    '--checksum',
+                    '--timeout=60',
+                    '-e',
+                    transport,
+                    str(local) + '/',
+                    f'{provision_config.ssh_target}:{shlex.quote(str(staging))}/',
                 ]
             )
-            print(f'Synchronizing {kind}: {source}...')
-            try:
-                ssh.run_command(command)
-            except (OSError, CalledProcessError, TimeoutExpired) as error:
-                sys.exit(f'ERROR: cannot copy {kind} source {source}: {error}')
+            verify = (
+                f"printf '%s  SHA256SUMS\\n' {shlex.quote(checksums)} | "
+                'sha256sum --strict -c - && '
+                'sha256sum --strict -c SHA256SUMS'
+            )
+            # GNU mv -T -n never replaces an existing version, including when a
+            # concurrent deploy publishes the same version first. Verify it too.
+            command = (
+                f'cd {shlex.quote(str(staging))} && {verify} && '
+                f'mv -T -n -- {shlex.quote(str(staging))} '
+                f'{shlex.quote(str(destination))} && '
+                f'cd {shlex.quote(str(destination))} && {verify}'
+            )
+            for index, _ in enumerate(sources.photos):
+                inbox = root / 'photos' / f'{index:03d}' / 'incoming'
+                link = destination / 'photos' / f'{index:03d}' / 'incoming'
+                command += (
+                    f' && mkdir -p -- {shlex.quote(str(inbox))}'
+                    f' && ln -sfn -- {shlex.quote(str(inbox))} {shlex.quote(str(link))}'
+                )
+            ssh.run_ssh(provision_config, command, timeout_seconds=300)
+    except (
+        OSError,
+        ValueError,
+        AssetCacheError,
+        CalledProcessError,
+        TimeoutExpired,
+    ) as error:
+        sys.exit(f'ERROR: cannot copy media package: {error}')
 
 
 def configure_stream_media(provision_config: config.Config) -> None:
@@ -175,6 +199,7 @@ def configure_stream_media(provision_config: config.Config) -> None:
             'if grep -Fq '
             f'-e {shlex.quote("/.local/share/showco/media/photos/")} '
             f'-e {shlex.quote("/.local/share/showco/media/movie/")} '
+            f'-e {shlex.quote("/.local/share/showco/media/versions/")} '
             f'{shlex.quote(str(path))} 2>/dev/null; then {command}; fi'
         )
     ssh.run_ssh(
@@ -254,7 +279,10 @@ def stream_media_configuration(
     remove_movie = (
         movie is None
         and isinstance(previous_movie, str)
-        and '/.local/share/showco/media/movie/' in previous_movie
+        and (
+            '/.local/share/showco/media/movie/' in previous_movie
+            or '/.local/share/showco/media/versions/' in previous_movie
+        )
     )
     if remove_movie:
         encoding = values.get('streaming_service', {}).get('encoding', {})
@@ -282,7 +310,9 @@ def stream_media_configuration(
             if count > len(photos):
                 replacements['image_dir_weights'] = list(range(len(photos), 0, -1))
     elif any(
-        '/.local/share/showco/media/photos/' in p for p in values.get('image_dir', [])
+        '/.local/share/showco/media/photos/' in p
+        or '/.local/share/showco/media/versions/' in p
+        for p in values.get('image_dir', [])
     ):
         if values.get('image_feed'):
             raise ValueError('remove image_feed before disabling managed photos')

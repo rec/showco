@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from reccy.configuration import settings
 
 from ..runtime.mixer import MixerSpec, MixerSpecs
+from .media_package import MediaInventory, inventory
 
 
 class GitRepo(BaseModel, frozen=True):
@@ -79,6 +80,10 @@ class Media(BaseModel, frozen=True):
     setup: list[Path] = Field(default_factory=list)
     teardown: list[Path] = Field(default_factory=list)
     movie: Path | None = None
+
+    @cached_property
+    def package(self) -> MediaInventory:
+        return inventory(self.sources)
 
     @cached_property
     def sources(self) -> dict[str, list[Path]]:

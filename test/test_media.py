@@ -190,7 +190,10 @@ def test_media_selections_persist_and_only_specified_categories_are_replaced(
     assert saved.teardown == [teardown]
     assert saved.movie == movie
     assert path.read_text() == '# public configuration\n'
-    root = Path('/home/tom/.local/share/showco/media')
+    root = (
+        Path('/home/tom/.local/share/showco/media/versions')
+        / resolved.media.package.version
+    )
     assert resolved.audio == [root / 'audio/000/intro.flac']
     assert resolved.setup == []
     assert resolved.teardown == [root / 'teardown/000']
@@ -295,27 +298,24 @@ def test_media_transfer_keeps_sources_separate_and_preserves_streamo_inbox(
         update={'media': config.Media(photos=[photos], teardown=[audio])}
     )
     with (
-        mock.patch('showco.provision.ssh.run_ssh'),
+        mock.patch('showco.provision.ssh.run_ssh') as remote,
         mock.patch('showco.provision.ssh.run_command') as copy,
         mock.patch('showco.provision.media.which', return_value='/usr/bin/rsync'),
     ):
         media.synchronize(configuration)
-    photos_command, audio_command = (c.args[0] for c in copy.call_args_list)
-    assert '--delete' in photos_command
-    assert '--exclude=/incoming/' in photos_command
-    assert '--exclude=/.streamo-*' in photos_command
-    assert photos_command[-2:] == [
-        str(photos) + '/',
-        'tom@recs-stage.local:/home/tom/.local/share/showco/media/photos/000/',
-    ]
-    assert shlex.split(photos_command[photos_command.index('-e') + 1])[-2:] == [
+    command = copy.call_args.args[0]
+    assert copy.call_count == 1
+    assert '--delete' not in command
+    assert '/media/versions/.staging-' in command[-1]
+    assert shlex.split(command[command.index('-e') + 1])[-2:] == [
         '-p',
         '2200',
     ]
-    assert audio_command[-2:] == [
-        str(audio),
-        'tom@recs-stage.local:/home/tom/.local/share/showco/media/teardown/000/',
-    ]
+    publication = remote.call_args.args[1]
+    assert 'sha256sum --strict -c SHA256SUMS' in publication
+    assert 'mv -T -n' in publication
+    assert configuration.media.package.version in publication
+    assert '/media/photos/000/incoming' in publication
 
 
 def test_failed_media_copy_stops_before_later_sources(tmp_path: Path) -> None:
@@ -331,7 +331,7 @@ def test_failed_media_copy_stops_before_later_sources(tmp_path: Path) -> None:
             'showco.provision.ssh.run_command',
             side_effect=subprocess.CalledProcessError(23, ['rsync']),
         ) as copy,
-        pytest.raises(SystemExit, match='cannot copy photos'),
+        pytest.raises(SystemExit, match='cannot copy media package'),
     ):
         media.synchronize(configuration)
     assert copy.call_count == 1

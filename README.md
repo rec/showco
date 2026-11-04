@@ -98,3 +98,15 @@ uv run ty check showco
 Automated tests do not establish that audio was recorded, a mixer is reachable,
 lighting frames were displayed, or the streaming service accepted an operation. Use the
 hardware acceptance tests before relying on a deployed system.
+
+Media deployment now inventories and stages all selected files as one verified
+package. Targets use content-versioned directories under
+`~/.local/share/showco/media/versions/`; transfer and target checksum verification
+finish before service configuration selects that version. A failed copy or
+verification leaves the previous package and configuration available. The
+existing `media/photos/NNN/incoming` directories remain the persistent upload
+inboxes, linked from each version, so supplied-media updates preserve audience
+photos and feed cursors. Old versions and failed staging directories are retained;
+this change does not automatically delete them. Local staging requires space for
+a complete media package, and selected files changing after preflight abort the
+transfer. These guarantees require the normal host-owned deployment directories.
