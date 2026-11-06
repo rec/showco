@@ -1,0 +1,82 @@
+mixers = []
+gui_path = "showco/gui.toml"
+argon_one = true
+accept_changed_host_key = true
+audio = []
+setup = []
+teardown = []
+
+[network]
+
+host = ""
+user = ""
+ssh_port = 22
+web_port = 17352
+swap_wifi = false
+topology = ""
+restrict_external_ingress = false
+
+[paths]
+
+root = "."
+
+[networks]
+
+[stream]
+
+enabled = false
+account = ""
+stream_title = ""
+category = ""
+tags = []
+chat_messages = []
+stream_marker_descriptions = []
+id = ""
+oauth_token_scopes = []
+client_id = ""
+redirect_uri = ""
+scopes = ""
+state = ""
+stream_key = ""
+client_secret = ""
+access_token = ""
+callback_url = ""
+
+[lyte]
+
+enabled = false
+installation_config = "patches/showco-installation.toml"
+
+
+[git.reccy]
+
+url = "sample"
+refname = ""
+
+[git.recs]
+
+url = "sample"
+refname = ""
+
+[git.streamo]
+
+url = "sample"
+refname = ""
+
+[git.showco]
+
+url = "sample"
+refname = ""
+
+[git.lyte]
+
+url = "sample"
+refname = ""
+
+[media]
+
+photos = []
+audio = []
+setup = []
+teardown = []
+movie = "."
