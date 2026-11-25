@@ -44,7 +44,7 @@ def test_default_gui_declares_all_navigation_pages() -> None:
         ('disabled', 'unknown', False, 'Twitch disabled'),
     ],
 )
-def test_show_page_has_only_faults_toggle_and_teardown(
+def test_show_page_has_destination_faults_toggle_and_teardown(
     connection: str, state: str, enabled: bool, label: str
 ) -> None:
     document = gui_schema.load_gui(gui_schema.DEFAULT_GUI_PATH)
@@ -62,13 +62,14 @@ def test_show_page_has_only_faults_toggle_and_teardown(
     html = views.configured_page(page, status)
 
     assert document.default_page == 'show'
-    assert [element.name for element in page.sections[0].elements] == [
+    assert [element.name for element in page.sections[1].elements] == [
         'twitch-toggle',
         'teardown',
         'show-result',
     ]
     assert f'<button{"" if enabled else " disabled"}>{label}</button>' in html
     assert 'id="fault-banner"' in html
+    assert 'Recording destination: unavailable' in html
     assert 'id="performance-lock-form"' not in html
     assert 'id="connection-status"' not in html
     assert 'id="monitoring-error"' not in html
@@ -76,6 +77,43 @@ def test_show_page_has_only_faults_toggle_and_teardown(
     assert 'function updateConfiguredActions(status)' in html
     assert '<button>End show</button>' in html
     assert 'data-disabled-when="" data-confirm="true"' in html
+
+
+@pytest.mark.parametrize(
+    ('state', 'on_system_disk', 'expected'),
+    [
+        ('connected', True, (True, ' (warning: system disk)')),
+        ('connected', False, (False, '')),
+        ('stale', True, (True, ' (last known; live destination unavailable)')),
+    ],
+)
+def test_show_page_labels_recording_destination(
+    state: str, on_system_disk: bool, expected: tuple[bool, str]
+) -> None:
+    page = gui_schema.load_gui(gui_schema.DEFAULT_GUI_PATH).page('show')
+    status = models.ShowStatus(
+        recs=models.RecsStatus(
+            service=models.ServiceStatus(name='recs', state=state),
+            snapshot_available=True,
+            disk=models.RecordingDiskStatus(
+                path='/mnt/recordings/recs',
+                used_bytes=25,
+                free_bytes=75,
+                total_bytes=100,
+                on_system_disk=on_system_disk,
+            ),
+        ),
+        streamo=models.StreamoStatus(
+            service=models.ServiceStatus(name='streamo', state='disabled'),
+        ),
+    )
+
+    html = views.configured_page(page, status)
+    warning, suffix = expected
+
+    assert f'Recording destination: /mnt/recordings/recs{suffix}</p>' in html
+    css = 'failed' if warning else ''
+    assert f'<p class="{css}" data-value="show.recs"' in html
 
 
 @pytest.mark.parametrize('page', ['show', 'actions'])

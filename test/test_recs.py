@@ -62,6 +62,20 @@ class RecsTests(unittest.TestCase):
 
         control.call.assert_called_once_with('status_snapshot', timeout=0.25)
 
+    def test_recording_path_on_home_filesystem_warns_of_system_disk(self) -> None:
+        control = mock.Mock(spec=RecsControlClient)
+        destination = Path.home()
+        control.call.return_value = {
+            **status_snapshot(),
+            'disk': {**disk_status(), 'path': str(destination)},
+        }
+
+        status = RecsClient(control=control).status()
+
+        self.assertEqual(
+            status.destination_text, f'{destination} (warning: system disk)'
+        )
+
     def test_stale_snapshot_does_not_claim_live_recording(self) -> None:
         control = mock.Mock(spec=RecsControlClient)
         control.call.side_effect = [status_snapshot(), TimeoutError('offline')]

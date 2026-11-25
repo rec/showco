@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 import threading
 import time
+from pathlib import Path
 from typing import TypeIs
 
 from pydantic import BaseModel, Field, ValidationError
@@ -230,7 +231,19 @@ def recording_disk_status(value: object) -> models.RecordingDiskStatus | str:
         alert_threshold=threshold,
         alert_active=alert,
         paused_for_disk_space=paused,
+        on_system_disk=_on_system_disk(Path(path)),
     )
+
+
+def _on_system_disk(path: Path) -> bool | None:
+    try:
+        device = path.stat().st_dev
+        home = Path.home()
+        # recs falls back to the home filesystem; an unmounted target may
+        # instead resolve to the root filesystem when home is separate.
+        return device == home.stat().st_dev or device == Path(home.anchor).stat().st_dev
+    except OSError:
+        return None
 
 
 def playback_status(value: object) -> models.PlaybackStatus | str:

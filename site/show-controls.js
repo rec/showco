@@ -1,4 +1,9 @@
 function showControlsUnavailable() {
+  const destination = document.getElementById('recording-destination');
+  if (destination) {
+    destination.className = 'failed';
+    destination.textContent = 'Recording destination: unavailable';
+  }
   const lock = document.getElementById('performance-lock-state');
   if (lock) lock.textContent = 'Performance lock: unknown (status unavailable)';
   const banner = document.getElementById('fault-banner');

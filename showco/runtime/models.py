@@ -65,6 +65,7 @@ class RecordingDiskStatus(BaseModel, frozen=True):
     alert_threshold: str | None = None
     alert_active: bool = False
     paused_for_disk_space: bool = False
+    on_system_disk: bool | None = None
 
 
 class PlaybackStatus(BaseModel, frozen=True):
@@ -94,6 +95,17 @@ class RecsStatus(BaseModel, frozen=True):
     playback: PlaybackStatus = Field(default_factory=PlaybackStatus)
     osc: list[RecorderStatus] = Field(default_factory=list)
     midi: list[MidiStatus] = Field(default_factory=list)
+
+    @computed_field
+    @property
+    def destination_text(self) -> str:
+        if self.disk is None or not self.snapshot_available:
+            return 'unavailable'
+        if self.service.state != 'connected':
+            return f'{self.disk.path} (last known; live destination unavailable)'
+        if self.disk.on_system_disk:
+            return f'{self.disk.path} (warning: system disk)'
+        return self.disk.path
 
 
 class ClosingStatus(BaseModel, frozen=True):

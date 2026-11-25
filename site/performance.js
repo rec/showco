@@ -47,7 +47,8 @@ function renderPerformance(status) {
   if (destination) {
     const stale = recs.disk_error || recs.snapshot_error;
     if (disk && stale) destination.textContent += `; stale: ${stale}`;
-    destination.className = stale ? 'failed' : '';
+    if (disk?.on_system_disk && !stale) destination.textContent += '; warning: system disk';
+    destination.className = stale || disk?.on_system_disk ? 'failed' : '';
   }
   const progress = document.getElementById('performance-progress');
   if (progress) progress.textContent =
@@ -155,6 +156,11 @@ function pollPerformance() {
       statusFailed(error);
       const recording = document.getElementById('performance-recording');
       if (recording) recording.textContent = 'Recording state unknown: status unavailable';
+      const destination = document.getElementById('performance-disk');
+      if (destination) {
+        destination.textContent = 'Recording destination and capacity unavailable';
+        destination.className = 'failed';
+      }
     }).finally(() => setTimeout(pollPerformance, 1000));
 }
 pollPerformance();

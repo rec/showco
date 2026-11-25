@@ -92,6 +92,7 @@
       case "service": return serviceDetail(value);
       case "snapshot": return value || "connected";
       case "progress": return value;
+      case "recording_destination": return value.destination_text;
       case "lyte": return lyteDetail(value);
       case "temperature": return value.temperature_c === null
         ? value.temperature_error || "unknown"
@@ -146,6 +147,9 @@
       element.textContent = `${label ? `${label}: ` : ""}${statusText(element.dataset.format, value)}`;
       if (element.dataset.format === "progress") {
         element.className = status.recording_progress.ok ? "ok" : "failed";
+      } else if (element.dataset.format === "recording_destination") {
+        element.className = value.service.state !== "connected" || !value.snapshot_available
+          || !value.disk || value.disk.on_system_disk ? "failed" : "";
       } else if (element.dataset.format === "cable_test") {
         element.className = status.cable_test.state === "failed" ? "failed" : "ok";
       }

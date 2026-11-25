@@ -525,7 +525,7 @@ TEXT_VALUES_BY_FORMAT = {
 }
 STATUS_FORMATS = {
     'show.readiness.ready': {'readiness'},
-    'show.recs': {'shutdown_recs'},
+    'show.recs': {'recording_destination', 'shutdown_recs'},
     'show.recs.service': {'service'},
     'show.recs.snapshot_error': {'snapshot'},
     'show.recording_progress.message': {'progress'},

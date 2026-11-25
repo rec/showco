@@ -265,6 +265,8 @@ def _gui_status_text(element: gui_schema.Element, status: models.ShowStatus) -> 
             return str(value or 'connected')
         case 'progress':
             return str(value)
+        case 'recording_destination' if isinstance(value, models.RecsStatus):
+            return value.destination_text
         case 'lyte' if isinstance(value, models.LyteStatus):
             return _lyte_detail(value)
         case 'temperature':
@@ -320,6 +322,15 @@ def _gui_status_class(format: str, status: models.ShowStatus) -> str:
         return 'state'
     if format == 'progress':
         return 'ok' if status.recording_progress.ok else 'failed'
+    if format == 'recording_destination':
+        recs = status.recs
+        if (
+            recs.service.state != 'connected'
+            or not recs.snapshot_available
+            or recs.disk is None
+            or recs.disk.on_system_disk
+        ):
+            return 'failed'
     if format == 'cable_test':
         return 'failed' if status.cable_test.state == 'failed' else 'ok'
     return ''

@@ -16,7 +16,14 @@ from showco.runtime import gui_schema, models, views
     [(c, s, p, 'normal') for c, s, p in product([True, False], repeat=3)]
     + [
         (True, True, False, v)
-        for v in ['advancing', 'stale-disk', 'no-disk', 'closing', 'protected']
+        for v in [
+            'advancing',
+            'stale-disk',
+            'no-disk',
+            'closing',
+            'protected',
+            'fallback',
+        ]
     ],
 )
 def test_initial_and_refreshed_status_use_the_same_text(
@@ -38,6 +45,7 @@ def test_initial_and_refreshed_status_use_the_same_text(
                 free_bytes=3 * 1024**3,
                 total_bytes=4 * 1024**3,
                 estimated_seconds_remaining=3672.4,
+                on_system_disk=variant == 'fallback',
             )
             if connected and variant != 'no-disk'
             else None,
@@ -141,6 +149,8 @@ def test_initial_and_refreshed_status_use_the_same_text(
     )
     expected['mixer-detail'] = formatted_text(health, 'mixer_detail')
     expected['osc-detail'] = formatted_text(health, 'osc_detail')
+    show = views.configured_page(gui_schema.current_gui().page('show'), status)
+    expected['recording-destination'] = text(show, 'recording-destination')
     subprocess.run(
         ['node', 'test/browser_presentation.cjs'],
         input=json.dumps(

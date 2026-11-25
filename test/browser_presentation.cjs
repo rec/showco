@@ -23,6 +23,7 @@ const checks = {
   'recs-health': '"recs: " + statusText("service", status.recs.service)',
   'recs-snapshot': '"recs snapshot: " + statusText("snapshot", status.recs.snapshot_error)',
   'recording-progress': '"recording progress: " + statusText("progress", status.recording_progress.message)',
+  'recording-destination': '"Recording destination: " + statusText("recording_destination", status.recs)',
   'streamo-health': '"streamo: " + statusText("service", status.streamo.service)',
   'lyte-health': '"lyte: " + statusText("lyte", status.lyte)',
   temperature: '"Pi temperature: " + statusText("temperature", status.system)',

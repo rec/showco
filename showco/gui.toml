@@ -6,6 +6,16 @@ default_page = "show"
 name = "show"
 
 [[pages.sections]]
+name = "capture-status"
+
+[[pages.sections.elements]]
+name = "recording-destination"
+kind = "status"
+label = "Recording destination"
+value = "show.recs"
+format = "recording_destination"
+
+[[pages.sections]]
 name = "show-controls"
 style = "transport"
 
