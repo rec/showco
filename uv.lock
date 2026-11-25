@@ -340,11 +340,10 @@ wheels = [
 
 [[package]]
 name = "dvice"
-version = "0.1.0"
-source = { git = "https://github.com/rec/dvice.git?branch=main#bf2f3276ad3072479f4e4a3c8ffeb0a3182273f1" }
+version = "0.2.0"
+source = { git = "https://github.com/rec/dvice.git?branch=main#661155cf35cd15276e05f9979945c297a2cd400d" }
 dependencies = [
     { name = "pydantic" },
-    { name = "reccy" },
     { name = "sounddevice" },
     { name = "threa" },
     { name = "tyro" },
@@ -1311,7 +1310,7 @@ wheels = [
 [[package]]
 name = "ufor"
 version = "0.2.0"
-source = { git = "https://github.com/rec/ufor.git?branch=main#2d3378a8ec8a8b09cda18256d306cc9031b82c04" }
+source = { git = "https://github.com/rec/ufor.git?branch=main#b75d80da58de9caf8de4d231984d03a55de5e78f" }
 dependencies = [
     { name = "pydantic" },
     { name = "reccy" },
