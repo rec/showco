@@ -77,6 +77,7 @@ write_network_config_files() {
 }
 
 configure_network() {
+  local temporary_directory
   local config_file
   local secrets_file
   local state_file="/home/$SHOW_USER/.config/showco/network-config.sha256"
@@ -92,8 +93,9 @@ configure_network() {
     return
   fi
 
-  config_file=$(mktemp)
-  secrets_file=$(mktemp)
+  temporary_directory=$(mktemp -d)
+  config_file="$temporary_directory/config.toml"
+  secrets_file="$temporary_directory/secrets.toml"
   write_network_config_files "$config_file" "$secrets_file"
   configuration_hash=$(printf '%s\0' \
     "$NETWORK_TOPOLOGY" "$X18" "$SWAP_WIFI" "$RESTRICT_EXTERNAL_INGRESS" \
@@ -105,6 +107,7 @@ configure_network() {
   if [[ -f "$state_file" && "$(cat "$state_file")" == "$configuration_hash" ]]; then
     printf 'Network configuration is unchanged.\n'
     rm -f "$config_file" "$secrets_file"
+    rmdir "$temporary_directory"
     return
   fi
   set +e
@@ -114,6 +117,7 @@ configure_network() {
   status=$?
   set -e
   rm -f "$config_file" "$secrets_file"
+  rmdir "$temporary_directory"
   if [[ "$status" -eq 0 ]]; then
     printf '%s\n' "$configuration_hash" \
       | sudo -H -u "$SHOW_USER" tee "$state_file" >/dev/null

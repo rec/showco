@@ -447,16 +447,36 @@ def test_generated_network_files_are_readable_and_preserve_addresses(
     environment.update(a.split('=', 1) for a in assignments)
     public_file = tmp_path / 'network.toml'
     secrets_file = tmp_path / 'secrets.toml'
-    # Exercise only the file writer, with privileged ownership changes disabled.
+    (tmp_path / 'showco').mkdir()
+    environment.update(
+        ROOT=str(tmp_path),
+        TMPDIR=str(tmp_path),
+        TEST_NETWORK_CONFIG=str(public_file),
+        TEST_NETWORK_SECRETS=str(secrets_file),
+    )
+    # Capture the actual CLI inputs without changing the host's network.
     writer = (script.SCRIPT_DIR / 'templates/network.sh').read_text()
     subprocess.run(
         [
             'bash',
             '-c',
-            writer + '\nsudo() { :; }\nwrite_network_config_files "$1" "$2"',
-            'writer',
-            str(public_file),
-            str(secrets_file),
+            writer
+            + """
+sudo() {
+  if [[ "$1" == -H && "$4" == env ]]; then
+    bash -c "${!#}"
+  fi
+}
+sha256sum() { cat >/dev/null; printf 'test-hash\n'; }
+uv() {
+  shift 5
+  [[ "$1" == --config && "$2" == *.toml && "$3" == --secrets && "$4" == *.toml ]] ||
+    return 1
+  cp "$2" "$TEST_NETWORK_CONFIG" && cp "$4" "$TEST_NETWORK_SECRETS"
+}
+export -f uv
+configure_network
+""",
         ],
         env=environment,
         capture_output=True,
