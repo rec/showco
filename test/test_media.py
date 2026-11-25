@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shlex
 import subprocess
 import tomllib
@@ -333,6 +334,9 @@ def test_existing_media_package_is_verified_and_reused_without_upload(
 ) -> None:
     photos = tmp_path / 'photos'
     photos.mkdir()
+    photo = photos / "one's.jpg"
+    photo.write_bytes(b'image')
+    os.utime(photo, ns=(1_600_000_000_012_345_678, 1_600_000_001_987_654_321))
     configuration = make_config(values()).model_copy(
         update={'media': config.Media(photos=[photos])}
     )
@@ -351,6 +355,10 @@ def test_existing_media_package_is_verified_and_reused_without_upload(
     assert f'/media/versions/{version}' in verification
     assert 'sha256sum --strict -c - && sha256sum --strict -c SHA256SUMS' in verification
     assert '/media/photos/000/incoming' in verification
+    assert verification.index('sha256sum --strict -c SHA256SUMS') < verification.index(
+        'touch -c -h -m -d @1600000001.987654321'
+    )
+    assert 'touch -c -h -a -d @1600000000.012345678' in verification
     copy.assert_not_called()
     stage.assert_not_called()
     assert 'Reusing verified media package' in capsys.readouterr().out

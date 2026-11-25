@@ -20,8 +20,15 @@ from reccy.runtime.asset_sets import (
 )
 
 
+class FileMetadata(BaseModel, frozen=True):
+    size: int
+    modified_ns: int
+    accessed_ns: int
+
+
 class MediaInventory(BaseModel, frozen=True):
     sources: dict[str, Path]
+    metadata: dict[str, FileMetadata]
     directories: list[str]
     manifest: PackageManifest
     targets: dict[str, list[str]]
@@ -90,9 +97,18 @@ def inventory(sources: dict[str, list[Path]]) -> MediaInventory:
                     )
     if failures:
         raise AssetPreparationError(failures)
+    metadata = {}
+    for name, path in files.items():
+        stat = path.stat()
+        metadata[name] = FileMetadata(
+            size=stat.st_size,
+            modified_ns=stat.st_mtime_ns,
+            accessed_ns=stat.st_atime_ns,
+        )
     with prepare_assets({n: open_source(p) for n, p in files.items()}) as prepared:
         return MediaInventory(
             sources=files,
+            metadata=metadata,
             directories=sorted(directories),
             manifest=PackageManifest(files=prepared.identities),
             targets=targets,

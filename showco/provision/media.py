@@ -9,6 +9,7 @@ import shlex
 import sys
 import time
 import tomllib
+from decimal import Decimal
 from pathlib import Path
 from shutil import which
 from subprocess import DEVNULL, CalledProcessError, TimeoutExpired, run
@@ -25,7 +26,7 @@ from ..runtime.recs_control import RecsControlClient
 from ..streamo.config import configure_stream_settings
 from ..x18.music import Files
 from . import config, ssh
-from .media_package import stage_media
+from .media_package import MediaInventory, stage_media
 
 if TYPE_CHECKING:
     from .provision import DeployOptions
@@ -133,6 +134,8 @@ def synchronize(provision_config: config.Config) -> None:
             f' && mkdir -p -- {shlex.quote(str(inbox))}'
             f' && ln -sfn -- {shlex.quote(str(inbox))} {shlex.quote(str(link))}'
         )
+    if timestamps := media_timestamp_command(destination, package):
+        verify_destination += f' && {timestamps}'
     if (
         ssh.capture_ssh(
             provision_config,
@@ -209,6 +212,22 @@ def synchronize(provision_config: config.Config) -> None:
         TimeoutExpired,
     ) as error:
         sys.exit(f'ERROR: cannot copy media package: {error}')
+
+
+def media_timestamp_command(destination: Path, package: MediaInventory) -> str:
+    commands = []
+    for name, metadata in package.metadata.items():
+        path = shlex.quote(str(destination / name))
+        modified = Decimal(metadata.modified_ns).scaleb(-9)
+        accessed = Decimal(metadata.accessed_ns).scaleb(-9)
+        commands.extend(
+            [
+                f'test -f {path} && test ! -L {path}',
+                f'touch -c -h -m -d @{modified:f} -- {path}',
+                f'touch -c -h -a -d @{accessed:f} -- {path}',
+            ]
+        )
+    return ' && '.join(commands)
 
 
 def configure_stream_media(provision_config: config.Config) -> None:
