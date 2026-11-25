@@ -199,7 +199,12 @@ def recording_session(path: Path) -> Session:
                 if entry.type == 'source_online' and entry.sample_rate is not None:
                     if entry.clock_id is not None:
                         rates.setdefault(entry.clock_id, entry.sample_rate)
-                if entry.type in {
+                if entry.type == 'input_overflow_unknown':
+                    issues.append(
+                        f'Audio lost on {entry.source or "recs"} at {entry.timestamp}: '
+                        'input overflow (duration unknown)'
+                    )
+                elif entry.type in {
                     'error',
                     'source_offline',
                     'source_failed',

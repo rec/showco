@@ -320,6 +320,29 @@ def test_open_recording_uses_saved_evidence_not_report_time(
     assert any('source_offline' in i for i in saved.issues)
 
 
+def test_report_flags_capture_loss_without_inventing_a_duration(
+    recording_directory: Path,
+) -> None:
+    journal = recording_directory / 'session-record.jsonl'
+    event = session_record.EventRecord(
+        type='input_overflow_unknown',
+        timestamp=START.isoformat(),
+        source='X18',
+        frame_count=24000,
+        reason='unknown_lost_frame_count',
+    )
+    with journal.open('a') as output:
+        output.write(event.model_dump_json() + '\n')
+
+    saved = report_scan.recording_sessions([recording_directory], [])[0]
+
+    assert saved.captured_seconds == 1
+    assert (
+        f'Audio lost on X18 at {START.isoformat()}: input overflow (duration unknown)'
+        in saved.issues
+    )
+
+
 def test_show_selection_skips_empty_and_trivial_groups_but_keeps_interruptions() -> (
     None
 ):
