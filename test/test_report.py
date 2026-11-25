@@ -8,13 +8,30 @@ import pytest
 import soundfile
 from pydantic import ValidationError
 from pytest_regressions.data_regression import DataRegressionFixture
-from recs.recording import session_record
+from recs.cfg import settings
+from recs.cfg.cfg import Cfg
+from recs.recording import recording_paths, session_record
 from ufor import recording
 from ufor.time import ClockObservation, Position, Rate, Timebase
 
 from showco.deployment import report, report_scan
 
 START = datetime(2026, 10, 16, 18, tzinfo=UTC)
+
+
+@pytest.mark.parametrize('suffix', ['', '/%Y', '/show-{year}'])
+def test_report_scans_configured_output_directory_without_live_recs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, suffix: str
+) -> None:
+    root = tmp_path / 'custom recordings'
+    root.mkdir()
+    cfg = Cfg(directory={'output_directory': f'{root}{suffix}'})
+    monkeypatch.setattr(
+        settings, 'load', lambda *a, **k: settings.LoadedSettings(cfg=cfg)
+    )
+    monkeypatch.setattr(recording_paths, 'mounted_record_disks', lambda: [])
+    with mock.patch('reccy.protocol.rpc.Client', side_effect=OSError('offline')):
+        assert report_scan.recording_roots(tmp_path, []) == [root.resolve()]
 
 
 def session(

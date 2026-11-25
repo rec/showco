@@ -105,6 +105,7 @@ def log_evidence(
 
 
 def recording_roots(home: Path, limitations: list[str]) -> list[Path]:
+    from reccy.paths import legal_path
     from recs.cfg import settings
     from recs.cfg.cfg import Cfg
     from recs.recording import recording_paths
@@ -114,7 +115,12 @@ def recording_roots(home: Path, limitations: list[str]) -> list[Path]:
     default = Path(cfg.general.default_record_directory)
     roots = [default] if default.is_absolute() else [p / default for p in mounts]
     if cfg.directory.output_directory:
-        roots.append(recording_paths.recovery_root(cfg.directory.output_directory))
+        parts = Path(cfg.directory.output_directory).parts
+        # Scan above the first date/time component so older sessions are included.
+        first_dynamic = next(
+            (i for i, p in enumerate(parts) if '%' in p or '{' in p), len(parts)
+        )
+        roots.append(legal_path(Path(*parts[:first_dynamic])))
     # The live snapshot also finds sessions whose output was changed at runtime.
     from reccy.protocol import rpc
     from recs.daemon import paths
