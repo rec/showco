@@ -16,7 +16,6 @@ from reccy.runtime.asset_sets import (
     AssetPreparationError,
     PackageManifest,
     prepare_assets,
-    stream_identity,
     write_package,
 )
 
@@ -34,6 +33,24 @@ class MediaInventory(BaseModel, frozen=True):
             'directories': self.directories,
         }
         return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
+
+    @cached_property
+    def manifest_bytes(self) -> bytes:
+        return tomlkit.dumps(self.manifest.model_dump()).encode()
+
+    @cached_property
+    def checksum_bytes(self) -> bytes:
+        checksums = {n: i.sha256 for n, i in self.manifest.files.items()}
+        checksums['asset-manifest.toml'] = hashlib.sha256(
+            self.manifest_bytes
+        ).hexdigest()
+        # GNU sha256sum uses escaped filenames for backslashes and newlines.
+        lines = []
+        for name, digest in checksums.items():
+            escaped = name.replace('\\', '\\\\').replace('\n', '\\n')
+            marker = '\\' if escaped != name else ''
+            lines.append(f'{marker}{digest}  {escaped}\n')
+        return ''.join(lines).encode()
 
 
 def inventory(sources: dict[str, list[Path]]) -> MediaInventory:
@@ -101,17 +118,6 @@ def stage_media(selected: MediaInventory) -> Iterator[Path]:
             write_package(root, prepared.streams, selected.manifest)
         for name in selected.directories:
             (root / name).mkdir(parents=True, exist_ok=True)
-        manifest = root / 'asset-manifest.toml'
-        manifest.write_text(tomlkit.dumps(selected.manifest.model_dump()))
-        with manifest.open('rb') as stream:
-            manifest_identity = stream_identity(stream)
-        checksums = {**selected.manifest.files, manifest.name: manifest_identity}
-        # GNU sha256sum's escaped filename syntax supports spaces, backslashes,
-        # and newlines without letting a filename create another command/record.
-        lines = []
-        for name, identity in checksums.items():
-            escaped = name.replace('\\', '\\\\').replace('\n', '\\n')
-            marker = '\\' if escaped != name else ''
-            lines.append(f'{marker}{identity.sha256}  {escaped}\n')
-        (root / 'SHA256SUMS').write_text(''.join(lines))
+        (root / 'asset-manifest.toml').write_bytes(selected.manifest_bytes)
+        (root / 'SHA256SUMS').write_bytes(selected.checksum_bytes)
         yield root

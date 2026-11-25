@@ -302,6 +302,7 @@ def test_media_transfer_keeps_sources_separate_and_preserves_streamo_inbox(
         update={'media': config.Media(photos=[photos], teardown=[audio])}
     )
     with (
+        mock.patch('showco.provision.ssh.capture_ssh', return_value=''),
         mock.patch('showco.provision.ssh.run_ssh') as remote,
         mock.patch('showco.provision.ssh.run_command') as copy,
         mock.patch('showco.provision.media.which', return_value='/usr/bin/rsync'),
@@ -327,6 +328,34 @@ def test_media_transfer_keeps_sources_separate_and_preserves_streamo_inbox(
     assert '/media/photos/000/incoming' in publication
 
 
+def test_existing_media_package_is_verified_and_reused_without_upload(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    photos = tmp_path / 'photos'
+    photos.mkdir()
+    configuration = make_config(values()).model_copy(
+        update={'media': config.Media(photos=[photos])}
+    )
+    with (
+        mock.patch('showco.provision.ssh.capture_ssh', return_value='present') as probe,
+        mock.patch('showco.provision.ssh.run_ssh') as remote,
+        mock.patch('showco.provision.ssh.run_command') as copy,
+        mock.patch('showco.provision.media.stage_media') as stage,
+    ):
+        media.synchronize(configuration)
+
+    version = configuration.media.package.version
+    assert f'/media/versions/{version}' in probe.call_args.args[1]
+    remote.assert_called_once()
+    verification = remote.call_args.args[1]
+    assert f'/media/versions/{version}' in verification
+    assert 'sha256sum --strict -c - && sha256sum --strict -c SHA256SUMS' in verification
+    assert '/media/photos/000/incoming' in verification
+    copy.assert_not_called()
+    stage.assert_not_called()
+    assert 'Reusing verified media package' in capsys.readouterr().out
+
+
 def test_failed_media_copy_stops_before_later_sources(tmp_path: Path) -> None:
     directory = tmp_path / 'photos'
     directory.mkdir()
@@ -334,6 +363,7 @@ def test_failed_media_copy_stops_before_later_sources(tmp_path: Path) -> None:
         update={'media': config.Media(photos=[directory, directory])}
     )
     with (
+        mock.patch('showco.provision.ssh.capture_ssh', return_value=''),
         mock.patch('showco.provision.ssh.run_ssh'),
         mock.patch('showco.provision.media.which', return_value='/usr/bin/rsync'),
         mock.patch(
@@ -384,6 +414,7 @@ def test_every_media_category_compares_contents_before_copying(
         update={'media': config.Media.model_validate({kind: selection})}
     )
     with (
+        mock.patch('showco.provision.ssh.capture_ssh', return_value=''),
         mock.patch('showco.provision.ssh.run_ssh'),
         mock.patch('showco.provision.ssh.run_command') as copy,
         mock.patch('showco.provision.media.which', return_value='/usr/bin/rsync'),

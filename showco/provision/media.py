@@ -115,17 +115,45 @@ def synchronize(provision_config: config.Config) -> None:
     sources = provision_config.media
     if not any(sources.sources.values()):
         return
+    package = sources.package
+    root = Path('/home') / provision_config.network.user / '.local/share/showco/media'
+    destination = root / 'versions' / package.version
+    quoted_destination = shlex.quote(str(destination))
+    checksums = hashlib.sha256(package.checksum_bytes).hexdigest()
+    verify = (
+        f"printf '%s  SHA256SUMS\\n' {shlex.quote(checksums)} | "
+        'sha256sum --strict -c - && '
+        'sha256sum --strict -c SHA256SUMS'
+    )
+    verify_destination = f'cd {quoted_destination} && {verify}'
+    for index, _ in enumerate(sources.photos):
+        inbox = root / 'photos' / f'{index:03d}' / 'incoming'
+        link = destination / 'photos' / f'{index:03d}' / 'incoming'
+        verify_destination += (
+            f' && mkdir -p -- {shlex.quote(str(inbox))}'
+            f' && ln -sfn -- {shlex.quote(str(inbox))} {shlex.quote(str(link))}'
+        )
+    if (
+        ssh.capture_ssh(
+            provision_config,
+            f'if test -e {quoted_destination} || test -L {quoted_destination}; '
+            "then printf 'present\\n'; fi",
+        )
+        == 'present'
+    ):
+        print('Verifying existing media package', flush=True)
+        ssh.run_ssh(provision_config, verify_destination, timeout_seconds=300)
+        print('Reusing verified media package', flush=True)
+        return
+
     if not (rsync := which('rsync')):
         sys.exit('ERROR: rsync is required on the development machine to copy media')
     transport = shlex.join(
         ssh.ssh_command(provision_config, provision_config.ssh_target, '')[:-2]
     )
-    root = Path('/home') / provision_config.network.user / '.local/share/showco/media'
-    destination = root / 'versions' / sources.package.version
     staging = root / 'versions' / f'.staging-{uuid4().hex}'
     try:
-        with stage_media(sources.package) as local:
-            checksums = hashlib.sha256((local / 'SHA256SUMS').read_bytes()).hexdigest()
+        with stage_media(package) as local:
             ssh.run_ssh(
                 provision_config,
                 'command -v rsync >/dev/null || '
@@ -165,26 +193,13 @@ def synchronize(provision_config: config.Config) -> None:
                 ],
                 stream_output=interactive,
             )
-            verify = (
-                f"printf '%s  SHA256SUMS\\n' {shlex.quote(checksums)} | "
-                'sha256sum --strict -c - && '
-                'sha256sum --strict -c SHA256SUMS'
-            )
             # GNU mv -T -n never replaces an existing version, including when a
             # concurrent deploy publishes the same version first. Verify it too.
             command = (
                 f'cd {shlex.quote(str(staging))} && {verify} && '
                 f'mv -T -n -- {shlex.quote(str(staging))} '
-                f'{shlex.quote(str(destination))} && '
-                f'cd {shlex.quote(str(destination))} && {verify}'
+                f'{quoted_destination} && {verify_destination}'
             )
-            for index, _ in enumerate(sources.photos):
-                inbox = root / 'photos' / f'{index:03d}' / 'incoming'
-                link = destination / 'photos' / f'{index:03d}' / 'incoming'
-                command += (
-                    f' && mkdir -p -- {shlex.quote(str(inbox))}'
-                    f' && ln -sfn -- {shlex.quote(str(inbox))} {shlex.quote(str(link))}'
-                )
             ssh.run_ssh(provision_config, command, timeout_seconds=300)
     except (
         OSError,
