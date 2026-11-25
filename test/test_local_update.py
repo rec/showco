@@ -691,9 +691,6 @@ class LocalUpdateTests(unittest.TestCase):
                 '/code/recs',
                 'pytest',
                 '-q',
-                '-n',
-                '4',
-                '--dist=loadfile',
             ],
             commands,
         )

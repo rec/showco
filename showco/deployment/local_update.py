@@ -279,9 +279,6 @@ def refresh_program_dependencies(
                 str(program.directory),
                 'pytest',
                 '-q',
-                '-n',
-                '4',
-                '--dist=loadfile',
             ],
         ),
     ]
