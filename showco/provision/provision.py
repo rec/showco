@@ -81,13 +81,11 @@ def resolved_config(options: DeployOptions) -> config.Config:
         lyte_installation_config=options.lyte_installation_config,
     )
     sources = media.resolve_sources(options.config_path, options)
+    provision_config = provision_config.model_copy(update={'media': sources})
     provision_config = provision_config.model_copy(
         update={
-            'media': sources,
-            **{
-                n: media.target_paths(sources, provision_config.network.user, n)
-                for n in ('audio', 'setup', 'teardown')
-            },
+            n: media.target_paths(provision_config, n)
+            for n in ('audio', 'setup', 'teardown')
         }
     )
     validate_config(provision_config)

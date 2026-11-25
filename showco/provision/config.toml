@@ -1,4 +1,5 @@
 argon_one = true
+verify_media = false
 
 [network]
 host = "t.local"

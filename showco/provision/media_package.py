@@ -6,6 +6,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from functools import cached_property
 from pathlib import Path
+from shutil import copyfile
 from tempfile import TemporaryDirectory
 from typing import BinaryIO
 
@@ -30,11 +31,13 @@ class MediaInventory(BaseModel, frozen=True):
     sources: dict[str, Path]
     metadata: dict[str, FileMetadata]
     directories: list[str]
-    manifest: PackageManifest
+    manifest: PackageManifest | None
     targets: dict[str, list[str]]
 
     @cached_property
     def version(self) -> str:
+        if self.manifest is None:
+            return self.metadata_version
         data = {
             'files': self.manifest.model_dump(mode='json'),
             'directories': self.directories,
@@ -42,11 +45,23 @@ class MediaInventory(BaseModel, frozen=True):
         return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
 
     @cached_property
+    def metadata_version(self) -> str:
+        data = {
+            'files': {n: [m.size, m.modified_ns] for n, m in self.metadata.items()},
+            'directories': self.directories,
+        }
+        return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
+
+    @cached_property
     def manifest_bytes(self) -> bytes:
+        if self.manifest is None:
+            raise ValueError('Media hashes are disabled')
         return tomlkit.dumps(self.manifest.model_dump()).encode()
 
     @cached_property
     def checksum_bytes(self) -> bytes:
+        if self.manifest is None:
+            raise ValueError('Media hashes are disabled')
         checksums = {n: i.sha256 for n, i in self.manifest.files.items()}
         checksums['asset-manifest.toml'] = hashlib.sha256(
             self.manifest_bytes
@@ -60,7 +75,7 @@ class MediaInventory(BaseModel, frozen=True):
         return ''.join(lines).encode()
 
 
-def inventory(sources: dict[str, list[Path]]) -> MediaInventory:
+def inventory(sources: dict[str, list[Path]], *, verify_media: bool) -> MediaInventory:
     files: dict[str, Path] = {}
     directories: list[str] = []
     targets: dict[str, list[str]] = {}
@@ -105,14 +120,17 @@ def inventory(sources: dict[str, list[Path]]) -> MediaInventory:
             modified_ns=stat.st_mtime_ns,
             accessed_ns=stat.st_atime_ns,
         )
-    with prepare_assets({n: open_source(p) for n, p in files.items()}) as prepared:
-        return MediaInventory(
-            sources=files,
-            metadata=metadata,
-            directories=sorted(directories),
-            manifest=PackageManifest(files=prepared.identities),
-            targets=targets,
-        )
+    manifest = None
+    if verify_media:
+        with prepare_assets({n: open_source(p) for n, p in files.items()}) as prepared:
+            manifest = PackageManifest(files=prepared.identities)
+    return MediaInventory(
+        sources=files,
+        metadata=metadata,
+        directories=sorted(directories),
+        manifest=manifest,
+        targets=targets,
+    )
 
 
 @contextmanager
@@ -126,14 +144,32 @@ def stage_media(selected: MediaInventory) -> Iterator[Path]:
     """Copy the inventoried bytes; changing a selected source aborts deployment."""
     with TemporaryDirectory(prefix='showco-media-') as directory:
         root = Path(directory)
-        with prepare_assets(
-            {n: open_source(p) for n, p in selected.sources.items()}
-        ) as prepared:
-            if prepared.identities != selected.manifest.files:
-                raise ValueError('Media source changed after preflight')
-            write_package(root, prepared.streams, selected.manifest)
         for name in selected.directories:
             (root / name).mkdir(parents=True, exist_ok=True)
-        (root / 'asset-manifest.toml').write_bytes(selected.manifest_bytes)
-        (root / 'SHA256SUMS').write_bytes(selected.checksum_bytes)
+        if selected.manifest is not None:
+            with prepare_assets(
+                {n: open_source(p) for n, p in selected.sources.items()}
+            ) as prepared:
+                if prepared.identities != selected.manifest.files:
+                    raise ValueError('Media source changed after preflight')
+                write_package(root, prepared.streams, selected.manifest)
+            (root / 'asset-manifest.toml').write_bytes(selected.manifest_bytes)
+            (root / 'SHA256SUMS').write_bytes(selected.checksum_bytes)
+        else:
+            for name, source in selected.sources.items():
+                metadata = selected.metadata[name]
+                target = root / name
+                before = source.stat()
+                if (before.st_size, before.st_mtime_ns) != (
+                    metadata.size,
+                    metadata.modified_ns,
+                ):
+                    raise ValueError(f'Media source changed after preflight: {source}')
+                copyfile(source, target)
+                after = source.stat()
+                if (after.st_size, after.st_mtime_ns) != (
+                    before.st_size,
+                    before.st_mtime_ns,
+                ) or target.stat().st_size != metadata.size:
+                    raise ValueError(f'Media source changed while staging: {source}')
         yield root

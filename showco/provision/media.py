@@ -9,6 +9,7 @@ import shlex
 import sys
 import time
 import tomllib
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 from shutil import which
@@ -102,30 +103,26 @@ def save_sources(config_path: Path, sources: config.Media) -> None:
         sys.exit(f'ERROR: cannot save media selections to {path}: {error}')
 
 
-def target_paths(sources: config.Media, user: str, kind: str) -> list[Path]:
+def target_paths(provision_config: config.Config, kind: str) -> list[Path]:
+    package = provision_config.media_package
     root = (
         Path('/home')
-        / user
+        / provision_config.network.user
         / '.local/share/showco/media/versions'
-        / sources.package.version
+        / package.version
     )
-    return [root / p for p in sources.package.targets[kind]]
+    return [root / p for p in package.targets[kind]]
 
 
 def synchronize(provision_config: config.Config) -> None:
     sources = provision_config.media
     if not any(sources.sources.values()):
         return
-    package = sources.package
+    package = provision_config.media_package
     root = Path('/home') / provision_config.network.user / '.local/share/showco/media'
     destination = root / 'versions' / package.version
     quoted_destination = shlex.quote(str(destination))
-    checksums = hashlib.sha256(package.checksum_bytes).hexdigest()
-    verify = (
-        f"printf '%s  SHA256SUMS\\n' {shlex.quote(checksums)} | "
-        'sha256sum --strict -c - && '
-        'sha256sum --strict -c SHA256SUMS'
-    )
+    verify = media_verification_command(package)
     verify_destination = f'cd {quoted_destination} && {verify}'
     for index, _ in enumerate(sources.photos):
         inbox = root / 'photos' / f'{index:03d}' / 'incoming'
@@ -186,7 +183,7 @@ def synchronize(provision_config: config.Config) -> None:
                 [
                     'rsync',
                     '-rt',
-                    '--checksum',
+                    *(['--checksum'] if provision_config.verify_media else []),
                     '--timeout=60',
                     *progress_options,
                     '-e',
@@ -198,8 +195,14 @@ def synchronize(provision_config: config.Config) -> None:
             )
             # GNU mv -T -n never replaces an existing version, including when a
             # concurrent deploy publishes the same version first. Verify it too.
+            staging_check = f'cd {shlex.quote(str(staging))} && {verify}'
+            if not provision_config.verify_media and (
+                timestamps := media_timestamp_command(staging, package)
+            ):
+                # Older rsync peers can truncate modification times to whole seconds.
+                staging_check = f'{timestamps} && {staging_check}'
             command = (
-                f'cd {shlex.quote(str(staging))} && {verify} && '
+                f'{staging_check} && '
                 f'mv -T -n -- {shlex.quote(str(staging))} '
                 f'{quoted_destination} && {verify_destination}'
             )
@@ -217,7 +220,7 @@ def synchronize(provision_config: config.Config) -> None:
 def media_timestamp_command(destination: Path, package: MediaInventory) -> str:
     commands = []
     for name, metadata in package.metadata.items():
-        path = shlex.quote(str(destination / name))
+        path = shlex.quote(f'./{name}')
         modified = Decimal(metadata.modified_ns).scaleb(-9)
         accessed = Decimal(metadata.accessed_ns).scaleb(-9)
         commands.extend(
@@ -227,7 +230,41 @@ def media_timestamp_command(destination: Path, package: MediaInventory) -> str:
                 f'touch -c -h -a -d @{accessed:f} -- {path}',
             ]
         )
-    return ' && '.join(commands)
+    if not commands:
+        return ''
+    return ' && '.join([f'cd {shlex.quote(str(destination))}', *commands])
+
+
+def media_verification_command(package: MediaInventory) -> str:
+    if package.manifest is not None:
+        checksums = hashlib.sha256(package.checksum_bytes).hexdigest()
+        return (
+            f"printf '%s  SHA256SUMS\\n' {checksums} | "
+            'sha256sum --strict -c - && sha256sum --strict -c SHA256SUMS'
+        )
+    checks = [
+        f'test -d {shlex.quote(f"./{d}")} && test ! -L {shlex.quote(f"./{d}")}'
+        for d in package.directories
+    ]
+    checks.append(
+        """test "$(find . -type f ! -path ./SHA256SUMS """
+        """! -path ./asset-manifest.toml -printf .)" = """
+        + shlex.quote('.' * len(package.metadata))
+    )
+    for name, metadata in package.metadata.items():
+        path = shlex.quote(f'./{name}')
+        seconds, nanos = divmod(metadata.modified_ns, 1_000_000_000)
+        stamp = datetime.fromtimestamp(seconds, UTC).strftime('%Y-%m-%d %H:%M:%S')
+        expected = shlex.quote(f'{metadata.size} {stamp}.{nanos:09d} +0000')
+        checks.append(
+            f'test -f {path} && test ! -L {path} && '
+            f"""test "$(TZ=UTC0 stat -c '%s %y' -- {path})" = {expected}"""
+        )
+    return (
+        '{ ' + ' && '.join(checks) + ' || '
+        "{ printf '%s\\n' 'Media package names, sizes or modification times differ' "
+        '>&2; exit 1; }; }'
+    )
 
 
 def configure_stream_media(provision_config: config.Config) -> None:
@@ -278,14 +315,10 @@ def streamo_settings(provision_config: config.Config) -> str:
 def streamo_arguments(provision_config: config.Config) -> list[str]:
     arguments = [
         v
-        for p in target_paths(
-            provision_config.media, provision_config.network.user, 'photos'
-        )
+        for p in target_paths(provision_config, 'photos')
         for v in ['--photos', str(p)]
     ]
-    if movies := target_paths(
-        provision_config.media, provision_config.network.user, 'movie'
-    ):
+    if movies := target_paths(provision_config, 'movie'):
         arguments.extend(['--movie', str(movies[0])])
     if provision_config.stream.enabled:
         for mixer in provision_config.mixers:

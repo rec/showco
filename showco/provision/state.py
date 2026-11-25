@@ -13,5 +13,8 @@ def provisioning_fingerprint(
         'config': provision_config.model_dump(mode='json'),
         'remote_script': remote_script,
     }
+    if any(provision_config.media.sources.values()):
+        package = provision_config.media_package
+        value['media'] = [package.version, package.metadata_version]
     encoded = json.dumps(value, sort_keys=True, separators=(',', ':')).encode()
     return hashlib.sha256(encoded).hexdigest()

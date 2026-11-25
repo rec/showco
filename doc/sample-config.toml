@@ -2,6 +2,7 @@ mixers = []
 gui_path = "showco/gui.toml"
 argon_one = true
 accept_changed_host_key = true
+verify_media = false
 audio = []
 setup = []
 teardown = []

@@ -193,7 +193,7 @@ def test_media_selections_persist_and_only_specified_categories_are_replaced(
     assert path.read_text() == '# public configuration\n'
     root = (
         Path('/home/tom/.local/share/showco/media/versions')
-        / resolved.media.package.version
+        / resolved.media_package.version
     )
     assert resolved.audio == [root / 'audio/000/intro.flac']
     assert resolved.setup == []
@@ -300,7 +300,10 @@ def test_media_transfer_keeps_sources_separate_and_preserves_streamo_inbox(
     audio = tmp_path / 'song with spaces.flac'
     audio.touch()
     configuration = make_config(values(), port=2200).model_copy(
-        update={'media': config.Media(photos=[photos], teardown=[audio])}
+        update={
+            'media': config.Media(photos=[photos], teardown=[audio]),
+            'verify_media': True,
+        }
     )
     with (
         mock.patch('showco.provision.ssh.capture_ssh', return_value=''),
@@ -325,12 +328,13 @@ def test_media_transfer_keeps_sources_separate_and_preserves_streamo_inbox(
     publication = remote.call_args.args[1]
     assert 'sha256sum --strict -c SHA256SUMS' in publication
     assert 'mv -T -n' in publication
-    assert configuration.media.package.version in publication
+    assert configuration.media_package.version in publication
     assert '/media/photos/000/incoming' in publication
 
 
+@pytest.mark.parametrize('verify_media', [False, True])
 def test_existing_media_package_is_verified_and_reused_without_upload(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], verify_media: bool
 ) -> None:
     photos = tmp_path / 'photos'
     photos.mkdir()
@@ -338,7 +342,7 @@ def test_existing_media_package_is_verified_and_reused_without_upload(
     photo.write_bytes(b'image')
     os.utime(photo, ns=(1_600_000_000_012_345_678, 1_600_000_001_987_654_321))
     configuration = make_config(values()).model_copy(
-        update={'media': config.Media(photos=[photos])}
+        update={'media': config.Media(photos=[photos]), 'verify_media': verify_media}
     )
     with (
         mock.patch('showco.provision.ssh.capture_ssh', return_value='present') as probe,
@@ -348,14 +352,15 @@ def test_existing_media_package_is_verified_and_reused_without_upload(
     ):
         media.synchronize(configuration)
 
-    version = configuration.media.package.version
+    version = configuration.media_package.version
     assert f'/media/versions/{version}' in probe.call_args.args[1]
     remote.assert_called_once()
     verification = remote.call_args.args[1]
     assert f'/media/versions/{version}' in verification
-    assert 'sha256sum --strict -c - && sha256sum --strict -c SHA256SUMS' in verification
+    check = 'sha256sum --strict -c SHA256SUMS' if verify_media else 'stat -c'
+    assert ('sha256sum' in verification) is verify_media
     assert '/media/photos/000/incoming' in verification
-    assert verification.index('sha256sum --strict -c SHA256SUMS') < verification.index(
+    assert verification.index(check) < verification.index(
         'touch -c -h -m -d @1600000001.987654321'
     )
     assert 'touch -c -h -a -d @1600000000.012345678' in verification
@@ -428,7 +433,7 @@ def test_every_media_category_compares_contents_before_copying(
         mock.patch('showco.provision.media.which', return_value='/usr/bin/rsync'),
     ):
         media.synchronize(configuration)
-    assert '--checksum' in copy.call_args.args[0]
+    assert '--checksum' not in copy.call_args.args[0]
 
 
 def test_movie_configuration_replaces_only_the_video_source() -> None:

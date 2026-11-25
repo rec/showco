@@ -82,10 +82,6 @@ class Media(BaseModel, frozen=True):
     movie: Path | None = None
 
     @cached_property
-    def package(self) -> MediaInventory:
-        return inventory(self.sources)
-
-    @cached_property
     def sources(self) -> dict[str, list[Path]]:
         return {
             'photos': self.photos,
@@ -107,6 +103,7 @@ class Config(BaseModel, frozen=True):
     gui_path: Path = Path('showco/gui.toml')
     argon_one: bool = True
     accept_changed_host_key: bool = True
+    verify_media: bool = False
     media: Media = Field(default_factory=Media)
     audio: list[Path] = Field(default_factory=list)
     setup: list[Path] = Field(default_factory=list)
@@ -115,6 +112,10 @@ class Config(BaseModel, frozen=True):
     @cached_property
     def ssh_target(self) -> str:
         return f'{self.network.user}@{self.network.host}'
+
+    @cached_property
+    def media_package(self) -> MediaInventory:
+        return inventory(self.media.sources, verify_media=self.verify_media)
 
 
 def config_from_values(
@@ -195,6 +196,7 @@ def config_from_values(
         ),
         gui_path=gui_path,
         argon_one=bool_value(values, 'argon_one', default=True),
+        verify_media=bool_value(values, 'verify_media', default=False),
         accept_changed_host_key=bool_value(
             values, 'accept_changed_host_key', default=True
         ),
