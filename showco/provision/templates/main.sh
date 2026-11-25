@@ -119,6 +119,7 @@ main() {
 
   phase "configuring storage mounts"
   configure_storage_mounts
+  configure_storage_hotplug
 
   phase "installing uv"
   install_uv

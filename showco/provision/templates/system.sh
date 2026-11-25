@@ -250,6 +250,33 @@ configure_storage_mounts() {
   done < <(lsblk -Ppn -o NAME,FSTYPE,LABEL,UUID,MOUNTPOINT)
 }
 
+storage_hotplug_rules() {
+  local fstab=$1
+  local volumes uuid target unit
+  # Include existing provisioned mounts even when their drives are absent.
+  volumes=$(awk '
+    $1 ~ /^UUID=[[:alnum:]-]+$/ && $2 ~ /^\/mnt\/[[:alnum:]_.-]+$/ &&
+      $4 ~ /^defaults,nofail,x-systemd[.]device-timeout=10(,|$)/ &&
+      $4 !~ /(^|,)noauto(,|$)/ {
+        print substr($1, 6), $2
+    }
+  ' "$fstab") || return
+  while read -r uuid target; do
+    [[ -n "$uuid" ]] || continue
+    unit=$(systemd-escape --path --suffix=mount "$target") || return
+    printf 'SUBSYSTEM=="block", ENV{ID_FS_UUID}=="%s", TAG+="systemd", ENV{SYSTEMD_WANTS}+=e"%s"\n' \
+      "$uuid" "${unit//\\/\\\\}"
+  done <<< "$volumes"
+}
+
+configure_storage_hotplug() {
+  local rules
+  rules=$(storage_hotplug_rules /etc/fstab) || return
+  sudo systemctl daemon-reload
+  sudo tee /etc/udev/rules.d/99-showco-storage.rules >/dev/null <<< "$rules"
+  sudo udevadm control --reload-rules
+}
+
 prepare_checkout_path() {
   local path=$1
   local backup

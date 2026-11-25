@@ -99,6 +99,44 @@ class ProvisionScriptTests(unittest.TestCase):
         self.assertIn('fstab_mountpoint_for_uuid()', script.REMOTE_SCRIPT)
         self.assertIn('mount_target_for_disk()', script.REMOTE_SCRIPT)
         self.assertIn('target="/mnt/$name-$suffix"', script.REMOTE_SCRIPT)
+        self.assertIn(
+            '\n  configure_storage_mounts\n  configure_storage_hotplug\n',
+            script.REMOTE_SCRIPT,
+        )
+
+    def test_storage_hotplug_only_targets_provisioned_mounts(self) -> None:
+        template = (script.SCRIPT_DIR / 'templates/system.sh').read_text()
+        fstab = (
+            'UUID=1111-2222 /mnt/recordings-2 ext4 '
+            'defaults,nofail,x-systemd.device-timeout=10 0 2\n'
+            'UUID=3333-4444 / ext4 defaults 0 1\n'
+            'UUID=5555-6666 /mnt/manual ext4 defaults 0 2\n'
+            'UUID=7777-8888 /mnt/offline ext4 '
+            'defaults,nofail,x-systemd.device-timeout=10,noauto 0 2\n'
+        )
+        result = subprocess.run(
+            [
+                'bash',
+                '-c',
+                template
+                + r"""
+systemd-escape() {
+  [[ "$*" == '--path --suffix=mount /mnt/recordings-2' ]] || return 1
+  printf '%s\n' 'mnt-recordings\x2d2.mount'
+}
+storage_hotplug_rules /dev/stdin
+""",
+            ],
+            input=fstab,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        self.assertEqual(
+            result.stdout.strip(),
+            'SUBSYSTEM=="block", ENV{ID_FS_UUID}=="1111-2222", TAG+="systemd", '
+            r'ENV{SYSTEMD_WANTS}+=e"mnt-recordings\\x2d2.mount"',
+        )
 
     def test_remote_script_preserves_broken_checkouts_for_reruns(self) -> None:
         self.assertIn('prepare_checkout_path()', script.REMOTE_SCRIPT)
