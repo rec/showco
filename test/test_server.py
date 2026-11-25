@@ -341,12 +341,46 @@ class ServerTests(unittest.TestCase):
                 streamo_enabled=True,
                 streamo_restart=restart,
             )
+        self.assertEqual(calls.mock_calls, [mock.call.route()])
         for action in ('streamo-toggle', 'streamo-restart'):
             calls.reset_mock()
             outcome = configured.app.run_action({'action': action})
             self.assertTrue(outcome.ok, outcome.message)
             self.assertEqual(calls.mock_calls, [mock.call.route(), mock.call.start()])
         self.assertEqual(recs.mock_calls, [])
+
+    def test_startup_routes_main_usb_without_streaming_and_recovers_late_mixer(
+        self,
+    ) -> None:
+        recs = rehearsal.RehearsalRecsClient()
+        player = mock.Mock()
+        player.status.return_value = MusicPlayerStatus()
+        routing = mock.Mock()
+        routing.route_main_to_usb.side_effect = [TimeoutError('offline'), None]
+        controller = music.MusicController(recs, player, routing, music.MusicConfig())
+        mixers = mock.Mock()
+        mixers.status.return_value = []
+        with (
+            mock.patch.object(
+                server.music, 'controller_from_specs', return_value=controller
+            ),
+            mock.patch.object(server, 'ShowcoServer'),
+        ):
+            configured = server.make_server(
+                '127.0.0.1',
+                0,
+                recs=recs,
+                system=rehearsal.RehearsalSystemMonitor(),
+                mixers=mixers,
+            )
+        routing.route_main_to_usb.assert_called_once_with()
+        self.assertIn('Cannot route X18 Main L/R', configured.app.status().music.error)
+        mixers.status.return_value = [models.MixerStatus(name='X18', latency_ms=1)]
+        recovered = configured.app.status()
+        self.assertIsNone(recovered.music.error)
+        self.assertEqual(recovered.streamo.service.state, 'disabled')
+        configured.app.status()
+        self.assertEqual(routing.route_main_to_usb.call_count, 2)
 
     def test_twitch_toggle_stops_stream_and_prevents_service_restart(self) -> None:
         stream = mock.Mock()

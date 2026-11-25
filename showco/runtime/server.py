@@ -371,8 +371,6 @@ def make_server(
     teardown: list[Path] | None = None,
     external_wifi: ExternalWifi | None = None,
 ) -> ThreadingHTTPServer:
-    if external_wifi is not None:
-        external_wifi.connect()
     handler = type('ConfiguredShowcoHandler', (ShowcoHandler,), {})
     recs_client = recs or RecsClient()
     streamo_client = (streamo or StreamoClient()) if streamo_enabled else None
@@ -384,8 +382,6 @@ def make_server(
         if type(recs_client) is RecsClient
         else None
     )
-    if waveforms is not None:
-        waveforms.start()
     system_monitor = system or SystemMonitor()
     performance = (
         PerformanceMonitor(system_monitor, recs_client.snapshot_client.status)
@@ -400,8 +396,14 @@ def make_server(
         setup=setup,
         teardown=teardown,
     )
-    if music_controller is not None and streamo_enabled:
-        streamo_restart_action = music_controller.start_stream
+    if music_controller is not None:
+        music_controller.configure_main_usb()
+        if streamo_enabled:
+            streamo_restart_action = music_controller.start_stream
+    if external_wifi is not None:
+        external_wifi.connect()
+    if waveforms is not None:
+        waveforms.start()
     app = ShowcoApp(
         recs_client,
         streamo_client,

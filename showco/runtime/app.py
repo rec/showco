@@ -126,16 +126,21 @@ class ShowcoApp:
                     service=models.ServiceStatus(name='lyte', state='disabled')
                 )
             )
+            mixers = self.mixers.status(
+                {channel.device for channel in recs.channels},
+                {midi.name: midi.state for midi in recs.midi},
+            )
+            if self.music is not None and any(
+                m.name == 'X18' and m.latency_ms is not None for m in mixers
+            ):
+                self.music.configure_main_usb()
             status = models.ShowStatus(
                 recs=recs,
                 streamo=streamo,
                 lyte=lyte,
                 system=self.system.status(),
                 network=self.external_wifi.status() if self.external_wifi else None,
-                mixers=self.mixers.status(
-                    {channel.device for channel in recs.channels},
-                    {midi.name: midi.state for midi in recs.midi},
-                ),
+                mixers=mixers,
                 revision=self.revision,
                 run_started_at=self.run_started_at,
                 music=self.music.status()

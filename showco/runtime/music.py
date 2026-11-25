@@ -11,6 +11,7 @@ from weakref import proxy
 import sounddevice
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from reccy.configuration import settings
+from reccy.runtime import logging
 
 from ..streamo.client import StreamoClient
 from ..x18.music import MusicPlayer, X18MusicRouting
@@ -20,6 +21,7 @@ from .mixer import MixerSpec
 from .recs import RecsClient
 
 DEFAULT_FADE_SECONDS = 2.0
+LOGGER = logging.get_logger(__name__)
 
 
 class MusicState(BaseModel, frozen=True):
@@ -89,6 +91,8 @@ class MusicController:
             else None
         )
         self.phase_lock = threading.Lock()
+        self.main_usb_confirmed = False
+        self.main_usb_error: str | None = None
         self._load_mode()
         self.closing = ClosingController(
             recs,
@@ -107,6 +111,7 @@ class MusicController:
         player = self.player.status()
         with self.phase_lock:
             mode, error = self.mode, self.transition_error
+            main_usb_error = self.main_usb_error
         closing = self.closing.status()
         remote = closing.remote
         if remote is None and closing.record is not None:
@@ -133,16 +138,35 @@ class MusicController:
             state=player.state,
             directory=player.directory,
             track=player.track,
-            error='; '.join(e for e in [error, closing.error] if e) or player.error,
+            error='; '.join(e for e in [error, closing.error, main_usb_error] if e)
+            or player.error,
             closing=remote,
         )
+
+    def configure_main_usb(self, *, required: bool = False) -> None:
+        with self.phase_lock:
+            if self.main_usb_confirmed and not required:
+                return
+            try:
+                self.routing.route_main_to_usb()
+            except (OSError, ValueError) as error:
+                message = f'Cannot route X18 Main L/R to USB 17–18: {error}'
+                if message != self.main_usb_error:
+                    LOGGER.warning('%s', message)
+                self.main_usb_confirmed = False
+                self.main_usb_error = message
+                if required:
+                    raise
+            else:
+                self.main_usb_confirmed = True
+                self.main_usb_error = None
 
     def start_stream(self) -> models.ActionResult:
         if self.streamo is None:
             return models.ActionResult(ok=True, message='streamO is disabled')
         if self.streamo_restart is None:
             raise ValueError('streamO restart is not configured')
-        self.routing.route_main_to_usb()
+        self.configure_main_usb(required=True)
         return self.streamo_restart()
 
     def setup(self) -> models.ActionResult:
