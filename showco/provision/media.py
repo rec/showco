@@ -11,7 +11,7 @@ import time
 import tomllib
 from pathlib import Path
 from shutil import which
-from subprocess import CalledProcessError, TimeoutExpired
+from subprocess import DEVNULL, CalledProcessError, TimeoutExpired, run
 from typing import TYPE_CHECKING, Annotated
 from uuid import uuid4
 
@@ -115,7 +115,7 @@ def synchronize(provision_config: config.Config) -> None:
     sources = provision_config.media
     if not any(sources.sources.values()):
         return
-    if not which('rsync'):
+    if not (rsync := which('rsync')):
         sys.exit('ERROR: rsync is required on the development machine to copy media')
     transport = shlex.join(
         ssh.ssh_command(provision_config, provision_config.ssh_target, '')[:-2]
@@ -133,17 +133,37 @@ def synchronize(provision_config: config.Config) -> None:
                 timeout_seconds=300,
             )
             ssh.run_ssh(provision_config, f'mkdir -p -- {shlex.quote(str(staging))}')
+            interactive = sys.stdout.isatty()
+            progress_options: list[str] = []
+            if interactive:
+                supports_total = (
+                    run(
+                        [rsync, '--info=help'],
+                        stdout=DEVNULL,
+                        stderr=DEVNULL,
+                        check=False,
+                    ).returncode
+                    == 0
+                )
+                progress_options = (
+                    ['--info=progress2', '--no-inc-recursive']
+                    if supports_total
+                    else ['--progress']
+                )
+                print('Uploading media package', flush=True)
             ssh.run_command(
                 [
                     'rsync',
                     '-rt',
                     '--checksum',
                     '--timeout=60',
+                    *progress_options,
                     '-e',
                     transport,
                     str(local) + '/',
                     f'{provision_config.ssh_target}:{shlex.quote(str(staging))}/',
-                ]
+                ],
+                stream_output=interactive,
             )
             verify = (
                 f"printf '%s  SHA256SUMS\\n' {shlex.quote(checksums)} | "

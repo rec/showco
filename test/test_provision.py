@@ -278,6 +278,22 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn('\r', terminal.getvalue())
         self.assertNotIn('verbose details', terminal.getvalue())
 
+    def test_streamed_transfer_output_preserves_updates_and_errors(self) -> None:
+        process = mock.Mock()
+        output = '\r50%\r100%\nrsync: transfer failed\n'
+        process.stdout = BytesIO(output.encode())
+        process.wait.return_value = 23
+        process.poll.return_value = 23
+        terminal = StringIO()
+        with (
+            mock.patch.object(ssh, 'Popen', return_value=process),
+            mock.patch('sys.stdout', terminal),
+            self.assertRaises(subprocess.CalledProcessError),
+        ):
+            ssh.run_command(['rsync'], stream_output=True)
+
+        self.assertEqual(terminal.getvalue(), output)
+
     def test_interrupted_ssh_keeps_partial_output_and_closes_process(self) -> None:
         for error in (KeyboardInterrupt(), subprocess.TimeoutExpired(['ssh'], 20)):
             with self.subTest(error=type(error).__name__):

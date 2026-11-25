@@ -287,8 +287,12 @@ def test_photos_enable_disabled_overlays_and_reset_incompatible_weights() -> Non
     }
 
 
+@pytest.mark.parametrize(
+    ('rsync_probe_status', 'progress_flag'),
+    [(0, '--info=progress2'), (1, '--progress')],
+)
 def test_media_transfer_keeps_sources_separate_and_preserves_streamo_inbox(
-    tmp_path: Path,
+    tmp_path: Path, rsync_probe_status: int, progress_flag: str
 ) -> None:
     photos = tmp_path / "performer's photos"
     photos.mkdir()
@@ -301,10 +305,15 @@ def test_media_transfer_keeps_sources_separate_and_preserves_streamo_inbox(
         mock.patch('showco.provision.ssh.run_ssh') as remote,
         mock.patch('showco.provision.ssh.run_command') as copy,
         mock.patch('showco.provision.media.which', return_value='/usr/bin/rsync'),
+        mock.patch('sys.stdout.isatty', return_value=True),
+        mock.patch('showco.provision.media.run') as probe,
     ):
+        probe.return_value.returncode = rsync_probe_status
         media.synchronize(configuration)
     command = copy.call_args.args[0]
     assert copy.call_count == 1
+    assert copy.call_args.kwargs['stream_output'] is True
+    assert progress_flag in command
     assert '--delete' not in command
     assert '/media/versions/.staging-' in command[-1]
     assert shlex.split(command[command.index('-e') + 1])[-2:] == [

@@ -309,6 +309,7 @@ def run_command(
     *,
     capture_output: bool = False,
     timeout_seconds: int | None = None,
+    stream_output: bool = False,
 ) -> CompletedProcess[str]:
     if not capture_output:
         process = Popen(
@@ -326,13 +327,17 @@ def run_command(
                 desc='Running remote command',
                 bar_format='{desc} [{elapsed}]',
                 file=sys.stdout,
-                disable=not sys.stdout.isatty(),
+                disable=stream_output or not sys.stdout.isatty(),
                 leave=False,
             ) as progress,
         ):
 
             def collect_output() -> None:
                 for line in stream:
+                    if stream_output:
+                        sys.stdout.write(line)
+                        sys.stdout.flush()
+                        continue
                     record.write(line)
                     if line.startswith('==> '):
                         progress.set_description_str(line[4:].strip())
@@ -355,7 +360,7 @@ def run_command(
                         'Command output did not close after process group termination'
                     )
                 progress.close()
-                if returncode != 0:
+                if returncode != 0 and not stream_output:
                     record.flush()
                     record.seek(0)
                     shutil.copyfileobj(record, sys.stdout)
