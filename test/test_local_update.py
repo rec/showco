@@ -43,9 +43,14 @@ class DependencyClosureTests(unittest.TestCase):
             self.write_project(root, 'ufor')
             self.write_project(
                 root,
+                'dvice',
+                {'reccy': 'ssh://git@github.com/rec/reccy.git'},
+            )
+            self.write_project(
+                root,
                 'recs',
                 {
-                    'reccy': 'https://github.com/rec/reccy.git',
+                    'dvice': 'https://github.com/rec/dvice.git',
                     'ufor': 'https://github.com/rec/ufor.git',
                 },
             )
@@ -58,7 +63,7 @@ class DependencyClosureTests(unittest.TestCase):
             programs = local_update.dependency_programs(['showco'], root)
 
         self.assertEqual(
-            [p.name for p in programs], ['reccy', 'ufor', 'recs', 'showco']
+            [p.name for p in programs], ['reccy', 'dvice', 'ufor', 'recs', 'showco']
         )
 
     def test_dependency_closure_rejects_local_source(self) -> None:

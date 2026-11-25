@@ -486,8 +486,13 @@ def github_sources(program: update.Program) -> dict[str, str | None]:
 def github_repository(git: str, path: Path, package: str) -> tuple[str, str]:
     parsed = urlparse(git)
     parts = parsed.path.strip('/').split('/')
-    if parsed.scheme != 'https' or parsed.netloc != 'github.com' or len(parts) != 2:
-        raise ValueError(f'{path}: {package} must use an https GitHub repository')
+    if (parsed.scheme, parsed.netloc) not in {
+        ('https', 'github.com'),
+        ('ssh', 'git@github.com'),
+    } or len(parts) != 2:
+        raise ValueError(
+            f'{path}: {package} must use a GitHub repository via HTTPS or SSH'
+        )
     owner, repository = parts
     if not repository.endswith('.git') or not owner or repository == '.git':
         raise ValueError(f'{path}: {package} has an invalid GitHub repository')
