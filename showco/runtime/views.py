@@ -215,13 +215,12 @@ def _gui_disabled(element: gui_schema.Element, status: models.ShowStatus) -> boo
         return not status.end_show_available
     if element.action == 'music-restart':
         return not status.music.restart_available or status.performance_locked
+    if element.action == 'streamo-stop':
+        return not status.twitch_stop_available
+    if element.action == 'streamo-restart':
+        return status.performance_locked or not status.twitch_stop_available
     if element.disabled_when == 'streamo_unavailable':
-        return (
-            not status.streamo.toggle_available
-            or status.performance_locked
-            or status.music.mode in {'closing', 'transitioning', 'fault'}
-            or (status.music.mode == 'teardown' and status.streamo.toggle_starts_stream)
-        )
+        return not status.twitch_toggle_available
     return (
         element.disabled_when == 'playback_waiting'
         and status.recs.playback.state == 'waiting'

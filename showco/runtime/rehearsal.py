@@ -256,9 +256,12 @@ class RehearsalStreamoClient(StreamoClient):
             ok=True, message=f'rehearsal streamo {command} succeeded'
         )
 
-
-def restart_streamo() -> models.ActionResult:
-    return models.ActionResult(ok=True, message='rehearsal streamo restart requested')
+    def restart(self) -> models.ActionResult:
+        self.stopped = False
+        self.started_at = time.time()
+        return models.ActionResult(
+            ok=True, message='rehearsal streamo restart requested'
+        )
 
 
 class RehearsalSystemMonitor(SystemMonitor):

@@ -135,6 +135,7 @@ class Element(BaseModel, frozen=True):
                 ('recs-marker', ''),
                 ('recs-pause-recording', ''),
                 ('recs-resume-recording', ''),
+                ('streamo-stop', ''),
                 ('', 'keep_awake'),
             } or not self.label:
                 raise ValueError(f'{self.name}: unsupported performance button')

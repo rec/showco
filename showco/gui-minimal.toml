@@ -32,8 +32,8 @@ kind = "workflow_display"
 label = "Stream: checking"
 
 [[pages.sections]]
-name = "moment"
-title = "Mark a moment"
+name = "show-controls"
+title = "Show controls"
 style = "performance-buttons"
 
 [[pages.sections.elements]]
@@ -41,6 +41,13 @@ name = "mark-moment"
 kind = "performance_button"
 label = "Add a recs marker"
 action = "recs-marker"
+
+[[pages.sections.elements]]
+name = "stop-twitch"
+kind = "performance_button"
+label = "Stop Twitch"
+action = "streamo-stop"
+visible_when = "streamo_enabled"
 
 [[pages.sections.elements]]
 name = "performance-result"

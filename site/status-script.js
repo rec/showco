@@ -169,9 +169,13 @@
   function updateConfiguredActions(status) {
     for (const button of document.querySelectorAll('form[data-disabled-when] button')) {
       const form = button.closest("form");
-      if (form.dataset.disabledWhen === "streamo_unavailable"
-          && !button.hasAttribute("aria-busy")) {
-        button.textContent = status.streamo.toggle_label;
+      if (form.dataset.disabledWhen === "streamo_unavailable") {
+        form.dataset.twitchStopAvailable = String(status.twitch_stop_available);
+        if (!button.hasAttribute("aria-busy")) {
+          button.textContent = status.streamo.toggle_label;
+          form.querySelector('input[name="action"]').value =
+            status.streamo.toggle_starts_stream ? "streamo-start" : "streamo-stop";
+        }
       }
       button.disabled = button.hasAttribute("aria-busy")
         || (["recs-pause-recording", "recs-resume-recording"].includes(form.dataset.action)
@@ -179,12 +183,13 @@
         || (form.dataset.action === "music-teardown" && !status.end_show_available)
         || (form.dataset.action === "music-restart"
           && (!status.music.restart_available || status.performance_locked))
+        || (form.dataset.action === "streamo-stop" && !status.twitch_stop_available)
+        || (form.dataset.action === "streamo-restart"
+          && (!status.twitch_stop_available || status.performance_locked))
         || (form.dataset.disabledWhen === "playback_waiting"
           && status.recs.playback.state === "waiting")
         || (form.dataset.disabledWhen === "streamo_unavailable"
-          && (!status.streamo.toggle_available || status.performance_locked
-            || ["closing", "transitioning", "fault"].includes(status.music.mode)
-            || (status.music.mode === "teardown" && status.streamo.toggle_starts_stream)));
+          && !status.twitch_toggle_available);
     }
   }
 

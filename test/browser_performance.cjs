@@ -26,6 +26,9 @@ const lockButtons = ['performance-lock', 'performance-unlock'].map(value => Obje
 const actionButtons = ['recs-marker', 'recs-pause-recording', 'recs-resume-recording'].map(value => {
   const button = new Element(); button.dataset.performanceAction = value; return button;
 });
+const stopButton = new Element();
+stopButton.dataset.performanceAction = 'streamo-stop';
+const performanceButtons = [...actionButtons, stopButton];
 const settings = new Map();
 const classes = new Set();
 const status = JSON.parse(fs.readFileSync(0, 'utf8'));
@@ -36,8 +39,11 @@ const context = vm.createContext({
   document: {
     body: {classList: {toggle(name, enabled) {enabled ? classes.add(name) : classes.delete(name);}}},
     getElementById: id => elements.get(id) || null,
-    querySelectorAll: selector => selector.includes(',') ? [...actionButtons, ...lockButtons]
-      : selector.includes('data-performance-action') ? actionButtons : lockButtons,
+    querySelectorAll: selector => selector === '[data-performance-action], #performance-lock-form button'
+      ? [...performanceButtons, ...lockButtons]
+      : selector === '[data-performance-action="streamo-stop"]' ? [stopButton]
+      : selector === '[data-performance-action]' ? performanceButtons
+      : selector === '#performance-lock-form button' ? lockButtons : [],
     createElement: () => new Element(), createTextNode: text => text,
     addEventListener() {}, visibilityState: 'visible',
   },
@@ -110,6 +116,15 @@ async function test() {
   assert.equal(elements.get('performance-result').textContent, 'marked');
 
   pendingAction = false;
+  assert.equal(stopButton.disabled, true);
+  status.twitch_stop_available = true;
+  status.recs.service.state = 'offline';
+  await vm.runInContext('pollPerformance()', context); await flush();
+  assert.ok(actionButtons.every(button => button.disabled));
+  assert.equal(stopButton.disabled, false);
+  await stopButton.listeners.click();
+  assert.deepEqual(posts[1], {action: 'streamo-stop'});
+
   status.active_faults = [
     {name: 'recs', message: 'offline', next_action: 'Inspect Health',
       started_at: '2026-09-16T10:00:00Z', acknowledged: true},
@@ -129,6 +144,7 @@ async function test() {
   context.fetch = async () => {throw new Error('offline');};
   await vm.runInContext('pollPerformance()', context); await flush();
   assert.ok(actionButtons.every(button => button.disabled));
+  assert.equal(stopButton.disabled, false);
   assert.ok(lockButtons.every(button => button.disabled));
   assert.match(elements.get('performance-recording').textContent, /unknown/);
   assert.match(elements.get('connection-status').textContent, /may be stale/);

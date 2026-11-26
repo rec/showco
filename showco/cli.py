@@ -104,14 +104,16 @@ def run_web_ui(options: WebUiOptions) -> int:
                 'Could not save audio configuration warning: %s', error
             )
     if options.rehearsal_mode:
+        streamo = rehearsal.RehearsalStreamoClient()
         server = make_server(
             options.host,
             options.port,
             recs=rehearsal.RehearsalRecsClient(),
-            streamo=rehearsal.RehearsalStreamoClient(),
+            streamo=streamo,
             system=rehearsal.RehearsalSystemMonitor(),
             mixers=rehearsal.RehearsalMixersMonitor(),
-            streamo_restart=rehearsal.restart_streamo,
+            streamo_restart=streamo.restart,
+            streamo_stop=lambda: streamo.action('stop'),
             lyte=rehearsal.RehearsalLyteClient(),
             streamo_enabled=True,
             setup=options.setup or options.audio,

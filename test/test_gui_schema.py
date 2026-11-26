@@ -36,11 +36,12 @@ def test_default_gui_declares_all_navigation_pages() -> None:
         ('connected', 'stopped', True, 'Start Twitch'),
         ('connected', 'streaming', True, 'Stop Twitch'),
         ('connected', 'muted', True, 'Stop Twitch'),
-        ('connected', 'starting', False, 'Starting...'),
+        ('connected', 'starting', True, 'Stop Twitch (starting)'),
         ('connected', 'stopping', False, 'Stopping...'),
         ('connected', 'failed', True, 'Retry Twitch (error)'),
-        ('error', 'streaming', True, 'Retry Twitch (error)'),
-        ('offline', 'unknown', True, 'Retry Twitch (status unavailable)'),
+        ('error', 'streaming', True, 'Stop Twitch'),
+        ('error', 'muted', True, 'Stop Twitch'),
+        ('offline', 'unknown', True, 'Stop Twitch (status unavailable)'),
         ('disabled', 'unknown', False, 'Twitch disabled'),
     ],
 )
@@ -68,6 +69,10 @@ def test_show_page_has_destination_faults_toggle_and_teardown(
         'show-result',
     ]
     assert f'<button{"" if enabled else " disabled"}>{label}</button>' in html
+    expected_action = (
+        'streamo-start' if state in {'stopped', 'failed'} else 'streamo-stop'
+    )
+    assert f'name="action" value="{expected_action}"' in html
     assert 'id="fault-banner"' in html
     assert 'Recording destination: unavailable' in html
     assert 'id="performance-lock-form"' not in html
@@ -163,13 +168,16 @@ def test_alternate_gui_changes_performance_page_without_code_changes() -> None:
             service=models.ServiceStatus(name='recs', state='connected')
         ),
         streamo=models.StreamoStatus(
-            service=models.ServiceStatus(name='streamo', state='disabled')
+            service=models.ServiceStatus(name='streamo', state='offline')
         ),
+        performance_locked=True,
     )
 
     try:
         gui_schema.configure_gui(path)
-        html = views.configured_page(document.page('performance'), status)
+        html = views.configured_page(
+            document.page('performance'), status, features={'streamo_enabled'}
+        )
     finally:
         gui_schema.configure_gui(gui_schema.DEFAULT_GUI_PATH)
 
@@ -178,9 +186,10 @@ def test_alternate_gui_changes_performance_page_without_code_changes() -> None:
     assert 'href="/channels"' not in html
     assert 'Add a recs marker' in html
     assert 'data-performance-action="recs-marker"' in html
+    assert 'data-performance-action="streamo-stop">Stop Twitch</button>' in html
     assert 'data-performance-action="recs-pause-recording"' not in html
     assert 'data-workflow-action="setlist-next"' not in html
-    assert html.index('Live status') < html.index('Mark a moment')
+    assert html.index('Live status') < html.index('Show controls')
 
 
 def test_actions_page_shows_cable_test_result_from_status() -> None:

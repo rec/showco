@@ -77,11 +77,16 @@ async function checkTeardownConfirmation() {
 }
 
 const status = JSON.parse(fs.readFileSync(0, 'utf8'));
+const actionInput = {value: ''};
+const toggleForm = {
+  dataset: {disabledWhen: 'streamo_unavailable', action: 'streamo-toggle'},
+  querySelector() {return actionInput;},
+};
 const toggle = {
   disabled: true,
   busy: false,
   hasAttribute() {return this.busy;},
-  closest() {return {dataset: {disabledWhen: 'streamo_unavailable'}};},
+  closest() {return toggleForm;},
 };
 const recordingButtons = ['recs-pause-recording', 'recs-resume-recording'].map(action => ({
   disabled: false,
@@ -112,6 +117,7 @@ const context = vm.createContext({
       ? [...elements.values()].filter(element => element.dataset?.value)
       : selector === '[data-layout="list"]' ? [osc]
       : selector === 'form[data-disabled-when] button' ? [toggle, ...recordingButtons]
+      : selector === '[data-disabled-when="streamo_unavailable"] button' ? [toggle]
       : selector.includes('form[data-action="recs-pause-recording"]') ? recordingButtons : [],
     createElement: () => ({append() {}}),
   },
@@ -146,11 +152,16 @@ vm.runInContext('updateStatus()', context).then(async () => {
   assert.equal(elements.get('osc-recorders').textContent, 'No OSC recorders.');
   assert.match(elements.get('connection-status').textContent, /^Connected/);
   assert.ok(!elements.get('lyte-health').textContent.includes('undefined'));
-  assert.equal(toggle.disabled, !status.streamo.toggle_available);
+  vm.runInContext('updateConfiguredActions(recordingState)', context);
+  assert.equal(toggle.disabled, !status.twitch_toggle_available);
   assert.equal(toggle.textContent, status.streamo.toggle_label);
-  context.toggleStatus = {...status, streamo: {...status.streamo, toggle_available: true}};
+  context.toggleStatus = {...status, twitch_toggle_available: true, streamo: {
+    ...status.streamo, toggle_starts_stream: false, toggle_label: 'Stop Twitch (status unavailable)',
+  }};
+  context.toggleStatus.twitch_stop_available = true;
   vm.runInContext('updateConfiguredActions(toggleStatus)', context);
   assert.equal(toggle.disabled, false);
+  assert.equal(actionInput.value, 'streamo-stop');
   toggle.busy = true;
   toggle.textContent = 'Starting...';
   vm.runInContext('updateConfiguredActions(toggleStatus)', context);
@@ -160,11 +171,18 @@ vm.runInContext('updateStatus()', context).then(async () => {
 
   context.toggleStatus.music = {...status.music, mode: 'teardown'};
   context.toggleStatus.streamo.toggle_starts_stream = true;
+  context.toggleStatus.twitch_toggle_available = false;
   vm.runInContext('updateConfiguredActions(toggleStatus)', context);
   assert.equal(toggle.disabled, true);
+  assert.equal(actionInput.value, 'streamo-start');
+  vm.runInContext('showControlsUnavailable()', context);
+  assert.equal(toggle.disabled, false);
+  assert.equal(actionInput.value, 'streamo-stop');
   context.toggleStatus.streamo.toggle_starts_stream = false;
+  context.toggleStatus.twitch_toggle_available = true;
   vm.runInContext('updateConfiguredActions(toggleStatus)', context);
   assert.equal(toggle.disabled, false);
+  assert.equal(actionInput.value, 'streamo-stop');
 
   const endForm = {
     dataset: {action: 'music-teardown', disabledWhen: '', confirm: 'true'},
@@ -221,7 +239,8 @@ vm.runInContext('updateStatus()', context).then(async () => {
   await vm.runInContext('updateStatus()', context);
   assert.match(elements.get('connection-status').textContent, /offline/);
   assert.equal(elements.get('readiness-state').textContent, 'unknown (status unavailable)');
-  assert.equal(toggle.disabled, true);
+  assert.equal(toggle.disabled, false);
+  assert.equal(actionInput.value, 'streamo-stop');
 
   let respond;
   let submitted;

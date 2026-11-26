@@ -62,7 +62,6 @@ PROTECTED_ACTIONS = {
     'music-stop',
     'music-close-cancel',
     'music-close-finish',
-    'streamo-stop',
+    'streamo-start',
     'streamo-restart',
-    'streamo-toggle',
 }

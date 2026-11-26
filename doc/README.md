@@ -29,7 +29,7 @@ Open showCo on the show network at the configured address and port. The Health p
 
 | Page | Use it for |
 | --- | --- |
-| Show | First page: observed faults, Start/Stop Twitch, and End show. Twitch switching leaves recs unchanged. After a streamO error or disconnection, the button retries streamO. Starting is disabled after teardown; use Resume show on Actions. |
+| Show | First page: observed faults, Start/Stop Twitch, and End show. A publishing or uncertain stream offers Stop, which leaves recs unchanged and works under Performance lock. Use the closing recovery controls during credits. After teardown, use Resume show on Actions to broadcast again. |
 | Lighting cues | Named lighting looks, Go/Back, current/next cue position, and live lyte state. |
 | Performance | Manual song cues, large marker and pause/resume controls, recording destination and capacity, stream state, pinned inputs, dimming, and optional screen-awake mode. |
 | Set list | Prepare and reorder songs, notes, and expected durations. |

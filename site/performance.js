@@ -57,9 +57,15 @@ function renderPerformance(status) {
   if (stream) stream.textContent =
     `streamO ${status.streamo.service.state}; ${status.streamo.stream_state}${status.streamo.muted ? '; muted' : ''}`;
   document.querySelectorAll('[data-performance-action]').forEach(button => {
-    button.disabled = performanceBusy || recs.service.state !== 'connected'
-      || (['recs-pause-recording', 'recs-resume-recording'].includes(button.dataset.performanceAction)
-        && !status.recording_controls_available);
+    const action = button.dataset.performanceAction;
+    if (action === 'streamo-stop') {
+      button.dataset.twitchStopAvailable = String(status.twitch_stop_available);
+    }
+    button.disabled = performanceBusy || (action === 'streamo-stop'
+      ? !status.twitch_stop_available
+      : recs.service.state !== 'connected' ||
+        (['recs-pause-recording', 'recs-resume-recording'].includes(action) &&
+          !status.recording_controls_available));
   });
   const signature = JSON.stringify(recs.channels.map(channel => [inputKey(channel), channel.name]));
   const choices = document.getElementById('input-pins');
@@ -116,8 +122,13 @@ document.querySelectorAll('[data-performance-action]').forEach(button => {
       const message = await showAction(fields);
       if (result) result.textContent = message;
     } catch (error) {if (result) result.textContent = error.message;}
-    finally {performanceBusy = false;}
-    // A fresh poll must re-enable controls after an uncertain response.
+    finally {
+      performanceBusy = false;
+      document.querySelectorAll('[data-performance-action="streamo-stop"]').forEach(value => {
+        value.disabled = value.dataset.twitchStopAvailable !== 'true';
+      });
+    }
+    // Recording controls still require a fresh poll after an uncertain response.
   });
 });
 

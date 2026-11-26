@@ -379,6 +379,7 @@ def make_server(
     setup: list[Path] | None = None,
     teardown: list[Path] | None = None,
     external_wifi: ExternalWifi | None = None,
+    streamo_stop: Callable[[], models.ActionResult] | None = None,
 ) -> ThreadingHTTPServer:
     handler = type('ConfiguredShowcoHandler', (ShowcoHandler,), {})
     recs_client = recs or RecsClient()
@@ -425,6 +426,7 @@ def make_server(
         if performance_enabled
         else None,
         external_wifi=external_wifi,
+        streamo_stop=streamo_stop,
     )
     handler.app = app
     server = ShowcoServer((host, port), handler)

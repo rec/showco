@@ -63,7 +63,7 @@
   <details><summary>{{ element.label }}</summary>{% for child in element.children %}{{ workflow_element(child) }}{% endfor %}</details>
 {% elif element.kind == 'link' %}
   <p><a href="{{ element.value }}"{% if element.download %} download{% endif %}>{{ element.label }}</a></p>
-{% elif element.kind == 'performance_button' %}
+{% elif element.kind == 'performance_button' and is_visible(element, features) %}
   <button type="button"{% if element.action %} data-performance-action="{{ element.action }}"{% if is_disabled(element, status) %} disabled{% endif %}{% else %} id="{{ element.name }}"{% endif %}>{{ element.label }}</button>
 {% elif element.kind == 'performance_checkbox' %}
   <label><input type="checkbox" id="{{ element.name }}"> {{ element.label }}</label>
@@ -125,8 +125,9 @@
       {% else %}<p>{{ element.empty_text }}</p>{% endif %}
       </div>
     {% elif element.kind == 'action_button' and is_visible(element, features) %}
-      <form method="post" data-action="{{ element.action }}" data-disabled-when="{{ element.disabled_when }}"{% if element.action == 'music-teardown' %} data-confirm="true"{% endif %}>
-        <input type="hidden" name="action" value="{{ element.action }}">
+      <form method="post" data-action="{{ element.action }}" data-disabled-when="{{ element.disabled_when }}"{% if element.action == 'music-teardown' %} data-confirm="true"{% elif element.action == 'streamo-toggle' %} data-twitch-stop-available="{{ 'true' if status.twitch_stop_available else 'false' }}"{% endif %}>
+        {% set action = ('streamo-start' if status.streamo.toggle_starts_stream else 'streamo-stop') if element.action == 'streamo-toggle' else element.action %}
+        <input type="hidden" name="action" value="{{ action }}">
         {% for name, value in element.parameters.items() %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
         <button{% if is_disabled(element, status) %} disabled{% endif %}>{{ status.streamo.toggle_label if element.action == 'streamo-toggle' else element.label }}</button>
       </form>

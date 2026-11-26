@@ -62,6 +62,7 @@ class ShowcoApp:
         music_controller: music.MusicController | None = None,
         state_directory: Path | None = None,
         external_wifi: ExternalWifi | None = None,
+        streamo_stop: Callable[[], models.ActionResult] | None = None,
     ) -> None:
         self.recs = recs
         self.streamo = streamo
@@ -70,6 +71,7 @@ class ShowcoApp:
         self.streamo_restart = streamo_restart or (
             lambda: services.restart_service('streamo')
         )
+        self.streamo_stop = streamo_stop or services.stop_streamo
         self.recovery_restart: Callable[[str], models.ActionResult] = (
             services.restart_service
         )
@@ -493,48 +495,8 @@ class ShowcoApp:
                 self.soundcheck_error = f'Soundcheck invalidation not saved: {error}'
         if action.startswith('recs-'):
             return recs_actions.run(self.recs, action, form)
-        if action == 'streamo-toggle':
-            if self.streamo is None:
-                return models.ActionResult(ok=False, message='streamO is disabled')
-            status = self.streamo.status()
-            if not status.toggle_available or (
-                self.music is not None
-                and self.music.status().mode in {'closing', 'transitioning', 'fault'}
-            ):
-                return models.ActionResult(
-                    ok=False,
-                    message='Twitch switching is unavailable during a transition '
-                    'or closing sequence, or when streamO is disabled',
-                )
-            if status.toggle_starts_stream:
-                if self.music is not None and self.music.status().mode == 'teardown':
-                    return models.ActionResult(
-                        ok=False,
-                        message='The show has ended. Use Resume show on Actions to '
-                        'restore the room mix and recording before broadcasting.',
-                    )
-                return self.streamo_restart()
-            result = self.streamo.action('stop')
-            if not result.ok:
-                return result
-            try:
-                service = services.service_registry().controller('streamo')
-                service.stop()
-                stopped = service.status().running is False
-            except (OSError, subprocess.SubprocessError) as error:
-                return models.ActionResult(
-                    ok=False, message=f'Twitch stop could not be confirmed: {error}'
-                )
-            return models.ActionResult(
-                ok=stopped,
-                message='Twitch stopped'
-                if stopped
-                else 'Twitch stop could not be confirmed',
-            )
-        if action == 'streamo-restart' and self.streamo is None:
-            return models.ActionResult(ok=False, message='streamo is disabled')
-        if action == 'streamo-restart':
-            return self.streamo_restart()
+        if action in {'streamo-start', 'streamo-stop', 'streamo-restart'}:
+            return self._twitch_action(action)
         if action == 'lyte-test':
             return (
                 self.lyte.test()
@@ -638,8 +600,48 @@ class ShowcoApp:
 
     def _restart_recovery(self, name: str) -> models.ActionResult:
         return (
-            self.streamo_restart() if name == 'streamo' else self.recovery_restart(name)
+            self._twitch_action('streamo-restart')
+            if name == 'streamo'
+            else self.recovery_restart(name)
         )
+
+    def _twitch_action(self, action: str) -> models.ActionResult:
+        if self.streamo is None:
+            return models.ActionResult(ok=False, message='streamO is disabled')
+        mode = self.music.status().mode if self.music is not None else None
+        if mode == 'transitioning':
+            return models.ActionResult(
+                ok=False, message='A show transition is in progress'
+            )
+        if mode == 'closing':
+            return models.ActionResult(
+                ok=False,
+                message='Use the closing recovery controls during closing credits',
+            )
+        status = self.streamo.status()
+        if status.closing_in_progress:
+            return models.ActionResult(
+                ok=False,
+                message='Use the closing recovery controls during closing credits',
+            )
+        if status.service.state == 'disabled':
+            return models.ActionResult(ok=False, message='streamO is disabled')
+        if action == 'streamo-stop':
+            return self.streamo_stop()
+        if action == 'streamo-start':
+            if mode == 'teardown':
+                return models.ActionResult(
+                    ok=False,
+                    message='The show has ended. Use Resume show on Actions to '
+                    'restore the room mix and recording before broadcasting.',
+                )
+            if mode == 'fault' or not status.toggle_starts_stream:
+                return models.ActionResult(
+                    ok=False,
+                    message='Twitch start refused: publisher may already be active '
+                    'or the show phase needs recovery',
+                )
+        return self.streamo_restart()
 
     def _remember_recovery(self, message: str) -> None:
         if not self.incident_lock.acquire(blocking=False):
@@ -725,7 +727,6 @@ RECORDING_ACTIONS = {
 STREAMO_ACTIONS = {
     'streamo-mute': 'mute',
     'streamo-unmute': 'unmute',
-    'streamo-stop': 'stop',
     'streamo-title': 'update_stream_info',
     'streamo-chat': 'chat',
     'streamo-announce': 'announce',

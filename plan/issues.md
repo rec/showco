@@ -9,17 +9,6 @@ items reduce resilience or make diagnosis harder. Findings below are based on
 source and existing tests. Resource and hardware scenarios still need the
 acceptance evidence identified under each issue.
 
-## P1: Broadcast health can replace Stop with Retry while publishing
-
-`StreamoStatus.toggle_label` and `toggle_starts_stream` give health errors
-priority over known streaming or muted states. A stale Twitch confirmation can
-therefore turn the front-page Stop control into a restart. Performance lock
-also protects both directions of `streamo-toggle`, and the default
-`gui-minimal.toml` page has no explicit stop control. Separate publisher
-activity, provider confirmation, and command availability. Keep a deliberate
-Stop path reachable while health is uncertain and define its ownership during
-credits. Test active/error, disconnected/unknown, and locked performance.
-
 ## P2: Waveforms can stop reconnecting after a routine recs busy reply
 
 `WaveformBridge._run()` and `close()` omit `rpc.RemoteError`. A busy or

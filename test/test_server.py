@@ -265,7 +265,7 @@ class ServerTests(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertEqual(result.message, 'streamo is disabled')
 
-    def test_twitch_toggle_starts_or_recovers_without_changing_recording(self) -> None:
+    def test_twitch_start_does_not_restart_an_active_or_unknown_publisher(self) -> None:
         recs = mock.Mock()
         stream = mock.Mock()
         stream.status.return_value = models.StreamoStatus(
@@ -283,12 +283,12 @@ class ServerTests(unittest.TestCase):
             streamo_restart=restart,
         )
 
-        for connection, state in [
-            ('connected', 'stopped'),
-            ('connected', 'failed'),
-            ('error', 'streaming'),
-            ('offline', 'unknown'),
-            ('offline', 'stopped'),
+        for connection, state, expected in [
+            ('connected', 'stopped', True),
+            ('connected', 'failed', True),
+            ('error', 'streaming', False),
+            ('offline', 'unknown', False),
+            ('offline', 'stopped', False),
         ]:
             with self.subTest(connection=connection, state=state):
                 stream.status.return_value = models.StreamoStatus(
@@ -296,8 +296,10 @@ class ServerTests(unittest.TestCase):
                     stream_state=state,
                 )
                 restart.reset_mock()
-                self.assertTrue(app.run_action({'action': 'streamo-toggle'}).ok)
-                restart.assert_called_once_with()
+                self.assertEqual(
+                    app.run_action({'action': 'streamo-start'}).ok, expected
+                )
+                self.assertEqual(restart.call_count, int(expected))
         stream.action.assert_not_called()
         self.assertEqual(recs.mock_calls, [])
 
@@ -343,7 +345,7 @@ class ServerTests(unittest.TestCase):
                 streamo_restart=restart,
             )
         self.assertEqual(calls.mock_calls, [mock.call.route()])
-        for action in ('streamo-toggle', 'streamo-restart'):
+        for action in ('streamo-start', 'streamo-restart'):
             calls.reset_mock()
             outcome = configured.app.run_action({'action': action})
             self.assertTrue(outcome.ok, outcome.message)
@@ -402,38 +404,51 @@ class ServerTests(unittest.TestCase):
         self.assertGreaterEqual(len(calls), 2)
         self.assertEqual(calls.count(current_thread()), 1)
 
-    def test_twitch_toggle_stops_stream_and_prevents_service_restart(self) -> None:
+    def test_twitch_stop_reaches_service_under_lock_and_uncertain_health(self) -> None:
         stream = mock.Mock()
-        stream.status.return_value = models.StreamoStatus(
-            service=models.ServiceStatus(name='streamo', state='connected'),
-            stream_state='streaming',
-        )
-        stream.action.return_value = models.ActionResult(ok=True, message='stopping')
         recs = mock.Mock()
+        restart = mock.Mock()
         app = ShowcoApp(
             recs,
             stream,
             rehearsal.RehearsalSystemMonitor(),
             rehearsal.RehearsalMixersMonitor(),
+            streamo_restart=restart,
         )
-        with mock.patch('showco.runtime.app.services.service_registry') as registry:
+        app.performance_lock.set(True)
+        with mock.patch('showco.runtime.services.service_registry') as registry:
             service = registry.return_value.controller.return_value
             service.status.return_value.running = False
-            self.assertTrue(app.run_action({'action': 'streamo-toggle'}).ok)
+            for connection, state in (
+                ('error', 'streaming'),
+                ('error', 'muted'),
+                ('offline', 'unknown'),
+                ('connected', 'stopped'),
+            ):
+                with self.subTest(connection=connection, state=state):
+                    stream.status.return_value = models.StreamoStatus(
+                        service=models.ServiceStatus(name='streamo', state=connection),
+                        stream_state=state,
+                    )
+                    service.stop.reset_mock()
+                    self.assertTrue(app.run_action({'action': 'streamo-stop'}).ok)
+                    service.stop.assert_called_once_with()
 
-        stream.action.assert_called_once_with('stop')
-        service.stop.assert_called_once_with()
+        stream.action.assert_not_called()
+        restart.assert_not_called()
         self.assertEqual(recs.mock_calls, [])
 
-    def test_twitch_toggle_rejects_unavailable_states_and_closing(self) -> None:
+    def test_twitch_controls_respect_closing_and_start_transition(self) -> None:
         stream = mock.Mock()
         restart = mock.Mock()
+        stop = mock.Mock()
         app = ShowcoApp(
             mock.Mock(),
             stream,
             rehearsal.RehearsalSystemMonitor(),
             rehearsal.RehearsalMixersMonitor(),
             streamo_restart=restart,
+            streamo_stop=stop,
         )
         for connection, state, closing in [
             ('connected', 'starting', None),
@@ -450,9 +465,14 @@ class ServerTests(unittest.TestCase):
                     stream_state=state,
                     closing=closing,
                 )
-                self.assertFalse(app.run_action({'action': 'streamo-toggle'}).ok)
+                self.assertFalse(app.run_action({'action': 'streamo-start'}).ok)
+                if closing:
+                    outcome = app.run_action({'action': 'streamo-stop'})
+                    self.assertFalse(outcome.ok)
+                    self.assertIn('closing recovery controls', outcome.message)
         stream.action.assert_not_called()
         restart.assert_not_called()
+        stop.assert_not_called()
 
     def test_twitch_start_after_teardown_requires_explicit_resume(self) -> None:
         stream = mock.Mock()
@@ -477,7 +497,7 @@ class ServerTests(unittest.TestCase):
                     service=models.ServiceStatus(name='streamo', state=connection),
                     stream_state=state,
                 )
-                outcome = app.run_action({'action': 'streamo-toggle'})
+                outcome = app.run_action({'action': 'streamo-start'})
                 self.assertFalse(outcome.ok)
                 self.assertIn('Resume show', outcome.message)
         restart.assert_not_called()

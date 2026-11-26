@@ -328,14 +328,13 @@ def test_recovery_needs_named_confirmation(tmp_path: Path) -> None:
 def test_stream_recovery_uses_the_prepared_stream_restart(tmp_path: Path) -> None:
     app = application(tmp_path)
     app.recs = mock.Mock()
+    stream_status = models.StreamoStatus(
+        service=models.ServiceStatus(name='streamo', state='offline')
+    )
+    app.streamo = mock.Mock()
+    app.streamo.status.return_value = stream_status
     app.status = mock.Mock(
-        return_value=status().model_copy(
-            update={
-                'streamo': models.StreamoStatus(
-                    service=models.ServiceStatus(name='streamo', state='offline')
-                )
-            }
-        )
+        return_value=status().model_copy(update={'streamo': stream_status})
     )
     app.streamo_restart = mock.Mock(
         return_value=models.ActionResult(ok=True, message='started')

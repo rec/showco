@@ -34,7 +34,7 @@ def test_lock_blocks_protected_action_before_dispatch(
 
 @pytest.mark.parametrize(
     'action',
-    ['streamo-stop', 'streamo-restart', 'music-close-cancel', 'music-close-finish'],
+    ['streamo-start', 'streamo-restart', 'music-close-cancel', 'music-close-finish'],
 )
 def test_lock_prevents_stream_and_closing_recovery_side_effects(
     tmp_path: Path, action: str

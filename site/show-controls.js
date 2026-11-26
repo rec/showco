@@ -13,11 +13,17 @@ function showControlsUnavailable() {
     banner.textContent = 'Live state unavailable. Reconnect before relying on these controls.';
   }
   document.querySelectorAll('[data-performance-action], #performance-lock-form button')
-    .forEach(button => {button.disabled = true;});
+    .forEach(button => {
+      if (button.dataset.performanceAction !== 'streamo-stop') button.disabled = true;
+    });
   document.querySelectorAll('[data-disabled-when="streamo_unavailable"] button')
     .forEach(button => {
-      button.disabled = true;
-      button.textContent = 'Twitch status unavailable';
+      if (button.hasAttribute('aria-busy')) return;
+      const form = button.closest('form');
+      const canStop = form.dataset.twitchStopAvailable === 'true';
+      button.disabled = !canStop;
+      button.textContent = canStop ? 'Stop Twitch (status unavailable)' : 'Twitch status unavailable';
+      if (canStop) form.querySelector('input[name="action"]').value = 'streamo-stop';
     });
   document.querySelectorAll('form[data-action="recs-pause-recording"] button, form[data-action="recs-resume-recording"] button')
     .forEach(button => {button.disabled = true;});

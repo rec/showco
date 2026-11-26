@@ -4,7 +4,7 @@ import argparse
 import sys
 from collections.abc import Callable
 from pathlib import Path
-from subprocess import CompletedProcess
+from subprocess import CompletedProcess, SubprocessError
 from typing import ClassVar
 
 from pydantic import BaseModel
@@ -112,6 +112,21 @@ def restart_service(name: str) -> models.ActionResult:
     if result.running:
         return models.ActionResult(ok=True, message=f'{name} restart requested')
     return models.ActionResult(ok=False, message=f'{name} service did not start')
+
+
+def stop_streamo() -> models.ActionResult:
+    try:
+        service = service_registry().controller('streamo')
+        service.stop()
+        stopped = service.status().running is False
+    except (OSError, SubprocessError) as error:
+        return models.ActionResult(
+            ok=False, message=f'Twitch stop could not be confirmed: {error}'
+        )
+    return models.ActionResult(
+        ok=stopped,
+        message='Twitch stopped' if stopped else 'Twitch stop could not be confirmed',
+    )
 
 
 def refresh_service_definition(

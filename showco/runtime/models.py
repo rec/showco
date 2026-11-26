@@ -143,59 +143,47 @@ class StreamoStatus(BaseModel, frozen=True):
     def toggle_label(self) -> str:
         if self.service.state == 'disabled':
             return 'Twitch disabled'
-        if self.stream_state == 'publishing' and self.service.state in {
-            'connected',
-            'error',
-        }:
-            return 'Stop Twitch (unconfirmed)'
-        if self.service.state == 'error':
-            return 'Retry Twitch (error)'
-        if self.service.state != 'connected':
-            return 'Retry Twitch (status unavailable)'
-        if self.closing is not None and self.closing.state not in {
-            'idle',
-            'completed',
-            'failed',
-        }:
+        if self.closing_in_progress or self.stream_state == 'stopping':
             return 'Stopping...'
-        if self.service.last_error is not None or self.stream_state == 'failed':
-            return 'Retry Twitch (error)'
-        return {
-            'stopped': 'Start Twitch',
-            'streaming': 'Stop Twitch',
-            'muted': 'Stop Twitch',
-            'starting': 'Starting...',
-            'stopping': 'Stopping...',
-        }.get(self.stream_state, 'Twitch status unknown')
+        if self.stream_state == 'publishing':
+            return 'Stop Twitch (unconfirmed)'
+        if self.service.state == 'offline' or self.stream_state == 'unknown':
+            return 'Stop Twitch (status unavailable)'
+        if self.stream_state == 'starting':
+            return 'Stop Twitch (starting)'
+        if self.toggle_starts_stream:
+            return (
+                'Retry Twitch (error)'
+                if self.stream_state == 'failed'
+                else 'Start Twitch'
+            )
+        return 'Stop Twitch'
 
     @computed_field
     @property
     def toggle_starts_stream(self) -> bool:
-        if self.stream_state == 'publishing':
-            return False
         return (
-            self.stream_state in {'stopped', 'failed'}
-            or self.service.state != 'connected'
-            or self.service.last_error is not None
+            self.service.state in {'connected', 'error'}
+            and self.stream_state in {'stopped', 'failed'}
+            and not self.ffmpeg_alive
         )
 
     @computed_field
     @property
     def toggle_available(self) -> bool:
         return (
-            self.service.state in {'connected', 'offline', 'error'}
-            and self.stream_state not in {'starting', 'stopping'}
-            and (
-                self.service.state in {'offline', 'error'}
-                or self.service.last_error is not None
-                or self.stream_state
-                in {'stopped', 'publishing', 'streaming', 'muted', 'failed'}
-            )
-            and (
-                self.closing is None
-                or self.closing.state in {'idle', 'completed', 'failed'}
-            )
+            self.service.state != 'disabled'
+            and self.stream_state != 'stopping'
+            and not self.closing_in_progress
         )
+
+    @property
+    def closing_in_progress(self) -> bool:
+        return self.closing is not None and self.closing.state not in {
+            'idle',
+            'completed',
+            'failed',
+        }
 
 
 class LyteStringStatus(BaseModel, frozen=True):
@@ -333,6 +321,25 @@ class ShowStatus(BaseModel, frozen=True):
     active_faults: list[ActiveFault] = Field(default_factory=list)
     observed_at: datetime | None = None
     monitoring_error: str | None = None
+
+    @computed_field
+    @property
+    def twitch_stop_available(self) -> bool:
+        return self.streamo.toggle_available and self.music.mode not in {
+            'closing',
+            'transitioning',
+        }
+
+    @computed_field
+    @property
+    def twitch_toggle_available(self) -> bool:
+        return self.twitch_stop_available and (
+            not self.streamo.toggle_starts_stream
+            or (
+                not self.performance_locked
+                and self.music.mode not in {'fault', 'teardown'}
+            )
+        )
 
     @computed_field
     @property
