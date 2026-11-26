@@ -98,9 +98,16 @@ def update_target(
     names = [n for n in names if n != 'showco'] + (
         ['showco'] if 'showco' in names else []
     )
-    active_services = active_service_enablement(names, run_command, output)
-    if active_services is None:
+    service_state = active_service_enablement(names, run_command, output)
+    if service_state is None:
         return 1
+    active_services, failed_services = service_state
+    for name in failed_services:
+        detail = ' Recording is unavailable.' if name == 'recs' else ''
+        print(
+            f'{name}: service was already failed and will be left stopped.{detail}',
+            file=output,
+        )
     active_names = list(active_services)
     refresh = any(p.name == 'reccy' for p in programs)
     settings_path = (
@@ -156,7 +163,12 @@ def update_target(
                 )
             )
         if all(r.ok for r in results):
-            return 0
+            if failed_services:
+                print(
+                    'Update installed. Previously failed services were left stopped.',
+                    file=output,
+                )
+            return int(bool(failed_services))
 
     except (OSError, KeyboardInterrupt) as error:
         results.append(
@@ -221,8 +233,9 @@ def update_target(
 
 def active_service_enablement(
     names: list[str], run_command: update.RunCommand, output: TextIO
-) -> dict[str, str] | None:
+) -> tuple[dict[str, str], list[str]] | None:
     active = {}
+    failed = []
     for name in names:
         unit = services.SERVICES[name].systemd_unit
         read = update.run_step(
@@ -246,7 +259,10 @@ def active_service_enablement(
         )
         state = fields.get('ActiveState')
         enablement = fields.get('UnitFileState', '')
-        if state in {'inactive', 'failed'}:
+        if state == 'failed':
+            failed.append(name)
+            continue
+        if state == 'inactive':
             continue
         if (
             state not in {'active', 'reloading'}
@@ -261,7 +277,7 @@ def active_service_enablement(
             )
             return None
         active[name] = enablement
-    return active
+    return active, failed
 
 
 def restart_services(

@@ -19,6 +19,7 @@ class Target:
         self.commands: list[list[str]] = []
         self.running = {'recs', 'showco', 'streamo', 'lyte'}
         self.enablement = dict.fromkeys(self.running, 'enabled')
+        self.failed_units: set[str] = set()
         self.failure = ''
         self.failed = False
         self.rollback_failure = False
@@ -52,7 +53,13 @@ class Target:
             operation, name = command[2], command[3].removesuffix('.service')
             if operation == 'show':
                 operation = 'read-service-state'
-                state = 'active' if name in self.running else 'inactive'
+                state = (
+                    'failed'
+                    if name in self.failed_units
+                    else 'active'
+                    if name in self.running
+                    else 'inactive'
+                )
                 stdout = f'ActiveState={state}\nUnitFileState={self.enablement[name]}\n'
         elif command[0] == 'sh':
             operation = 'health'
@@ -223,6 +230,23 @@ def test_failed_stop_does_not_change_revisions(target: Target) -> None:
     assert deploy(target) == 1
     assert not any('reset' in c for c in target.commands)
     assert target.running == {'recs', 'showco', 'streamo', 'lyte'}
+
+
+def test_update_reports_failed_recorder_without_starting_or_rolling_back(
+    target: Target,
+) -> None:
+    target.running.remove('recs')
+    target.failed_units.add('recs')
+    output = StringIO()
+
+    assert deploy(target, output) == 1
+
+    assert target.revisions['recs'] == 'new-recs'
+    assert target.environments['recs'] == 'new-recs'
+    assert 'recs' not in target.running
+    assert 'Recording is unavailable.' in output.getvalue()
+    assert 'Update installed.' in output.getvalue()
+    assert ['systemctl', '--user', 'start', 'recs.service'] not in target.commands
 
 
 @pytest.mark.parametrize('failure', ['', 'stop', 'sync'])
