@@ -721,11 +721,23 @@ class ProvisionTests(unittest.TestCase):
                 self.assertIn('masked', check.call_args.args[2])
                 self.assertIn('inactive', check.call_args.args[2])
 
-    def test_streamo_health_command_uses_target_showco(self) -> None:
-        command = verify.showco_streamo_health_command(Path('/code'))
+    def test_streamo_verification_checks_manual_service_without_publishing(
+        self,
+    ) -> None:
+        provision_config = make_config(values())
+        provision_config = provision_config.model_copy(
+            update={
+                'stream': provision_config.stream.model_copy(update={'enabled': True})
+            }
+        )
+        with mock.patch.object(verify, 'verify_remote_command') as check:
+            verify.verify_streamo_service(provision_config)
 
-        self.assertIn('cd /code/showco', command)
-        self.assertIn('uv run --locked showco run streamo-health', command)
+        command = check.call_args.args[2]
+        self.assertIn('systemctl --user show streamo.service', command)
+        self.assertIn('LoadState=loaded', command)
+        self.assertIn('ActiveState=(inactive|failed)', command)
+        self.assertIn('UnitFileState=static Restart=no', command)
 
     def test_initial_wait_for_ssh_retries_until_connected(self) -> None:
         config = make_config(values(networks=networks(x18=False)))

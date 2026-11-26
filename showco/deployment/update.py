@@ -336,10 +336,6 @@ def start_or_refresh_service_step(
             return install_lyte_service(
                 root, provision_config.lyte.installation_config, run_command
             )
-        if service_name == 'streamo':
-            return install_streamo_service(
-                root, provision_config.network.user, run_command
-            )
     return run_service_step(
         service_name,
         'refresh' if refresh_definitions else 'start',
@@ -415,7 +411,7 @@ def install_streamo_service(
     config_path = Path('/home') / user / '.config/streamo/config.toml'
     command = (
         f'cd {shlex.quote(str(directory))} && '
-        'uv run --locked streamo daemon install '
+        'uv run --locked streamo daemon install --manual '
         f'--config {shlex.quote(str(config_path))}'
     )
     return run_step('streamo', 'install service', ['sh', '-c', command], run_command)

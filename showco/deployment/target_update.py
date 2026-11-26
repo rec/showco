@@ -95,10 +95,13 @@ def update_target(
             return 1
 
     names = update.selected_service_names(programs)
-    names = [n for n in names if n != 'showco'] + (
-        ['showco'] if 'showco' in names else []
-    )
-    service_state = active_service_enablement(names, run_command, output)
+    update_publisher = 'streamo' in names
+    restart_names = [n for n in names if n not in {'streamo', 'showco'}]
+    if update_publisher or 'showco' in names:
+        # Stop the controller before taking streamO down. Its actions can start
+        # the publisher, including during an update limited to streamO's code.
+        restart_names.append('showco')
+    service_state = active_service_enablement(restart_names, run_command, output)
     if service_state is None:
         return 1
     active_services, failed_services = service_state
@@ -125,6 +128,8 @@ def update_target(
             return 1
     try:
         stopped = stop_services(active_names, run_command)
+        if update_publisher and all(r.ok for r in stopped):
+            stopped.append(stop_publisher_for_update(run_command))
     except (OSError, KeyboardInterrupt) as error:
         print(f'Service shutdown interrupted: {error or "Interrupted"}', file=output)
         update.report_failures(
@@ -150,6 +155,21 @@ def update_target(
             )
         if all(r.ok for r in results):
             results.extend(install_revisions(programs, targets, run_command))
+        if update_publisher and all(r.ok for r in results):
+            results.append(
+                update.install_streamo_service(
+                    root, provision_config.network.user, run_command
+                )
+            )
+            if results[-1].ok:
+                results.append(
+                    update.run_step(
+                        'streamo',
+                        'verify manual service',
+                        ['sh', '-c', verify.streamo_manual_service_command()],
+                        run_command,
+                    )
+                )
         if all(r.ok for r in results):
             results.extend(
                 restart_services(
@@ -280,6 +300,26 @@ def active_service_enablement(
     return active, failed
 
 
+def stop_publisher_for_update(run_command: update.RunCommand) -> update.StepResult:
+    unit = 'streamo.service'
+    state = update.run_step(
+        'streamo',
+        'read publisher unit',
+        ['systemctl', '--user', 'show', unit, '--property=LoadState', '--value'],
+        run_command,
+    )
+    if not state.ok or state.output.strip() == 'not-found':
+        return state
+    if state.output.strip() == 'masked':
+        return update.run_service_step('streamo', 'stop', run_command)
+    return update.run_step(
+        'streamo',
+        'disable and stop publisher',
+        ['systemctl', '--user', 'disable', unit, '--now'],
+        run_command,
+    )
+
+
 def restart_services(
     active: dict[str, str],
     refresh: bool,
@@ -393,15 +433,6 @@ def check_updated_services(
                 'lyte',
                 'service health',
                 ['systemctl', '--user', 'is-active', '--quiet', 'lyte.service'],
-                run_command,
-            )
-        )
-    if 'streamo' in names and provision_config.stream.enabled:
-        results.append(
-            update.run_step(
-                'streamo',
-                'service health',
-                ['sh', '-c', verify.showco_streamo_health_command(root)],
                 run_command,
             )
         )

@@ -11,6 +11,11 @@ configured stereo pair. The exact source key is resolved from recs at deployment
 an absent or ambiguous mixer fails configuration instead of opening a competing
 hardware capture. Media and publishing credentials are preserved.
 
+Provisioning and updates that include streamO leave the publisher stopped.
+The installed systemd service can be started from showCo and stays off at boot.
+When using recs, streamO waits for fresh audio samples before opening the
+publishing connection.
+
 At startup, showCo routes X18 Main L/R post-fader to USB 17–18 for recs, even
 when streamO is disabled. If the mixer is unavailable at launch, showCo
 reports the routing error in readiness. An independent checker verifies the

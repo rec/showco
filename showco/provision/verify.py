@@ -169,14 +169,6 @@ def showco_service_status_command(service: str, root: Path) -> str:
     )
 
 
-def showco_streamo_health_command(root: Path) -> str:
-    showco_directory = shlex.quote(str(root / 'showco'))
-    return user_session_command(
-        f'cd {showco_directory} && PATH="$HOME/.local/bin:$PATH" '
-        'uv run --locked showco run streamo-health'
-    )
-
-
 def persistent_journal_command() -> str:
     return (
         'sudo systemd-cat --identifier=showco-provisioning '
@@ -230,7 +222,19 @@ def verify_streamo_service(provision_config: config.Config) -> VerificationResul
     return verify_remote_command(
         provision_config,
         'streamO service',
-        showco_streamo_health_command(provision_config.paths.root),
+        user_session_command(streamo_manual_service_command()),
+    )
+
+
+def streamo_manual_service_command() -> str:
+    return 'sh -c ' + shlex.quote(
+        'state=$(systemctl --user show streamo.service '
+        '--property=LoadState,ActiveState,UnitFileState,Restart) && '
+        "for property in LoadState=loaded 'ActiveState=(inactive|failed)' "
+        'UnitFileState=static Restart=no; do '
+        'if ! grep -Exq "$property" <<EOF\n$state\nEOF\nthen '
+        'printf "streamO manual service expected %s\\n%s\\n" "$property" "$state" >&2; '
+        'exit 1; fi; done'
     )
 
 

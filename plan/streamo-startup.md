@@ -19,7 +19,12 @@ Neither boot nor maintenance may resurrect previous broadcast intent.
 Pending user decision: confirm explicit Start rather than automatic publication
 on initially becoming ready.
 
-This is a planning change. It does not disable autostart on the current Pi.
+Implemented in source: streamO can be installed as a manual systemd service.
+Updated provisioning and target updates that include streamO leave it off.
+A publisher using recs waits for fresh samples from its own subscription
+before opening output. The Pi still needs the migration. Use the updated
+provisioning path or a deploy that loads the current updater and includes
+streamO. An older updater can restart an active publisher.
 
 ## Why plugging in currently publishes
 
@@ -45,7 +50,7 @@ ingest stream key are separate concerns.
 
 ## Implementation plan
 
-### 1. Install a manual-start service without briefly publishing
+### 1. Install a manual-start service without briefly publishing (implemented)
 
 Use an installed, inactive streamO service on the Pi, excluded from boot
 activation. Keep `stream.enabled` meaning the feature is available. Do not
@@ -54,22 +59,11 @@ globally disable or mask it, because explicit Start must work.
 `StreamoClient.status()` represents an installed inactive Linux unit as
 stopped. Use that lifecycle for the proposed explicit-start flow.
 
-The existing installer always enables and starts the unit. Calling it and then
-stopping/disabling streamO leaves a publishing window and is insufficient.
-Plan a small explicit manual-install capability in the existing service API,
-instead of duplicating reccy's unit rendering and metadata in showCo. This is a
-necessary sibling prerequisite to scope before implementation, not permission
-to change reccy or dependencies during this documentation task.
-
-Cover initial install, repeated provisioning, existing boot-enabled units, and
-definition refresh. Also verify the manual-start contract through updates,
-rollback, and interrupted maintenance. Migrate existing installations away
-from boot activation.
-
-Verification must accept the intended inactive/manual state without broadcasting.
-Apply the bounded recovery policy below to service restart behavior too.
-Stop must remain stopped. An unrestricted systemd restart loop must not bypass
-the readiness gate or the three-attempt limit.
+reccy renders a static unit with `Restart=no` and disables and stops an
+existing service before replacing its definition. Provisioning validates the
+configuration and uses that installer. A target update affecting streamO
+stops showCo first, takes streamO offline, and leaves it offline on rollback.
+Provisioning and updates verify the systemd properties without broadcasting.
 
 ### 2. Share one non-publishing readiness decision
 
@@ -120,11 +114,10 @@ requests. Recheck readiness at dispatch, not only when rendering the page.
 A stale browser button or direct POST must not bypass the gate. Stop must
 remain available even when readiness fails.
 
-A UI gate alone cannot protect the interval between checking and opening the
-provider output. streamO must establish its selected real audio input before
-opening that output, with bounded failure and no publication while waiting.
-Scope this small publisher-side prerequisite explicitly before implementation;
-do not claim a showCo-only precheck protects direct daemon starts.
+streamO now waits for fresh audio from its selected recs subscription before
+provider preparation, and checks again immediately before opening the encoder.
+If samples never arrive, startup fails after a bounded wait. Fresh, quiet
+samples qualify.
 
 #### Bounded recovery after an intentional start
 

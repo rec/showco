@@ -61,8 +61,16 @@ class Target:
                     else 'inactive'
                 )
                 stdout = f'ActiveState={state}\nUnitFileState={self.enablement[name]}\n'
+                if '--property=LoadState' in command:
+                    stdout = 'loaded\n'
         elif command[0] == 'sh':
-            operation = 'health'
+            operation = (
+                'manual-install'
+                if 'daemon install --manual' in command[-1]
+                else 'manual-check'
+                if 'UnitFileState=static' in command[-1]
+                else 'health'
+            )
         if not self.failed and operation == self.failure:
             self.failed = True
             return CompletedProcess(command, 1, '', 'injected failure')
@@ -80,6 +88,10 @@ class Target:
             self.running.add(name)
         elif operation == 'disable':
             self.enablement[name] = 'disabled'
+            if '--now' in command:
+                self.running.discard(name)
+        elif operation == 'manual-install':
+            self.enablement['streamo'] = 'static'
         elif operation == 'enable':
             self.enablement[name] = (
                 'enabled-runtime' if '--runtime' in command else 'enabled'
@@ -156,7 +168,7 @@ def test_invalid_candidate_gui_is_rejected_before_services_stop(target: Target) 
 def test_updated_enabled_service_is_checked_and_failure_rolls_back(
     target: Target, service: str
 ) -> None:
-    target.failure = 'is-active' if service == 'lyte' else 'health'
+    target.failure = 'is-active' if service == 'lyte' else 'manual-check'
     output = StringIO()
 
     assert (
@@ -168,7 +180,8 @@ def test_updated_enabled_service_is_checked_and_failure_rolls_back(
 
     assert target.revisions[service] == f'old-{service}'
     assert target.environments[service] == f'old-{service}'
-    assert 'service health: failed' in output.getvalue()
+    step = 'service health' if service == 'lyte' else 'verify manual service'
+    assert f'{step}: failed' in output.getvalue()
 
 
 @pytest.mark.parametrize('failure', ['reset', 'sync', 'start', 'health'])
@@ -249,12 +262,13 @@ def test_update_reports_failed_recorder_without_starting_or_rolling_back(
     assert ['systemctl', '--user', 'start', 'recs.service'] not in target.commands
 
 
-@pytest.mark.parametrize('failure', ['', 'stop', 'sync'])
-def test_target_update_keeps_stopped_publisher_off(
-    target: Target, failure: str
+@pytest.mark.parametrize('failure', ['', 'sync', 'manual-install', 'manual-check'])
+@pytest.mark.parametrize('running', [True, False])
+def test_target_update_leaves_publisher_off_even_on_rollback(
+    target: Target, failure: str, running: bool
 ) -> None:
-    target.running.remove('streamo')
-    target.enablement['streamo'] = 'disabled'
+    if not running:
+        target.running.remove('streamo')
     target.failure = failure
 
     outcome = target_update.update_target(
@@ -266,10 +280,37 @@ def test_target_update_keeps_stopped_publisher_off(
 
     assert outcome == int(bool(failure))
     assert target.running == {'recs', 'showco', 'lyte'}
-    assert target.enablement['streamo'] == 'disabled'
+    assert target.enablement['streamo'] in {'disabled', 'static'}
+    assert [
+        'systemctl',
+        '--user',
+        'disable',
+        'streamo.service',
+        '--now',
+    ] in target.commands
     assert not any(
-        c[:2] == ['systemctl', '--user'] and c[2] != 'show' and 'streamo.service' in c
+        c[:2] == ['systemctl', '--user']
+        and c[2] in {'enable', 'start', 'restart'}
+        and 'streamo.service' in c
         for c in target.commands
+    )
+
+
+def test_streamo_only_update_stops_showco_before_disabling_publisher(
+    target: Target,
+) -> None:
+    assert (
+        target_update.update_target(
+            ['streamo'], root=Path('/code'), run_command=target.run, output=StringIO()
+        )
+        == 0
+    )
+    assert target.revisions['showco'] == 'old-showco'
+    assert target.running == {'recs', 'lyte', 'showco'}
+    assert target.commands.index(
+        ['systemctl', '--user', 'stop', 'showco.service']
+    ) < target.commands.index(
+        ['systemctl', '--user', 'disable', 'streamo.service', '--now']
     )
 
 
@@ -445,7 +486,6 @@ def test_reccy_update_refreshes_enabled_services_after_sync(target: Target) -> N
         )
     assert {c.args[0] for c in restart.call_args_list} == {
         'recs',
-        'streamo',
         'lyte',
         'showco',
     }

@@ -165,7 +165,6 @@ install_streamo_service() {
   local config_path
   local quoted_config
   local uid
-  local input
   if [[ "$STREAMO_ENABLED" != true ]]; then
     local unit_directory="/home/$SHOW_USER/.config/systemd/user"
     local load_state
@@ -192,18 +191,10 @@ install_streamo_service() {
     env PATH="$ROOT/streamo/.venv/bin:/home/$SHOW_USER/.local/bin:$PATH" \
     bash -lc "cd '$ROOT/streamo' && uv run --locked streamo daemon validate --config $quoted_config" || return "$?"
   user_systemctl unmask streamo.service
-  input=$(service_input "$(git -C "$ROOT/streamo" rev-parse HEAD)
-$(sha256sum "$config_path" | awk '{print $1}')")
-  if service_is_current streamo "$input"; then
-    printf 'streamO service is already installed.\n'
-    return
-  fi
   sudo -H -u "$SHOW_USER" \
     env XDG_RUNTIME_DIR="/run/user/$uid" \
     PATH="$ROOT/streamo/.venv/bin:/home/$SHOW_USER/.local/bin:$PATH" \
-    bash -lc "cd '$ROOT/streamo' && uv run --locked streamo daemon install --config $quoted_config"
-  user_systemctl restart streamo.service
-  record_service_state streamo "$input"
+    bash -lc "cd '$ROOT/streamo' && uv run --locked streamo daemon install --manual --config $quoted_config"
 }
 
 install_lyte_service() {

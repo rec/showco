@@ -91,7 +91,7 @@ class UpdateTests(unittest.TestCase):
                     'sh',
                     '-c',
                     'cd /code/streamo && uv run --locked streamo daemon install '
-                    '--config /home/tom/.config/streamo/config.toml',
+                    '--manual --config /home/tom/.config/streamo/config.toml',
                 ]
             ],
         )

@@ -254,7 +254,8 @@ storage_hotplug_rules /dev/stdin
     def test_remote_script_restarts_changed_services(self) -> None:
         self.assertIn('user_systemctl restart recs.service', script.REMOTE_SCRIPT)
         self.assertIn('user_systemctl restart showco.service', script.REMOTE_SCRIPT)
-        self.assertIn('user_systemctl restart streamo.service', script.REMOTE_SCRIPT)
+        self.assertIn('streamo daemon install --manual', script.REMOTE_SCRIPT)
+        self.assertNotIn('user_systemctl restart streamo.service', script.REMOTE_SCRIPT)
         self.assertIn('user_systemctl restart lyte.service', script.REMOTE_SCRIPT)
 
     def test_remote_script_reboots_only_when_the_system_requires_it(self) -> None:
@@ -561,34 +562,22 @@ user_systemctl() {
 
 
 @pytest.mark.parametrize(
-    ('validation_status', 'installed', 'expected'),
+    ('validation_status', 'expected'),
     [
         (
             0,
-            False,
             [
                 'validate',
                 'systemctl unmask streamo.service',
-                'install',
-                'systemctl restart streamo.service',
+                'manual install',
             ],
         ),
-        (
-            0,
-            True,
-            [
-                'validate',
-                'systemctl unmask streamo.service',
-                'streamO service is already installed.',
-            ],
-        ),
-        (1, True, ['validate']),
+        (1, ['validate']),
     ],
 )
-def test_streamo_validates_before_changing_or_skipping_service_installation(
+def test_streamo_provision_validates_and_installs_without_starting(
     tmp_path: Path,
     validation_status: int,
-    installed: bool,
     expected: list[str],
 ) -> None:
     config_path = tmp_path / 'config.toml'
@@ -616,14 +605,13 @@ sudo() {
       printf 'Movie is 640x360 at 24 fps. Expected 1280x720 at 30 fps.\n' >&2
       return "$TEST_VALIDATION_STATUS"
     fi
+  elif [[ "$*" == *'daemon install --manual'* ]]; then
+    printf 'manual install\n'
   else
-    printf 'install\n'
+    return 99
   fi
 }
 id() { printf '1000\n'; }
-git() { printf 'revision\n'; }
-service_is_current() { [[ "$TEST_INSTALLED" == true ]]; }
-record_service_state() { :; }
 install_streamo_service
 """,
         ],
@@ -633,7 +621,6 @@ install_streamo_service
             'ROOT': str(tmp_path),
             'STREAMO_ENABLED': 'true',
             'TEST_CONFIG': str(config_path),
-            'TEST_INSTALLED': str(installed).lower(),
             'TEST_VALIDATION_STATUS': str(validation_status),
         },
         capture_output=True,
