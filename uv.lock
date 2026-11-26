@@ -972,7 +972,7 @@ wheels = [
 [[package]]
 name = "reccy"
 version = "0.2.0"
-source = { git = "https://github.com/rec/reccy.git?branch=main#0b62e26c5deb7236dbbf8b4b5ff88f4a8ab4479a" }
+source = { git = "https://github.com/rec/reccy.git?branch=main#a140875bafe35354530853ff473e2e22ac203719" }
 dependencies = [
     { name = "pint" },
     { name = "pydantic" },
@@ -1171,7 +1171,7 @@ wheels = [
 [[package]]
 name = "streamo"
 version = "0.2.0"
-source = { git = "https://github.com/rec/streamo.git?branch=main#47308a21a79740949a8881c2dd4e42805f23adc1" }
+source = { git = "https://github.com/rec/streamo.git?branch=main#99e166511e33f39ce7e13ea4f30364c59424a098" }
 dependencies = [
     { name = "google-auth" },
     { name = "google-auth-oauthlib" },
