@@ -23,6 +23,8 @@ class SnapshotStatus(BaseModel, frozen=True):
     has_snapshot: bool = False
     paused: bool = False
     session_started_at: float | None = None
+    session_directory: str | None = None
+    instance_token: str | None = None
     rows: list[dict[str, object]] = Field(default_factory=list)
     errors: list[models.ErrorRecord] = Field(default_factory=list)
     disk: models.RecordingDiskStatus | None = None
@@ -114,11 +116,16 @@ def snapshot_status(value: object) -> SnapshotStatus | str:
     midi = midi_status(value)
     if not isinstance(inputs := value.get('midi'), list) or len(midi) != len(inputs):
         return 'recs status snapshot has invalid MIDI status'
+    session = value.get('session_directory')
+    instance = value.get('instance')
+    token = instance.get('start_token') if object_dict(instance) else None
     return SnapshotStatus(
         service_state='connected',
         has_snapshot=True,
         paused=paused,
-        session_started_at=session_start(value.get('session_directory')),
+        session_started_at=session_start(session),
+        session_directory=session if isinstance(session, str) else None,
+        instance_token=token if isinstance(token, str) else None,
         rows=rows,
         errors=errors,
         disk=disk,
@@ -211,6 +218,21 @@ def error_records(value: object) -> list[models.ErrorRecord] | str:
             return 'recs status snapshot has invalid errors'
         errors.append(models.ErrorRecord(timestamp=timestamp, message=message))
     return errors
+
+
+def errors_since(
+    errors: list[models.ErrorRecord], started_at: float
+) -> list[models.ErrorRecord]:
+    recent = []
+    for error in errors:
+        try:
+            timestamp = datetime.fromisoformat(error.timestamp.replace('Z', '+00:00'))
+            if timestamp.timestamp() < started_at:
+                continue
+        except (OSError, OverflowError, ValueError):
+            pass
+        recent.append(error)
+    return recent
 
 
 def recording_disk_status(value: object) -> models.RecordingDiskStatus | str:

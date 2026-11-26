@@ -69,6 +69,8 @@ class Target:
                 if 'daemon install --manual' in command[-1]
                 else 'manual-check'
                 if 'UnitFileState=static' in command[-1]
+                else 'clear-twitch-recovery'
+                if 'showco-twitch.json' in command[-1]
                 else 'health'
             )
         if not self.failed and operation == self.failure:

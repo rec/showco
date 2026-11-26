@@ -218,7 +218,7 @@ def _gui_disabled(element: gui_schema.Element, status: models.ShowStatus) -> boo
     if element.action == 'streamo-stop':
         return not status.twitch_stop_available
     if element.action == 'streamo-restart':
-        return status.performance_locked or not status.twitch_stop_available
+        return True
     if element.disabled_when == 'streamo_unavailable':
         return not status.twitch_toggle_available
     return (
@@ -257,6 +257,8 @@ def _gui_section_class(style: str, status: models.ShowStatus) -> str:
 def _gui_status_text(element: gui_schema.Element, status: models.ShowStatus) -> str:
     value = _gui_value(element.value, status, None)
     match element.format:
+        case 'twitch_message':
+            return status.twitch_message
         case 'readiness':
             return 'ready' if value else 'not ready'
         case 'service' if isinstance(value, models.ServiceStatus):

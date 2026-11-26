@@ -6,6 +6,7 @@ import threading
 from pydantic import ValidationError
 from reccy.entities import Musician
 from reccy.protocol import rpc
+from recs.daemon.gui_protocol import AudioStatusResult
 
 from . import models, recs_channels, recs_control, recs_snapshot
 
@@ -43,6 +44,8 @@ class RecsClient:
             snapshot_available=snapshot.has_snapshot,
             paused=snapshot.paused,
             session_started_at=snapshot.session_started_at,
+            session_directory=snapshot.session_directory,
+            instance_token=snapshot.instance_token,
             elapsed_seconds=recs_channels._float(totals.get('time')),
             recorded_seconds=recs_channels._float(totals.get('recorded')),
             file_size=recs_channels._float(totals.get('file_size')),
@@ -65,6 +68,13 @@ class RecsClient:
             osc=snapshot.osc,
             midi=snapshot.midi,
         )
+
+    def audio_capture_clocks(self) -> dict[str, str]:
+        try:
+            value = self.control.call('audio_status', timeout=1)
+        except rpc.RemoteError as error:
+            raise ValueError(f'Cannot verify recs capture identity: {error}') from error
+        return audio_capture_clocks(AudioStatusResult.model_validate(value))
 
     def play(self) -> models.ActionResult:
         if self.status().playback.state == 'paused':
@@ -610,6 +620,16 @@ def _number(value: object) -> float | None:
     if isinstance(value, int | float) and not isinstance(value, bool):
         return float(value)
     return None
+
+
+def audio_capture_clocks(status: AudioStatusResult) -> dict[str, str]:
+    return {
+        name: clock
+        for s in status.sources
+        if isinstance(name := s.get('source'), str)
+        and isinstance(clock := s.get('clock_id'), str)
+        and clock
+    }
 
 
 ACTION_COMMANDS = {

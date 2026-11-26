@@ -525,6 +525,7 @@ TEXT_VALUES_BY_FORMAT = {
     'osc_detail': {'item'},
 }
 STATUS_FORMATS = {
+    'show.twitch_message': {'twitch_message'},
     'show.readiness.ready': {'readiness'},
     'show.recs': {'recording_destination', 'shutdown_recs'},
     'show.recs.service': {'service'},

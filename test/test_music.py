@@ -180,22 +180,17 @@ def test_record_fades_music_before_starting_a_new_session() -> None:
     assert value.status().mode == 'record'
 
 
-def test_record_starts_streamo_after_the_new_recording_session() -> None:
+def test_record_leaves_twitch_off_until_an_explicit_start() -> None:
     restart = mock.Mock(return_value=result())
-    value, recs, _, routing = controller(streamo=mock.Mock())
+    value, recs, _, _ = controller(streamo=mock.Mock())
     value.streamo_restart = restart
-    calls = mock.Mock()
-    calls.attach_mock(routing.route_main_to_usb, 'route')
-    calls.attach_mock(restart, 'start')
-
-    value.record()
+    assert value.record().ok
 
     assert recs.action.call_args_list == [
         mock.call('new_session'),
         mock.call('resume_recording'),
     ]
-    restart.assert_called_once_with()
-    assert calls.mock_calls == [mock.call.route(), mock.call.start()]
+    restart.assert_not_called()
 
 
 def test_stream_does_not_start_when_usb_routing_is_unconfirmed() -> None:
@@ -299,7 +294,28 @@ def test_restart_during_credits_stops_observer_and_starts_record_mode() -> None:
     ]
     player.stop.assert_called_once_with(2.0)
     routing.restore_room.assert_called_once_with(scene)
-    value.streamo_restart.assert_called_once_with()
+    value.streamo_restart.assert_not_called()
+    assert mock.call('stop') in stream.action.call_args_list
+
+
+def test_resume_records_even_if_publisher_stop_cannot_be_confirmed() -> None:
+    stream = mock.Mock()
+    stream.status.return_value = models.StreamoStatus(
+        service=models.ServiceStatus(name='streamo', state='offline')
+    )
+    stream.action.return_value = models.ActionResult(
+        ok=False, message='Socket unavailable'
+    )
+    value, recs, _, _ = controller(streamo=stream)
+    resumed = value.record(restart=True)
+
+    assert not resumed.ok
+    assert 'Twitch stop could not be confirmed' in resumed.message
+    assert value.status().mode == 'record'
+    assert recs.action.call_args_list == [
+        mock.call('new_session'),
+        mock.call('resume_recording'),
+    ]
 
 
 def test_restart_from_teardown_resumes_recording_and_stops_music() -> None:
@@ -1338,7 +1354,7 @@ def test_abandon_closing_restarts_show_only_after_recording_resumes(
         assert restored.status().mode == 'record'
         assert restored.closing.status().record is None
         assert not path.exists()
-        restart.assert_called_once_with()
+        restart.assert_not_called()
         assert (
             music.MusicState.model_validate_json(
                 (tmp_path / 'music.json').read_text()
@@ -1738,7 +1754,7 @@ def test_resume_preserves_record_mode_when_old_evidence_cannot_be_deleted(
             mock.call('new_session'),
             mock.call('resume_recording'),
         ]
-        restart.assert_called_once_with()
+        restart.assert_not_called()
         routing.restore_room.assert_called_once_with(evidence.room_scene)
     finally:
         value.close()

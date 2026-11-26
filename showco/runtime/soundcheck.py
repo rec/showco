@@ -22,7 +22,9 @@ class SoundcheckState(BaseModel, frozen=True):
     destination: str = ''
     expected_inputs: list[str] = Field(default_factory=list)
     results: dict[str, CheckResult] = Field(default_factory=dict)
-    recording_baseline: float | None = None
+    recording_baselines: dict[str, float] = Field(default_factory=dict)
+    recording_session: str | None = None
+    recording_clocks: dict[str, str] = Field(default_factory=dict)
     recording_started: datetime | None = None
 
 
@@ -52,26 +54,8 @@ class Soundcheck:
     def observe(
         self, status: models.ShowStatus, configuration: str, now: datetime | None = None
     ) -> None:
-        now = now or datetime.now().astimezone()
         disk = status.recs.disk
-        scope = hashlib.sha256(
-            json.dumps(
-                [
-                    now.date().isoformat(),
-                    configuration,
-                    self.identity(disk.path) if disk is not None else '',
-                    disk.path if disk is not None else '',
-                    [
-                        [c.device, c.channels, c.name, c.on]
-                        for c in status.recs.channels
-                    ],
-                    status.recs.service.state,
-                    status.lyte.service.state,
-                    status.streamo.service.state,
-                ],
-                sort_keys=True,
-            ).encode()
-        ).hexdigest()
+        scope = self.scope(status, configuration, now)
         if self.state.scope and self.state.scope != scope:
             self.invalidate(
                 'Date, device, service, or configuration changed; repeat checks'
@@ -85,6 +69,28 @@ class Soundcheck:
         elif self.pending_save:
             self.save(self.state)
 
+    def scope(
+        self, status: models.ShowStatus, configuration: str, now: datetime | None = None
+    ) -> str:
+        now = now or datetime.now().astimezone()
+        disk = status.recs.disk
+        return hashlib.sha256(
+            json.dumps(
+                [
+                    now.date().isoformat(),
+                    configuration,
+                    self.identity(disk.path) if disk is not None else '',
+                    disk.path if disk is not None else '',
+                    [[c.device, c.channels, c.name] for c in status.recs.channels],
+                    status.recs.service.state,
+                    status.recs.session_directory,
+                    status.recs.instance_token,
+                    status.recs.offline_sources,
+                ],
+                sort_keys=True,
+            ).encode()
+        ).hexdigest()
+
     def invalidate(self, reason: str) -> None:
         invalid = self.state.model_copy(
             update={
@@ -92,7 +98,9 @@ class Soundcheck:
                     k: v.model_copy(update={'state': 'invalid', 'evidence': reason})
                     for k, v in self.state.results.items()
                 },
-                'recording_baseline': None,
+                'recording_baselines': {},
+                'recording_session': None,
+                'recording_clocks': {},
                 'recording_started': None,
             }
         )
@@ -111,17 +119,42 @@ class Soundcheck:
                 update={
                     'expected_inputs': expected,
                     'results': {},
-                    'recording_baseline': None,
+                    'recording_baselines': {},
+                    'recording_session': None,
+                    'recording_clocks': {},
                     'recording_started': None,
                 }
             )
         )
 
-    def record_start(self, status: models.ShowStatus) -> None:
+    def record_start(
+        self, status: models.ShowStatus, capture_clocks: dict[str, str] | None = None
+    ) -> None:
+        if (
+            status.recs.service.state != 'connected'
+            or not status.recs.session_directory
+        ):
+            raise ValueError('A current recording session is required for the sample')
+        baseline = {
+            input_key(c): c.recorded_seconds
+            for c in status.recs.channels
+            if c.recorded_seconds is not None
+        }
+        if not set(self.state.expected_inputs) <= baseline.keys():
+            raise ValueError('Recorded duration is unavailable for an expected input')
+        expected = self.expected_sources(status.recs)
+        if capture_clocks is not None and (
+            not expected or not expected <= capture_clocks.keys()
+        ):
+            raise ValueError('Capture identity is unavailable for an expected input')
         self.save(
             self.state.model_copy(
                 update={
-                    'recording_baseline': status.recs.recorded_seconds,
+                    'recording_baselines': baseline,
+                    'recording_session': status.recs.session_directory,
+                    'recording_clocks': {
+                        k: v for k, v in (capture_clocks or {}).items() if k in expected
+                    },
                     'recording_started': datetime.now().astimezone(),
                     'results': {
                         k: v
@@ -139,6 +172,7 @@ class Soundcheck:
         confirmation: bool = False,
         skip: bool = False,
         note: str = '',
+        capture_clocks: dict[str, str] | None = None,
     ) -> models.ActionResult:
         if step not in CHECKS:
             raise ValueError('Unknown soundcheck step')
@@ -183,19 +217,32 @@ class Soundcheck:
                 else f'Check signal, recording, or connection: {", ".join(failed)}'
             )
         elif step == 'recording':
-            baseline, current = (
-                self.state.recording_baseline,
-                status.recs.recorded_seconds,
-            )
+            baseline = self.state.recording_baselines
+            current = {
+                input_key(c): c.recorded_seconds
+                for c in status.recs.channels
+                if c.recorded_seconds is not None
+            }
+            missing = [
+                k
+                for k in self.state.expected_inputs
+                if k not in baseline or k not in current or current[k] < baseline[k] + 1
+            ]
             passed = bool(
                 status.recs.service.state == 'connected'
-                and baseline is not None
-                and current is not None
-                and current >= baseline + 1
+                and self.state.recording_session
+                and self.state.recording_session == status.recs.session_directory
+                and not missing
+                and all(
+                    (capture_clocks or {}).get(k) == v
+                    for k, v in self.state.recording_clocks.items()
+                )
             )
             evidence = (
-                f'Reported recorded audio: {baseline} to {current} seconds; '
-                'this does not prove playback'
+                'At least one second was saved for every expected recording input'
+                if passed
+                else 'Make and check a sample for every expected input in this session'
+                + (': ' + ', '.join(missing) if missing else '')
             )
         elif step == 'playback':
             recording = self.state.results.get('recording')
@@ -203,6 +250,7 @@ class Soundcheck:
                 confirmation
                 and recording
                 and recording.state == 'passed'
+                and self.state.recording_session == status.recs.session_directory
                 and note.strip()
             )
             evidence = (
@@ -241,6 +289,13 @@ class Soundcheck:
             )
         )
         return models.ActionResult(ok=passed or skip, message=evidence)
+
+    def expected_sources(self, status: models.RecsStatus) -> set[str]:
+        return {
+            c.device
+            for c in status.channels
+            if input_key(c) in self.state.expected_inputs
+        }
 
 
 def input_key(channel: models.ChannelLevel) -> str:

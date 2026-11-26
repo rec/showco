@@ -79,15 +79,15 @@ function renderWorkflows(data) {
   }
   const options = document.getElementById('recovery-options');
   if (options) {
-    const names = ['recs', 'lyte', 'streamo'].filter(name => !['connected', 'disabled'].includes(data.show[name].service.state));
+    const names = ['recs', 'lyte'].filter(name => !['connected', 'disabled'].includes(data.show[name].service.state));
     const signature = JSON.stringify(names);
     if (signature !== recoverySignature) {
       recoverySignature = signature; options.replaceChildren();
       for (const name of names) {
-        const displayName = name === 'streamo' ? 'streamO' : name;
+        const displayName = name;
         const section = document.createElement('section');
         const explanation = document.createElement('p');
-        explanation.textContent = `${displayName} is unavailable. Restarting ${displayName} interrupts ${name === 'recs' ? 'recording and playback; audio during the interruption is lost' : name === 'lyte' ? 'lighting output' : 'the live stream'}. Other services are not restarted. Unlock performance protection first.`;
+        explanation.textContent = `${displayName} is unavailable. Restarting ${displayName} interrupts ${name === 'recs' ? 'recording and playback; audio during the interruption is lost' : 'lighting output'}. Other services are not restarted. Unlock performance protection first.`;
         const label = document.createElement('label'); const confirm = document.createElement('input');
         confirm.type = 'checkbox'; confirm.dataset.confirmService = name;
         label.append(confirm, document.createTextNode(`I intend to interrupt ${displayName}`));

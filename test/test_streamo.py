@@ -73,7 +73,8 @@ class StreamoTests(unittest.TestCase):
             service.installed = True
             for running, details, expected in [
                 (False, 'inactive', 'stopped'),
-                (False, 'failed', 'unknown'),
+                (False, 'failed', 'failed'),
+                (False, 'inactive\nError: capture failed', 'stopped'),
                 (True, 'active', 'unknown'),
             ]:
                 with self.subTest(details=details):

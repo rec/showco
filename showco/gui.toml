@@ -27,6 +27,13 @@ action = "streamo-toggle"
 disabled_when = "streamo_unavailable"
 
 [[pages.sections.elements]]
+name = "twitch-readiness"
+kind = "status"
+value = "show.twitch_message"
+format = "twitch_message"
+visible_when = "streamo_enabled"
+
+[[pages.sections.elements]]
 name = "teardown"
 kind = "action_button"
 label = "End show"
@@ -1466,13 +1473,6 @@ empty_text = "No actions yet."
 [[pages.sections]]
 name = "stream"
 title = "Stream"
-
-[[pages.sections.elements]]
-name = "restart-stream"
-kind = "action_button"
-label = "Restart Stream"
-action = "streamo-restart"
-visible_when = "streamo_enabled"
 
 [[pages.sections.elements]]
 name = "mute-stream"

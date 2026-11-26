@@ -66,6 +66,7 @@ def channel_levels(rows: list[dict[str, object]]) -> list[models.ChannelLevel]:
                 channels=_channels(row.get('channels')),
                 signal=signal,
                 on=row.get('on') is True,
+                recorded_seconds=_float(row.get('recorded')),
             )
         )
     return channels

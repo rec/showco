@@ -346,11 +346,10 @@ class ServerTests(unittest.TestCase):
                 streamo_restart=restart,
             )
         self.assertEqual(calls.mock_calls, [mock.call.route()])
-        for action in ('streamo-start', 'streamo-restart'):
-            calls.reset_mock()
-            outcome = configured.app.run_action({'action': action})
-            self.assertTrue(outcome.ok, outcome.message)
-            self.assertEqual(calls.mock_calls, [mock.call.route(), mock.call.start()])
+        calls.reset_mock()
+        outcome = configured.app.run_action({'action': 'streamo-start'})
+        self.assertTrue(outcome.ok, outcome.message)
+        self.assertEqual(calls.mock_calls, [mock.call.route(), mock.call.start()])
         self.assertEqual(recs.mock_calls, [])
 
     def test_startup_routes_main_usb_without_streaming_and_recovers_late_mixer(
@@ -797,7 +796,7 @@ class ServerTests(unittest.TestCase):
 
         lyte.test.assert_not_called()
 
-    def test_stream_restart_action_uses_service_restart(self) -> None:
+    def test_legacy_restart_action_cannot_start_a_broadcast(self) -> None:
         restart = mock.Mock(
             return_value=models.ActionResult(
                 ok=True,
@@ -814,8 +813,9 @@ class ServerTests(unittest.TestCase):
 
         result = app.run_action({'action': 'streamo-restart'})
 
-        self.assertTrue(result.ok)
-        restart.assert_called_once_with()
+        self.assertFalse(result.ok)
+        self.assertIn('Use Start Twitch', result.message)
+        restart.assert_not_called()
 
     def test_track_name_action_uses_recs_client(self) -> None:
         recs = rehearsal.RehearsalRecsClient()

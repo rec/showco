@@ -154,10 +154,12 @@ vm.runInContext('updateStatus()', context).then(async () => {
   assert.ok(!elements.get('lyte-health').textContent.includes('undefined'));
   vm.runInContext('updateConfiguredActions(recordingState)', context);
   assert.equal(toggle.disabled, !status.twitch_toggle_available);
-  assert.equal(toggle.textContent, status.streamo.toggle_label);
+  assert.equal(toggle.textContent, status.twitch_label);
   context.toggleStatus = {...status, twitch_toggle_available: true, streamo: {
     ...status.streamo, toggle_starts_stream: false, toggle_label: 'Stop Twitch (status unavailable)',
   }};
+  context.toggleStatus.twitch_action = 'streamo-stop';
+  context.toggleStatus.twitch_label = 'Stop Twitch (status unavailable)';
   context.toggleStatus.twitch_stop_available = true;
   vm.runInContext('updateConfiguredActions(toggleStatus)', context);
   assert.equal(toggle.disabled, false);
@@ -171,6 +173,7 @@ vm.runInContext('updateStatus()', context).then(async () => {
 
   context.toggleStatus.music = {...status.music, mode: 'teardown'};
   context.toggleStatus.streamo.toggle_starts_stream = true;
+  context.toggleStatus.twitch_action = 'streamo-start';
   context.toggleStatus.twitch_toggle_available = false;
   vm.runInContext('updateConfiguredActions(toggleStatus)', context);
   assert.equal(toggle.disabled, true);
@@ -179,6 +182,7 @@ vm.runInContext('updateStatus()', context).then(async () => {
   assert.equal(toggle.disabled, false);
   assert.equal(actionInput.value, 'streamo-stop');
   context.toggleStatus.streamo.toggle_starts_stream = false;
+  context.toggleStatus.twitch_action = 'streamo-stop';
   context.toggleStatus.twitch_toggle_available = true;
   vm.runInContext('updateConfiguredActions(toggleStatus)', context);
   assert.equal(toggle.disabled, false);

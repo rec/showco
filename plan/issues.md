@@ -163,14 +163,6 @@ only after measuring which resource actually limits capture.
   existing browser VM tests check behavior and presentation parity but cannot
   establish operator visibility or recovery timing on an actual show network.
 
-## streamO publishes automatically at boot without ready audio
-
-The device-free October 21 boot created an unwanted short Twitch broadcast.
-Normal updates preserve an intentionally stopped service. Enabled provisioning
-can still enable and start streamO, and Start is not gated by fresh recording,
-audio, and clock evidence. The manual-start lifecycle and three-attempt
-recovery policy are in [streamo-startup.md](streamo-startup.md).
-
 ## Slow Pi connections over showbox Wi-Fi
 
 The original slowdown occurred on **showbox Wi-Fi**. The fast October 21

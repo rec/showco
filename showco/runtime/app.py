@@ -29,9 +29,11 @@ from . import (
     recording_progress,
     recovery,
     recs_actions,
+    recs_snapshot,
     services,
     setlist,
     soundcheck,
+    twitch,
     workflows,
 )
 from .lyte import LyteClient
@@ -65,6 +67,8 @@ class ShowcoApp:
         state_directory: Path | None = None,
         external_wifi: ExternalWifi | None = None,
         streamo_stop: Callable[[], models.ActionResult] | None = None,
+        twitch_readiness: twitch.TwitchReadiness | None = None,
+        twitch_state: Path | None = None,
     ) -> None:
         self.recs = recs
         self.streamo = streamo
@@ -74,6 +78,13 @@ class ShowcoApp:
             lambda: services.restart_service('streamo')
         )
         self.streamo_stop = streamo_stop or services.stop_streamo
+        self.twitch_readiness = twitch_readiness
+        self.twitch = twitch.TwitchRecovery(twitch_state)
+        self.twitch_probe_lock = threading.Lock()
+        self.twitch_probe_after = 0.0
+        self.twitch_blockers = (
+            ['Checking Twitch readiness'] if twitch_readiness is not None else []
+        )
         self.recovery_restart: Callable[[str], models.ActionResult] = (
             services.restart_service
         )
@@ -190,7 +201,8 @@ class ShowcoApp:
 
     def _observe(self) -> None:
         try:
-            self._refresh_status()
+            status = self._refresh_status()
+            self.observe_twitch(status)
         except (OSError, ValueError, RuntimeError) as error:
             LOGGER.warning('Service observation failed: %s', error)
 
@@ -264,6 +276,9 @@ class ShowcoApp:
             )
         else:
             streamo = self.streamo.status()
+        twitch_off = streamo.toggle_starts_stream
+        twitch_run = self.twitch.run
+        recovery_needed = bool(twitch_run and twitch_run.needs_recovery(streamo))
         recs = self.recs.status()
         session_started_at = recs.session_started_at
         if session_started_at != self.recs_clock_session:
@@ -284,7 +299,9 @@ class ShowcoApp:
                 if session_started_at is None
                 else session_started_at
             )
-            recs = recs.model_copy(update={'errors': errors_since(recs.errors, cutoff)})
+            recs = recs.model_copy(
+                update={'errors': recs_snapshot.errors_since(recs.errors, cutoff)}
+            )
         lyte = (
             self.lyte.status()
             if self.lyte is not None
@@ -305,6 +322,15 @@ class ShowcoApp:
             mixers=mixers,
             revision=self.revision,
             run_started_at=self.run_started_at,
+            twitch_blockers=self.twitch_blockers if twitch_off else [],
+            twitch_recovery_pending=bool(
+                recovery_needed
+                and twitch_run
+                and twitch_run.attempts < twitch.MAX_RECOVERIES
+            ),
+            twitch_recovery_message=self.twitch.message(
+                recovery_needed, streamo.service.last_error or ''
+            ),
             music=self.music.status()
             if self.music is not None
             else models.MusicStatus(),
@@ -541,7 +567,10 @@ class ShowcoApp:
             )
         if action.startswith(('setlist-', 'soundcheck-', 'recovery-', 'lighting-')):
             return self._run_workflow(form)
-        if action in performance.PROTECTED_ACTIONS:
+        if action in performance.PROTECTED_ACTIONS and action not in {
+            'streamo-start',
+            'streamo-restart',
+        }:
             self.soundcheck_dirty.set()
             self._schedule_status_storage()
         if action.startswith('recs-'):
@@ -563,18 +592,22 @@ class ShowcoApp:
                 )
             match action:
                 case 'music-setup':
+                    self.twitch.cancel()
                     return self.music.setup()
                 case 'music-record':
                     return self.music.record()
                 case 'music-teardown':
+                    self.twitch.cancel()
                     return self.music.teardown()
                 case 'music-restart':
                     if not self.music.status().restart_available:
                         return models.ActionResult(
                             ok=False, message='Teardown has not been requested'
                         )
+                    self.twitch.cancel()
                     return self.music.record(restart=True)
                 case 'music-close-cancel':
+                    self.twitch.cancel()
                     return self.music.abandon_closing()
                 case 'music-close-finish':
                     if form.get('confirmation') != 'broadcast-stopped':
@@ -587,6 +620,7 @@ class ShowcoApp:
                         return models.ActionResult(
                             ok=True, message='Pi shutdown canceled'
                         )
+                    self.twitch.cancel()
                     return self.music.stop()
             return models.ActionResult(
                 ok=False, message=f'unknown music action {action}'
@@ -622,12 +656,16 @@ class ShowcoApp:
             return workflows.run_setlist(self.setlist, self.recs, form)
         show = self.status()
         if action.startswith('recovery-'):
+            if action == 'recovery-restart' and form.get('service') == 'streamo':
+                return models.ActionResult(
+                    ok=False, message='Use Start Twitch on the Show page'
+                )
             result = workflows.run_recovery(
                 self.recovery,
                 form,
                 show,
                 self._refresh_recovery,
-                self._restart_recovery,
+                self.recovery_restart,
                 self._remember_recovery,
                 self._invalidate_soundcheck,
             )
@@ -642,7 +680,12 @@ class ShowcoApp:
             if self.soundcheck_error:
                 raise ValueError(self.soundcheck_error)
             return workflows.run_soundcheck(
-                self.soundcheck, self.recs, self.lyte, form, show
+                self.soundcheck,
+                self.recs,
+                self.lyte,
+                form,
+                show,
+                verify_capture=self.twitch_readiness is not None,
             )
         finally:
             self.soundcheck_lock.release()
@@ -650,13 +693,6 @@ class ShowcoApp:
     def _refresh_recovery(self) -> models.ShowStatus:
         self.recs.snapshot_client.invalidate()
         return self.status()
-
-    def _restart_recovery(self, name: str) -> models.ActionResult:
-        return (
-            self._twitch_action('streamo-restart')
-            if name == 'streamo'
-            else self.recovery_restart(name)
-        )
 
     def _twitch_action(self, action: str) -> models.ActionResult:
         if self.streamo is None:
@@ -684,8 +720,13 @@ class ShowcoApp:
         if status.service.state == 'disabled':
             return models.ActionResult(ok=False, message='streamO is disabled')
         if action == 'streamo-stop':
+            self.twitch.cancel()
             service = self.streamo_stop()
             if service.ok:
+                if self.twitch.error:
+                    return models.ActionResult(
+                        ok=False, message=f'{service.message}. {self.twitch.error}'
+                    )
                 return service
             stop = self.streamo.action('stop')
             if not stop.ok:
@@ -704,20 +745,183 @@ class ShowcoApp:
             return models.ActionResult(
                 ok=False, message=f'{publisher}. {service.message}'
             )
-        if action == 'streamo-start':
-            if mode == 'teardown':
+        if action == 'streamo-restart':
+            return models.ActionResult(
+                ok=False, message='Use Start Twitch on the Show page'
+            )
+        if mode == 'teardown':
+            return models.ActionResult(
+                ok=False,
+                message='The show has ended. Use Resume show on Actions to '
+                'restore the room mix and recording before broadcasting.',
+            )
+        if mode == 'fault' or not status.toggle_starts_stream:
+            return models.ActionResult(
+                ok=False,
+                message='Twitch start refused: publisher may already be active '
+                'or the show phase needs recovery',
+            )
+        if (
+            self.twitch_readiness is not None
+            and self.twitch.run
+            and self.twitch.run.attempts < twitch.MAX_RECOVERIES
+            and (
+                self.twitch.run.needs_recovery(status)
+                or time.monotonic() < self.twitch.run.retry_after
+            )
+        ):
+            return models.ActionResult(
+                ok=False, message='Automatic Twitch recovery is pending'
+            )
+        if self.twitch_readiness is not None:
+            if not self.twitch_probe_lock.acquire(blocking=False):
                 return models.ActionResult(
-                    ok=False,
-                    message='The show has ended. Use Resume show on Actions to '
-                    'restore the room mix and recording before broadcasting.',
+                    ok=False, message='Checking Twitch readiness; retry shortly'
                 )
-            if mode == 'fault' or not status.toggle_starts_stream:
-                return models.ActionResult(
-                    ok=False,
-                    message='Twitch start refused: publisher may already be active '
-                    'or the show phase needs recovery',
+            try:
+                show = self._fresh_twitch_status(status)
+                evidence = self.soundcheck.state
+                self.twitch_blockers = self._check_twitch(show)
+                if self.twitch_blockers:
+                    return models.ActionResult(
+                        ok=False, message='. '.join(self.twitch_blockers)
+                    )
+                if not self._twitch_check_still_current(show, evidence):
+                    return models.ActionResult(
+                        ok=False, message='Twitch readiness changed; retry when ready'
+                    )
+            finally:
+                self.twitch_probe_lock.release()
+        self.twitch.save(
+            twitch.BroadcastRun(
+                retry_after=time.monotonic() + twitch.RETRY_DELAY_SECONDS
+            )
+        )
+        return self._launch_twitch()
+
+    def _fresh_twitch_status(self, streamo: models.StreamoStatus) -> models.ShowStatus:
+        self.recs.snapshot_client.invalidate()
+        return models.ShowStatus(
+            recs=self.recs.status(),
+            streamo=streamo,
+            music=self.music.status()
+            if self.music is not None
+            else models.MusicStatus(),
+        )
+
+    def _check_twitch(self, show: models.ShowStatus) -> list[str]:
+        if self.twitch_readiness is None:
+            return []
+        if (
+            self.soundcheck_dirty.is_set()
+            or self.soundcheck_error
+            or self.soundcheck.pending_save
+        ):
+            return ['Waiting for current Soundcheck evidence']
+        return self.twitch_readiness.check(show, self.soundcheck, self.revision)
+
+    def _launch_twitch(self) -> models.ActionResult:
+        try:
+            result = self.streamo_restart()
+        except (OSError, ValueError, subprocess.SubprocessError) as error:
+            result = models.ActionResult(ok=False, message=str(error))
+        if not result.ok:
+            LOGGER.error('Twitch start failed: %s', result.message)
+            if self.twitch.run is not None:
+                self.twitch.save(
+                    self.twitch.run.model_copy(
+                        update={'failure': result.message, 'launch_failed': True}
+                    )
                 )
-        return self.streamo_restart()
+        return result
+
+    def observe_twitch(self, status: models.ShowStatus) -> None:
+        if (
+            self.twitch_readiness is None
+            or self.streamo is None
+            or not status.streamo.toggle_starts_stream
+            or status.music.mode in {'closing', 'teardown', 'transitioning', 'fault'}
+            or time.monotonic() < self.twitch_probe_after
+            or not self.twitch_probe_lock.acquire(blocking=False)
+        ):
+            return
+        try:
+            run = self.twitch.run
+            if (
+                run is not None
+                and status.streamo.stream_state == 'stopped'
+                and not run.launch_failed
+                and time.monotonic() >= run.retry_after
+                and self.action_lock.acquire(False)
+            ):
+                try:
+                    if (
+                        self.twitch.run is run
+                        and self.streamo.status().stream_state == 'stopped'
+                    ):
+                        self.twitch.cancel()
+                finally:
+                    self.action_lock.release()
+            show = self._fresh_twitch_status(status.streamo)
+            evidence = self.soundcheck.state
+            self.twitch_blockers = self._check_twitch(show)
+            if (
+                self.twitch_blockers
+                or run is None
+                or run.attempts >= twitch.MAX_RECOVERIES
+                or not run.needs_recovery(status.streamo)
+                or time.monotonic() < run.retry_after
+                or not self.action_lock.acquire(False)
+            ):
+                return
+            try:
+                if self.twitch.run is not run:
+                    return
+                if not self._twitch_check_still_current(show, evidence):
+                    return
+                failure = (
+                    status.streamo.service.last_error
+                    or run.failure
+                    or 'Publisher stopped'
+                )
+                self.twitch.save(
+                    twitch.BroadcastRun(
+                        attempts=run.attempts + 1,
+                        retry_after=time.monotonic() + twitch.RETRY_DELAY_SECONDS,
+                        failure=failure,
+                    )
+                )
+                LOGGER.warning(
+                    'Twitch automatic recovery %d/%d: %s',
+                    run.attempts + 1,
+                    twitch.MAX_RECOVERIES,
+                    failure,
+                )
+                self._launch_twitch()
+            finally:
+                self.action_lock.release()
+        finally:
+            self.twitch_probe_after = time.monotonic() + twitch.RETRY_DELAY_SECONDS
+            self.twitch_probe_lock.release()
+
+    def _twitch_check_still_current(
+        self, checked: models.ShowStatus, evidence: soundcheck.SoundcheckState
+    ) -> bool:
+        assert self.streamo is not None
+        fresh = self._fresh_twitch_status(self.streamo.status())
+        return (
+            fresh.streamo.toggle_starts_stream
+            and fresh.streamo.stream_state == checked.streamo.stream_state
+            and twitch.same_recording(fresh.recs, checked.recs)
+            and fresh.music.mode
+            not in {'closing', 'teardown', 'transitioning', 'fault'}
+            and not self.soundcheck_dirty.is_set()
+            and self.soundcheck.state is evidence
+            and self.soundcheck.scope(
+                fresh, workflows.soundcheck_configuration(self.revision)
+            )
+            == evidence.scope
+        )
 
     def _remember_recovery(self, message: str) -> None:
         with self.incident_lock:
@@ -752,24 +956,6 @@ def source_revision() -> str | None:
     if result.returncode:
         return None
     return result.stdout.strip() or None
-
-
-def errors_since(
-    errors: list[models.ErrorRecord], started_at: float
-) -> list[models.ErrorRecord]:
-    return [
-        e
-        for e in errors
-        if (timestamp := error_timestamp(e.timestamp)) is None
-        or timestamp >= started_at
-    ]
-
-
-def error_timestamp(value: str) -> float | None:
-    try:
-        return datetime.fromisoformat(value.replace('Z', '+00:00')).timestamp()
-    except ValueError:
-        return None
 
 
 def action_log_entry(action: str, result: models.ActionResult) -> models.ActionLogEntry:

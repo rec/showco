@@ -150,6 +150,7 @@ main() {
 
   phase "installing streamO service"
   configure_streamo_media
+  clear_twitch_recovery
   install_streamo_service
 
   phase "installing showco service"

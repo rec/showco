@@ -93,6 +93,7 @@
       case "snapshot": return value || "connected";
       case "progress": return value;
       case "recording_destination": return value.destination_text;
+      case "twitch_message": return value;
       case "lyte": return lyteDetail(value);
       case "temperature": return value.temperature_c === null
         ? value.temperature_error || "unknown"
@@ -172,9 +173,8 @@
       if (form.dataset.disabledWhen === "streamo_unavailable") {
         form.dataset.twitchStopAvailable = String(status.twitch_stop_available);
         if (!button.hasAttribute("aria-busy")) {
-          button.textContent = status.streamo.toggle_label;
-          form.querySelector('input[name="action"]').value =
-            status.streamo.toggle_starts_stream ? "streamo-start" : "streamo-stop";
+          button.textContent = status.twitch_label;
+          form.querySelector('input[name="action"]').value = status.twitch_action;
         }
       }
       button.disabled = button.hasAttribute("aria-busy")
@@ -184,8 +184,7 @@
         || (form.dataset.action === "music-restart"
           && (!status.music.restart_available || status.performance_locked))
         || (form.dataset.action === "streamo-stop" && !status.twitch_stop_available)
-        || (form.dataset.action === "streamo-restart"
-          && (!status.twitch_stop_available || status.performance_locked))
+        || form.dataset.action === "streamo-restart"
         || (form.dataset.disabledWhen === "playback_waiting"
           && status.recs.playback.state === "waiting")
         || (form.dataset.disabledWhen === "streamo_unavailable"

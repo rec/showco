@@ -29,14 +29,16 @@ def refresh_soundcheck(
     show: models.ShowStatus,
     revision: str | None,
 ) -> None:
+    controller.observe(show, soundcheck_configuration(revision))
+
+
+def soundcheck_configuration(revision: str | None) -> str:
     settings = Path.home() / '.config/recs/settings.json'
     try:
         configuration = settings.read_bytes()
     except FileNotFoundError:
         configuration = b''
-    controller.observe(
-        show, hashlib.sha256(configuration).hexdigest() + (revision or '')
-    )
+    return hashlib.sha256(configuration).hexdigest() + (revision or '')
 
 
 def run_lighting(
@@ -113,6 +115,8 @@ def run_soundcheck(
     lyte: LyteClient | None,
     form: dict[str, str],
     show: models.ShowStatus,
+    *,
+    verify_capture: bool = False,
 ) -> models.ActionResult:
     action = form['action']
     if form.get('scope') != controller.state.scope:
@@ -126,12 +130,17 @@ def run_soundcheck(
             ok=True, message='Soundcheck started; recording has not changed'
         )
     if action == 'soundcheck-check':
+        step = form.get('step', '')
+        skip = form.get('skip') == 'yes'
         return controller.check(
-            form.get('step', ''),
+            step,
             show,
             form.get('confirmation') == 'observed',
-            form.get('skip') == 'yes',
+            skip,
             form.get('note', ''),
+            recs.audio_capture_clocks()
+            if verify_capture and step == 'recording' and not skip
+            else None,
         )
     if action in {
         'soundcheck-start-recording',
@@ -147,7 +156,9 @@ def run_soundcheck(
                 raise ValueError('lyte is disabled')
             return lyte.test()
         if action == 'soundcheck-start-recording':
-            controller.record_start(show)
+            controller.record_start(
+                show, recs.audio_capture_clocks() if verify_capture else None
+            )
             result = recs.action('resume_recording')
         else:
             result = recs.action('pause_recording')

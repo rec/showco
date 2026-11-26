@@ -565,11 +565,10 @@ class ViewsTests(unittest.TestCase):
         self.assertIn('type="checkbox" data-value-type="boolean"', html)
         self.assertIn('saveMutableAttribute', html)
 
-    def test_actions_page_has_stream_restart_button(self) -> None:
+    def test_actions_page_cannot_start_twitch(self) -> None:
         html = actions_page([])
 
-        self.assertIn('Restart Stream', html)
-        self.assertIn('value="streamo-restart"', html)
+        self.assertNotIn('value="streamo-restart"', html)
 
     def test_actions_page_hides_stream_controls_when_disabled(self) -> None:
         html = actions_page([], features={'lyte_enabled', 'music_enabled'})

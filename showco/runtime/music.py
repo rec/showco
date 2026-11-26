@@ -244,11 +244,17 @@ class MusicController:
 
     def record(self, *, restart: bool = False) -> models.ActionResult:
         self._require_cleanup_idle()
+        stream_error = None
         if restart:
             if not self.closing.stop(timeout=5):
                 return models.ActionResult(
                     ok=False, message='Closing observer is still active; retry Restart'
                 )
+            try:
+                self._stop_stream()
+            except (OSError, ValueError) as error:
+                stream_error = f'Twitch stop could not be confirmed: {error}'
+                LOGGER.error('%s', stream_error)
         else:
             self.closing.require_idle()
         if self.status().mode == 'record' and self.closing.status().record is None:
@@ -276,10 +282,13 @@ class MusicController:
                     'recs recording resumed',
                     lambda: self._require(self.recs.action('resume_recording')),
                 ),
-                ('streamO started', lambda: self._require(self.start_stream())),
             ],
         )
         self.closing.clear()
+        if stream_error:
+            return models.ActionResult(
+                ok=False, message=f'{result.message}. {stream_error}'
+            )
         return result
 
     def teardown(self) -> models.ActionResult:

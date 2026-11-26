@@ -128,6 +128,20 @@ def update_target(
             return 1
     try:
         stopped = stop_services(active_names, run_command)
+        if 'showco' in restart_names and all(r.ok for r in stopped):
+            stopped.append(
+                update.run_step(
+                    'showco',
+                    'clear Twitch recovery authorization',
+                    [
+                        'sh',
+                        '-c',
+                        'state=/run/user/$(id -u)/showco-twitch.json; '
+                        'if [ -e "$state" ]; then unlink "$state"; fi',
+                    ],
+                    run_command,
+                )
+            )
         if update_publisher and all(r.ok for r in stopped):
             stopped.append(stop_publisher_for_update(run_command))
     except (OSError, KeyboardInterrupt) as error:

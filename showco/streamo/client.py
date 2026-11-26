@@ -62,6 +62,7 @@ class StreamoClient:
                 STREAMO_SERVICE, paths.current_platform()
             )
             default_endpoint = service_paths.control_endpoint
+            manager_failure = None
             if (
                 include_service_status
                 and sys.platform == 'linux'
@@ -74,15 +75,17 @@ class StreamoClient:
                 except (OSError, subprocess.SubprocessError, ValueError):
                     pass
                 else:
-                    if (
-                        service.installed
-                        and service.running is False
-                        and service.details == 'inactive'
-                    ):
-                        return StreamoStatus(
-                            service=ServiceStatus(name='streamo', state='connected'),
-                            stream_state='stopped',
-                        )
+                    state, _, detail = service.details.partition('\n')
+                    if service.installed and service.running is False:
+                        if state == 'inactive':
+                            return StreamoStatus(
+                                service=ServiceStatus(
+                                    name='streamo', state='connected'
+                                ),
+                                stream_state='stopped',
+                            )
+                        if state == 'failed':
+                            manager_failure = detail or 'streamO service failed'
             last_failure = None
             if include_service_status and self.control_endpoint == default_endpoint:
                 try:
@@ -99,9 +102,10 @@ class StreamoClient:
             return StreamoStatus(
                 service=ServiceStatus(
                     name='streamo',
-                    state='offline',
+                    state='error' if manager_failure else 'offline',
                     last_error=(
                         last_failure
+                        or manager_failure
                         or (
                             f'streamO is not responding: its control socket '
                             f'{self.control_endpoint} does not exist. The service may '
@@ -111,7 +115,8 @@ class StreamoClient:
                             else str(error)
                         )
                     ),
-                )
+                ),
+                stream_state='failed' if manager_failure else 'unknown',
             )
         if not isinstance(status, dict):
             return StreamoStatus(

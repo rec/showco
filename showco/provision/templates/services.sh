@@ -197,6 +197,20 @@ install_streamo_service() {
     bash -lc "cd '$ROOT/streamo' && uv run --locked streamo daemon install --manual --config $quoted_config"
 }
 
+clear_twitch_recovery() {
+  local state
+  state="/run/user/$(id -u "$SHOW_USER")/showco-twitch.json"
+  if [[ "$STREAMO_ENABLED" != true && ! -e "$state" ]]; then
+    return
+  fi
+  if user_systemctl is-active --quiet showco.service; then
+    user_systemctl stop showco.service
+  fi
+  if [[ -e "$state" ]]; then
+    sudo -H -u "$SHOW_USER" unlink "$state"
+  fi
+}
+
 install_lyte_service() {
   local config_path
   local quoted_config

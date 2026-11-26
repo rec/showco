@@ -65,6 +65,7 @@ def test_show_page_has_destination_faults_toggle_and_teardown(
     assert document.default_page == 'show'
     assert [element.name for element in page.sections[1].elements] == [
         'twitch-toggle',
+        'twitch-readiness',
         'teardown',
         'show-result',
     ]

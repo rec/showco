@@ -23,6 +23,7 @@ from . import (
     models,
     music,
     services,
+    twitch,
     views,
     workflows,
 )
@@ -427,6 +428,14 @@ def make_server(
         else None,
         external_wifi=external_wifi,
         streamo_stop=streamo_stop,
+        twitch_readiness=twitch.TwitchReadiness(
+            Path.home() / '.config/streamo/config.toml'
+        )
+        if performance_enabled and streamo_enabled
+        else None,
+        twitch_state=twitch.runtime_state_path()
+        if performance_enabled and streamo_enabled
+        else None,
     )
     handler.app = app
     server = ShowcoServer((host, port), handler)

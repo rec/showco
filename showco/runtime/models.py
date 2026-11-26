@@ -31,6 +31,7 @@ class ChannelLevel(BaseModel, frozen=True):
     channels: list[int] = Field(default_factory=list)
     signal: float | None = None
     on: bool = False
+    recorded_seconds: float | None = None
 
 
 class RecorderStatus(BaseModel, frozen=True):
@@ -84,6 +85,8 @@ class RecsStatus(BaseModel, frozen=True):
     snapshot_available: bool = False
     paused: bool = False
     session_started_at: float | None = None
+    session_directory: str | None = None
+    instance_token: str | None = None
     elapsed_seconds: float | None = None
     recorded_seconds: float | None = None
     file_size: float | None = None
@@ -323,6 +326,38 @@ class ShowStatus(BaseModel, frozen=True):
     active_faults: list[ActiveFault] = Field(default_factory=list)
     observed_at: datetime | None = None
     monitoring_error: str | None = None
+    twitch_blockers: list[str] = Field(default_factory=list)
+    twitch_recovery_pending: bool = False
+    twitch_recovery_message: str = ''
+
+    @computed_field
+    @property
+    def twitch_message(self) -> str:
+        if self.streamo.service.state == 'disabled':
+            return ''
+        parts = ['Twitch off'] if self.streamo.toggle_starts_stream else []
+        if self.twitch_recovery_message:
+            parts.append(self.twitch_recovery_message)
+        parts.extend(self.twitch_blockers)
+        return '. '.join(parts)
+
+    @computed_field
+    @property
+    def twitch_action(self) -> str:
+        return (
+            'streamo-start'
+            if self.streamo.toggle_starts_stream and not self.twitch_recovery_pending
+            else 'streamo-stop'
+        )
+
+    @computed_field
+    @property
+    def twitch_label(self) -> str:
+        return (
+            'Cancel Twitch recovery'
+            if self.twitch_recovery_pending
+            else self.streamo.toggle_label
+        )
 
     @computed_field
     @property
@@ -337,9 +372,11 @@ class ShowStatus(BaseModel, frozen=True):
     def twitch_toggle_available(self) -> bool:
         return self.twitch_stop_available and (
             not self.streamo.toggle_starts_stream
+            or self.twitch_recovery_pending
             or (
                 not self.performance_locked
                 and self.music.mode not in {'fault', 'teardown'}
+                and not self.twitch_blockers
             )
         )
 

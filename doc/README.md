@@ -49,7 +49,23 @@ Open showCo on the show network at the configured address and port. The Health p
 | Errors | See up to 25 recs errors from the current showCo process. |
 
 The **Show** tab opens by default. Switching Twitch does not start a new recs
-session or pause recording. **End show** runs the existing closing credits and
+session or pause recording. Enter **Record** first, then confirm the recording
+disk and verify a saved sample for every expected audio input in **Soundcheck**.
+Resume recording after listening back. The Show page lists any remaining
+blockers. **Start Twitch** becomes available when the Pi has synchronized
+within the past hour, recs is writing to the verified disk, and fresh samples
+arrive from the configured stereo pair. Quiet samples qualify. The publisher
+stays off until you press **Start Twitch**.
+
+After a publisher failure, showCo checks readiness before each automatic
+recovery. One broadcast gets three recovery attempts. A successful recovery
+keeps the previous attempt count. The Show page displays the remaining
+readiness blockers and the attempt count. **Cancel Twitch recovery** clears a
+pending recovery, just as **Stop Twitch** clears authorization during an
+active broadcast. After exhaustion, **Retry Twitch** starts a new allowance
+when the checks pass. Reboot and maintenance clear recovery authorization.
+
+**End show** runs the existing closing credits and
 fades when broadcasting, then pauses recs and starts the configured teardown
 music. If Twitch is already stopped, teardown music starts without credits.
 Performance lock also blocks these buttons.
@@ -57,9 +73,9 @@ Performance lock also blocks these buttons.
 disabled during closing and after teardown finishes. A broadcast that is live
 despite a saved teardown phase can still be ended with this button.
 **Resume show** is a separate control on **Actions**. It stops the closing
-observer, fades out teardown music, restores the room mix, starts a new recs
-session, and restarts Twitch. This also works during credits. Starting Twitch
-alone after teardown is blocked so it cannot bypass restoring the show.
+observer, fades out teardown music, restores the room mix, and starts a new
+recs session. This also works during credits. Verify a sample from the new
+session and press **Start Twitch** to broadcast again.
 
 The browser refreshes status and channel data. Waveforms use a dedicated event stream and resynchronize after a delayed browser connection. An unavailable optional service does not make the other pages unavailable.
 
@@ -136,7 +152,7 @@ page. This tests cue operation only, not laser output or physical readiness.
 
 Open **Soundcheck**, select the expected recording inputs, and begin. This clears earlier results without starting output. Confirm the intended disk, then make sound on all selected inputs and check their measured signal/clipping state. Disk confirmation requires fresh recs status, available space without an active disk alert, and a readable Linux mount identity. On systems without that identity, disk verification remains unsuccessful.
 
-Explicitly confirm and resume recording to begin a sample in the current session. After making sound, check that the recorded-audio counter advanced, then explicitly pause. Open **Playback**, select and listen to that sample, and enter its session/file description before confirming you heard it. Counter growth is measured evidence; playback is an operator confirmation. Recording remains paused until you resume it yourself. Starting another sample clears the previous sample's recording and playback results.
+Explicitly confirm and resume recording to begin a sample in the current session. Make sound on every expected input, check that each input gained at least one second of recorded audio, then explicitly pause. Open **Playback**, select and listen to that sample, and enter its session/file description before confirming you heard it. The counters measure saved audio and the playback step records your confirmation. Resume recording before starting Twitch. Starting another sample clears the previous sample's recording and playback results.
 
 Lighting tests require an explicit output confirmation and button press; they leave the lights off. Confirm lighting by watching it and streaming by receiving the stream externally. Optional steps can be skipped with a reason and remain visibly skipped, never passed. Opening or refreshing the page starts no test.
 
@@ -144,7 +160,7 @@ Results and timestamps persist in `~/.local/state/showco/soundcheck.json`. Backg
 
 ### Guided recovery
 
-Open **Recovery** to refresh status, inspect the active-fault banner, or download diagnostics. A restart is offered only for a failed or disconnected enabled recs, lyte, or streamO service. Unlock protection and confirm the named interruption first: recs restart interrupts recording and playback, lyte restart interrupts lighting, and streamO restart interrupts streaming. Other services are not restarted.
+Open **Recovery** to refresh status, inspect the active-fault banner, or download diagnostics. A restart is offered for a failed or disconnected enabled recs or lyte service. Unlock protection and confirm the interruption first. Restarting recs interrupts recording and playback, and restarting lyte interrupts lighting. Use the Show page for Twitch recovery.
 
 The request and original failure are saved before execution in `~/.local/state/showco/recovery.json` and recorded in incident history. A successful restart command remains **checking** until you press **Refresh and verify recovery**. A failed or uncertain outcome is visible and never automatically retried, including after a showCo restart. Verification may be repeated while a service starts without restarting it again. Connected-recorder disk and input faults require inspection on Health; stalled file growth alone never triggers a restart. Recovery cannot restore missed audio.
 

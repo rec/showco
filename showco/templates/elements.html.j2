@@ -126,10 +126,10 @@
       </div>
     {% elif element.kind == 'action_button' and is_visible(element, features) %}
       <form method="post" data-action="{{ element.action }}" data-disabled-when="{{ element.disabled_when }}"{% if element.action == 'music-teardown' %} data-confirm="true"{% elif element.action == 'streamo-toggle' %} data-twitch-stop-available="{{ 'true' if status.twitch_stop_available else 'false' }}"{% endif %}>
-        {% set action = ('streamo-start' if status.streamo.toggle_starts_stream else 'streamo-stop') if element.action == 'streamo-toggle' else element.action %}
+        {% set action = status.twitch_action if element.action == 'streamo-toggle' else element.action %}
         <input type="hidden" name="action" value="{{ action }}">
         {% for name, value in element.parameters.items() %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
-        <button{% if is_disabled(element, status) %} disabled{% endif %}>{{ status.streamo.toggle_label if element.action == 'streamo-toggle' else element.label }}</button>
+        <button{% if is_disabled(element, status) %} disabled{% endif %}>{{ status.twitch_label if element.action == 'streamo-toggle' else element.label }}</button>
       </form>
     {% elif element.kind == 'action_result' %}
       <p id="{{ element.name }}" data-action-result aria-live="polite"></p>

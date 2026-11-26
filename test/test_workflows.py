@@ -25,9 +25,15 @@ def status() -> models.ShowStatus:
         recs=models.RecsStatus(
             service=models.ServiceStatus(name='recs', state='connected'),
             recorded_seconds=10,
+            session_directory='/recordings/2026/11/26/12-00-00',
             channels=[
                 models.ChannelLevel(
-                    name='Vocal', device='X18', channels=[1], state='present', on=True
+                    name='Vocal',
+                    device='X18',
+                    channels=[1],
+                    state='present',
+                    on=True,
+                    recorded_seconds=10,
                 )
             ],
             disk=models.RecordingDiskStatus(
@@ -221,7 +227,18 @@ def test_sample_writes_are_not_proof_of_playback() -> None:
     check.record_start(show)
     assert not check.check('recording', show).ok
     advanced = show.model_copy(
-        update={'recs': show.recs.model_copy(update={'recorded_seconds': 12})}
+        update={
+            'recs': show.recs.model_copy(
+                update={
+                    'recorded_seconds': 12,
+                    'channels': [
+                        show.recs.channels[0].model_copy(
+                            update={'recorded_seconds': 12}
+                        )
+                    ],
+                }
+            )
+        }
     )
     assert check.check('recording', advanced).ok
     assert not check.check('playback', advanced).ok
@@ -245,6 +262,44 @@ def test_soundcheck_missing_identity_and_bad_inputs_cannot_pass() -> None:
     assert check.state.results['lights'].state == 'skipped'
     with pytest.raises(ValueError, match='reason'):
         check.check('stream', show, skip=True)
+
+
+def test_recording_sample_needs_audio_on_every_expected_track() -> None:
+    check = soundcheck.Soundcheck()
+    show = status()
+    vocal = show.recs.channels[0]
+    instrument = vocal.model_copy(update={'name': 'Instrument', 'channels': [2]})
+    show = show.model_copy(
+        update={'recs': show.recs.model_copy(update={'channels': [vocal, instrument]})}
+    )
+    check.begin(['X18: 1', 'X18: 2'])
+    check.record_start(show)
+    louder = vocal.model_copy(update={'recorded_seconds': 50})
+    recorded = show.model_copy(
+        update={
+            'recs': show.recs.model_copy(
+                update={'recorded_seconds': 60, 'channels': [louder, instrument]}
+            )
+        }
+    )
+    result = check.check('recording', recorded)
+    assert not result.ok
+    assert 'X18: 2' in result.message
+
+
+def test_soundcheck_requires_the_same_capture_throughout_a_recording_sample() -> None:
+    check = soundcheck.Soundcheck()
+    show = status()
+    check.begin(['X18: 1'])
+    check.record_start(show, {'X18': 'original'})
+    vocal = show.recs.channels[0].model_copy(update={'recorded_seconds': 12})
+    advanced = show.model_copy(
+        update={'recs': show.recs.model_copy(update={'channels': [vocal]})}
+    )
+    assert not check.check(
+        'recording', advanced, capture_clocks={'X18': 'replacement'}
+    ).ok
+    assert check.check('recording', advanced, capture_clocks={'X18': 'original'}).ok
 
 
 def test_soundcheck_pages_and_status_never_start_output(tmp_path: Path) -> None:
@@ -325,7 +380,7 @@ def test_recovery_needs_named_confirmation(tmp_path: Path) -> None:
     app.recovery_restart.assert_not_called()
 
 
-def test_stream_recovery_uses_the_prepared_stream_restart(tmp_path: Path) -> None:
+def test_service_recovery_cannot_start_twitch(tmp_path: Path) -> None:
     app = application(tmp_path)
     app.recs = mock.Mock()
     stream_status = models.StreamoStatus(
@@ -350,8 +405,9 @@ def test_stream_recovery_uses_the_prepared_stream_restart(tmp_path: Path) -> Non
         }
     )
 
-    assert outcome.ok, outcome.message
-    app.streamo_restart.assert_called_once_with()
+    assert not outcome.ok
+    assert 'Use Start Twitch' in outcome.message
+    app.streamo_restart.assert_not_called()
     app.recovery_restart.assert_not_called()
 
 
