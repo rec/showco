@@ -33,8 +33,9 @@ This is a planning change. It does not disable autostart on the current Pi.
 4. `streamo/recs_input.py: RecsAudio` can supply waiting silence while audio is
    unavailable. It stops for a missing input after a 30-second outage allowance,
    rather than preventing publication before the first real samples arrive.
-5. `deployment/target_update.py` starts services after updates and during
-   rollback/error recovery. Definition refresh can reinstall and start them.
+5. Normal target updates preserve a previously stopped publisher. The
+   remaining maintenance risk is enabled provisioning or refreshing an
+   already-running publisher without fresh authorization and readiness.
 
 October 21's device-free boot is consistent with this path: approximately
 27 seconds of encoder output before the missing-input failure, and a short
@@ -50,9 +51,8 @@ Use an installed, inactive streamO service on the Pi, excluded from boot
 activation. Keep `stream.enabled` meaning the feature is available. Do not
 globally disable or mask it, because explicit Start must work.
 
-`StreamoClient.status()` already represents an installed inactive Linux unit as
-stopped. Reuse that lifecycle. Do not introduce a showCo observer which starts
-publishing whenever conditions become healthy.
+`StreamoClient.status()` represents an installed inactive Linux unit as
+stopped. Use that lifecycle for the proposed explicit-start flow.
 
 The existing installer always enables and starts the unit. Calling it and then
 stopping/disabling streamO leaves a publishing window and is insufficient.
@@ -61,11 +61,10 @@ instead of duplicating reccy's unit rendering and metadata in showCo. This is a
 necessary sibling prerequisite to scope before implementation, not permission
 to change reccy or dependencies during this documentation task.
 
-Cover initial install, repeated provisioning, already-current services,
-definition refresh, normal updates, rollback, and interrupted-update recovery.
-None may enable or start publishing. Existing installations need the old boot
-activation removed through a tested provisioning/update step; changing only
-new-install defaults leaves current Pis unsafe.
+Cover initial install, repeated provisioning, existing boot-enabled units, and
+definition refresh. Also verify the manual-start contract through updates,
+rollback, and interrupted maintenance. Migrate existing installations away
+from boot activation.
 
 Verification must accept the intended inactive/manual state without broadcasting.
 Apply the bounded recovery policy below to service restart behavior too.
@@ -107,7 +106,7 @@ side effect of checking readiness.
 
 ### 3. Gate every route that can publish
 
-Audit `streamo-toggle` when starting, `streamo-restart`, streamO recovery
+Gate `streamo-start`, `streamo-restart`, streamO recovery
 restart, and `MusicController.start_stream()`. Include Record/Resume show and
 closing-abandonment recovery, which currently restart recording and broadcasting.
 
@@ -150,20 +149,14 @@ do not claim a showCo-only precheck protects direct daemon starts.
 - Show each failure, the used/remaining attempts, readiness blockers, and the
   exhausted/off state on the front page. Recovery never restores missed audio.
 
-### 4. Keep the front page explicit and truthful
+### 4. Show the start blockers and recovery budget
 
 Display **Twitch off** after boot and show specific unmet prerequisites. Disable
-Start while blocked; rejected backend requests return the same reasons.
-Readiness becoming healthy must not itself start publishing.
+Start while blocked and return the same reasons from the backend. Show the
+recovery budget and exhausted state. Preserve provider confirmation separately
+from publisher activity and keep deliberate Stop available under uncertain health.
 
-After an intentional start, distinguish starting, encoder active, and provider
-publication confirmed or unverified. FFmpeg progress is not proof of Twitch
-receipt. Unavailable confirmation must remain explicit. Put startup failures on
-the front page, keeping Stop available if process state is uncertain.
-
-Coordinate this with [recording-failure.md](recording-failure.md), especially
-front-page errors and per-input recording evidence. Do not bundle unrelated
-recovery, naming cleanup, or recording-date migration into this change.
+Coordinate this with the [per-input recording evidence issue](issues.md#p2-the-show-page-lacks-per-input-recording-evidence).
 
 ## Commits and acceptance
 

@@ -3,11 +3,9 @@
 Keep this file for outstanding findings only. Remove each issue's section in the
 commit that completes it rather than retaining resolution notes.
 
-Source audit at `f7c1835` (26 November 2026). P1 items can interrupt a show,
-hide capture loss, or strand an operator in a partially completed action. P2
-items reduce resilience or make diagnosis harder. Findings below are based on
-source and existing tests. Resource and hardware scenarios still need the
-acceptance evidence identified under each issue.
+The remaining numbered priorities from the 26 November 2026 audit are P2
+and P3. The older operational issues below have their own acceptance criteria.
+Findings are based on source and existing tests.
 
 ## P2: Waveforms can stop reconnecting after a routine recs busy reply
 
@@ -20,14 +18,13 @@ Test both busy subscription recovery and rejected unsubscribe.
 
 ## P2: Closing observation can wait forever with stale operation evidence
 
-`ClosingController._observe()` polls every 100 ms while the operation is
-available. Missing or mismatched operation IDs loop indefinitely while holding
-the recording-control gate, and `remote` can still describe the last successful
-response. Black timing also combines remote wall-clock timestamps with
-`time.time()`; a correction mid-show can mistime the fade. Introduce a bounded,
-explicit recovery state after sustained loss of observation and use elapsed or
-monotonic timing where the protocol permits. Test streamO restart and wall-clock
-steps during credits.
+The restart deadline for an unconfirmed saved request covers only the initial
+reconciliation. After a successful observation, missing or mismatched operation
+IDs can still hold the recording-control gate indefinitely while `remote`
+describes the last successful reply. Black timing uses remote and local
+wall-clock timestamps, so a clock step can mistime the fade. Bound sustained
+loss of observation and use elapsed or monotonic timing where the protocol
+permits. Test streamO restart and wall-clock steps during credits.
 
 ## P2: Music decoder and audio I/O failures can leave a playing status behind
 
@@ -50,6 +47,15 @@ destination in the readiness check without silently changing the recording
 destination or splitting a session. Add missing, late-mounted, wrong-volume,
 and full-drive cases, including automount behavior on the Pi.
 
+## P2: The Show page lacks per-input recording evidence
+
+The Show page reports recorder faults and aggregate write progress. It still
+cannot show whether each required input is delivering fresh samples, being
+silence-filtered, or writing to the current session. Expose that evidence
+through recs' public snapshot and retain bounded failure summaries with session
+identity and destination. Test that continued writes on one input cannot hide
+a failure on another.
+
 ## P2: Soundcheck can credit a different recording from the sample it started
 
 `Soundcheck.record_start()` saves an aggregate recorded-seconds baseline but
@@ -64,12 +70,12 @@ the main instrument while another channel keeps writing.
 
 `PerformanceMonitor._run()` increments an absolute sample deadline even if
 `sample()` takes multiple periods. When a probe recovers, the monitor can
-perform back-to-back work against the same status lock and daemons the panel
-needs. Samples are grouped by wall-clock minute, and filesystem failures can
-turn incident history into a repeated synchronous save attempt. Skip expired
-sample periods, bound sample age/count, and make persistence failure observable
-without reattempting a write from every status request. Exercise a long probe,
-clock correction and slow or full disk.
+perform back-to-back work against daemons the panel needs. Samples are grouped
+by wall-clock minute. A clock step can distort aggregation and delay pruning.
+Incident writes have their own worker, but a full disk can still trigger a
+retry on each fresh observation. Skip expired sample periods, bound sample
+age/count, and pace retries for failed writes. Exercise a long probe, clock
+correction, and slow or full disk.
 
 ## P2: Waveform and HTTP bounds do not fully bound live resource use
 
@@ -94,7 +100,8 @@ recording can compete for storage bandwidth and RAM; the SSH timeout limits
 waiting time, not peak memory or directory reads. Bound discovery and journal
 work, avoid repeated walks, and report when coverage is incomplete. Keep the
 existing qualification rules while exposing loss evidence from sessions that
-never managed a qualifying write in a separate diagnostic path.
+never managed a qualifying write in a separate diagnostic path. When no show
+qualifies, report the scanned roots and why candidates were excluded.
 
 ## P2: Live diagnostic collection can fail on normal file churn
 
@@ -141,10 +148,8 @@ only after measuring which resource actually limits capture.
 - `readiness.status()` is a service checklist, while “Recording” means
   enabled and “Audio writes” means aggregate progress. Use names that distinguish
   armed state, actual writes, per-input evidence, and intended storage.
-- `safe_media_copy` controls retention/deletion policy while `verify_media`
-  selects metadata versus content verification. “Reusing verified media
-  package” currently describes both verification modes. Use labels that say
-  whether bytes were checked and whether the active package was retained.
+- “Reusing verified media package” describes both metadata and content
+  verification. Say whether the bytes were checked.
 - `music-stop` powers off the Pi, unlike the player and streamO stop actions.
   Keep the poweroff consequence clear in the action and diagnostic naming.
 - `test_recs.py` and `test_recs_snapshot.py` both assert most of the same
@@ -158,30 +163,22 @@ only after measuring which resource actually limits capture.
   existing browser VM tests check behavior and presentation parity but cannot
   establish operator visibility or recovery timing on an actual show network.
 
-## October 17 show recording lost without a front-page warning
-
-The user saw no errors on the front Show page and initially found only rehearsal
-material. Boot-relative evidence now identifies a likely show session despite
-its misleading clock labels; audio identity and coverage remain unverified.
-Confirmed recording, reporting, and warning defects, the updated investigation,
-and the prevention plan are in [recording-failure.md](recording-failure.md).
-
 ## streamO publishes automatically at boot without ready audio
 
 The device-free October 21 boot created an unwanted short Twitch broadcast.
-Provisioning and deployment start a publisher that waits for audio only after
-launching. The default-off lifecycle, readiness checks, open decisions, and
-regression/acceptance plan are in [streamo-startup.md](streamo-startup.md).
+Normal updates preserve an intentionally stopped service. Enabled provisioning
+can still enable and start streamO, and Start is not gated by fresh recording,
+audio, and clock evidence. The manual-start lifecycle and three-attempt
+recovery policy are in [streamo-startup.md](streamo-startup.md).
 
 ## Slow Pi connections over showbox Wi-Fi
 
-Connecting to the Pi through showCo was slow on **showbox Wi-Fi**. The cause
-remains unresolved. The quick SSH connections observed on 2026-10-21 used
-**house Wi-Fi**, so they do not demonstrate that the showbox issue is fixed.
-
-Existing SSH timeout and retry changes improve failure handling but do not
-establish that the connection slowdown was resolved. Investigate and verify on
-showbox Wi-Fi before closing this issue.
+The original slowdown occurred on **showbox Wi-Fi**. The fast October 21
+measurements used **house Wi-Fi**. On October 25, the Mac initially retained
+its house-network address after a restart. Once it obtained the showbox address,
+SSH to both `10.0.0.1` and `t.local` took less than 0.4 seconds. The
+intermittent slowdown remains unexplained. If it recurs, distinguish Wi-Fi and
+DHCP readiness from mDNS lookup and SSH connection time.
 
 ## Intended behavior and scope
 
