@@ -194,8 +194,10 @@ Each selected source has its own numbered destination within a versioned package
 When a new package needs to be uploaded, the default `safe_media_copy = false`
 removes previous versioned packages and partial uploads from the Pi before
 transferring the replacement. If the upload fails, rerun provisioning to restore
-the media. Set `safe_media_copy = true` at the top level to retain the old media
-while copying and verifying the new package. That mode needs enough free space
+the media. If streamO is running, showCo reports an error before deleting media.
+Run `showco --stop-streamo` to stop it first. Set `safe_media_copy = true` at the
+top level to retain the old media while copying and verifying the new package.
+That mode needs enough free space
 for the full incoming package alongside the existing files.
 
 Provisioning installs the copied audio paths in showCo's service arguments and updates streamO's photo directories and movie path while preserving its other settings. Existing photo timing and compatible directory weights are retained. If photos were disabled, they are enabled every 30 seconds; incompatible weights reset to the descending defaults. This does not enable the streamO service or supply its streaming credentials. Target-side `showco run` and service-installation flags continue to refer to paths already on the Pi.

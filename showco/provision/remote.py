@@ -34,6 +34,7 @@ def provision_remote(
     *,
     upgrade: bool = False,
     fingerprint: str | None = None,
+    stop_streamo: bool = False,
 ) -> None:
     uploaded = False
     print(f'Waiting for SSH connection to {provision_config.ssh_target}...')
@@ -41,7 +42,7 @@ def provision_remote(
     require_passwordless_sudo(provision_config)
     validate_remote_worktrees(provision_config)
     topology = preflight_network(provision_config)
-    media.synchronize(provision_config)
+    media.synchronize(provision_config, stop_streamo=stop_streamo)
     print(f'Checking {provision_config.ssh_target}...')
     ssh.run_ssh(
         provision_config,

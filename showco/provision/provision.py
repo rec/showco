@@ -37,6 +37,10 @@ class DeployOptions(BaseModel, frozen=True):
         bool,
         tyro.conf.arg(help='Run apt-get upgrade during provisioning'),
     ] = False
+    stop_streamo: Annotated[
+        bool,
+        tyro.conf.arg(help='Stop a running streamO before replacing its media'),
+    ] = False
     repositories: Annotated[list[str] | None, tyro.conf.Positional] = None
     push: bool = False
     sync: bool = False
@@ -134,6 +138,7 @@ def run(
             local_script,
             remote_script,
             upgrade=options.upgrade,
+            stop_streamo=options.stop_streamo,
             fingerprint=state.provisioning_fingerprint(
                 provision_config, script.REMOTE_SCRIPT
             ),

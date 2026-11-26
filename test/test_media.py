@@ -331,7 +331,7 @@ def test_media_transfer_keeps_sources_separate_and_preserves_streamo_inbox(
     if config_overrides:
         assert preparation[:3] == ['mkdir', '-p', '--']
     else:
-        assert preparation[:-1] == [
+        assert preparation[-10:-1] == [
             'rm',
             '-rf',
             '--one-file-system',
@@ -358,6 +358,50 @@ def test_media_transfer_keeps_sources_separate_and_preserves_streamo_inbox(
     assert 'mv -T -n' in publication
     assert configuration.media_package.version in publication
     assert '/media/photos/000/incoming' in publication
+
+
+@pytest.mark.parametrize(
+    ('state', 'stop_streamo', 'stop_fails', 'expected_actions'),
+    [
+        ('active', False, False, []),
+        ('active', True, False, ['stop', 'delete']),
+        ('activating', True, True, ['stop']),
+        ('inactive', False, False, ['delete']),
+    ],
+)
+def test_destructive_media_replacement_waits_for_streamo_to_stop(
+    state: str, stop_streamo: bool, stop_fails: bool, expected_actions: list[str]
+) -> None:
+    stubs = """
+systemctl() {
+    case "$2" in
+        show) printf '%s\\n' "$TEST_STATE" ;;
+        stop) printf 'stop\\n'; return "$TEST_STOP_RESULT" ;;
+    esac
+}
+rm() { printf 'delete\\n'; }
+"""
+    command = media.remove_media_command(
+        Path('/media/versions'), stop_streamo=stop_streamo
+    )
+    result = subprocess.run(
+        ['sh', '-c', stubs + command],
+        env={
+            **os.environ,
+            'TEST_STATE': state,
+            'TEST_STOP_RESULT': str(int(stop_fails)),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert [
+        s for s in result.stdout.splitlines() if s in {'stop', 'delete'}
+    ] == expected_actions
+    assert result.returncode == int('delete' not in expected_actions)
+    if not expected_actions:
+        assert 'streamO is running' in result.stderr
+        assert '--stop-streamo' in result.stderr
 
 
 @pytest.mark.parametrize('verify_media', [False, True])

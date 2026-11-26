@@ -26,7 +26,7 @@ from reccy.runtime.assets import AssetCacheError
 from ..runtime.recs_control import RecsControlClient
 from ..streamo.config import configure_stream_settings
 from ..x18.music import Files
-from . import config, ssh
+from . import config, ssh, verify
 from .media_package import MediaInventory, stage_media
 
 if TYPE_CHECKING:
@@ -114,7 +114,7 @@ def target_paths(provision_config: config.Config, kind: str) -> list[Path]:
     return [root / p for p in package.targets[kind]]
 
 
-def synchronize(provision_config: config.Config) -> None:
+def synchronize(provision_config: config.Config, *, stop_streamo: bool = False) -> None:
     sources = provision_config.media
     if not any(sources.sources.values()):
         return
@@ -163,10 +163,9 @@ def synchronize(provision_config: config.Config) -> None:
             )
             prepare_staging = f'mkdir -p -- {shlex.quote(str(staging))}'
             if not provision_config.safe_media_copy:
-                print('Removing previous media packages before upload', flush=True)
                 prepare_staging = (
-                    f'rm -rf --one-file-system -- {shlex.quote(str(versions))} && '
-                    + prepare_staging
+                    f'{remove_media_command(versions, stop_streamo=stop_streamo)} '
+                    f'&& {prepare_staging}'
                 )
             ssh.run_ssh(provision_config, prepare_staging, timeout_seconds=300)
             interactive = sys.stdout.isatty()
@@ -223,6 +222,28 @@ def synchronize(provision_config: config.Config) -> None:
         TimeoutExpired,
     ) as error:
         sys.exit(f'ERROR: cannot copy media package: {error}')
+
+
+def remove_media_command(versions: Path, *, stop_streamo: bool) -> str:
+    status = verify.user_systemctl_command(
+        'show --property=ActiveState --value streamo.service'
+    )
+    stop = verify.user_systemctl_command('stop streamo.service')
+    running = (
+        f"printf '%s\\n' 'Stopping streamO before replacing media'; {stop} || exit $?"
+        if stop_streamo
+        else "printf '%s\\n' 'ERROR: streamO is running. Rerun showco with "
+        "--stop-streamo to stop it before replacing media.' >&2; exit 1"
+    )
+    return (
+        f'streamo_state=$({status}) || exit $?; '
+        'case "$streamo_state" in inactive|failed) ;; '
+        "'') printf '%s\\n' 'ERROR: Cannot determine whether streamO is running.' >&2; "
+        'exit 1 ;; '
+        f'*) {running} ;; esac; '
+        "printf '%s\\n' 'Removing previous media packages before upload'; "
+        f'rm -rf --one-file-system -- {shlex.quote(str(versions))}'
+    )
 
 
 def media_timestamp_command(destination: Path, package: MediaInventory) -> str:
