@@ -4,8 +4,7 @@ verify_media = false
 [movie]
 inputs = ["../../../streamo/videos/*.mp4"]
 title_card = "../../../streamo/open-loop.md"
-# Restore "4h" before rendering for the final show.
-duration = "15min"
+duration = "4h"
 start_black_duration = "2s"
 title_interval = "1min"
 width = 1280
