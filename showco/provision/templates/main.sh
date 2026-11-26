@@ -63,6 +63,9 @@ main() {
   phase "checking user"
   id "$SHOW_USER" >/dev/null
 
+  phase "disarming Twitch for provisioning"
+  clear_twitch_recovery
+
   phase "configuring locale"
   configure_locale
 
@@ -150,7 +153,6 @@ main() {
 
   phase "installing streamO service"
   configure_streamo_media
-  clear_twitch_recovery
   install_streamo_service
 
   phase "installing showco service"

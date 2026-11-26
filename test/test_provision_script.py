@@ -306,6 +306,17 @@ storage_hotplug_rules /dev/stdin
         self.assertIn('/var/log/journal', script.REMOTE_SCRIPT)
         self.assertIn('systemctl restart systemd-journald', script.REMOTE_SCRIPT)
 
+    def test_provision_disarms_twitch_before_changing_live_services(self) -> None:
+        main = script.REMOTE_SCRIPT.rindex('main() {')
+        disarm = script.REMOTE_SCRIPT.index('clear_twitch_recovery', main)
+
+        for step in (
+            'sync_repo reccy',
+            'install_recs_service',
+            'configure_streamo_media',
+        ):
+            self.assertLess(disarm, script.REMOTE_SCRIPT.index(step, main))
+
     def test_remote_script_exports_locale_before_package_updates(self) -> None:
         main = script.REMOTE_SCRIPT.rindex('main() {')
         locale = script.REMOTE_SCRIPT.index('configure_locale', main)

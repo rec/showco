@@ -199,15 +199,41 @@ install_streamo_service() {
 
 clear_twitch_recovery() {
   local state
-  state="/run/user/$(id -u "$SHOW_USER")/showco-twitch.json"
-  if [[ "$STREAMO_ENABLED" != true && ! -e "$state" ]]; then
+  local runtime_directory="/run/user/$(id -u "$SHOW_USER")"
+  local unit_directory="/home/$SHOW_USER/.config/systemd/user"
+  state="$runtime_directory/showco-twitch.json"
+  if [[ ! -S "$runtime_directory/bus" && ! -e "$state" && ! -e "$unit_directory/streamo.service" ]]; then
     return
   fi
-  if user_systemctl is-active --quiet showco.service; then
+  local load_state
+  local showco_active=false
+  load_state=$(user_systemctl show --property=LoadState --value showco.service) \
+    || [[ "$load_state" == not-found ]] || return 1
+  if [[ "$load_state" != not-found ]]; then
+    if user_systemctl is-active --quiet showco.service; then
+      showco_active=true
+    fi
     user_systemctl stop showco.service
   fi
   if [[ -e "$state" ]]; then
     sudo -H -u "$SHOW_USER" unlink "$state"
+  fi
+  if [[ "$showco_active" == true ]]; then
+    trap 'restore_showco_after_failed_provision "$?"' EXIT
+  fi
+  load_state=$(user_systemctl show --property=LoadState --value streamo.service) \
+    || [[ "$load_state" == not-found ]] || return 1
+  if [[ "$load_state" == masked ]]; then
+    user_systemctl stop streamo.service
+  elif [[ "$load_state" != not-found ]]; then
+    user_systemctl disable --now streamo.service
+  fi
+}
+
+restore_showco_after_failed_provision() {
+  if [[ "$1" != 0 ]]; then
+    user_systemctl start showco.service \
+      || printf 'ERROR: could not restore showCo after provisioning failed.\n' >&2
   fi
 }
 
