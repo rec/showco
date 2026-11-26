@@ -9,16 +9,6 @@ items reduce resilience or make diagnosis harder. Findings below are based on
 source and existing tests. Resource and hardware scenarios still need the
 acceptance evidence identified under each issue.
 
-## P1: Update rollback can start intentionally stopped services
-
-`target_update.update_target()` starts all selected services after a failed
-stop, and its success and rollback paths also start services without checking
-their previous runtime intent. A manually stopped publisher can start after
-updating or after another service failed to stop. Capture active and enabled
-state before mutating anything and restore that state on rollback. Test a
-previously stopped streamO along with a failed recs or lyte update. This is
-also part of the default-off Twitch lifecycle below.
-
 ## P1: Capture failure and operational errors can miss the front page and log
 
 `fault_details()` observes aggregate audio progress and readiness but ignores

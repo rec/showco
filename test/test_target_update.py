@@ -18,6 +18,7 @@ class Target:
         self.environments = dict(self.revisions)
         self.commands: list[list[str]] = []
         self.running = {'recs', 'showco', 'streamo', 'lyte'}
+        self.enablement = dict.fromkeys(self.running, 'enabled')
         self.failure = ''
         self.failed = False
         self.rollback_failure = False
@@ -49,6 +50,10 @@ class Target:
             operation, name = 'sync', Path(command[-1]).name
         elif command[0] == 'systemctl':
             operation, name = command[2], command[3].removesuffix('.service')
+            if operation == 'show':
+                operation = 'read-service-state'
+                state = 'active' if name in self.running else 'inactive'
+                stdout = f'ActiveState={state}\nUnitFileState={self.enablement[name]}\n'
         elif command[0] == 'sh':
             operation = 'health'
         if not self.failed and operation == self.failure:
@@ -66,6 +71,12 @@ class Target:
             self.running.discard(name)
         elif operation == 'start':
             self.running.add(name)
+        elif operation == 'disable':
+            self.enablement[name] = 'disabled'
+        elif operation == 'enable':
+            self.enablement[name] = (
+                'enabled-runtime' if '--runtime' in command else 'enabled'
+            )
         return CompletedProcess(command, 0, stdout, '')
 
 
@@ -179,7 +190,7 @@ def test_failed_deployment_rolls_back_unloaded_services(target: Target) -> None:
     assert 'Previous versions restored and services restarted.' in output.getvalue()
 
 
-@pytest.mark.parametrize('failure', ['fetch', 'rev-parse'])
+@pytest.mark.parametrize('failure', ['fetch', 'rev-parse', 'read-service-state'])
 def test_preflight_failure_never_stops_services(target: Target, failure: str) -> None:
     target.failure = failure
     assert deploy(target) == 1
@@ -212,6 +223,30 @@ def test_failed_stop_does_not_change_revisions(target: Target) -> None:
     assert deploy(target) == 1
     assert not any('reset' in c for c in target.commands)
     assert target.running == {'recs', 'showco', 'streamo', 'lyte'}
+
+
+@pytest.mark.parametrize('failure', ['', 'stop', 'sync'])
+def test_target_update_keeps_stopped_publisher_off(
+    target: Target, failure: str
+) -> None:
+    target.running.remove('streamo')
+    target.enablement['streamo'] = 'disabled'
+    target.failure = failure
+
+    outcome = target_update.update_target(
+        ['recs', 'streamo'],
+        root=Path('/code'),
+        run_command=target.run,
+        output=StringIO(),
+    )
+
+    assert outcome == int(bool(failure))
+    assert target.running == {'recs', 'showco', 'lyte'}
+    assert target.enablement['streamo'] == 'disabled'
+    assert not any(
+        c[:2] == ['systemctl', '--user'] and c[2] != 'show' and 'streamo.service' in c
+        for c in target.commands
+    )
 
 
 def test_interrupted_service_stop_restarts_every_selected_service(
@@ -392,3 +427,32 @@ def test_reccy_update_refreshes_enabled_services_after_sync(target: Target) -> N
     }
     assert all(c.args[1] for c in restart.call_args_list)
     assert target.environments == {n: f'new-{n}' for n in update.REPOSITORY_NAMES}
+
+
+@pytest.mark.parametrize('enablement', ['disabled', 'enabled-runtime'])
+def test_target_refresh_keeps_active_service_enablement(
+    target: Target, enablement: str
+) -> None:
+    target.enablement['recs'] = enablement
+
+    def install(
+        name: str,
+        refresh: bool,
+        root: Path,
+        configuration: object,
+        runner: update.RunCommand,
+    ) -> update.StepResult:
+        if refresh:
+            target.enablement[name] = 'enabled'
+        return update.run_service_step(name, 'start', runner)
+
+    with mock.patch.object(
+        update, 'start_or_refresh_service_step', side_effect=install
+    ):
+        outcome = target_update.update_target(
+            ['reccy'], root=Path('/code'), run_command=target.run, output=StringIO()
+        )
+
+    assert outcome == 0
+    assert target.enablement['recs'] == enablement
+    assert 'recs' in target.running

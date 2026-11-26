@@ -7,7 +7,7 @@ from tempfile import NamedTemporaryFile
 from typing import TextIO
 
 from ..provision import config, verify
-from ..runtime import gui_schema
+from ..runtime import gui_schema, services
 from . import update
 
 
@@ -98,6 +98,10 @@ def update_target(
     names = [n for n in names if n != 'showco'] + (
         ['showco'] if 'showco' in names else []
     )
+    active_services = active_service_enablement(names, run_command, output)
+    if active_services is None:
+        return 1
+    active_names = list(active_services)
     refresh = any(p.name == 'reccy' for p in programs)
     settings_path = (
         Path('/home') / provision_config.network.user / '.config/recs/settings.json'
@@ -113,17 +117,19 @@ def update_target(
             print(f'Cannot back up recs settings: {error}', file=output)
             return 1
     try:
-        stopped = stop_services(names, run_command)
+        stopped = stop_services(active_names, run_command)
     except (OSError, KeyboardInterrupt) as error:
         print(f'Service shutdown interrupted: {error or "Interrupted"}', file=output)
         update.report_failures(
-            [update.run_service_step(n, 'start', run_command) for n in names], output
+            [update.run_service_step(n, 'start', run_command) for n in active_names],
+            output,
         )
         return 1
     if not all(r.ok for r in stopped):
         update.report_failures(stopped, output)
         update.report_failures(
-            [update.run_service_step(n, 'start', run_command) for n in names], output
+            [update.run_service_step(n, 'start', run_command) for n in active_names],
+            output,
         )
         return 1
 
@@ -139,14 +145,15 @@ def update_target(
             results.extend(install_revisions(programs, targets, run_command))
         if all(r.ok for r in results):
             results.extend(
-                update.start_or_refresh_service_step(
-                    n, refresh, root, provision_config, run_command
+                restart_services(
+                    active_services, refresh, root, provision_config, run_command
                 )
-                for n in names
             )
         if all(r.ok for r in results):
             results.extend(
-                check_updated_services(names, root, provision_config, run_command)
+                check_updated_services(
+                    active_names, root, provision_config, run_command
+                )
             )
         if all(r.ok for r in results):
             return 0
@@ -164,7 +171,7 @@ def update_target(
 
     update.report_failures(results, output)
     print('Update failed; restoring previous revisions and environments.', file=output)
-    stopped = stop_services(names, run_command)
+    stopped = stop_services(active_names, run_command)
     if not all(r.ok for r in stopped):
         update.report_failures(stopped, output)
         print('Rollback blocked: could not stop affected services.', file=output)
@@ -198,19 +205,101 @@ def update_target(
     if not all(r.ok for r in restored):
         print('Rollback incomplete; affected services remain stopped.', file=output)
         return 1
-    restarted = [
-        update.start_or_refresh_service_step(
-            n, refresh, root, provision_config, run_command
-        )
-        for n in names
-    ]
-    restarted.extend(check_updated_services(names, root, provision_config, run_command))
+    restarted = restart_services(
+        active_services, refresh, root, provision_config, run_command
+    )
+    restarted.extend(
+        check_updated_services(active_names, root, provision_config, run_command)
+    )
     update.report_failures(restarted, output)
     if all(r.ok for r in restarted):
         print('Previous versions restored and services restarted.', file=output)
     else:
         print('Previous versions restored, but service recovery failed.', file=output)
     return 1
+
+
+def active_service_enablement(
+    names: list[str], run_command: update.RunCommand, output: TextIO
+) -> dict[str, str] | None:
+    active = {}
+    for name in names:
+        unit = services.SERVICES[name].systemd_unit
+        read = update.run_step(
+            name,
+            'read service state',
+            [
+                'systemctl',
+                '--user',
+                'show',
+                unit,
+                '--property=ActiveState',
+                '--property=UnitFileState',
+            ],
+            run_command,
+        )
+        if not read.ok:
+            update.report_failure(read, output)
+            return None
+        fields = dict(
+            line.split('=', 1) for line in read.output.splitlines() if '=' in line
+        )
+        state = fields.get('ActiveState')
+        enablement = fields.get('UnitFileState', '')
+        if state in {'inactive', 'failed'}:
+            continue
+        if (
+            state not in {'active', 'reloading'}
+            or not enablement
+            or enablement.startswith('masked')
+        ):
+            print(
+                f'{name}: cannot preserve service state '
+                f'(active={state or "unknown"}, enabled={enablement or "unknown"}). '
+                'Resolve the service state before updating.',
+                file=output,
+            )
+            return None
+        active[name] = enablement
+    return active
+
+
+def restart_services(
+    active: dict[str, str],
+    refresh: bool,
+    root: Path,
+    provision_config: config.Config,
+    run_command: update.RunCommand,
+) -> list[update.StepResult]:
+    results = []
+    for name, enablement in active.items():
+        reinstall = refresh and enablement in {'enabled', 'disabled', 'enabled-runtime'}
+        try:
+            results.append(
+                update.start_or_refresh_service_step(
+                    name, reinstall, root, provision_config, run_command
+                )
+            )
+        finally:
+            if reinstall and enablement != 'enabled':
+                unit = services.SERVICES[name].systemd_unit
+                restored = update.run_step(
+                    name,
+                    'restore service enablement',
+                    ['systemctl', '--user', 'disable', unit],
+                    run_command,
+                )
+                results.append(restored)
+                if restored.ok and enablement == 'enabled-runtime':
+                    results.append(
+                        update.run_step(
+                            name,
+                            'restore runtime enablement',
+                            ['systemctl', '--user', 'enable', unit, '--runtime'],
+                            run_command,
+                        )
+                    )
+    return results
 
 
 def install_revisions(
