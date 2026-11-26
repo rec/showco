@@ -40,7 +40,9 @@ class IncidentTimeline:
                 self.load_error = f'Cannot read incident history: {error}'
                 self.storage_error = self.load_error
 
-    def observe(self, status: models.ShowStatus) -> list[models.Incident]:
+    def observe(
+        self, status: models.ShowStatus, *, persist: bool = True
+    ) -> list[models.Incident]:
         current = states(status)
         now = datetime.now().astimezone()
         previous_faults = {f.name: f for f in self.faults}
@@ -87,44 +89,50 @@ class IncidentTimeline:
             self.previous != current or list(previous_faults.values()) != self.faults
         )
         self.previous = current
-        if self.pending_save:
+        if persist and self.pending_save:
             try:
                 self.save()
             except OSError as error:
                 self.storage_error = f'Cannot save incident history: {error}'
         return list(self.incidents)
 
-    def acknowledge(self, name: str, started_at: str) -> None:
+    def acknowledge(self, name: str, started_at: str, *, persist: bool = True) -> None:
         started = datetime.fromisoformat(started_at)
         for index, fault in enumerate(self.faults):
             if fault.name == name and fault.started_at == started:
                 self.faults[index] = fault.model_copy(update={'acknowledged': True})
                 self.pending_save = True
                 try:
-                    self.save()
+                    if persist:
+                        self.save()
                 except OSError:
                     self.faults[index] = fault
                     raise
                 return
         raise ValueError('This fault is no longer current; refresh status')
 
-    def record(self, message: str) -> None:
+    def record(self, message: str, *, persist: bool = True) -> None:
         self.incidents = [
             models.Incident(timestamp=datetime.now().astimezone(), message=message),
             *self.incidents[:99],
         ]
         self.pending_save = True
-        self.save()
+        if persist:
+            self.save()
+
+    def history(self) -> IncidentHistory:
+        return IncidentHistory(
+            previous=self.previous,
+            incidents=list(self.incidents),
+            faults=list(self.faults),
+        )
+
+    def write(self, history: IncidentHistory) -> None:
+        if self.path is not None:
+            settings.write_json_model(self.path, history, write_empty_dicts=True)
 
     def save(self) -> None:
-        if self.path is not None:
-            settings.write_json_model(
-                self.path,
-                IncidentHistory(
-                    previous=self.previous, incidents=self.incidents, faults=self.faults
-                ),
-                write_empty_dicts=True,
-            )
+        self.write(self.history())
         self.pending_save = False
         self.storage_error = self.load_error
 

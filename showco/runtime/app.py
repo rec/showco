@@ -46,6 +46,8 @@ LOGGER = logging.get_logger(__name__)
 STATUS_REFRESH_SECONDS = 1.0
 STATUS_MAX_AGE_SECONDS = 5.0
 STATUS_WAIT_SECONDS = 0.4
+STATUS_STORAGE_WARNING_SECONDS = 2.0
+SOUNDCHECK_INVALIDATED = 'Configuration or output test requested; repeat soundcheck'
 
 
 class ShowcoApp:
@@ -93,7 +95,10 @@ class ShowcoApp:
         self.status_ready = threading.Event()
         self.latest_status: tuple[models.ShowStatus, float] | None = None
         self.incident_lock = threading.Lock()
+        self.status_storage_lock = threading.Lock()
+        self.status_storage_started: float | None = None
         self.soundcheck_lock = threading.Lock()
+        self.soundcheck_dirty = threading.Event()
         self.soundcheck_error: str | None = None
         self.reported_monitoring_error: str | None = None
         self.performance_lock = performance.PerformanceLock(
@@ -193,10 +198,61 @@ class ShowcoApp:
         try:
             status = self._collect_status()
             self.latest_status = status, started
-            return status
         finally:
             self.status_ready.set()
             self.status_lock.release()
+        self._schedule_status_storage()
+        return status
+
+    def _schedule_status_storage(self) -> None:
+        if self.latest_status is None or not self.status_storage_lock.acquire(False):
+            return
+        self.status_storage_started = time.monotonic()
+        try:
+            threading.Thread(
+                target=self._save_observation, name='showco-status-storage', daemon=True
+            ).start()
+        except RuntimeError as error:
+            self.status_storage_started = None
+            self.status_storage_lock.release()
+            LOGGER.error('Cannot start status storage: %s', error)
+
+    def _save_observation(self) -> None:
+        try:
+            with self.incident_lock:
+                history = (
+                    self.incidents.history() if self.incidents.pending_save else None
+                )
+                self.incidents.pending_save = False
+            if history is not None:
+                try:
+                    self.incidents.write(history)
+                except OSError as error:
+                    with self.incident_lock:
+                        self.incidents.pending_save = True
+                        self.incidents.storage_error = (
+                            f'Cannot save incident history: {error}'
+                        )
+                else:
+                    self.incidents.storage_error = self.incidents.load_error
+            latest = self.latest_status
+            if latest is not None and self.soundcheck_lock.acquire(blocking=False):
+                try:
+                    if self.soundcheck_dirty.is_set():
+                        self.soundcheck_dirty.clear()
+                        self.soundcheck.invalidate(SOUNDCHECK_INVALIDATED)
+                    workflows.refresh_soundcheck(
+                        self.soundcheck, latest[0], self.revision
+                    )
+                except OSError as error:
+                    self.soundcheck_error = f'Soundcheck evidence unavailable: {error}'
+                else:
+                    self.soundcheck_error = None
+                finally:
+                    self.soundcheck_lock.release()
+        finally:
+            self.status_storage_started = None
+            self.status_storage_lock.release()
 
     def _collect_status(self) -> models.ShowStatus:
         observed_at = datetime.now().astimezone()
@@ -243,32 +299,22 @@ class ShowcoApp:
         status = status.model_copy(
             update={'recording_progress': self.recording_progress.observe(recs)}
         )
-        if self.soundcheck_lock.acquire(blocking=False):
-            try:
-                workflows.refresh_soundcheck(self.soundcheck, status, self.revision)
-            except OSError as error:
-                self.soundcheck_error = f'Soundcheck evidence unavailable: {error}'
-            else:
-                self.soundcheck_error = None
-            finally:
-                self.soundcheck_lock.release()
-        if self.incident_lock.acquire(blocking=False):
-            try:
-                observed = self.incidents.observe(status)
-                faults = list(self.incidents.faults)
-            finally:
-                self.incident_lock.release()
-        else:
-            previous = self.latest_status
-            observed = previous[0].incidents if previous else []
-            faults = previous[0].active_faults if previous else []
+        with self.incident_lock:
+            observed = self.incidents.observe(status, persist=False)
+            faults = list(self.incidents.faults)
         cable_status = self.cable_test_status()
+        storage_started = self.status_storage_started
         monitoring_error = (
             '; '.join(
                 error
                 for error in (
                     self.performance_lock.error,
                     self.incidents.storage_error,
+                    'Status history or soundcheck storage is stalled'
+                    if storage_started is not None
+                    and time.monotonic() - storage_started
+                    >= STATUS_STORAGE_WARNING_SECONDS
+                    else None,
                     self.soundcheck_error,
                     self.setlist.load_error,
                     self.lighting.load_error,
@@ -461,14 +507,11 @@ class ShowcoApp:
                 'before changing recording, playback or show mode',
             )
         if action == 'acknowledge-fault':
-            if not self.incident_lock.acquire(blocking=False):
-                raise TimeoutError('Incident history is busy; retry acknowledgement')
-            try:
+            with self.incident_lock:
                 self.incidents.acknowledge(
-                    form.get('name', ''), form.get('started_at', '')
+                    form.get('name', ''), form.get('started_at', ''), persist=False
                 )
-            finally:
-                self.incident_lock.release()
+            self._schedule_status_storage()
             return models.ActionResult(
                 ok=True, message='Fault acknowledged; it remains active until recovery'
             )
@@ -485,14 +528,8 @@ class ShowcoApp:
         if action.startswith(('setlist-', 'soundcheck-', 'recovery-', 'lighting-')):
             return self._run_workflow(form)
         if action in performance.PROTECTED_ACTIONS:
-            try:
-                self._invalidate_soundcheck(
-                    'Configuration or output test requested; repeat soundcheck'
-                )
-            except TimeoutError:
-                raise
-            except OSError as error:
-                self.soundcheck_error = f'Soundcheck invalidation not saved: {error}'
+            self.soundcheck_dirty.set()
+            self._schedule_status_storage()
         if action.startswith('recs-'):
             return recs_actions.run(self.recs, action, form)
         if action in {'streamo-start', 'streamo-stop', 'streamo-restart'}:
@@ -586,6 +623,8 @@ class ShowcoApp:
         if not self.soundcheck_lock.acquire(blocking=False):
             raise TimeoutError('Soundcheck evidence is busy; retry shortly')
         try:
+            if self.soundcheck_dirty.is_set():
+                raise TimeoutError('Soundcheck invalidation is pending; retry shortly')
             if self.soundcheck_error:
                 raise ValueError(self.soundcheck_error)
             return workflows.run_soundcheck(
@@ -644,13 +683,9 @@ class ShowcoApp:
         return self.streamo_restart()
 
     def _remember_recovery(self, message: str) -> None:
-        if not self.incident_lock.acquire(blocking=False):
-            LOGGER.warning('Incident history busy: %s', message)
-            return
-        try:
-            self.incidents.record(message)
-        finally:
-            self.incident_lock.release()
+        with self.incident_lock:
+            self.incidents.record(message, persist=False)
+        self._schedule_status_storage()
 
     def _invalidate_soundcheck(
         self, message: str = 'Service restart requested; repeat soundcheck'

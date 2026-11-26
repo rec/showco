@@ -94,7 +94,11 @@ def test_background_sampling_observes_services_without_browser_requests(
         recs, 'status', side_effect=[status().recs, status(False).recs]
     ):
         monitor.sample()
+        with application.status_storage_lock:
+            pass
         monitor.sample()
+        with application.status_storage_lock:
+            pass
     restored = incidents.IncidentTimeline(tmp_path / 'incidents.json')
     assert any(f.name == 'recs' and f.message == 'offline' for f in restored.faults)
 

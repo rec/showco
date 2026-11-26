@@ -386,10 +386,14 @@ def test_background_observation_invalidates_soundcheck_without_workflow_page(
     identity = mock.Mock(return_value='first mount')
     app.soundcheck.identity = identity
     app.status()
+    with app.status_storage_lock:
+        pass
     app.soundcheck.begin(['X18: 1'])
     app.soundcheck.check('lights', status(), skip=True, note='unused')
     identity.return_value = 'different mount'
     app.status()
+    with app.status_storage_lock:
+        pass
     assert app.soundcheck.state.results['lights'].state == 'invalid'
 
 

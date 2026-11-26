@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 from datetime import datetime
 from pathlib import Path
+from threading import Event
 from unittest import mock
 
 import pytest
@@ -173,7 +174,11 @@ def test_incident_write_failure_is_logged_once_and_visible_on_show(
         settings, 'write_json_model', side_effect=OSError('full disk')
     ):
         app.status()
+        with app.status_storage_lock:
+            pass
         show = app.status()
+        with app.status_storage_lock:
+            pass
 
     page = gui_schema.load_gui(gui_schema.DEFAULT_GUI_PATH).page('show')
     fragment = views.configured_page(page, show)
@@ -185,3 +190,57 @@ def test_incident_write_failure_is_logged_once_and_visible_on_show(
         )
         == 1
     )
+
+
+@pytest.mark.parametrize('filename', ['incidents.json', 'soundcheck.json'])
+def test_stalled_status_storage_does_not_hide_capture_fault_or_block_show_controls(
+    tmp_path: Path, filename: str
+) -> None:
+    writing = Event()
+    release = Event()
+    recs = mock.Mock()
+    recs.status.return_value = status().recs
+    music = mock.Mock()
+    music.status.return_value = models.MusicStatus(mode='record')
+    music.record.return_value = music.stop.return_value = models.ActionResult(
+        ok=True, message='accepted'
+    )
+    app = ShowcoApp(
+        recs,
+        None,
+        rehearsal.RehearsalSystemMonitor(),
+        rehearsal.RehearsalMixersMonitor(),
+        music_controller=music,
+        state_directory=tmp_path,
+    )
+    write_json = settings.write_json_model
+
+    def write(path: Path, model: object, **kwargs: object) -> None:
+        if path.name == filename:
+            writing.set()
+            assert release.wait(5)
+        write_json(path, model, **kwargs)
+
+    with mock.patch.object(settings, 'write_json_model', side_effect=write):
+        app.status()
+        try:
+            assert writing.wait(2)
+            recs.status.return_value = status().recs.model_copy(
+                update={'service': models.ServiceStatus(name='recs', state='offline')}
+            )
+            with mock.patch('showco.runtime.app.STATUS_STORAGE_WARNING_SECONDS', 0):
+                app.status()
+                live = app.http_status()
+            assert live is not None
+            assert any(
+                f.name == 'recs' and f.message == 'offline' for f in live.active_faults
+            )
+            assert 'storage is stalled' in (live.monitoring_error or '')
+            assert app.run_action({'action': 'music-record'}).ok
+            assert app.run_action(
+                {'action': 'music-stop', 'confirmation': 'shutdown'}
+            ).ok
+        finally:
+            release.set()
+            with app.status_storage_lock:
+                pass
