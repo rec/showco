@@ -1,4 +1,5 @@
 import subprocess
+import sys
 from pathlib import Path
 from shutil import which
 from unittest import mock
@@ -89,7 +90,7 @@ def test_movie_cache_reuses_validated_output_and_hashes_source_contents(
 
 
 def test_sibling_renderer_produces_a_validated_cache_entry(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     renderer = Path(__file__).resolve().parents[2] / 'streamo'
     if not (renderer / 'scripts/render.py').is_file() or not all(
@@ -109,7 +110,11 @@ def test_sibling_renderer_produces_a_validated_cache_entry(
         title_fade=0,
     )
     cache = tmp_path / 'cache'
+    monkeypatch.setattr(sys.stderr, 'isatty', lambda: True)
     output = movie.cached_movie(recipe, tmp_path, renderer, cache)
+    captured = capsys.readouterr()
+    assert 'Rendering movie: 100%' in captured.err
+    assert 'Validating the show movie' in captured.out
     with mock.patch.object(movie, 'render_and_validate') as build:
         assert movie.cached_movie(recipe, tmp_path, renderer, cache) == output
     build.assert_not_called()

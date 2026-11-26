@@ -3,12 +3,14 @@
 import hashlib
 import os
 from glob import glob
+from math import isfinite
 from pathlib import Path
-from subprocess import CalledProcessError, run
-from tempfile import TemporaryDirectory
+from subprocess import PIPE, CalledProcessError, Popen, run
+from tempfile import TemporaryDirectory, TemporaryFile
 
 from pydantic import BaseModel, ConfigDict, Field, RootModel
 from reccy.configuration import settings, units
+from tqdm import tqdm
 
 
 class Movie(BaseModel, frozen=True):
@@ -74,7 +76,7 @@ def cached_movie(recipe: Movie, base: Path, renderer: Path, cache: Path) -> Path
         print('Reusing the rendered movie', flush=True)
         return output
 
-    print('Rendering and validating the show movie', flush=True)
+    print('Rendering the show movie', flush=True)
     output.parent.mkdir(parents=True, exist_ok=True)
     with TemporaryDirectory(dir=output.parent) as directory:
         temporary = Path(directory) / output.name
@@ -119,30 +121,63 @@ def render_and_validate(
             }
         ),
     )
-    for args in (
-        [
-            'python',
-            '-m',
-            'scripts.render',
-            '--output',
-            str(output),
-            *arguments,
-            '--inputs',
-            *(str(p) for p in inputs),
-        ],
-        ['streamo', 'daemon', 'validate', '--config', str(validation)],
+    try:
+        render_with_progress(
+            [
+                *command,
+                'python',
+                '-m',
+                'scripts.render',
+                '--progress',
+                '--output',
+                str(output),
+                *arguments,
+                '--inputs',
+                *(str(p) for p in inputs),
+            ],
+            renderer,
+            recipe.duration,
+        )
+        print('Validating the show movie', flush=True)
+        run(
+            [*command, 'streamo', 'daemon', 'validate', '--config', str(validation)],
+            cwd=renderer,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except CalledProcessError as error:
+        detail = error.stderr.strip() or f'exit status {error.returncode}'
+        raise ValueError(detail.replace(str(output), 'rendered movie')) from error
+
+
+def render_with_progress(command: list[str], renderer: Path, duration: float) -> None:
+    with (
+        TemporaryFile(mode='w+') as errors,
+        Popen(command, cwd=renderer, stdout=PIPE, stderr=errors, text=True) as process,
+        tqdm(
+            total=duration,
+            desc='Rendering movie',
+            unit='s',
+            disable=None,
+            bar_format='{l_bar}{bar}| {n:.0f}/{total:.0f}s [{elapsed}<{remaining}]',
+        ) as progress,
     ):
+        assert process.stdout is not None
         try:
-            run(
-                [*command, *args],
-                cwd=renderer,
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-        except CalledProcessError as error:
-            detail = error.stderr.strip() or f'exit status {error.returncode}'
-            raise ValueError(detail.replace(str(output), 'rendered movie')) from error
+            for line in process.stdout:
+                key, _, value = line.strip().partition('=')
+                if key != 'rendered_seconds':
+                    continue
+                seconds = float(value)
+                if isfinite(seconds) and seconds > progress.n:
+                    progress.update(min(seconds, duration) - progress.n)
+            if status := process.wait():
+                errors.seek(0)
+                raise CalledProcessError(status, command, stderr=errors.read())
+        finally:
+            if process.poll() is None:
+                process.terminate()
 
 
 def file_hash(path: Path) -> bytes:
