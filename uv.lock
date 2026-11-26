@@ -984,7 +984,7 @@ dependencies = [
 [[package]]
 name = "recs"
 version = "0.13.1"
-source = { git = "https://github.com/rec/recs.git?branch=main#8f1d44684fec711ba28703cba5b4ccf2c33026c0" }
+source = { git = "https://github.com/rec/recs.git?branch=main#79a4313b72edd22b241ce0a30d1b50c135f746f8" }
 dependencies = [
     { name = "dvice" },
     { name = "humanfriendly" },
