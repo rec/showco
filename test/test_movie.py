@@ -9,7 +9,37 @@ from PIL import Image
 from provision_helpers import networks, values
 from reccy.configuration.settings import write_text_atomically
 
+from showco import cli
 from showco.provision import config, media, movie, provision
+
+
+def test_render_command_prints_the_deploy_cache_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    config_path = tmp_path / 'config.toml'
+    config_path.write_text('[movie]\ninputs = ["clips/*.mp4"]\n')
+    secrets_path = tmp_path / 'secrets.toml'
+    secrets_path.write_text('[movie]\nduration = "15min"\n')
+    cache = tmp_path / 'cache' / 'showco' / 'movies'
+    output = cache / 'digest' / 'movie.mp4'
+    monkeypatch.setenv('XDG_CACHE_HOME', str(tmp_path / 'cache'))
+    monkeypatch.setattr(cli, 'ERROR_LOG_PATH', tmp_path / 'showco-errors.txt')
+
+    with mock.patch.object(movie, 'cached_movie', return_value=output) as generate:
+        assert (
+            cli.main(
+                ['render', '--config', str(config_path), '--secrets', str(secrets_path)]
+            )
+            == 0
+        )
+
+    generate.assert_called_once_with(
+        movie.Movie(inputs=['clips/*.mp4'], duration=900),
+        tmp_path,
+        Path(__file__).resolve().parents[2] / 'streamo',
+        cache,
+    )
+    assert capsys.readouterr().out.strip() == str(output)
 
 
 def test_provisioning_uses_generated_movie_and_static_photos(tmp_path: Path) -> None:

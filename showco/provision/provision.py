@@ -20,6 +20,13 @@ from . import config, media, movie, remote, script, state
 PROVISION_DIR = Path(__file__).resolve().parent
 
 
+class RenderOptions(BaseModel, frozen=True):
+    config_path: Annotated[Path, tyro.conf.arg(name='config')] = (
+        PROVISION_DIR / 'config.toml'
+    )
+    secrets: Path = PROVISION_DIR / 'secrets.toml'
+
+
 class DeployOptions(BaseModel, frozen=True):
     config_path: Annotated[Path, tyro.conf.arg(name='config')] = (
         PROVISION_DIR / 'config.toml'
@@ -87,6 +94,33 @@ class DeployOptions(BaseModel, frozen=True):
     )
 
 
+def render_main(arguments: list[str]) -> int:
+    options = tyro.cli(
+        RenderOptions,
+        args=arguments,
+        description='Render and validate the movie locally',
+    )
+    values = config.load_values(options.config_path, options.secrets)
+    if 'movie' not in values:
+        sys.exit('ERROR: no movie recipe configured')
+    print(
+        prepare_movie(movie.Movie.model_validate(values['movie']), options.config_path)
+    )
+    return 0
+
+
+def prepare_movie(recipe: movie.Movie, config_path: Path) -> Path:
+    try:
+        return movie.cached_movie(
+            recipe,
+            config_path.expanduser().resolve().parent,
+            local_checkout_directory() / 'streamo',
+            movie.cache_directory(),
+        )
+    except (OSError, ValueError, CalledProcessError, ReccyError) as error:
+        sys.exit(f'ERROR: cannot prepare the show movie: {error}')
+
+
 def resolved_config(
     options: DeployOptions, *, render_movie: bool = True
 ) -> config.Config:
@@ -117,15 +151,7 @@ def resolved_config(
         use_saved_movie=provision_config.movie is None,
     )
     if recipe is not None:
-        try:
-            generated = movie.cached_movie(
-                recipe,
-                options.config_path.expanduser().resolve().parent,
-                local_checkout_directory() / 'streamo',
-                movie.cache_directory(),
-            )
-        except (OSError, ValueError, CalledProcessError, ReccyError) as error:
-            sys.exit(f'ERROR: cannot prepare the show movie: {error}')
+        generated = prepare_movie(recipe, options.config_path)
         sources = config.Media.model_validate(
             sources.model_dump() | {'movie': generated}
         )

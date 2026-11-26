@@ -275,7 +275,8 @@ class CliTests(unittest.TestCase):
             with self.subTest(flag=flag), redirect_stdout(output):
                 self.assertEqual(cli.main([flag]), 0)
             self.assertIn(
-                '{run,bundle,cable-test,prepare-card,deploy,logs,', output.getvalue()
+                '{run,bundle,cable-test,prepare-card,deploy,render,logs,',
+                output.getvalue(),
             )
             self.assertIn('Bare showco defaults to showco deploy.', output.getvalue())
             self.assertIn('showco deploy -h for deployment flags', output.getvalue())

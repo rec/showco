@@ -19,7 +19,7 @@ from reccy import cli
 from reccy.runtime import logging
 
 from .deployment import bundle, card, deploy, logs, machine_role, panel, python, report
-from .provision import network
+from .provision import network, provision
 from .runtime import gui_schema, rehearsal, services
 from .runtime.mixer import MixersMonitor, load_mixer_specs
 from .runtime.network import ExternalWifi
@@ -173,6 +173,7 @@ def main(argv: list[str] | None = None) -> int:
                             'cable-test': cable_test.main,
                             'prepare-card': card.main,
                             'deploy': deploy.main,
+                            'render': provision.render_main,
                             'logs': logs.main,
                             'clear-logs': logs.clear_main,
                             'report': report.main,
