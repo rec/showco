@@ -1171,7 +1171,7 @@ wheels = [
 [[package]]
 name = "streamo"
 version = "0.2.0"
-source = { git = "https://github.com/rec/streamo.git?branch=main#99e166511e33f39ce7e13ea4f30364c59424a098" }
+source = { git = "https://github.com/rec/streamo.git?branch=main#9e722b74ccb7c5d6ff1ed7114424071c0d484533" }
 dependencies = [
     { name = "google-auth" },
     { name = "google-auth-oauthlib" },
