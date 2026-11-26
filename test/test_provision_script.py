@@ -560,8 +560,36 @@ user_systemctl() {
     assert not any(c.startswith(('start ', 'restart ')) for c in recorded)
 
 
-def test_enabling_streamo_unmasks_before_installing_and_starting(
+@pytest.mark.parametrize(
+    ('validation_status', 'installed', 'expected'),
+    [
+        (
+            0,
+            False,
+            [
+                'validate',
+                'systemctl unmask streamo.service',
+                'install',
+                'systemctl restart streamo.service',
+            ],
+        ),
+        (
+            0,
+            True,
+            [
+                'validate',
+                'systemctl unmask streamo.service',
+                'streamO service is already installed.',
+            ],
+        ),
+        (1, True, ['validate']),
+    ],
+)
+def test_streamo_validates_before_changing_or_skipping_service_installation(
     tmp_path: Path,
+    validation_status: int,
+    installed: bool,
+    expected: list[str],
 ) -> None:
     config_path = tmp_path / 'config.toml'
     config_path.write_text('')
@@ -581,10 +609,20 @@ def test_enabling_streamo_unmasks_before_installing_and_starting(
             source
             + """
 user_systemctl() { printf 'systemctl %s\n' "$*"; }
-sudo() { printf 'install\n'; }
+sudo() {
+  if [[ "$*" == *'daemon validate'* ]]; then
+    printf 'validate\n'
+    if [[ "$TEST_VALIDATION_STATUS" != 0 ]]; then
+      printf 'Movie is 640x360 at 24 fps. Expected 1280x720 at 30 fps.\n' >&2
+      return "$TEST_VALIDATION_STATUS"
+    fi
+  else
+    printf 'install\n'
+  fi
+}
 id() { printf '1000\n'; }
 git() { printf 'revision\n'; }
-service_is_current() { return 1; }
+service_is_current() { [[ "$TEST_INSTALLED" == true ]]; }
 record_service_state() { :; }
 install_streamo_service
 """,
@@ -595,13 +633,13 @@ install_streamo_service
             'ROOT': str(tmp_path),
             'STREAMO_ENABLED': 'true',
             'TEST_CONFIG': str(config_path),
+            'TEST_INSTALLED': str(installed).lower(),
+            'TEST_VALIDATION_STATUS': str(validation_status),
         },
         capture_output=True,
         text=True,
-        check=True,
     )
-    assert completed.stdout.splitlines() == [
-        'systemctl unmask streamo.service',
-        'install',
-        'systemctl restart streamo.service',
-    ]
+    assert completed.returncode == validation_status
+    assert completed.stdout.splitlines() == expected
+    if validation_status:
+        assert '640x360 at 24 fps. Expected 1280x720 at 30 fps.' in completed.stderr

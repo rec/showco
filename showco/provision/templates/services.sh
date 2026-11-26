@@ -185,9 +185,12 @@ install_streamo_service() {
     printf 'ERROR: streamO configuration does not exist: %s\n' "$config_path" >&2
     return 1
   fi
-  user_systemctl unmask streamo.service
   quoted_config=$(printf '%q' "$config_path")
   uid=$(id -u "$SHOW_USER")
+  sudo -H -u "$SHOW_USER" \
+    env PATH="$ROOT/streamo/.venv/bin:/home/$SHOW_USER/.local/bin:$PATH" \
+    bash -lc "cd '$ROOT/streamo' && uv run --locked streamo daemon validate --config $quoted_config" || return "$?"
+  user_systemctl unmask streamo.service
   input=$(service_input "$(git -C "$ROOT/streamo" rev-parse HEAD)
 $(sha256sum "$config_path" | awk '{print $1}')")
   if service_is_current streamo "$input"; then
