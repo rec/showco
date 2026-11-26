@@ -536,8 +536,10 @@ def test_uncertain_closing_request_preserves_recording_and_operation(
         value.close()
 
 
+@pytest.mark.parametrize('unlink_fails', [False, True])
 def test_rejected_closing_can_be_retried_without_changing_recording(
     tmp_path: Path,
+    unlink_fails: bool,
 ) -> None:
     streamo = mock.Mock()
     streamo.start_closing.side_effect = [
@@ -565,14 +567,24 @@ def test_rejected_closing_can_be_retried_without_changing_recording(
         rehearsal.RehearsalMixersMonitor(),
         music_controller=value,
     )
+    unlink = Path.unlink
+
+    def remove(candidate: Path, missing_ok: bool = False) -> None:
+        if unlink_fails and candidate == path:
+            raise PermissionError('closing state cannot be removed')
+        unlink(candidate, missing_ok=missing_ok)
+
     try:
-        outcome = request_closing(app)
+        with mock.patch.object(Path, 'unlink', autospec=True, side_effect=remove):
+            outcome = request_closing(app)
 
         assert not outcome.ok
         assert 'did not start: publisher busy' in outcome.message
         assert app.recent_actions()[0].result == outcome
         assert value.status().mode == 'record'
-        assert not path.exists()
+        assert path.exists() == unlink_fails
+        if unlink_fails:
+            assert 'cannot restore' in (value.status().closing_warning or '')
         assert request_closing(app).ok
         assert value.status().mode == 'closing'
         recs.pause_recording.assert_not_called()
@@ -613,14 +625,14 @@ def test_failed_credits_leave_recs_recording_and_room_music_off() -> None:
     value.close()
 
 
+@pytest.mark.parametrize('phase', ['credits-requesting', 'credits-running'])
 def test_showco_restart_observes_existing_closing_without_resending(
     tmp_path: Path,
+    phase: str,
 ) -> None:
     state_path = tmp_path / 'closing.json'
     scene = x18_music.RoomScene(master_fader=0.7, input_lr=[1] * 18)
-    record = closing.ClosingRecord(
-        operation_id='show-1', phase='credits-running', room_scene=scene
-    )
+    record = closing.ClosingRecord(operation_id='show-1', phase=phase, room_scene=scene)
     settings.write_json_model(state_path, record)
     recs = mock.Mock()
     recs.pause_recording.return_value = True
@@ -653,6 +665,43 @@ def test_showco_restart_observes_existing_closing_without_resending(
     streamo.start_closing.assert_not_called()
     recs.pause_recording.assert_not_called()
     value.close()
+
+
+def test_unconfirmed_provisional_closing_after_restart_becomes_recoverable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / 'closing.json'
+    settings.write_json_model(
+        path,
+        closing.ClosingRecord(
+            operation_id='never-confirmed',
+            phase='credits-requesting',
+            room_scene=x18_music.RoomScene(master_fader=0.7, input_lr=[1] * 18),
+        ),
+    )
+    streamo = mock.Mock()
+    streamo.status.return_value = models.StreamoStatus(
+        service=models.ServiceStatus(name='streamo', state='connected'),
+        stream_state='streaming',
+    )
+    monkeypatch.setattr(closing, 'RESTORED_REQUEST_WAIT_SECONDS', 0.02)
+    value, recs, player, routing = controller(streamo=streamo, path=path)
+    try:
+        deadline = time.monotonic() + 2
+        while value.status().mode != 'fault' and time.monotonic() < deadline:
+            time.sleep(0.01)
+        status_value = value.status()
+        assert status_value.mode == 'fault'
+        assert 'Use closing recovery' in (status_value.error or '')
+        assert (
+            closing.ClosingRecord.model_validate(settings.read(path)).phase == 'failed'
+        )
+        recs.pause_recording.assert_not_called()
+        routing.fade_main.assert_not_called()
+        player.start.assert_not_called()
+        streamo.start_closing.assert_not_called()
+    finally:
+        value.close()
 
 
 @pytest.mark.parametrize('phase', ['credits-running', 'black-interval'])

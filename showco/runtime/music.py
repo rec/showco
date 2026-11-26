@@ -156,6 +156,7 @@ class MusicController:
             error='; '.join(e for e in [error, closing.error, main_usb_error] if e)
             or player.error,
             closing=remote,
+            closing_warning=closing.warning,
             x18_usb_routing=usb_routing,
         )
 

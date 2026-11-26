@@ -178,6 +178,14 @@ def fault_details(status: models.ShowStatus) -> list[tuple[str, str, str]]:
             )
         )
     music = status.music
+    if music.closing_warning:
+        faults.append(
+            (
+                'Closing state',
+                music.closing_warning,
+                'Check storage before restarting showCo.',
+            )
+        )
     if (
         music.mode == 'fault'
         or music.state == 'failed'

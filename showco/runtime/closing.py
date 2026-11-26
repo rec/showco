@@ -18,6 +18,7 @@ from . import models
 from .recs import RecsClient
 
 LOGGER = logging.get_logger(__name__)
+RESTORED_REQUEST_WAIT_SECONDS = 5.0
 
 
 class ClosingRecord(BaseModel, frozen=True):
@@ -31,6 +32,7 @@ class ClosingSnapshot(BaseModel, frozen=True):
     record: ClosingRecord | None = None
     remote: models.ClosingStatus | None = None
     error: str | None = None
+    warning: str | None = None
     observing: bool = False
 
 
@@ -82,7 +84,7 @@ class ClosingController:
             'teardown-music-playing',
             'failed',
         }:
-            self._start_observer()
+            self._start_observer(restored_request=record.phase == 'credits-requesting')
 
     def request(self) -> models.ActionResult:
         assert self.streamo is not None
@@ -105,7 +107,7 @@ class ClosingController:
             operation_id=str(uuid.uuid4()), phase='credits-requesting', room_scene=scene
         )
         self._save(record)
-        self._publish(remote=None, error=None)
+        self._publish(remote=None, error=None, warning=None)
         self._black_fade_done = False
         try:
             self.streamo.start_closing(record.operation_id)
@@ -133,7 +135,12 @@ class ClosingController:
                         self._publish(remote=prior.remote, error=prior.error)
                 except OSError as cleanup_error:
                     message += f'; cannot restore saved closing state: {cleanup_error}'
-                    self._publish(record=previous, remote=prior.remote, error=message)
+                    self._publish(
+                        record=previous,
+                        remote=prior.remote,
+                        error=prior.error,
+                        warning=message,
+                    )
                 return models.ActionResult(ok=False, message=message)
             message = (
                 f'Closing request outcome is uncertain: {error}. '
@@ -247,30 +254,52 @@ class ClosingController:
             error=record.error,
         )
 
-    def _start_observer(self) -> None:
+    def _start_observer(self, *, restored_request: bool = False) -> None:
         if self._thread is not None and self._thread.is_alive():
             return
         self._stop.clear()
         self._thread = threading.Thread(
-            target=self._observe, name='showco-closing-credits', daemon=True
+            target=self._observe,
+            args=(restored_request,),
+            name='showco-closing-credits',
+            daemon=True,
         )
         self._thread.start()
 
-    def _observe(self) -> None:
+    def _observe(self, restored_request: bool) -> None:
+        deadline = (
+            time.monotonic() + RESTORED_REQUEST_WAIT_SECONDS
+            if restored_request
+            else None
+        )
         while not self._stop.wait(0.1):
             record = self.status().record
             if record is None:
                 return
-            assert self.streamo is not None
-            remote = self.streamo.status().closing
+            remote = self.streamo.status().closing if self.streamo is not None else None
             if self._stop.is_set():
                 return
-            if remote is None or remote.operation_id != record.operation_id:
+            if (
+                remote is None
+                or remote.operation_id != record.operation_id
+                or (
+                    deadline is not None
+                    and remote.state not in {'running', 'completed', 'failed'}
+                )
+            ):
+                if deadline is not None and time.monotonic() >= deadline:
+                    self._save_failure(
+                        record,
+                        'Cannot confirm the closing request saved before restart. '
+                        'Recording and room mix are unchanged. Use closing recovery.',
+                    )
+                    return
                 self._publish(
                     error='Closing status is unavailable or has a different '
                     'operation ID; recording and room music are unchanged'
                 )
                 continue
+            deadline = None
             self._publish(remote=remote)
             try:
                 if remote.state == 'failed':
@@ -364,6 +393,9 @@ class ClosingController:
                 sounddevice.PortAudioError,
             ) as error:
                 message += f'; {name} failed: {error}'
+        self._save_failure(record, message)
+
+    def _save_failure(self, record: ClosingRecord, message: str) -> None:
         failed = record.model_copy(update={'phase': 'failed', 'error': message})
         try:
             self._save(failed)

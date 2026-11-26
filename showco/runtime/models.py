@@ -271,6 +271,7 @@ class InputCheck(BaseModel, frozen=True):
 
 class MusicStatus(BaseModel, frozen=True):
     x18_usb_routing: ReadinessCheck | None = None
+    closing_warning: str | None = None
     mode: str = 'stopped'
     state: str = 'stopped'
     directory: Path | None = None
