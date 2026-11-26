@@ -763,6 +763,42 @@ def test_shutdown_reports_unconfirmed_poweroff() -> None:
     assert 'poweroff is unconfirmed' in outcome.message
 
 
+def test_failed_poweroff_keeps_show_transitions_gated_until_cleanup_exits(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    value, recs, _, _ = controller(path=tmp_path / 'closing.json')
+    value.poweroff = mock.Mock(side_effect=OSError('poweroff rejected'))
+    writing = threading.Event()
+    release = threading.Event()
+    write_json = settings.write_json_model
+
+    def write(path: Path, state: music.MusicState) -> None:
+        if state.mode == 'stopped':
+            writing.set()
+            assert release.wait(5)
+        write_json(path, state)
+
+    with mock.patch.object(settings, 'write_json_model', side_effect=write):
+        monkeypatch.setattr(music, 'SHUTDOWN_CLEANUP_SECONDS', 0.1)
+        try:
+            outcome = value.stop()
+            assert writing.is_set()
+            assert not outcome.ok
+            assert 'poweroff rejected' in outcome.message
+            assert value.status().mode == 'transitioning'
+            with pytest.raises(ValueError, match='Shutdown cleanup is still running'):
+                value.record()
+            recs.action.assert_not_called()
+        finally:
+            release.set()
+            with value.cleanup_lock:
+                pass
+
+    assert value.record().ok
+    phase = music.MusicState.model_validate(settings.read(tmp_path / 'music.json'))
+    assert phase.mode == 'record'
+
+
 def test_failed_recording_command_mutes_returns_and_reports_completed_steps() -> None:
     value, recs, player, routing = controller()
     recs.action.return_value = models.ActionResult(ok=False, message='recs offline')

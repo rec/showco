@@ -202,8 +202,9 @@ class MusicPlayer:
         self.level = 0.0
 
     def status(self) -> MusicPlayerStatus:
-        with self.lock:
-            return self.status_value
+        # Writers replace this immutable snapshot. The audio lock may be held
+        # while PortAudio is closing, so readers must not wait for it.
+        return self.status_value
 
     def start(self, paths: list[Path], fade_seconds: float) -> None:
         playlists = audio_files(paths)

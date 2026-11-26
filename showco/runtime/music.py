@@ -120,6 +120,9 @@ class MusicController:
         player = self.player.status()
         with self.phase_lock:
             mode, error = self.mode, self.transition_error
+        if self.cleanup_lock.locked():
+            mode = 'transitioning'
+            error = 'Shutdown cleanup is still running'
         usb_routing = self.x18_usb_routing
         main_usb_error = (
             usb_routing.message if usb_routing and not usb_routing.ok else None
@@ -193,6 +196,7 @@ class MusicController:
                 )
 
     def start_stream(self) -> models.ActionResult:
+        self._require_cleanup_idle()
         if self.streamo is None:
             return models.ActionResult(ok=True, message='streamO is disabled')
         if self.streamo_restart is None:
@@ -201,6 +205,7 @@ class MusicController:
         return self.streamo_restart()
 
     def setup(self) -> models.ActionResult:
+        self._require_cleanup_idle()
         self.closing.require_idle()
         restore = (
             [('room routing restored', self._restore_room)]
@@ -232,6 +237,7 @@ class MusicController:
         return result
 
     def record(self, *, restart: bool = False) -> models.ActionResult:
+        self._require_cleanup_idle()
         if restart:
             if not self.closing.stop(timeout=5):
                 return models.ActionResult(
@@ -271,6 +277,7 @@ class MusicController:
         return result
 
     def teardown(self) -> models.ActionResult:
+        self._require_cleanup_idle()
         if self.streamo is not None and self.streamo.status().stream_state != 'stopped':
             record = self.closing.status().record
             if (
@@ -315,11 +322,13 @@ class MusicController:
         )
 
     def abandon_closing(self) -> models.ActionResult:
+        self._require_cleanup_idle()
         if (rejected := self.closing.prepare_recovery()) is not None:
             return rejected
         return self.record(restart=True)
 
     def finish_closing(self) -> models.ActionResult:
+        self._require_cleanup_idle()
         return self.closing.finish()
 
     def stop(self) -> models.ActionResult:
@@ -406,6 +415,12 @@ class MusicController:
         record = self.closing.status().record
         if record is not None:
             self.routing.restore_room(record.room_scene)
+
+    def _require_cleanup_idle(self) -> None:
+        if self.cleanup_lock.locked():
+            raise ValueError(
+                'Shutdown cleanup is still running; retry when it finishes'
+            )
 
     def _load_mode(self) -> None:
         if self.state_path is None:
