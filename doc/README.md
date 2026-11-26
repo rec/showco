@@ -193,6 +193,32 @@ The four directory/audio flags repeat. `--movie` selects one local movie file fo
 
 Each selected source has its own numbered destination within a versioned package under `/home/<user>/.local/share/showco/media/versions/`. Provisioning preserves source file modification and access times. Matching packages are reused. By default, showCo compares file names, sizes, and modification times. Set `verify_media = true` at the top level of the provisioning configuration to compare SHA-256 contents, including changes that leave the size and modification time intact. The modes use separate package identities. streamO's downloaded-image inbox stays outside the package. Missing sources or failed transfers stop provisioning. A copied `score.toml` must use relative file paths within its directory.
 
+A `[movie]` recipe in the provisioning config lets `showco` generate the movie
+on the development machine using the sibling streamO checkout and local FFmpeg.
+Paths and input globs are relative to the config file. For example:
+
+```toml
+[movie]
+inputs = ["clips/*.mp4"]
+duration = "4h"
+title_card = "title.md"
+width = 1280
+height = 720
+fps = 30
+seed = 0
+
+[media]
+photos = ["rouen-images"]
+```
+
+`[media].photos` supplies a default static directory for live photo overlays.
+Saved media selections and explicit media flags take precedence over these
+defaults. With `[movie]` configured, showCo generates the filename, validates
+the complete movie before contacting the Pi, and configures streamO to match
+its size and frame rate. The local cache reuses the validated result for the
+same recipe, input contents, and rendering tools. A recipe replaces the saved
+`movie` selection and cannot be combined with `--movie`.
+
 Provisioning stages and verifies a new package alongside existing versions
 before applying configuration. If the package will not fit or the transfer
 fails, existing versions remain available. `--stop-streamo` stops a running

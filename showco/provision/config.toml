@@ -1,6 +1,20 @@
 argon_one = true
 verify_media = false
 
+[movie]
+inputs = ["../../../streamo/videos/*.mp4"]
+title_card = "../../../streamo/open-loop.md"
+duration = "4h"
+start_black_duration = "2s"
+title_interval = "1min"
+width = 1280
+height = 720
+fps = 30
+seed = 0
+
+[media]
+photos = ["../../rouen-images"]
+
 [network]
 host = "t.local"
 web_port = 10000

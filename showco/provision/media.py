@@ -36,6 +36,8 @@ if TYPE_CHECKING:
 class StreamMediaOptions(BaseModel, frozen=True):
     config_path: Annotated[Path, tyro.conf.arg(name='config')]
     movie: Path | None = None
+    movie_resolution: str | None = None
+    movie_frame_rate: int | None = None
     photos: Annotated[list[Path], tyro.conf.UseAppendAction] = Field(
         default_factory=list
     )
@@ -44,10 +46,20 @@ class StreamMediaOptions(BaseModel, frozen=True):
     )
 
 
-def resolve_sources(config_path: Path, options: DeployOptions) -> config.Media:
+def resolve_sources(
+    config_path: Path,
+    options: DeployOptions,
+    *,
+    defaults: config.Media | None = None,
+    use_saved_movie: bool = True,
+) -> config.Media:
     path = config_path.expanduser().resolve().with_name('media.toml')
     try:
-        saved = config.Media.model_validate(config.read_toml(path))
+        saved = config.Media.model_validate(
+            config.merge_values(
+                (defaults or config.Media()).model_dump(), config.read_toml(path)
+            )
+        )
         selected: dict[str, object] = {
             n: [p.expanduser().resolve() for p in getattr(options, n)]
             if getattr(options, n)
@@ -59,7 +71,7 @@ def resolve_sources(config_path: Path, options: DeployOptions) -> config.Media:
             options.movie.expanduser().resolve()
             if options.movie is not None
             else (path.parent / saved.movie.expanduser()).resolve()
-            if saved.movie is not None
+            if use_saved_movie and saved.movie is not None
             else None
         )
         sources = config.Media.model_validate(selected)
@@ -385,6 +397,15 @@ def streamo_arguments(provision_config: config.Config) -> list[str]:
     ]
     if movies := target_paths(provision_config, 'movie'):
         arguments.extend(['--movie', str(movies[0])])
+        if recipe := provision_config.movie:
+            arguments.extend(
+                [
+                    '--movie-resolution',
+                    recipe.resolution,
+                    '--movie-frame-rate',
+                    str(recipe.fps),
+                ]
+            )
     if provision_config.stream.enabled:
         for mixer in provision_config.mixers:
             if mixer.name == 'X18':
@@ -532,7 +553,28 @@ def main() -> None:
         updated = stream_media_configuration(
             text, options.photos, options.movie, recs_source=source
         )
-        if updated != text:
+        if (
+            options.movie_resolution is not None
+            and options.movie_frame_rate is not None
+        ):
+            values = tomllib.loads(updated)
+            configured = config.merge_values(
+                values,
+                {
+                    'allow_scaling': False,
+                    'streaming_service': {
+                        'encoding': {
+                            'video': {
+                                'resolution': options.movie_resolution,
+                                'frame_rate': options.movie_frame_rate,
+                            }
+                        }
+                    },
+                },
+            )
+            if updated != text or configured != values:
+                settings.save(path, RootModel(configured), write_empty_dicts=True)
+        elif updated != text:
             settings.write_text_atomically(path, updated)
         if stream_settings := os.environ.get('SHOWCO_STREAM_SETTINGS'):
             stream = config.Stream.model_validate_json(stream_settings)
@@ -546,7 +588,7 @@ def main() -> None:
                     if v
                 },
             )
-    except (OSError, ValueError) as error:
+    except (OSError, ValueError, ReccyError) as error:
         sys.exit(f'ERROR: cannot configure streamO in {path}: {error}')
 
 

@@ -1,0 +1,115 @@
+import subprocess
+from pathlib import Path
+from shutil import which
+from unittest import mock
+
+import pytest
+from PIL import Image
+from provision_helpers import networks, values
+from reccy.configuration.settings import write_text_atomically
+
+from showco.provision import config, media, movie, provision
+
+
+def test_provisioning_uses_generated_movie_and_static_photos(tmp_path: Path) -> None:
+    photos = tmp_path / 'rouen-images'
+    photos.mkdir()
+    (photos / 'existing.jpg').write_bytes(b'photo')
+    generated = tmp_path / 'generated.mp4'
+    generated.write_bytes(b'movie')
+    write_text_atomically(tmp_path / 'media.toml', 'movie = "missing-old-movie.mp4"\n')
+    settings = values(
+        movie={'inputs': ['clips/*.mp4'], 'duration': '4h'},
+        media={'photos': ['rouen-images']},
+        networks=networks(
+            internal_wifi={'password': 'test-password'},
+            external_wifi={'name': 'house', 'password': 'test-password'},
+        ),
+    )
+    options = provision.DeployOptions(config_path=tmp_path / 'config.toml')
+    with (
+        mock.patch.object(config, 'load_values', return_value=settings),
+        mock.patch.object(movie, 'cached_movie', return_value=generated) as generate,
+    ):
+        resolved = provision.resolved_config(options)
+    assert resolved.movie is not None
+    assert generate.call_args.args[:2] == (resolved.movie, tmp_path)
+    assert resolved.media.photos == [photos]
+    assert resolved.media.movie == generated
+    assert media.streamo_arguments(resolved)[-4:] == [
+        '--movie-resolution',
+        '1280x720',
+        '--movie-frame-rate',
+        '30',
+    ]
+
+
+def test_movie_cache_reuses_validated_output_and_hashes_source_contents(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / 'clip.mp4'
+    source.write_bytes(b'old')
+    renderer = tmp_path / 'streamo'
+    for name in (
+        'scripts/render.py',
+        'scripts/render_plan.py',
+        'scripts/title_card.py',
+        'scripts/media_output.py',
+        'streamo/video_probe.py',
+        'uv.lock',
+    ):
+        path = renderer / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch()
+    recipe = movie.Movie(inputs=['*.mp4'])
+    cache = tmp_path / 'cache'
+
+    def render(
+        recipe: movie.Movie,
+        inputs: list[Path],
+        title: Path | None,
+        renderer: Path,
+        output: Path,
+    ) -> None:
+        output.write_bytes(inputs[0].read_bytes())
+
+    with (
+        mock.patch.object(
+            movie, 'run', return_value=subprocess.CompletedProcess([], 0, b'ffmpeg')
+        ),
+        mock.patch.object(movie, 'render_and_validate', side_effect=render) as build,
+    ):
+        first = movie.cached_movie(recipe, tmp_path, renderer, cache)
+        assert movie.cached_movie(recipe, tmp_path, renderer, cache) == first
+        source.write_bytes(b'new')
+        second = movie.cached_movie(recipe, tmp_path, renderer, cache)
+    assert build.call_count == 2
+    assert first.read_bytes() == b'old'
+    assert second.read_bytes() == b'new'
+
+
+def test_sibling_renderer_produces_a_validated_cache_entry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    renderer = Path(__file__).resolve().parents[2] / 'streamo'
+    if not (renderer / 'scripts/render.py').is_file() or not all(
+        which(p) for p in ('uv', 'ffmpeg', 'ffprobe')
+    ):
+        pytest.skip('Requires the sibling streamO checkout, uv, and FFmpeg')
+    monkeypatch.setenv('UV_OFFLINE', '1')
+    Image.new('RGB', (64, 48), 'red').save(tmp_path / 'still.png')
+    recipe = movie.Movie(
+        inputs=['still.png'],
+        duration=3,
+        width=64,
+        height=48,
+        fps=30,
+        work_scale=1,
+        start_black_duration=1,
+        title_fade=0,
+    )
+    cache = tmp_path / 'cache'
+    output = movie.cached_movie(recipe, tmp_path, renderer, cache)
+    with mock.patch.object(movie, 'render_and_validate') as build:
+        assert movie.cached_movie(recipe, tmp_path, renderer, cache) == output
+    build.assert_not_called()

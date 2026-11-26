@@ -5,14 +5,16 @@ import sys
 import tempfile
 from pathlib import Path
 from string import hexdigits
+from subprocess import CalledProcessError
 from typing import Annotated
 
 import tyro
 from pydantic import BaseModel, Field
 from reccy.configuration import settings
+from reccy.errors import ReccyError
 
 from ..runtime import gui_schema
-from . import config, media, remote, script, state
+from . import config, media, movie, remote, script, state
 
 PROVISION_DIR = Path(__file__).resolve().parent
 
@@ -68,7 +70,9 @@ class DeployOptions(BaseModel, frozen=True):
     )
 
 
-def resolved_config(options: DeployOptions) -> config.Config:
+def resolved_config(
+    options: DeployOptions, *, render_movie: bool = True
+) -> config.Config:
     env = config.load_values(options.config_path, options.secrets)
     provision_config = config.config_from_values(
         env,
@@ -84,7 +88,30 @@ def resolved_config(options: DeployOptions) -> config.Config:
         lyte_enabled=options.lyte_enabled,
         lyte_installation_config=options.lyte_installation_config,
     )
-    sources = media.resolve_sources(options.config_path, options)
+    validate_config(provision_config)
+    gui_schema.load_gui(PROVISION_DIR.parent.parent / provision_config.gui_path)
+    recipe = provision_config.movie if render_movie else None
+    if recipe is not None and options.movie is not None:
+        sys.exit('ERROR: --movie cannot be combined with a configured movie recipe')
+    sources = media.resolve_sources(
+        options.config_path,
+        options,
+        defaults=provision_config.media,
+        use_saved_movie=provision_config.movie is None,
+    )
+    if recipe is not None:
+        try:
+            generated = movie.cached_movie(
+                recipe,
+                options.config_path.expanduser().resolve().parent,
+                local_checkout_directory() / 'streamo',
+                movie.cache_directory(),
+            )
+        except (OSError, ValueError, CalledProcessError, ReccyError) as error:
+            sys.exit(f'ERROR: cannot prepare the show movie: {error}')
+        sources = config.Media.model_validate(
+            sources.model_dump() | {'movie': generated}
+        )
     provision_config = provision_config.model_copy(update={'media': sources})
     provision_config = provision_config.model_copy(
         update={
@@ -92,8 +119,6 @@ def resolved_config(options: DeployOptions) -> config.Config:
             for n in ('audio', 'setup', 'teardown')
         }
     )
-    validate_config(provision_config)
-    gui_schema.load_gui(PROVISION_DIR.parent.parent / provision_config.gui_path)
     return provision_config
 
 

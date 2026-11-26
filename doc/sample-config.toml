@@ -74,6 +74,24 @@ refname = ""
 url = "sample"
 refname = ""
 
+[movie]
+
+inputs = ["clips/*.mp4"]
+duration = 3600.0
+title_card = "."
+seed = 0
+width = 1280
+height = 720
+fps = 30
+work_scale = 2
+work_fps = 30
+still_duration = 30.0
+start_black_duration = 8.0
+title_interval = 180.0
+title_jitter = 30.0
+title_duration = 8.0
+title_fade = 4.0
+
 [media]
 
 photos = []

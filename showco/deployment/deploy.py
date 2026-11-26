@@ -95,7 +95,9 @@ def run(options: provision.DeployOptions) -> int:
         ):
             return 1
         return 0
-    provision_config = provision.resolved_config(options)
+    provision_config = provision.resolved_config(
+        options, render_movie=not (update_requested or options.remote)
+    )
     if options.remote:
         return update.update_remote_target(
             selected,
@@ -115,7 +117,10 @@ def run(options: provision.DeployOptions) -> int:
             autosquash=options.autosquash if options.autosquash is not None else 50,
             clear_settings=options.clear_settings,
         )
-    media.save_sources(options.config_path, provision_config.media)
+    selections = provision_config.media
+    if provision_config.movie is not None:
+        selections = selections.model_copy(update={'movie': None})
+    media.save_sources(options.config_path, selections)
     cards = card.attached_imager_cards()
     if len(cards) > 1:
         sys.exit(
