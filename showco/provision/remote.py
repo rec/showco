@@ -66,11 +66,7 @@ def provision_remote(
             timeout_seconds=REMOTE_PROVISION_TIMEOUT_SECONDS,
         )
 
-        if ssh.provisioning_reboot_required(provision_config):
-            print(f'Waiting for {provision_config.ssh_target} to reboot...')
-            boot_id = ssh.schedule_remote_reboot(provision_config)
-            ssh.wait_for_rebooted_ssh(provision_config, boot_id)
-        else:
+        if not complete_pending_reboot(provision_config):
             print(f'No reboot is required for {provision_config.ssh_target}.')
 
         print(f'Checking provisioned services on {provision_config.ssh_target}...')
@@ -93,6 +89,15 @@ def provision_remote(
                     f'WARNING: Could not remove remote provisioning script: {e}',
                     file=sys.stderr,
                 )
+
+
+def complete_pending_reboot(provision_config: config.Config) -> bool:
+    if not ssh.provisioning_reboot_required(provision_config):
+        return False
+    print(f'Waiting for {provision_config.ssh_target} to reboot...')
+    boot_id = ssh.schedule_remote_reboot(provision_config)
+    ssh.wait_for_rebooted_ssh(provision_config, boot_id)
+    return True
 
 
 def publication_command(

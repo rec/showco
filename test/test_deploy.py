@@ -24,6 +24,11 @@ class DeployTests(unittest.TestCase):
             operation = mock.patch(f'showco.provision.media.{name}')
             operation.start()
             self.addCleanup(operation.stop)
+        reboot = mock.patch(
+            'showco.provision.ssh.provisioning_reboot_required', return_value=False
+        )
+        self.pending_reboot = reboot.start()
+        self.addCleanup(reboot.stop)
 
     def test_attached_card_is_prepared_before_waiting_and_provisioning(self) -> None:
         for previous_boot_id in [None, 'previous-boot']:
@@ -241,6 +246,54 @@ class DeployTests(unittest.TestCase):
         self.assertEqual(update_target.call_args.args[0], update.REPOSITORY_NAMES)
         self.assertIs(update_target.call_args.kwargs['target_config'], provision_config)
         provision_target.assert_not_called()
+
+    def test_matching_configuration_retries_pending_reboot_before_updating(
+        self,
+    ) -> None:
+        provision_config = mock.Mock(ssh_target='tom@bertrand.local')
+        self.pending_reboot.return_value = True
+        calls = mock.Mock()
+        with (
+            mock.patch(
+                'showco.provision.provision.resolved_config',
+                return_value=provision_config,
+            ),
+            mock.patch(
+                'showco.provision.state.provisioning_fingerprint',
+                return_value='fingerprint',
+            ),
+            mock.patch(
+                'showco.provision.remote.applied_provisioning_fingerprint',
+                return_value='fingerprint',
+            ),
+            mock.patch(
+                'showco.provision.ssh.schedule_remote_reboot', return_value='old-boot'
+            ) as reboot,
+            mock.patch(
+                'showco.provision.ssh.wait_for_rebooted_ssh',
+                side_effect=[SystemExit('reboot was not confirmed'), None],
+            ) as wait,
+            mock.patch(
+                'showco.deployment.local_update.update_from_provisioning_machine',
+                return_value=0,
+            ) as update_target,
+        ):
+            calls.attach_mock(reboot, 'reboot')
+            calls.attach_mock(wait, 'wait')
+            calls.attach_mock(deploy.media.synchronize, 'stage')
+            calls.attach_mock(update_target, 'update')
+            with self.assertRaisesRegex(SystemExit, 'reboot was not confirmed'):
+                deploy.run(self.options())
+            update_target.assert_not_called()
+            self.assertEqual(deploy.run(self.options()), 0)
+
+        self.assertEqual(
+            [c[0] for c in calls.mock_calls],
+            ['reboot', 'wait', 'reboot', 'wait', 'stage', 'update'],
+        )
+        self.assertEqual(
+            wait.call_args_list, [mock.call(provision_config, 'old-boot')] * 2
+        )
 
     def test_missing_applied_state_provisions_target(self) -> None:
         provision_config = mock.Mock(ssh_target='tom@bertrand.local')
