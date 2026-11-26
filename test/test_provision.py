@@ -560,9 +560,6 @@ class ProvisionTests(unittest.TestCase):
                 'showco.provision.verify.report_verification_results',
                 side_effect=SystemExit('streamO service failed'),
             ),
-            mock.patch(
-                'showco.provision.remote.record_applied_provisioning_fingerprint'
-            ) as record,
         ):
             with self.assertRaisesRegex(SystemExit, 'streamO service failed'):
                 remote.provision_remote(
@@ -572,18 +569,33 @@ class ProvisionTests(unittest.TestCase):
                     fingerprint='a' * 64,
                 )
 
-            record.assert_called_once_with(provision_config, 'a' * 64)
-            record.reset_mock()
-            run.side_effect = [None, subprocess.CalledProcessError(1, ['ssh']), None]
-            with self.assertRaises(subprocess.CalledProcessError):
-                remote.provision_remote(
-                    provision_config,
-                    Path('/tmp/local.sh'),
-                    '/tmp/remote.sh',
-                    fingerprint='a' * 64,
-                )
+        command = run.call_args_list[2].args[1]
+        self.assertIn('flock -n 9', command)
+        self.assertIn('bash /tmp/remote.sh && mkdir', command)
+        self.assertIn('a' * 64, command)
+        self.assertIn('provisioning-fingerprint', command)
 
-        record.assert_not_called()
+    def test_media_preparation_failure_never_stops_streamo(self) -> None:
+        provision_config = make_config(values(networks=networks(x18=False)))
+        with (
+            mock.patch('showco.provision.ssh.wait_for_ssh'),
+            mock.patch('showco.provision.remote.require_passwordless_sudo'),
+            mock.patch('showco.provision.remote.validate_remote_worktrees'),
+            mock.patch('showco.provision.remote.preflight_network'),
+            mock.patch(
+                'showco.provision.media.synchronize',
+                side_effect=SystemExit('not enough free space'),
+            ),
+            mock.patch('showco.provision.ssh.run_ssh') as run,
+            self.assertRaisesRegex(SystemExit, 'not enough free space'),
+        ):
+            remote.provision_remote(
+                provision_config,
+                Path('/tmp/local.sh'),
+                '/tmp/remote.sh',
+                stop_streamo=True,
+            )
+        run.assert_not_called()
 
     def test_provision_does_not_wait_for_reboot_when_not_required(self) -> None:
         config = make_config(values(networks=networks(x18=False)))

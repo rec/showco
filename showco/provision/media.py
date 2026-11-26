@@ -26,7 +26,7 @@ from reccy.runtime.assets import AssetCacheError
 from ..runtime.recs_control import RecsControlClient
 from ..streamo.config import configure_stream_settings
 from ..x18.music import Files
-from . import config, ssh, verify
+from . import config, ssh, state
 from .media_package import MediaInventory, stage_media
 
 if TYPE_CHECKING:
@@ -114,7 +114,7 @@ def target_paths(provision_config: config.Config, kind: str) -> list[Path]:
     return [root / p for p in package.targets[kind]]
 
 
-def synchronize(provision_config: config.Config, *, stop_streamo: bool = False) -> None:
+def synchronize(provision_config: config.Config) -> None:
     sources = provision_config.media
     if not any(sources.sources.values()):
         return
@@ -124,16 +124,9 @@ def synchronize(provision_config: config.Config, *, stop_streamo: bool = False) 
     destination = versions / package.version
     quoted_destination = shlex.quote(str(destination))
     verify = media_verification_command(package)
-    verify_destination = f'cd {quoted_destination} && {verify}'
-    for index, _ in enumerate(sources.photos):
-        inbox = root / 'photos' / f'{index:03d}' / 'incoming'
-        link = destination / 'photos' / f'{index:03d}' / 'incoming'
-        verify_destination += (
-            f' && mkdir -p -- {shlex.quote(str(inbox))}'
-            f' && ln -sfn -- {shlex.quote(str(inbox))} {shlex.quote(str(link))}'
-        )
-    if timestamps := media_timestamp_command(destination, package):
-        verify_destination += f' && {timestamps}'
+    verify_destination = prepare_package_command(
+        destination, root, package, verify, len(sources.photos)
+    )
     if (
         ssh.capture_ssh(
             provision_config,
@@ -149,10 +142,13 @@ def synchronize(provision_config: config.Config, *, stop_streamo: bool = False) 
 
     if not (rsync := which('rsync')):
         sys.exit('ERROR: rsync is required on the development machine to copy media')
+    check_media_space(provision_config, versions, package)
     transport = shlex.join(
         ssh.ssh_command(provision_config, provision_config.ssh_target, '')[:-2]
     )
     staging = versions / f'.staging-{uuid4().hex}'
+    quoted_staging = shlex.quote(str(staging))
+    stage_attempted = False
     try:
         with stage_media(package) as local:
             ssh.run_ssh(
@@ -161,13 +157,10 @@ def synchronize(provision_config: config.Config, *, stop_streamo: bool = False) 
                 '{ sudo apt-get update && sudo apt-get install -y rsync; }',
                 timeout_seconds=300,
             )
-            prepare_staging = f'mkdir -p -- {shlex.quote(str(staging))}'
-            if not provision_config.safe_media_copy:
-                prepare_staging = (
-                    f'{remove_media_command(versions, stop_streamo=stop_streamo)} '
-                    f'&& {prepare_staging}'
-                )
-            ssh.run_ssh(provision_config, prepare_staging, timeout_seconds=300)
+            stage_attempted = True
+            ssh.run_ssh(
+                provision_config, f'mkdir -- {quoted_staging}', timeout_seconds=300
+            )
             interactive = sys.stdout.isatty()
             progress_options: list[str] = []
             if interactive:
@@ -196,13 +189,15 @@ def synchronize(provision_config: config.Config, *, stop_streamo: bool = False) 
                     '-e',
                     transport,
                     str(local) + '/',
-                    f'{provision_config.ssh_target}:{shlex.quote(str(staging))}/',
+                    f'{provision_config.ssh_target}:{quoted_staging}/',
                 ],
                 stream_output=interactive,
             )
             # GNU mv -T -n never replaces an existing version, including when a
             # concurrent deploy publishes the same version first. Verify it too.
-            staging_check = f'cd {shlex.quote(str(staging))} && {verify}'
+            staging_check = prepare_package_command(
+                staging, root, package, verify, len(sources.photos)
+            )
             if not provision_config.verify_media and (
                 timestamps := media_timestamp_command(staging, package)
             ):
@@ -210,7 +205,7 @@ def synchronize(provision_config: config.Config, *, stop_streamo: bool = False) 
                 staging_check = f'{timestamps} && {staging_check}'
             command = (
                 f'{staging_check} && '
-                f'mv -T -n -- {shlex.quote(str(staging))} '
+                f'mv -T -n -- {quoted_staging} '
                 f'{quoted_destination} && {verify_destination}'
             )
             ssh.run_ssh(provision_config, command, timeout_seconds=300)
@@ -222,28 +217,58 @@ def synchronize(provision_config: config.Config, *, stop_streamo: bool = False) 
         TimeoutExpired,
     ) as error:
         sys.exit(f'ERROR: cannot copy media package: {error}')
+    finally:
+        if stage_attempted:
+            try:
+                ssh.run_ssh(
+                    provision_config,
+                    f'rm -rf --one-file-system -- {quoted_staging}',
+                    exit_on_error=False,
+                    timeout_seconds=15,
+                )
+            except (OSError, CalledProcessError, TimeoutExpired) as error:
+                print(
+                    f'WARNING: Could not remove staging directory {staging}: {error}',
+                    file=sys.stderr,
+                )
 
 
-def remove_media_command(versions: Path, *, stop_streamo: bool) -> str:
-    status = verify.user_systemctl_command(
-        'show --property=ActiveState --value streamo.service'
+def check_media_space(
+    provision_config: config.Config, versions: Path, package: MediaInventory
+) -> None:
+    target = shlex.quote(str(versions))
+    result = ssh.capture_ssh(
+        provision_config, f'mkdir -p -- {target} && df -B1 --output=avail -- {target}'
     )
-    stop = verify.user_systemctl_command('stop streamo.service')
-    running = (
-        f"printf '%s\\n' 'Stopping streamO before replacing media'; {stop} || exit $?"
-        if stop_streamo
-        else "printf '%s\\n' 'ERROR: streamO is running. Rerun showco with "
-        "--stop-streamo to stop it before replacing media.' >&2; exit 1"
-    )
-    return (
-        f'streamo_state=$({status}) || exit $?; '
-        'case "$streamo_state" in inactive|failed) ;; '
-        "'') printf '%s\\n' 'ERROR: Cannot determine whether streamO is running.' >&2; "
-        'exit 1 ;; '
-        f'*) {running} ;; esac; '
-        "printf '%s\\n' 'Removing previous media packages before upload'; "
-        f'rm -rf --one-file-system -- {shlex.quote(str(versions))}'
-    )
+    try:
+        available = int(result.splitlines()[-1])
+    except (IndexError, ValueError):
+        sys.exit(f'ERROR: cannot determine free space for media packages at {versions}')
+    required = sum(m.size for m in package.metadata.values())
+    if package.manifest is not None:
+        required += len(package.manifest_bytes) + len(package.checksum_bytes)
+    if available < required:
+        sys.exit(
+            f'ERROR: not enough free space to stage replacement media at {versions}: '
+            f'{required:,} bytes required, {available:,} available. '
+            'Existing packages were kept.'
+        )
+
+
+def prepare_package_command(
+    destination: Path, root: Path, package: MediaInventory, verify: str, photos: int
+) -> str:
+    command = f'cd {shlex.quote(str(destination))} && {verify}'
+    for index in range(photos):
+        inbox = root / 'photos' / f'{index:03d}' / 'incoming'
+        link = destination / 'photos' / f'{index:03d}' / 'incoming'
+        command += (
+            f' && mkdir -p -- {shlex.quote(str(inbox))}'
+            f' && ln -sfn -- {shlex.quote(str(inbox))} {shlex.quote(str(link))}'
+        )
+    if timestamps := media_timestamp_command(destination, package):
+        command += f' && {timestamps}'
+    return command
 
 
 def media_timestamp_command(destination: Path, package: MediaInventory) -> str:
@@ -296,7 +321,9 @@ def media_verification_command(package: MediaInventory) -> str:
     )
 
 
-def configure_stream_media(provision_config: config.Config) -> None:
+def configure_stream_media(
+    provision_config: config.Config, *, expected_fingerprint: str
+) -> None:
     arguments = streamo_arguments(provision_config)
     path = Path('/home') / provision_config.network.user / '.config/streamo/config.toml'
     command = shlex.join(
@@ -322,10 +349,19 @@ def configure_stream_media(provision_config: config.Config) -> None:
             f'-e {shlex.quote("/.local/share/showco/media/versions/")} '
             f'{shlex.quote(str(path))} 2>/dev/null; then {command}; fi'
         )
+    fingerprint = shlex.quote(
+        str(state.provisioning_fingerprint_path(provision_config))
+    )
+    apply = (
+        f'test "$(cat -- {fingerprint})" = {shlex.quote(expected_fingerprint)} || {{ '
+        "printf '%s\\n' 'ERROR: provisioning state changed while preparing media; "
+        "rerun showCo.' >&2; exit 1; }; "
+        f'cd {shlex.quote(str(provision_config.paths.root / "showco"))} && '
+        f'export PATH="$HOME/.local/bin:$PATH" && {command}'
+    )
     ssh.run_ssh(
         provision_config,
-        f'cd {shlex.quote(str(provision_config.paths.root / "showco"))} && '
-        f'export PATH="$HOME/.local/bin:$PATH" && {command}',
+        state.lock_configuration(provision_config, apply),
         timeout_seconds=60,
     )
 

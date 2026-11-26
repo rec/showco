@@ -39,11 +39,15 @@ def test_provisioning_transfers_only_streamo_publish_credentials() -> None:
         'access_token': 'test-token',
     }
     with mock.patch('showco.provision.media.ssh.run_ssh') as run:
-        media.configure_stream_media(configuration)
+        media.configure_stream_media(configuration, expected_fingerprint='a' * 64)
     command = run.call_args.args[1]
     assert 'SHOWCO_STREAM_SETTINGS=' in command
     assert 'test-token' in command
     assert 'keep-local' not in command
+    assert command.index('flock -n 9') < command.index('provisioning state changed')
+    assert command.index('provisioning state changed') < command.index(
+        'SHOWCO_STREAM_SETTINGS='
+    )
 
 
 def test_target_media_configuration_applies_publish_credentials(tmp_path: Path) -> None:
@@ -289,20 +293,19 @@ def test_photos_enable_disabled_overlays_and_reset_incompatible_weights() -> Non
 
 
 @pytest.mark.parametrize(
-    ('rsync_probe_status', 'progress_flag', 'config_overrides'),
-    [(0, '--info=progress2', {}), (1, '--progress', {'safe_media_copy': True})],
+    ('rsync_probe_status', 'progress_flag'),
+    [(0, '--info=progress2'), (1, '--progress')],
 )
 def test_media_transfer_keeps_sources_separate_and_preserves_streamo_inbox(
     tmp_path: Path,
     rsync_probe_status: int,
     progress_flag: str,
-    config_overrides: dict[str, object],
 ) -> None:
     photos = tmp_path / "performer's photos"
     photos.mkdir()
     audio = tmp_path / 'song with spaces.flac'
     audio.touch()
-    configuration = make_config(values(**config_overrides), port=2200).model_copy(
+    configuration = make_config(values(), port=2200).model_copy(
         update={
             'media': config.Media(photos=[photos], teardown=[audio]),
             'verify_media': True,
@@ -310,7 +313,9 @@ def test_media_transfer_keeps_sources_separate_and_preserves_streamo_inbox(
     )
     operations = mock.Mock()
     with (
-        mock.patch('showco.provision.ssh.capture_ssh', return_value=''),
+        mock.patch(
+            'showco.provision.ssh.capture_ssh', side_effect=['', 'Avail\n10000000']
+        ),
         mock.patch('showco.provision.ssh.run_ssh') as remote,
         mock.patch('showco.provision.ssh.run_command') as copy,
         mock.patch('showco.provision.media.which', return_value='/usr/bin/rsync'),
@@ -326,22 +331,10 @@ def test_media_transfer_keeps_sources_separate_and_preserves_streamo_inbox(
         'remote',
         'copy',
         'remote',
+        'remote',
     ]
     preparation = shlex.split(remote.call_args_list[1].args[1])
-    if config_overrides:
-        assert preparation[:3] == ['mkdir', '-p', '--']
-    else:
-        assert preparation[-10:-1] == [
-            'rm',
-            '-rf',
-            '--one-file-system',
-            '--',
-            '/home/tom/.local/share/showco/media/versions',
-            '&&',
-            'mkdir',
-            '-p',
-            '--',
-        ]
+    assert preparation[:-1] == ['mkdir', '--']
     assert '/media/versions/.staging-' in preparation[-1]
     command = copy.call_args.args[0]
     assert copy.call_count == 1
@@ -353,55 +346,39 @@ def test_media_transfer_keeps_sources_separate_and_preserves_streamo_inbox(
         '-p',
         '2200',
     ]
-    publication = remote.call_args.args[1]
+    publication = remote.call_args_list[-2].args[1]
     assert 'sha256sum --strict -c SHA256SUMS' in publication
     assert 'mv -T -n' in publication
     assert configuration.media_package.version in publication
     assert '/media/photos/000/incoming' in publication
+    assert publication.index('/media/photos/000/incoming') < publication.index(
+        'mv -T -n'
+    )
+    cleanup = shlex.split(remote.call_args.args[1])
+    assert cleanup == ['rm', '-rf', '--one-file-system', '--', preparation[-1]]
 
 
-@pytest.mark.parametrize(
-    ('state', 'stop_streamo', 'stop_fails', 'expected_actions'),
-    [
-        ('active', False, False, []),
-        ('active', True, False, ['stop', 'delete']),
-        ('activating', True, True, ['stop']),
-        ('inactive', False, False, ['delete']),
-    ],
-)
-def test_destructive_media_replacement_waits_for_streamo_to_stop(
-    state: str, stop_streamo: bool, stop_fails: bool, expected_actions: list[str]
+def test_insufficient_space_keeps_existing_media_and_skips_upload(
+    tmp_path: Path,
 ) -> None:
-    stubs = """
-systemctl() {
-    case "$2" in
-        show) printf '%s\\n' "$TEST_STATE" ;;
-        stop) printf 'stop\\n'; return "$TEST_STOP_RESULT" ;;
-    esac
-}
-rm() { printf 'delete\\n'; }
-"""
-    command = media.remove_media_command(
-        Path('/media/versions'), stop_streamo=stop_streamo
+    movie = tmp_path / 'movie.mp4'
+    movie.write_bytes(b'new movie')
+    configuration = make_config(values()).model_copy(
+        update={'media': config.Media(movie=movie)}
     )
-    result = subprocess.run(
-        ['sh', '-c', stubs + command],
-        env={
-            **os.environ,
-            'TEST_STATE': state,
-            'TEST_STOP_RESULT': str(int(stop_fails)),
-        },
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert [
-        s for s in result.stdout.splitlines() if s in {'stop', 'delete'}
-    ] == expected_actions
-    assert result.returncode == int('delete' not in expected_actions)
-    if not expected_actions:
-        assert 'streamO is running' in result.stderr
-        assert '--stop-streamo' in result.stderr
+    with (
+        mock.patch(
+            'showco.provision.ssh.capture_ssh', side_effect=['', 'Avail\n8']
+        ) as probe,
+        mock.patch('showco.provision.ssh.run_ssh') as remote,
+        mock.patch('showco.provision.ssh.run_command') as copy,
+        mock.patch('showco.provision.media.which', return_value='/usr/bin/rsync'),
+        pytest.raises(SystemExit, match='9 bytes required, 8 available'),
+    ):
+        media.synchronize(configuration)
+    assert 'df -B1 --output=avail' in probe.call_args.args[1]
+    remote.assert_not_called()
+    copy.assert_not_called()
 
 
 @pytest.mark.parametrize('verify_media', [False, True])
@@ -448,8 +425,10 @@ def test_failed_media_copy_stops_before_later_sources(tmp_path: Path) -> None:
         update={'media': config.Media(photos=[directory, directory])}
     )
     with (
-        mock.patch('showco.provision.ssh.capture_ssh', return_value=''),
-        mock.patch('showco.provision.ssh.run_ssh'),
+        mock.patch(
+            'showco.provision.ssh.capture_ssh', side_effect=['', 'Avail\n10000000']
+        ),
+        mock.patch('showco.provision.ssh.run_ssh') as remote,
         mock.patch('showco.provision.media.which', return_value='/usr/bin/rsync'),
         mock.patch(
             'showco.provision.ssh.run_command',
@@ -459,6 +438,15 @@ def test_failed_media_copy_stops_before_later_sources(tmp_path: Path) -> None:
     ):
         media.synchronize(configuration)
     assert copy.call_count == 1
+    preparation = shlex.split(remote.call_args_list[1].args[1])
+    assert '/media/versions/.staging-' in preparation[-1]
+    assert shlex.split(remote.call_args.args[1]) == [
+        'rm',
+        '-rf',
+        '--one-file-system',
+        '--',
+        preparation[-1],
+    ]
 
 
 def test_clearing_photos_disables_only_managed_photos() -> None:
@@ -499,7 +487,9 @@ def test_every_media_category_compares_contents_before_copying(
         update={'media': config.Media.model_validate({kind: selection})}
     )
     with (
-        mock.patch('showco.provision.ssh.capture_ssh', return_value=''),
+        mock.patch(
+            'showco.provision.ssh.capture_ssh', side_effect=['', 'Avail\n10000000']
+        ),
         mock.patch('showco.provision.ssh.run_ssh'),
         mock.patch('showco.provision.ssh.run_command') as copy,
         mock.patch('showco.provision.media.which', return_value='/usr/bin/rsync'),

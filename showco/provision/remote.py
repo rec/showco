@@ -11,11 +11,10 @@ from reccy.runtime import subprocess
 from tqdm import tqdm
 
 from ..deployment import repositories
-from . import config, media, network, script, ssh, verify
+from . import config, media, network, script, ssh, state, verify
 
 SSH_CLEANUP_TIMEOUT_SECONDS = 15
 REMOTE_PROVISION_TIMEOUT_SECONDS = 1_800
-PROVISIONING_FINGERPRINT_NAME = 'provisioning-fingerprint'
 FINGERPRINT_SSH_TIMEOUTS = (1, 2, 4, 8, 16)
 WIFI_STATUS_COMMAND = 'nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device status'
 SSH_ROUTE_COMMAND = 'test -n "$SSH_CLIENT" && ip -o route get "${SSH_CLIENT%% *}"'
@@ -42,7 +41,7 @@ def provision_remote(
     require_passwordless_sudo(provision_config)
     validate_remote_worktrees(provision_config)
     topology = preflight_network(provision_config)
-    media.synchronize(provision_config, stop_streamo=stop_streamo)
+    media.synchronize(provision_config)
     print(f'Checking {provision_config.ssh_target}...')
     ssh.run_ssh(
         provision_config,
@@ -57,7 +56,13 @@ def provision_remote(
         print(f'Running provisioning on {provision_config.ssh_target}...')
         ssh.run_ssh(
             provision_config,
-            script.remote_command(provision_config, remote_script, upgrade=upgrade),
+            publication_command(
+                provision_config,
+                remote_script,
+                upgrade=upgrade,
+                fingerprint=fingerprint,
+                stop_streamo=stop_streamo,
+            ),
             timeout_seconds=REMOTE_PROVISION_TIMEOUT_SECONDS,
         )
 
@@ -67,10 +72,6 @@ def provision_remote(
             ssh.wait_for_rebooted_ssh(provision_config, boot_id)
         else:
             print(f'No reboot is required for {provision_config.ssh_target}.')
-
-        if fingerprint is not None:
-            # Service health must not invalidate successfully applied machine setup.
-            record_applied_provisioning_fingerprint(provision_config, fingerprint)
 
         print(f'Checking provisioned services on {provision_config.ssh_target}...')
         verify.report_verification_results(
@@ -92,6 +93,33 @@ def provision_remote(
                     f'WARNING: Could not remove remote provisioning script: {e}',
                     file=sys.stderr,
                 )
+
+
+def publication_command(
+    provision_config: config.Config,
+    remote_script: str,
+    *,
+    upgrade: bool,
+    fingerprint: str | None,
+    stop_streamo: bool,
+) -> str:
+    command = ''
+    if stop_streamo and any(provision_config.media.sources.values()):
+        status = verify.user_systemctl_command(
+            'show --property=ActiveState --value streamo.service'
+        )
+        stop = verify.user_systemctl_command('stop streamo.service')
+        command += (
+            f'streamo_state=$({status}) || exit $?; '
+            'case "$streamo_state" in inactive|failed) ;; '
+            "'' ) printf '%s\\n' 'ERROR: cannot determine whether streamO is running.' "
+            '>&2; exit 1 ;; '
+            f'*) {stop} || exit $? ;; esac; '
+        )
+    command += script.remote_command(provision_config, remote_script, upgrade=upgrade)
+    if fingerprint is not None:
+        command += f' && {fingerprint_command(provision_config, fingerprint)}'
+    return state.lock_configuration(provision_config, command)
 
 
 def preflight_network(
@@ -120,7 +148,7 @@ def require_passwordless_sudo(provision_config: config.Config) -> None:
 
 
 def applied_provisioning_fingerprint(provision_config: config.Config) -> str | None:
-    path = provisioning_fingerprint_path(provision_config)
+    path = state.provisioning_fingerprint_path(provision_config)
     command = (
         f'if test -f {shlex.quote(str(path))}; then '
         f'cat {shlex.quote(str(path))}; else exit 42; fi'
@@ -193,28 +221,16 @@ def applied_provisioning_fingerprint(provision_config: config.Config) -> str | N
     return fingerprint
 
 
-def record_applied_provisioning_fingerprint(
-    provision_config: config.Config, fingerprint: str
-) -> None:
-    path = provisioning_fingerprint_path(provision_config)
+def fingerprint_command(provision_config: config.Config, fingerprint: str) -> str:
+    path = state.provisioning_fingerprint_path(provision_config)
     temporary = path.with_name(f'.{path.name}.XXXXXX')
-    command = ' && '.join(
+    return ' && '.join(
         [
             f'mkdir -p {shlex.quote(str(path.parent))}',
             f'temporary=$(mktemp {shlex.quote(str(temporary))})',
             f'printf \'%s\\n\' {shlex.quote(fingerprint)} > "$temporary"',
             f'mv "$temporary" {shlex.quote(str(path))}',
         ]
-    )
-    ssh.run_ssh(provision_config, command)
-
-
-def provisioning_fingerprint_path(provision_config: config.Config) -> Path:
-    return (
-        Path('/home')
-        / provision_config.network.user
-        / '.local/state/showco'
-        / (PROVISIONING_FINGERPRINT_NAME)
     )
 
 

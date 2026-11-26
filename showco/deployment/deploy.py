@@ -163,8 +163,8 @@ def run(options: provision.DeployOptions) -> int:
             )
         return provision.run(options, provision_config=provision_config)
 
-    media.synchronize(provision_config, stop_streamo=options.stop_streamo)
-    media.configure_stream_media(provision_config)
+    media.synchronize(provision_config)
+    media.configure_stream_media(provision_config, expected_fingerprint=fingerprint)
     print(f'Configuration matches: updating {provision_config.ssh_target}...')
     return local_update.update_from_provisioning_machine(
         update.REPOSITORY_NAMES,

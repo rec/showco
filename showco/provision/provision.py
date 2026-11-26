@@ -126,7 +126,6 @@ def run(
         persist_network_host(options.config_path, options.host)
     if options.root is not None:
         persist_paths_root(options.config_path, options.root)
-    remote_script = '/tmp/showco-provision-pi.sh'
     with tempfile.NamedTemporaryFile(
         'w', delete=False, prefix='showco-provision-pi.', suffix='.sh'
     ) as fp:
@@ -136,7 +135,7 @@ def run(
         remote.provision_remote(
             provision_config,
             local_script,
-            remote_script,
+            f'/tmp/{local_script.name}',
             upgrade=options.upgrade,
             stop_streamo=options.stop_streamo,
             fingerprint=state.provisioning_fingerprint(

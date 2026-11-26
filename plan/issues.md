@@ -9,18 +9,6 @@ items reduce resilience or make diagnosis harder. Findings below are based on
 source and existing tests. Resource and hardware scenarios still need the
 acceptance evidence identified under each issue.
 
-## P1: Default media replacement deletes the running show's old package
-
-`media.synchronize()` removes the entire version store before staging a new
-version when `safe_media_copy` is false, which is the default. An interrupted
-transfer, verification error, or concurrent provision can leave streamO and
-the setup/teardown player referencing files that no longer exist. Encoder
-leases cover the current movie snapshot, not future restarts or every other
-asset. Keep the referenced package until the replacement and its configuration
-are committed, serialize publication, and define cleanup for abandoned staging
-and superseded packages. Test upload failure and a second provision with a
-service still pointing at the old version.
-
 ## P1: Update rollback can start intentionally stopped services
 
 `target_update.update_target()` starts all selected services after a failed
