@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from reccy.configuration import settings
 from reccy.errors import ReccyError
 
+from ..deployment.repositories import DEFAULT_AUTOSQUASH_LIMIT
 from ..runtime import gui_schema
 from . import config, media, movie, remote, script, state
 
@@ -58,7 +59,14 @@ class DeployOptions(BaseModel, frozen=True):
     remote: bool = False
     target_machine: bool = False
     clear_settings: bool = False
-    autosquash: int | None = Field(default=None, ge=0)
+    autosquash: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            f'Commits to scan for fixups (default {DEFAULT_AUTOSQUASH_LIMIT}, '
+            '0 disables autosquash)'
+        ),
+    )
     movie: Path | None = Field(
         default=None, description='Local movie file to copy for streamO video'
     )
@@ -145,7 +153,9 @@ def run(
         local_checkout_directory(),
         update.run_command_with_timeout,
         sys.stdout,
-        autosquash=options.autosquash if options.autosquash is not None else 50,
+        autosquash=options.autosquash
+        if options.autosquash is not None
+        else DEFAULT_AUTOSQUASH_LIMIT,
     ):
         sys.exit(
             'ERROR: local repositories are not ready for Raspberry Pi provisioning'

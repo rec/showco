@@ -6,6 +6,7 @@ import tyro
 
 from ..provision import media, provision, remote, script, ssh, state
 from . import card, local_update, machine_role, releases, target_update, update
+from .repositories import DEFAULT_AUTOSQUASH_LIMIT
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -101,7 +102,9 @@ def run(options: provision.DeployOptions) -> int:
             local_root,
             update.run_command_with_timeout,
             sys.stdout,
-            autosquash=options.autosquash if options.autosquash is not None else 50,
+            autosquash=options.autosquash
+            if options.autosquash is not None
+            else DEFAULT_AUTOSQUASH_LIMIT,
         ):
             return 1
         if options.sync and not local_update.refresh_local_dependencies(
@@ -134,7 +137,9 @@ def run(options: provision.DeployOptions) -> int:
             root=options.root,
             target_config=provision_config,
             output=sys.stdout,
-            autosquash=options.autosquash if options.autosquash is not None else 50,
+            autosquash=options.autosquash
+            if options.autosquash is not None
+            else DEFAULT_AUTOSQUASH_LIMIT,
             clear_settings=options.clear_settings,
             **prepared,
         )
@@ -230,7 +235,9 @@ def prepare_releases(options: provision.DeployOptions, selected: list[str]) -> i
             root,
             run_command,
             sys.stdout,
-            autosquash=options.autosquash if options.autosquash is not None else 50,
+            autosquash=options.autosquash
+            if options.autosquash is not None
+            else DEFAULT_AUTOSQUASH_LIMIT,
         ):
             return 1
         plans = releases.plan_releases(selected, root, run_command)

@@ -370,7 +370,7 @@ class DeployTests(unittest.TestCase):
             root=None,
             target_config=provision_config,
             output=mock.ANY,
-            autosquash=50,
+            autosquash=100,
             clear_settings=False,
         )
         provision_target.assert_not_called()
@@ -399,7 +399,7 @@ class DeployTests(unittest.TestCase):
             Path('/code'),
             update.run_command_with_timeout,
             mock.ANY,
-            autosquash=50,
+            autosquash=100,
         )
         refresh.assert_not_called()
         resolved.assert_not_called()

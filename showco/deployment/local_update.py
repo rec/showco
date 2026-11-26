@@ -12,6 +12,7 @@ from tqdm import tqdm
 
 from ..provision import config, provision, ssh
 from . import publication, update
+from .repositories import DEFAULT_AUTOSQUASH_LIMIT
 
 
 class DependencyRefresh(StrEnum):
@@ -29,7 +30,7 @@ def update_from_provisioning_machine(
     target_config: config.Config | None = None,
     run_command: update.RunCommand | None = None,
     output: TextIO = sys.stdout,
-    autosquash: int = 50,
+    autosquash: int = DEFAULT_AUTOSQUASH_LIMIT,
     clear_settings: bool = False,
     repositories_prepared: bool = False,
 ) -> int:
@@ -77,7 +78,7 @@ def prepare_local_repositories(
     run_command: update.RunCommand,
     output: TextIO,
     *,
-    autosquash: int = 50,
+    autosquash: int = DEFAULT_AUTOSQUASH_LIMIT,
 ) -> bool:
     try:
         programs = dependency_programs(selected, root)
