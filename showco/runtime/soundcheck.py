@@ -25,6 +25,7 @@ class SoundcheckState(BaseModel, frozen=True):
     recording_baselines: dict[str, float] = Field(default_factory=dict)
     recording_session: str | None = None
     recording_clocks: dict[str, str] = Field(default_factory=dict)
+    playback_pause: bool = False
     recording_started: datetime | None = None
 
 
@@ -85,7 +86,6 @@ class Soundcheck:
                     status.recs.service.state,
                     status.recs.session_directory,
                     status.recs.instance_token,
-                    status.recs.offline_sources,
                 ],
                 sort_keys=True,
             ).encode()
@@ -101,6 +101,7 @@ class Soundcheck:
                 'recording_baselines': {},
                 'recording_session': None,
                 'recording_clocks': {},
+                'playback_pause': False,
                 'recording_started': None,
             }
         )
@@ -122,6 +123,7 @@ class Soundcheck:
                     'recording_baselines': {},
                     'recording_session': None,
                     'recording_clocks': {},
+                    'playback_pause': False,
                     'recording_started': None,
                 }
             )
@@ -152,6 +154,7 @@ class Soundcheck:
                 update={
                     'recording_baselines': baseline,
                     'recording_session': status.recs.session_directory,
+                    'playback_pause': False,
                     'recording_clocks': {
                         k: v for k, v in (capture_clocks or {}).items() if k in expected
                     },
@@ -296,6 +299,23 @@ class Soundcheck:
             for c in status.channels
             if input_key(c) in self.state.expected_inputs
         }
+
+    def allow_playback_pause(
+        self, status: models.ShowStatus, capture_clocks: dict[str, str]
+    ) -> None:
+        recording = self.state.results.get('recording')
+        if (
+            not status.recs.paused
+            and self.state.recording_session == status.recs.session_directory
+            and recording is not None
+            and recording.state == 'passed'
+            and self.state.recording_clocks
+            and all(
+                capture_clocks.get(k) == v
+                for k, v in self.state.recording_clocks.items()
+            )
+        ):
+            self.save(self.state.model_copy(update={'playback_pause': True}))
 
 
 def input_key(channel: models.ChannelLevel) -> str:

@@ -1,7 +1,9 @@
-import os
+import hashlib
 import subprocess
+import threading
 import time
 from pathlib import Path
+from typing import BinaryIO
 
 from pydantic import BaseModel, Field
 from reccy.configuration import settings
@@ -12,6 +14,7 @@ from recs.base.audio_stream import AudioClient
 from recs.daemon.gui_protocol import AudioStatusResult
 from streamo.config import STREAMO_SERVICE
 from streamo.daemon import load_config
+from streamo.managed import LaunchPermit, launch_permit_path
 from streamo.preflight import check_encoders, check_media
 from streamo.recs_input import RecsConnection
 
@@ -22,7 +25,7 @@ MAX_RECOVERIES = 3
 RETRY_DELAY_SECONDS = 5
 CLOCK_SYNC_MAX_AGE_SECONDS = 3600
 CLOCK_SYNC_MARKER = Path('/run/systemd/timesync/synchronized')
-RUNTIME_STATE_NAME = 'showco-twitch.json'
+LAUNCH_WINDOW_SECONDS = 90
 
 
 class BroadcastRun(BaseModel, frozen=True):
@@ -42,32 +45,69 @@ class TwitchRecovery:
         self.path = path
         self.run: BroadcastRun | None = None
         self.error = ''
-        if path is not None:
-            try:
-                self.run = BroadcastRun.model_validate(settings.read(path))
-            except FileNotFoundError:
-                pass
-            except (OSError, ValueError) as error:
-                self.error = f'Twitch recovery state unavailable: {error}'
+        self.lock = threading.Lock()
+        self.stop_lock = threading.Lock()
+        self.generation = 0
+        self.permit_file: BinaryIO | None = None
 
-    def save(self, run: BroadcastRun) -> None:
-        if self.path is not None:
-            try:
-                settings.write_json_model(self.path, run)
-            except OSError as error:
-                self.error = f'Cannot save Twitch recovery state: {error}'
-                raise
-        self.run = run
-        self.error = ''
+    def authorize(
+        self, run: BroadcastRun, generation: int, config_sha256: str | None
+    ) -> bool:
+        with self.lock:
+            if generation != self.generation or self.stop_lock.locked():
+                return False
+            if self.path is not None:
+                import fcntl
 
-    def cancel(self) -> None:
-        self.run = None
-        self.error = ''
-        if self.path is not None:
-            try:
-                self.path.unlink(missing_ok=True)
-            except OSError as error:
-                self.error = f'Could not clear Twitch recovery authorization: {error}'
+                if self.permit_file is not None:
+                    self.permit_file.close()
+                    self.permit_file = None
+                try:
+                    permit = LaunchPermit(
+                        config_sha256=config_sha256 or '',
+                        expires_at=time.monotonic() + LAUNCH_WINDOW_SECONDS,
+                    )
+                    settings.write_json_model(self.path, permit, sync=False)
+                    file = self.path.open('rb')
+                    try:
+                        fcntl.flock(file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    except OSError:
+                        file.close()
+                        raise
+                    self.permit_file = file
+                except (OSError, ValueError) as error:
+                    self.error = f'Cannot authorize managed publishing: {error}'
+                    raise
+            self.run = run
+            self.error = ''
+            return True
+
+    def launch_failed(self, generation: int, message: str) -> None:
+        with self.lock:
+            if generation == self.generation and self.run is not None:
+                self.run = self.run.model_copy(
+                    update={'failure': message, 'launch_failed': True}
+                )
+                if self.permit_file is not None:
+                    self.permit_file.close()
+                    self.permit_file = None
+
+    def cancel(self, *, generation: int | None = None) -> None:
+        with self.lock:
+            if generation is not None and generation != self.generation:
+                return
+            self.generation += 1
+            self.run = None
+            self.error = ''
+            if self.permit_file is not None:
+                self.permit_file.close()
+                self.permit_file = None
+            if self.path is not None:
+                try:
+                    self.path.unlink(missing_ok=True)
+                except OSError:
+                    # The closed lock has already revoked the grant.
+                    pass
 
     def message(self, off: bool, failure: str) -> str:
         run = self.run
@@ -89,6 +129,8 @@ class TwitchRecovery:
 class TwitchReadiness:
     def __init__(self, config: Path) -> None:
         self.config = config
+        self.config_sha256: str | None = None
+        self.capture_clocks: dict[str, str] = {}
 
     def check(
         self,
@@ -97,6 +139,8 @@ class TwitchReadiness:
         revision: str | None,
     ) -> list[str]:
         recs = show.recs
+        self.config_sha256 = None
+        self.capture_clocks = {}
         if not recs.snapshot_available or recs.service.state != 'connected':
             return ['Fresh recs status is unavailable']
         blockers = []
@@ -161,7 +205,8 @@ class TwitchReadiness:
         ]:
             return ['Update the managed streamO service before starting Twitch']
         try:
-            config = load_config(self.config)
+            digest = hashlib.sha256(self.config.read_bytes()).hexdigest()
+            config = load_config(self.config, expected_sha256=digest)
         except (OSError, ValueError) as error:
             return [f'Cannot load streamO configuration ({type(error).__name__})']
         if config.recs_input is None or not config.recs_input.daemon:
@@ -196,7 +241,12 @@ class TwitchReadiness:
             }
             expected_sources = evidence.recording_clocks.keys()
             clocks = audio_capture_clocks(audio)
-            if any(clocks.get(k) != v for k, v in evidence.recording_clocks.items()):
+            if not expected_sources <= clocks.keys() or (
+                not evidence.playback_pause
+                and any(
+                    clocks.get(k) != v for k, v in evidence.recording_clocks.items()
+                )
+            ):
                 return ['A recs capture changed; verify a new sample in Soundcheck']
             if (
                 not expected_sources
@@ -218,6 +268,8 @@ class TwitchReadiness:
                 'Cannot verify fresh samples from the selected recs pair '
                 f'({type(error).__name__})'
             ]
+        self.config_sha256 = digest
+        self.capture_clocks = {k: v for k, v in clocks.items() if k in expected_sources}
         return []
 
 
@@ -239,7 +291,7 @@ def clock_is_synchronized() -> bool:
 
 
 def runtime_state_path() -> Path:
-    return Path('/run/user') / str(os.getuid()) / RUNTIME_STATE_NAME
+    return launch_permit_path()
 
 
 def same_recording(current: models.RecsStatus, checked: models.RecsStatus) -> bool:

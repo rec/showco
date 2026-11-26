@@ -156,12 +156,28 @@ def run_soundcheck(
                 raise ValueError('lyte is disabled')
             return lyte.test()
         if action == 'soundcheck-start-recording':
+            if verify_capture and show.recs.paused:
+                result = recs.action('resume_recording')
+                recs.snapshot_client.invalidate()
+                if result.ok:
+                    return models.ActionResult(
+                        ok=True,
+                        message='Recording resumed. Start the sample when ready.',
+                    )
+                return result
             controller.record_start(
                 show, recs.audio_capture_clocks() if verify_capture else None
             )
             result = recs.action('resume_recording')
         else:
+            clocks = (
+                recs.audio_capture_clocks()
+                if verify_capture and not show.recs.paused
+                else {}
+            )
             result = recs.action('pause_recording')
+            if result.ok and clocks:
+                controller.allow_playback_pause(show, clocks)
         recs.snapshot_client.invalidate()
         return result
     raise ValueError('Unknown soundcheck action')

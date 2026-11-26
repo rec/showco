@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest import mock
 
 import pytest
+from streamo import managed
 
 from showco.runtime import models, rehearsal, soundcheck, twitch, workflows
 from showco.runtime.app import ShowcoApp
@@ -80,6 +81,7 @@ def test_twitch_checks_current_capture_and_selected_subscription(
     ready: models.ShowStatus, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     config_path = tmp_path / 'streamo.toml'
+    config_path.touch()
     sample = soundcheck.Soundcheck(identity=lambda path: 'mount')
     track = models.ChannelLevel(
         name='Main', device='X18', channels=[17, 18], state='silent', recorded_seconds=0
@@ -135,7 +137,9 @@ def test_twitch_checks_current_capture_and_selected_subscription(
     }
     configured_pair = mock.Mock(daemon=True, source='X18', channels=[17, 18])
     monkeypatch.setattr(
-        twitch, 'load_config', lambda path: mock.Mock(recs_input=configured_pair)
+        twitch,
+        'load_config',
+        lambda path, **kwargs: mock.Mock(recs_input=configured_pair),
     )
     connect = mock.Mock(return_value=connection)
     monkeypatch.setattr(twitch, 'RecsConnection', connect)
@@ -164,6 +168,19 @@ def test_twitch_checks_current_capture_and_selected_subscription(
     ]
     assert connection.subscribe.call_count == 1
 
+    sample.allow_playback_pause(show, {'X18': 'capture'})
+    paused = show.model_copy(
+        update={
+            'recs': show.recs.model_copy(
+                update={'paused': True, 'offline_sources': ['X18']}
+            ),
+        }
+    )
+    sample.observe(paused, workflows.soundcheck_configuration(None))
+    assert gate.check(paused, sample, None) == ['Resume recs recording']
+    assert gate.check(show, sample, None) == []
+    assert gate.capture_clocks == {'X18': 'different-capture'}
+
 
 @pytest.fixture
 def clock(monkeypatch: pytest.MonkeyPatch) -> list[float]:
@@ -178,6 +195,7 @@ def make_app(
     gate: mock.Mock,
     launch: mock.Mock,
 ) -> ShowcoApp:
+    gate.config_sha256 = '0' * 64
     recs = mock.Mock()
     recs.status.return_value = ready.recs
     streamo = mock.Mock()
@@ -192,7 +210,7 @@ def make_app(
             return_value=models.ActionResult(ok=True, message='Stopped')
         ),
         twitch_readiness=gate,
-        twitch_state=state,
+        twitch_state=state if os.name != 'nt' else None,
     )
     application.soundcheck.identity = lambda path: 'mount'
     application.soundcheck.observe(
@@ -237,7 +255,6 @@ def test_twitch_only_starts_after_a_fresh_explicit_request_and_recovers_three_ti
     gate.check.return_value = []
     observe(failed)
     assert launch.call_count == 2
-    application = make_app(failed, path, gate, launch)
     observe(failed)
     assert launch.call_count == 3
     live = ready.model_copy(
@@ -318,4 +335,75 @@ def test_clean_service_stop_does_not_authorize_an_automatic_restart(
     clock[0] += 10
     application.observe_twitch(ready)
     assert not path.exists()
+    launch.assert_called_once()
+
+
+@pytest.mark.skipif(os.name == 'nt', reason='Managed publishing uses POSIX file locks')
+@pytest.mark.parametrize('automatic', [False, True])
+def test_stop_revokes_managed_permission_while_start_holds_action_lock(
+    ready: models.ShowStatus,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    clock: list[float],
+    automatic: bool,
+) -> None:
+    gate = mock.Mock()
+    gate.check.return_value = []
+    launch = mock.Mock()
+    path = tmp_path / 'broadcast.json'
+    monkeypatch.setattr(managed, 'launch_permit_path', lambda: path)
+    application = make_app(ready, path, gate, launch)
+
+    if automatic:
+        launch.return_value = models.ActionResult(ok=True, message='Started')
+        assert application.run_action({'action': 'streamo-start'}).ok
+        launch.reset_mock()
+
+    def launch_with_concurrent_stop() -> models.ActionResult:
+        assert managed.read_launch_permit().config_sha256 == '0' * 64
+        assert application.run_action({'action': 'streamo-stop'}).ok
+        with pytest.raises(managed.ManagedLaunchError):
+            managed.read_launch_permit()
+        return models.ActionResult(ok=True, message='Started')
+
+    launch.side_effect = launch_with_concurrent_stop
+    if automatic:
+        failed = ready.streamo.model_copy(update={'stream_state': 'failed'})
+        assert application.streamo is not None
+        application.streamo.status.return_value = failed
+        clock[0] += 10
+        application.observe_twitch(ready.model_copy(update={'streamo': failed}))
+    else:
+        result = application.run_action({'action': 'streamo-start'})
+        assert not result.ok
+        assert 'start canceled' in result.message
+    launch.assert_called_once()
+    assert application.twitch.run is None
+
+
+@pytest.mark.skipif(os.name == 'nt', reason='Managed publishing uses POSIX file locks')
+def test_failed_unlink_cannot_restore_a_revoked_twitch_run(
+    ready: models.ShowStatus,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    gate = mock.Mock()
+    gate.check.return_value = []
+    launch = mock.Mock(return_value=models.ActionResult(ok=True, message='Started'))
+    path = tmp_path / 'broadcast.json'
+    monkeypatch.setattr(managed, 'launch_permit_path', lambda: path)
+    application = make_app(ready, path, gate, launch)
+    assert application.run_action({'action': 'streamo-start'}).ok
+    with mock.patch.object(Path, 'unlink', side_effect=PermissionError):
+        assert application.run_action({'action': 'streamo-stop'}).ok
+    assert path.exists()
+    with pytest.raises(managed.ManagedLaunchError):
+        managed.read_launch_permit()
+    failed = ready.model_copy(
+        update={
+            'streamo': ready.streamo.model_copy(update={'stream_state': 'failed'}),
+        }
+    )
+    restored = make_app(failed, path, gate, launch)
+    restored.observe_twitch(failed)
     launch.assert_called_once()
