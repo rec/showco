@@ -252,12 +252,17 @@ def run_scp(provision_config: config.Config, source: Path, remote_path: str) -> 
         sys.exit(ssh_error_message(provision_config, error))
 
 
-def capture_ssh(provision_config: config.Config, command: str) -> str:
+def capture_ssh(
+    provision_config: config.Config,
+    command: str,
+    *,
+    timeout_seconds: int = SSH_VERIFICATION_TIMEOUT_SECONDS,
+) -> str:
     try:
         completed = run_command(
             ssh_command(provision_config, provision_config.ssh_target, command),
             capture_output=True,
-            timeout_seconds=SSH_VERIFICATION_TIMEOUT_SECONDS,
+            timeout_seconds=timeout_seconds,
         )
     except (CalledProcessError, TimeoutExpired) as error:
         sys.exit(ssh_error_message(provision_config, error))

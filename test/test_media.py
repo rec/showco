@@ -6,6 +6,7 @@ import shlex
 import subprocess
 import tomllib
 from pathlib import Path
+from shutil import which
 from unittest import mock
 
 import pytest
@@ -314,7 +315,7 @@ def test_media_transfer_keeps_sources_separate_and_preserves_streamo_inbox(
     operations = mock.Mock()
     with (
         mock.patch(
-            'showco.provision.ssh.capture_ssh', side_effect=['', 'Avail\n10000000']
+            'showco.provision.ssh.capture_ssh', side_effect=['', 'Avail\n10000000', '']
         ),
         mock.patch('showco.provision.ssh.run_ssh') as remote,
         mock.patch('showco.provision.ssh.run_command') as copy,
@@ -382,6 +383,94 @@ def test_insufficient_space_keeps_existing_media_and_skips_upload(
 
 
 @pytest.mark.parametrize('verify_media', [False, True])
+def test_media_transfer_reuses_only_matching_files_from_previous_packages(
+    tmp_path: Path,
+    verify_media: bool,
+) -> None:
+    stat = which('gstat') or which('stat')
+    cp = which('gcp') or which('cp')
+    if not stat or not cp or not which('sha256sum'):
+        pytest.skip('Requires GNU stat, cp, and sha256sum')
+    for tool in (stat, cp):
+        if subprocess.run([tool, '--version'], capture_output=True).returncode:
+            pytest.skip('Requires GNU stat and cp')
+
+    audio = tmp_path / 'audio'
+    audio.mkdir()
+    movie = tmp_path / 'movie.mp4'
+    files = {
+        'audio/000/stable "song".wav': (
+            audio / 'stable "song".wav',
+            b'same',
+            b'same',
+            0,
+        ),
+        'audio/000/collision.wav': (audio / 'collision.wav', b'new!', b'old!', 0),
+        'audio/000/retimed.wav': (audio / 'retimed.wav', b'same', b'same', 1),
+        'movie/000/movie.mp4': (movie, b'new movie', b'old', 0),
+    }
+    versions = tmp_path / 'versions'
+    stamp = 1_600_000_001_987_654_321
+    for index, (name, (source, content, previous, offset)) in enumerate(files.items()):
+        source.write_bytes(content)
+        os.utime(source, ns=(stamp, stamp))
+        old = versions / (str(index % 2 + 1) * 64) / name
+        old.parent.mkdir(parents=True, exist_ok=True)
+        old.write_bytes(previous)
+        os.utime(old, ns=(stamp, stamp + offset))
+    configuration = make_config(values()).model_copy(
+        update={
+            'media': config.Media(audio=[audio], movie=movie),
+            'verify_media': verify_media,
+        }
+    )
+    staging = versions / '.staging-test'
+    staging.mkdir()
+    reused = {
+        'audio/000/stable "song".wav',
+        'audio/000/retimed.wav' if verify_media else 'audio/000/collision.wav',
+    }
+
+    def capture(configuration: config.Config, command: str, **kwargs: object) -> str:
+        if 'df -B1' in command:
+            return 'Avail\n10000000'
+        if 'reuse_media()' not in command:
+            return ''
+        _, _, body = command.split('\n', 2)
+        prefix = (
+            f'versions={shlex.quote(str(versions))}\n'
+            f'staging={shlex.quote(str(staging))}\n'
+            f'stat() {{ {shlex.quote(stat)} "$@"; }}\n'
+            f'cp() {{ {shlex.quote(cp)} "$@"; }}\n'
+        )
+        return subprocess.check_output(['sh', '-c', prefix + body], text=True)
+
+    def transfer(command: list[str], *, stream_output: bool) -> None:
+        local = Path(command[-2])
+        uploaded = {
+            p.relative_to(local).as_posix() for p in local.rglob('*') if p.is_file()
+        }
+        expected = files.keys() - reused
+        if verify_media:
+            expected.update({'SHA256SUMS', 'asset-manifest.toml'})
+        assert uploaded == expected
+        assert {
+            p.relative_to(staging).as_posix() for p in staging.rglob('*') if p.is_file()
+        } == reused
+        for name in reused:
+            assert (staging / name).read_bytes() == files[name][2]
+
+    with (
+        mock.patch.object(media.ssh, 'capture_ssh', side_effect=capture),
+        mock.patch.object(media.ssh, 'run_ssh'),
+        mock.patch.object(media.ssh, 'run_command', side_effect=transfer) as copy,
+        mock.patch.object(media, 'which', return_value='/usr/bin/rsync'),
+    ):
+        media.synchronize(configuration)
+    copy.assert_called_once()
+
+
+@pytest.mark.parametrize('verify_media', [False, True])
 def test_existing_media_package_is_verified_and_reused_without_upload(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], verify_media: bool
 ) -> None:
@@ -426,7 +515,7 @@ def test_failed_media_copy_stops_before_later_sources(tmp_path: Path) -> None:
     )
     with (
         mock.patch(
-            'showco.provision.ssh.capture_ssh', side_effect=['', 'Avail\n10000000']
+            'showco.provision.ssh.capture_ssh', side_effect=['', 'Avail\n10000000', '']
         ),
         mock.patch('showco.provision.ssh.run_ssh') as remote,
         mock.patch('showco.provision.media.which', return_value='/usr/bin/rsync'),
@@ -488,7 +577,7 @@ def test_every_media_category_compares_contents_before_copying(
     )
     with (
         mock.patch(
-            'showco.provision.ssh.capture_ssh', side_effect=['', 'Avail\n10000000']
+            'showco.provision.ssh.capture_ssh', side_effect=['', 'Avail\n10000000', '']
         ),
         mock.patch('showco.provision.ssh.run_ssh'),
         mock.patch('showco.provision.ssh.run_command') as copy,

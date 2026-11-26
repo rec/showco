@@ -140,7 +140,9 @@ def open_source(path: Path) -> Iterator[BinaryIO]:
 
 
 @contextmanager
-def stage_media(selected: MediaInventory) -> Iterator[Path]:
+def stage_media(
+    selected: MediaInventory, reused: frozenset[str] = frozenset()
+) -> Iterator[Path]:
     """Copy the inventoried bytes; changing a selected source aborts deployment."""
     with TemporaryDirectory(prefix='showco-media-') as directory:
         root = Path(directory)
@@ -152,7 +154,17 @@ def stage_media(selected: MediaInventory) -> Iterator[Path]:
             ) as prepared:
                 if prepared.identities != selected.manifest.files:
                     raise ValueError('Media source changed after preflight')
-                write_package(root, prepared.streams, selected.manifest)
+                write_package(
+                    root,
+                    {n: s for n, s in prepared.streams.items() if n not in reused},
+                    PackageManifest(
+                        files={
+                            n: i
+                            for n, i in prepared.identities.items()
+                            if n not in reused
+                        }
+                    ),
+                )
             (root / 'asset-manifest.toml').write_bytes(selected.manifest_bytes)
             (root / 'SHA256SUMS').write_bytes(selected.checksum_bytes)
         else:
@@ -165,6 +177,8 @@ def stage_media(selected: MediaInventory) -> Iterator[Path]:
                     metadata.modified_ns,
                 ):
                     raise ValueError(f'Media source changed after preflight: {source}')
+                if name in reused:
+                    continue
                 copyfile(source, target)
                 after = source.stat()
                 if (after.st_size, after.st_mtime_ns) != (

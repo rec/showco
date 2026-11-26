@@ -27,7 +27,7 @@ from ..runtime.recs_control import RecsControlClient
 from ..streamo.config import configure_stream_settings
 from ..x18.music import Files
 from . import config, ssh, state
-from .media_package import MediaInventory, stage_media
+from .media_package import FileMetadata, MediaInventory, stage_media
 
 if TYPE_CHECKING:
     from .provision import DeployOptions
@@ -162,17 +162,28 @@ def synchronize(provision_config: config.Config) -> None:
     quoted_staging = shlex.quote(str(staging))
     stage_attempted = False
     try:
-        with stage_media(package) as local:
-            ssh.run_ssh(
+        ssh.run_ssh(
+            provision_config,
+            'command -v rsync >/dev/null || '
+            '{ sudo apt-get update && sudo apt-get install -y rsync; }',
+            timeout_seconds=300,
+        )
+        stage_attempted = True
+        ssh.run_ssh(provision_config, f'mkdir -- {quoted_staging}', timeout_seconds=300)
+        reused: frozenset[str] = frozenset()
+        if package.metadata:
+            names = list(package.metadata)
+            copied = ssh.capture_ssh(
                 provision_config,
-                'command -v rsync >/dev/null || '
-                '{ sudo apt-get update && sudo apt-get install -y rsync; }',
+                reuse_media_command(versions, staging, package),
                 timeout_seconds=300,
             )
-            stage_attempted = True
-            ssh.run_ssh(
-                provision_config, f'mkdir -- {quoted_staging}', timeout_seconds=300
-            )
+            reused = frozenset(names[int(i)] for i in copied.splitlines())
+            if reused:
+                print(
+                    f'Reusing {len(reused)} media files already on the Pi', flush=True
+                )
+        with stage_media(package, reused) as local:
             interactive = sys.stdout.isatty()
             progress_options: list[str] = []
             if interactive:
@@ -211,7 +222,7 @@ def synchronize(provision_config: config.Config) -> None:
                 staging, root, package, verify, len(sources.photos)
             )
             if not provision_config.verify_media and (
-                timestamps := media_timestamp_command(staging, package)
+                timestamps := media_timestamp_command(staging, package, skip=reused)
             ):
                 # Older rsync peers can truncate modification times to whole seconds.
                 staging_check = f'{timestamps} && {staging_check}'
@@ -267,6 +278,58 @@ def check_media_space(
         )
 
 
+def reuse_media_command(versions: Path, staging: Path, package: MediaInventory) -> str:
+    command = [
+        f'versions={shlex.quote(str(versions))}',
+        f'staging={shlex.quote(str(staging))}',
+        """reuse_media() {
+    index=$1 name=$2 size=$3 metadata=$4 digest=$5
+    for version in "$versions"/*; do
+        id=${version##*/}
+        case "$id" in *[!0-9a-f]*) continue ;; esac
+        [ "${#id}" -eq 64 ] && [ -d "$version" ] && [ ! -L "$version" ] || continue
+        source=$version/$name
+        [ -f "$source" ] && [ ! -L "$source" ] || continue
+        if [ -n "$digest" ]; then
+            [ "$(stat -c '%s' -- "$source")" = "$size" ] || continue
+            checksum=$(sha256sum < "$source") || return 1
+            [ "${checksum%% *}" = "$digest" ] || continue
+        else
+            [ "$(TZ=UTC0 stat -c '%s %y' -- "$source")" = "$metadata" ] || continue
+        fi
+        target=$staging/$name
+        mkdir -p -- "${target%/*}" || return 1
+        cp -p --reflink=auto -- "$source" "$target" || return 1
+        printf '%s\\n' "$index"
+        return
+    done
+    return 0
+}""",
+    ]
+    for index, (name, metadata) in enumerate(package.metadata.items()):
+        digest = '' if package.manifest is None else package.manifest.files[name].sha256
+        command.append(
+            shlex.join(
+                [
+                    'reuse_media',
+                    str(index),
+                    name,
+                    str(metadata.size),
+                    media_stat(metadata),
+                    digest,
+                ]
+            )
+            + ' || exit 1'
+        )
+    return '\n'.join(command)
+
+
+def media_stat(metadata: FileMetadata) -> str:
+    seconds, nanos = divmod(metadata.modified_ns, 1_000_000_000)
+    stamp = datetime.fromtimestamp(seconds, UTC).strftime('%Y-%m-%d %H:%M:%S')
+    return f'{metadata.size} {stamp}.{nanos:09d} +0000'
+
+
 def prepare_package_command(
     destination: Path, root: Path, package: MediaInventory, verify: str, photos: int
 ) -> str:
@@ -283,9 +346,13 @@ def prepare_package_command(
     return command
 
 
-def media_timestamp_command(destination: Path, package: MediaInventory) -> str:
+def media_timestamp_command(
+    destination: Path, package: MediaInventory, *, skip: frozenset[str] = frozenset()
+) -> str:
     commands = []
     for name, metadata in package.metadata.items():
+        if name in skip:
+            continue
         path = shlex.quote(f'./{name}')
         modified = Decimal(metadata.modified_ns).scaleb(-9)
         accessed = Decimal(metadata.accessed_ns).scaleb(-9)
@@ -319,9 +386,7 @@ def media_verification_command(package: MediaInventory) -> str:
     )
     for name, metadata in package.metadata.items():
         path = shlex.quote(f'./{name}')
-        seconds, nanos = divmod(metadata.modified_ns, 1_000_000_000)
-        stamp = datetime.fromtimestamp(seconds, UTC).strftime('%Y-%m-%d %H:%M:%S')
-        expected = shlex.quote(f'{metadata.size} {stamp}.{nanos:09d} +0000')
+        expected = shlex.quote(media_stat(metadata))
         checks.append(
             f'test -f {path} && test ! -L {path} && '
             f"""test "$(TZ=UTC0 stat -c '%s %y' -- {path})" = {expected}"""
