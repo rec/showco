@@ -22,7 +22,9 @@ def main(root: Path, arguments: list[str]) -> int:
             check=True,
             capture_output=True,
         )
-        with TemporaryDirectory(prefix='showco-update-') as directory:
+        # Avoid building the updater in a small tmpfs on targets that use one
+        # for /tmp. A checkout and uv cache on the same filesystem can hardlink.
+        with TemporaryDirectory(prefix='.showco-update-', dir=root) as directory:
             updater = Path(directory) / 'showco'
             updater.mkdir()
             # Service specifications are read from the existing sibling checkouts.

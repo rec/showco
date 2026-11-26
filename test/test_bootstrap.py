@@ -39,6 +39,7 @@ def test_published_updater_runs_without_changing_installed_files(
             assert isinstance(directory, Path)
             directories.append(directory)
             assert directory != checkout
+            assert directory.parent.parent == tmp_path
             assert (directory.parent / 'recs').readlink() == tmp_path / 'recs'
             assert (directory.parent / 'lyte').readlink() == tmp_path / 'lyte'
             assert (directory / 'uv.lock').read_text() == 'published content'
