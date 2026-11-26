@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 import time
 import traceback
 import unittest
@@ -436,6 +437,61 @@ class ServerTests(unittest.TestCase):
 
         stream.action.assert_not_called()
         restart.assert_not_called()
+        self.assertEqual(recs.mock_calls, [])
+
+    def test_twitch_stop_falls_back_to_publisher_when_service_stop_times_out(
+        self,
+    ) -> None:
+        recs = mock.Mock()
+        stream = mock.Mock()
+        app = ShowcoApp(
+            recs,
+            stream,
+            rehearsal.RehearsalSystemMonitor(),
+            rehearsal.RehearsalMixersMonitor(),
+        )
+        app.performance_lock.set(True)
+        publishing = models.StreamoStatus(
+            service=models.ServiceStatus(name='streamo', state='connected'),
+            stream_state='publishing',
+            ffmpeg_alive=True,
+        )
+        with mock.patch('showco.runtime.services.service_registry') as registry:
+            service = registry.return_value.controller.return_value
+            service.stop.side_effect = subprocess.TimeoutExpired(
+                ['systemctl', '--user', 'stop'], 2
+            )
+            for after, accepted, expected in (
+                ('stopped', True, 'Twitch publisher stopped'),
+                ('publishing', True, 'Broadcast stop is unconfirmed'),
+                ('publishing', False, 'Publisher stop failed or is unconfirmed'),
+            ):
+                with self.subTest(after=after, accepted=accepted):
+                    stream.reset_mock()
+                    stream.status.side_effect = [
+                        publishing,
+                        publishing.model_copy(
+                            update={
+                                'stream_state': after,
+                                'ffmpeg_alive': after != 'stopped',
+                            }
+                        ),
+                    ]
+                    stream.action.return_value = models.ActionResult(
+                        ok=accepted, message='stop reply'
+                    )
+                    outcome = app.run_action({'action': 'streamo-stop'})
+                    self.assertFalse(outcome.ok)
+                    self.assertIn(expected, outcome.message)
+                    self.assertIn(
+                        'service stop could not be confirmed', outcome.message
+                    )
+                    stream.action.assert_called_once_with('stop')
+                    self.assertEqual(
+                        stream.status.call_args_list,
+                        [mock.call(include_service_status=False)]
+                        * (2 if accepted else 1),
+                    )
         self.assertEqual(recs.mock_calls, [])
 
     def test_twitch_controls_respect_closing_and_start_transition(self) -> None:

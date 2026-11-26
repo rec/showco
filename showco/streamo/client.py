@@ -48,7 +48,7 @@ class StreamoClient:
             ).control_endpoint
         )
 
-    def status(self) -> StreamoStatus:
+    def status(self, *, include_service_status: bool = True) -> StreamoStatus:
         try:
             status = self._call('status')
         except (
@@ -62,7 +62,11 @@ class StreamoClient:
                 STREAMO_SERVICE, paths.current_platform()
             )
             default_endpoint = service_paths.control_endpoint
-            if sys.platform == 'linux' and self.control_endpoint == default_endpoint:
+            if (
+                include_service_status
+                and sys.platform == 'linux'
+                and self.control_endpoint == default_endpoint
+            ):
                 try:
                     service = controller.ServiceController(
                         STREAMO_SERVICE, paths.current_platform()
@@ -80,7 +84,7 @@ class StreamoClient:
                             stream_state='stopped',
                         )
             last_failure = None
-            if self.control_endpoint == default_endpoint:
+            if include_service_status and self.control_endpoint == default_endpoint:
                 try:
                     saved = ReccyStatus.model_validate_json(
                         service_paths.status.read_bytes()
@@ -187,7 +191,7 @@ class StreamoClient:
         )
 
     def _call(self, command: str, **fields: object) -> object:
-        options = {'timeout': 1.0} if command == 'status' else {}
+        options = {'timeout': 1.0} if command in {'status', 'stop'} else {}
         return rpc.Client(self.control_endpoint, role='showco', **options).call(
             command, **fields
         )

@@ -83,6 +83,23 @@ class StreamoTests(unittest.TestCase):
                     self.assertEqual(status.stream_state, expected)
                     self.assertTrue(status.toggle_available)
 
+    def test_control_only_status_never_waits_for_service_manager(self) -> None:
+        client = FakeStreamoClient(ConnectionError('not running'))
+        with (
+            mock.patch('showco.streamo.client.sys.platform', 'linux'),
+            mock.patch('showco.streamo.client.controller.ServiceController') as manager,
+        ):
+            status = client.status(include_service_status=False)
+        self.assertEqual(status.stream_state, 'unknown')
+        manager.assert_not_called()
+
+    def test_publisher_stop_rpc_has_a_short_deadline(self) -> None:
+        client = StreamoClient()
+        with mock.patch('showco.streamo.client.rpc.Client') as rpc:
+            rpc.return_value.call.return_value = 'ok'
+            self.assertTrue(client.action('stop').ok)
+        rpc.assert_called_once_with(client.control_endpoint, role='showco', timeout=1.0)
+
     def test_status_reports_stream_failure(self) -> None:
         client = FakeStreamoClient({'state': 'failed', 'last_error': 'encoder exited'})
 

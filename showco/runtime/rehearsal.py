@@ -233,7 +233,7 @@ class RehearsalStreamoClient(StreamoClient):
         self.stopped = False
         self.actions: list[tuple[str, dict[str, object]]] = []
 
-    def status(self) -> models.StreamoStatus:
+    def status(self, *, include_service_status: bool = True) -> models.StreamoStatus:
         return models.StreamoStatus(
             service=models.ServiceStatus(name='streamo', state='connected'),
             stream_state='stopped' if self.stopped else 'streaming',

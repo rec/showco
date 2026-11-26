@@ -4,8 +4,8 @@ import argparse
 import sys
 from collections.abc import Callable
 from pathlib import Path
-from subprocess import CompletedProcess, SubprocessError
-from typing import ClassVar
+from subprocess import CompletedProcess, SubprocessError, run
+from typing import ClassVar, Literal
 
 from pydantic import BaseModel
 from reccy import reccy
@@ -115,17 +115,35 @@ def restart_service(name: str) -> models.ActionResult:
 
 
 def stop_streamo() -> models.ActionResult:
+    def run_stop_command(
+        command: list[str],
+        *,
+        check: bool,
+        text: Literal[True],
+        capture_output: bool,
+        timeout: float,
+    ) -> CompletedProcess[str]:
+        return run(
+            command,
+            check=check,
+            text=text,
+            capture_output=capture_output,
+            timeout=min(timeout, 2.0),
+        )
+
     try:
-        service = service_registry().controller('streamo')
+        service = service_registry(runner=run_stop_command).controller('streamo')
         service.stop()
         stopped = service.status().running is False
     except (OSError, SubprocessError) as error:
         return models.ActionResult(
-            ok=False, message=f'Twitch stop could not be confirmed: {error}'
+            ok=False, message=f'streamO service stop could not be confirmed: {error}'
         )
     return models.ActionResult(
         ok=stopped,
-        message='Twitch stopped' if stopped else 'Twitch stop could not be confirmed',
+        message='Twitch stopped'
+        if stopped
+        else 'streamO service stop could not be confirmed',
     )
 
 

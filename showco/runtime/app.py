@@ -671,7 +671,11 @@ class ShowcoApp:
                 ok=False,
                 message='Use the closing recovery controls during closing credits',
             )
-        status = self.streamo.status()
+        status = (
+            self.streamo.status(include_service_status=False)
+            if action == 'streamo-stop'
+            else self.streamo.status()
+        )
         if status.closing_in_progress:
             return models.ActionResult(
                 ok=False,
@@ -680,7 +684,26 @@ class ShowcoApp:
         if status.service.state == 'disabled':
             return models.ActionResult(ok=False, message='streamO is disabled')
         if action == 'streamo-stop':
-            return self.streamo_stop()
+            service = self.streamo_stop()
+            if service.ok:
+                return service
+            stop = self.streamo.action('stop')
+            if not stop.ok:
+                return models.ActionResult(
+                    ok=False,
+                    message=f'{service.message}. '
+                    f'Publisher stop failed or is unconfirmed: {stop.message}',
+                )
+            after = self.streamo.status(include_service_status=False)
+            publisher = (
+                'Twitch publisher stopped'
+                if after.stream_state == 'stopped' and not after.ffmpeg_alive
+                else 'streamO accepted the publisher stop request. '
+                'Broadcast stop is unconfirmed'
+            )
+            return models.ActionResult(
+                ok=False, message=f'{publisher}. {service.message}'
+            )
         if action == 'streamo-start':
             if mode == 'teardown':
                 return models.ActionResult(
