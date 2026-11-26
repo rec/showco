@@ -334,7 +334,7 @@
         updateChannels(status.recs.channels);
         updateConfiguredLists(status);
         updatePerformance(status);
-        statusConnected();
+        statusConnected(status);
       })
       .catch(statusFailed);
   }

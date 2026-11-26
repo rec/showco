@@ -14,7 +14,7 @@
       return requestStatus()
         .then(status => {
           updateChannels(status.recs.channels);
-          statusConnected();
+          statusConnected(status);
           error.observedStatus = status;
         })
         .catch(statusFailed)

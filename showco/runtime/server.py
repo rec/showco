@@ -74,14 +74,23 @@ class ShowcoHandler(BaseHTTPRequestHandler):
 
     def _do_get(self) -> None:
         if self.path == '/status':
-            self._json(self.app.status())
+            if (status := self.app.http_status()) is None:
+                self.send_error(503, 'Live status is unavailable; retry shortly')
+            else:
+                self._json(status)
             return
         if self.path == '/workflow-status':
+            if self.app.action_lock.locked():
+                self.send_error(503, 'A showCo action is in progress; retry shortly')
+                return
+            if (status := self.app.http_status()) is None:
+                self.send_error(503, 'Live status is unavailable; retry shortly')
+                return
             if not self.app.action_lock.acquire(blocking=False):
                 self.send_error(503, 'A showCo action is in progress; retry shortly')
                 return
             try:
-                payload = self.app.workflow_status()
+                payload = self.app.workflow_status(status)
             finally:
                 self.app.action_lock.release()
             self._json(payload)
@@ -99,7 +108,7 @@ class ShowcoHandler(BaseHTTPRequestHandler):
         self._html(
             views.configured_page(
                 page,
-                self.app.status(),
+                self.app.http_status() or self.app.unavailable_status(),
                 mutable_attributes=(
                     self.app.recs.mutable_attributes()
                     if page.uses_source('recs.mutable_attributes')
@@ -428,7 +437,7 @@ def make_server(
     if waveforms is not None:
         waveforms.start()
     if performance is not None:
-        performance.observe = app.status
+        performance.observe = app.observe_status
         performance.start()
     return server
 

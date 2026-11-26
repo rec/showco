@@ -3,6 +3,8 @@ from unittest import mock
 
 import pytest
 
+from showco.runtime import models, rehearsal
+from showco.runtime.app import ShowcoApp
 from showco.runtime.server import (
     ACTION_BODY_TIMEOUT_SECONDS,
     CONNECTION_TIMEOUT_SECONDS,
@@ -85,6 +87,56 @@ def test_status_request_uses_reserved_slot_when_ordinary_slots_are_busy() -> Non
 
     get.assert_called_once_with()
     assert handler.server.status_slots.acquire(blocking=False)
+
+
+def test_stalled_observation_releases_both_status_slots_and_allows_pause() -> None:
+    observing = threading.Event()
+    release = threading.Event()
+
+    def status() -> models.StreamoStatus:
+        observing.set()
+        assert release.wait(5)
+        return models.StreamoStatus(
+            service=models.ServiceStatus(name='streamo', state='connected')
+        )
+
+    recs = mock.Mock(wraps=rehearsal.RehearsalRecsClient())
+    streamo = mock.Mock()
+    streamo.status.side_effect = status
+    app = ShowcoApp(
+        recs,
+        streamo,
+        rehearsal.RehearsalSystemMonitor(),
+        rehearsal.RehearsalMixersMonitor(),
+    )
+    server = mock.Mock(status_slots=threading.BoundedSemaphore(2))
+    handlers = [object.__new__(ShowcoHandler) for _ in range(2)]
+    for handler in handlers:
+        handler.path = '/status'
+        handler.app = app
+        handler.server = server
+        handler.send_error = mock.Mock()
+    clients = [threading.Thread(target=h.do_GET) for h in handlers]
+    try:
+        for client in clients:
+            client.start()
+        assert observing.wait(2)
+        result = app.run_action({'action': 'recs-pause-recording'})
+        assert result.ok
+        recs.action.assert_called_once_with('pause_recording')
+        for client in clients:
+            client.join(timeout=2)
+            assert not client.is_alive()
+        for handler in handlers:
+            assert handler.send_error.call_args.args[0] == 503
+        streamo.status.assert_called_once_with()
+        assert server.status_slots.acquire(blocking=False)
+        assert server.status_slots.acquire(blocking=False)
+    finally:
+        release.set()
+        for client in clients:
+            client.join(timeout=2)
+        assert app.status_ready.wait(2)
 
 
 def test_slow_and_truncated_action_bodies_return_clear_errors() -> None:

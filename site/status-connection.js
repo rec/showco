@@ -15,8 +15,8 @@ function requestStatus() {
     .finally(() => clearTimeout(timer));
 }
 
-function statusConnected() {
-  lastStatusReceived = new Date();
+function statusConnected(status) {
+  lastStatusReceived = status?.observed_at ? new Date(status.observed_at) : new Date();
   const indicator = document.getElementById('connection-status');
   if (indicator) {
     indicator.className = 'ok';

@@ -9,18 +9,6 @@ items reduce resilience or make diagnosis harder. Findings below are based on
 source and existing tests. Resource and hardware scenarios still need the
 acceptance evidence identified under each issue.
 
-## P1: Shared observation work can make status and recovery unavailable
-
-`ShowcoApp.status()` holds `status_lock` across sequential streamO, recs, lyte,
-network and mixer checks, possible X18 writes, and synchronous soundcheck and
-incident persistence. The monitor calls it too. streamO and lyte use the generic
-RPC deadline, while the browser gives up after five seconds. Two waiting
-`/status` requests can consume both reserved slots. Separately,
-`run_action()` waits for the action lock for most commands, so an action whose
-browser request already expired can run later. Separate bounded status
-collection from state mutation and return busy promptly for queued actions.
-Test a slow dependency, two clients, and an urgent action in the same scenario.
-
 ## P1: Default media replacement deletes the running show's old package
 
 `media.synchronize()` removes the entire version store before staging a new

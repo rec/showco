@@ -933,8 +933,10 @@ class ServerTests(unittest.TestCase):
             rehearsal.RehearsalMixersMonitor(),
         )
 
+        second_results: list[models.ActionResult] = []
+
         def run_second_action() -> None:
-            app.run_action({'action': 'recs-calibrate'})
+            second_results.append(app.run_action({'action': 'recs-calibrate'}))
             second_complete.set()
 
         first = Thread(target=app.run_action, args=({'action': 'recs-calibrate'},))
@@ -944,7 +946,9 @@ class ServerTests(unittest.TestCase):
         self.assertTrue(entered.wait(1))
         second.start()
         try:
-            self.assertFalse(second_complete.wait(0.05))
+            self.assertTrue(second_complete.wait(0.5))
+            self.assertFalse(second_results[0].ok)
+            self.assertIn('Another action is in progress', second_results[0].message)
             self.assertEqual(calls, 1)
         finally:
             release.set()
@@ -953,6 +957,8 @@ class ServerTests(unittest.TestCase):
 
         self.assertFalse(first.is_alive())
         self.assertFalse(second.is_alive())
+        self.assertEqual(calls, 1)
+        self.assertTrue(app.run_action({'action': 'recs-calibrate'}).ok)
         self.assertEqual(calls, 2)
 
     def test_failed_action_result_logs_error(self) -> None:

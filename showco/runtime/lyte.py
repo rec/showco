@@ -112,7 +112,10 @@ class LyteClient:
         )
 
     def _call(self, command: str, **params: object) -> str | dict[str, object]:
-        return rpc.Client(self.control_endpoint, role='showco').call(command, **params)
+        options = {'timeout': 1.0} if command == 'status' else {}
+        return rpc.Client(self.control_endpoint, role='showco', **options).call(
+            command, **params
+        )
 
 
 def _status_error(

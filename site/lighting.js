@@ -75,7 +75,7 @@ async function refreshLighting() {
     if (!response.ok) throw new Error(`Cue status unavailable: ${response.status}`);
     const data = await response.json();
     if (request !== lightingRequest) return;
-    renderLighting(data); statusConnected();
+    renderLighting(data); statusConnected(data.show);
   } catch (error) {
     if (request !== lightingRequest) return;
     lightingState = null; lightingControls(); statusFailed(error);

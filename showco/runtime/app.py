@@ -43,6 +43,9 @@ from .system import SystemMonitor
 from .waveforms import WaveformBridge
 
 LOGGER = logging.get_logger(__name__)
+STATUS_REFRESH_SECONDS = 1.0
+STATUS_MAX_AGE_SECONDS = 5.0
+STATUS_WAIT_SECONDS = 0.4
 
 
 class ShowcoApp:
@@ -85,6 +88,9 @@ class ShowcoApp:
         self.cable_test_value = models.CableTestStatus()
         self.cable_test_started_at = 0.0
         self.status_lock = threading.Lock()
+        self.status_ready = threading.Event()
+        self.latest_status: tuple[models.ShowStatus, float] | None = None
+        self.incident_lock = threading.Lock()
         self.soundcheck_lock = threading.Lock()
         self.soundcheck_error: str | None = None
         self.performance_lock = performance.PerformanceLock(
@@ -108,87 +114,180 @@ class ShowcoApp:
         )
 
     def status(self) -> models.ShowStatus:
-        with self.status_lock:
-            if self.streamo is None:
-                streamo = models.StreamoStatus(
-                    service=models.ServiceStatus(name='streamo', state='disabled')
-                )
-            else:
-                streamo = self.streamo.status()
-            recs = self.recs.status()
-            recs = recs.model_copy(
-                update={'errors': errors_since(recs.errors, self.run_started_at)}
-            )
-            lyte = (
-                self.lyte.status()
-                if self.lyte is not None
-                else models.LyteStatus(
-                    service=models.ServiceStatus(name='lyte', state='disabled')
-                )
-            )
-            mixers = self.mixers.status(
-                {channel.device for channel in recs.channels},
-                {midi.name: midi.state for midi in recs.midi},
-            )
-            status = models.ShowStatus(
-                recs=recs,
-                streamo=streamo,
-                lyte=lyte,
-                system=self.system.status(),
-                network=self.external_wifi.status() if self.external_wifi else None,
-                mixers=mixers,
-                revision=self.revision,
-                run_started_at=self.run_started_at,
-                music=self.music.status()
-                if self.music is not None
-                else models.MusicStatus(),
-            )
-            status = status.model_copy(update={'readiness': readiness.status(status)})
-            status = status.model_copy(
-                update={'recording_progress': self.recording_progress.observe(recs)}
-            )
-            with self.soundcheck_lock:
+        if not self.status_lock.acquire(blocking=False):
+            raise TimeoutError('Live status is being collected; retry shortly')
+        return self._refresh_status()
+
+    def observe_status(self) -> None:
+        latest = self.latest_status
+        if latest is None or time.monotonic() - latest[1] >= STATUS_REFRESH_SECONDS:
+            if self.status_lock.acquire(blocking=False):
+                self.status_ready.clear()
                 try:
-                    workflows.refresh_soundcheck(self.soundcheck, status, self.revision)
-                except OSError as error:
-                    self.soundcheck_error = f'Soundcheck evidence unavailable: {error}'
-                else:
-                    self.soundcheck_error = None
-            observed = self.incidents.observe(status)
-            cable_status = self.cable_test_status()
+                    threading.Thread(
+                        target=self._observe,
+                        name='showco-status-observation',
+                        daemon=True,
+                    ).start()
+                except RuntimeError as error:
+                    self.status_ready.set()
+                    self.status_lock.release()
+                    LOGGER.error('Cannot start live status observation: %s', error)
+
+    def http_status(self) -> models.ShowStatus | None:
+        self.observe_status()
+        latest = self.latest_status
+        if latest is None or time.monotonic() - latest[1] >= STATUS_MAX_AGE_SECONDS:
+            self.status_ready.wait(STATUS_WAIT_SECONDS)
+            latest = self.latest_status
+        if latest is not None and time.monotonic() - latest[1] < STATUS_MAX_AGE_SECONDS:
+            status = latest[0]
             return status.model_copy(
                 update={
-                    'incidents': observed,
-                    'active_faults': list(self.incidents.faults),
                     'performance_locked': self.performance_lock.locked,
-                    'observed_at': datetime.now().astimezone(),
-                    'monitoring_error': '; '.join(
-                        error
-                        for error in (
-                            self.performance_lock.error,
-                            self.incidents.storage_error,
-                            self.soundcheck_error,
-                            self.setlist.load_error,
-                            self.lighting.load_error,
-                            self.soundcheck.load_error,
-                            self.recovery.load_error,
-                            self.system.observation_error
-                            if isinstance(self.system, PerformanceMonitor)
-                            else None,
-                            self.system.storage_error
-                            if isinstance(self.system, PerformanceMonitor)
-                            else None,
-                        )
-                        if error
-                    )
-                    or None,
-                    'input_checks': readiness.input_checks(recs.channels),
-                    'cable_test': cable_status,
-                    'recording_controls_available': not self.action_in_progress
-                    and status.music.mode not in {'closing', 'transitioning'}
-                    and cable_status.state != 'running',
+                    'recording_controls_available': status.recording_controls_available
+                    and not self.action_in_progress,
                 }
             )
+        return None
+
+    def unavailable_status(self) -> models.ShowStatus:
+        message = 'Live status unavailable; waiting for a fresh observation'
+        return models.ShowStatus(
+            recs=models.RecsStatus(
+                service=models.ServiceStatus(
+                    name='recs', state='offline', last_error=message
+                )
+            ),
+            streamo=models.StreamoStatus(
+                service=models.ServiceStatus(
+                    name='streamo',
+                    state='disabled' if self.streamo is None else 'offline',
+                    last_error=message,
+                ),
+            ),
+            readiness=models.ReadinessStatus(
+                checks=[
+                    models.ReadinessCheck(name='Live status', ok=False, message=message)
+                ]
+            ),
+            recording_controls_available=False,
+            music=models.MusicStatus(mode='fault', error=message),
+            performance_locked=self.performance_lock.locked,
+            monitoring_error=message,
+            revision=self.revision,
+        )
+
+    def _observe(self) -> None:
+        try:
+            self._refresh_status()
+        except (OSError, ValueError, RuntimeError) as error:
+            LOGGER.warning('Service observation failed: %s', error)
+
+    def _refresh_status(self) -> models.ShowStatus:
+        self.status_ready.clear()
+        started = time.monotonic()
+        try:
+            status = self._collect_status()
+            self.latest_status = status, started
+            return status
+        finally:
+            self.status_ready.set()
+            self.status_lock.release()
+
+    def _collect_status(self) -> models.ShowStatus:
+        observed_at = datetime.now().astimezone()
+        if self.streamo is None:
+            streamo = models.StreamoStatus(
+                service=models.ServiceStatus(name='streamo', state='disabled')
+            )
+        else:
+            streamo = self.streamo.status()
+        recs = self.recs.status()
+        recs = recs.model_copy(
+            update={'errors': errors_since(recs.errors, self.run_started_at)}
+        )
+        lyte = (
+            self.lyte.status()
+            if self.lyte is not None
+            else models.LyteStatus(
+                service=models.ServiceStatus(name='lyte', state='disabled')
+            )
+        )
+        mixers = self.mixers.status(
+            {channel.device for channel in recs.channels},
+            {midi.name: midi.state for midi in recs.midi},
+        )
+        status = models.ShowStatus(
+            recs=recs,
+            streamo=streamo,
+            lyte=lyte,
+            system=self.system.status(),
+            network=self.external_wifi.status() if self.external_wifi else None,
+            mixers=mixers,
+            revision=self.revision,
+            run_started_at=self.run_started_at,
+            music=self.music.status()
+            if self.music is not None
+            else models.MusicStatus(),
+        )
+        status = status.model_copy(update={'readiness': readiness.status(status)})
+        status = status.model_copy(
+            update={'recording_progress': self.recording_progress.observe(recs)}
+        )
+        if self.soundcheck_lock.acquire(blocking=False):
+            try:
+                workflows.refresh_soundcheck(self.soundcheck, status, self.revision)
+            except OSError as error:
+                self.soundcheck_error = f'Soundcheck evidence unavailable: {error}'
+            else:
+                self.soundcheck_error = None
+            finally:
+                self.soundcheck_lock.release()
+        if self.incident_lock.acquire(blocking=False):
+            try:
+                observed = self.incidents.observe(status)
+                faults = list(self.incidents.faults)
+            finally:
+                self.incident_lock.release()
+        else:
+            previous = self.latest_status
+            observed = previous[0].incidents if previous else []
+            faults = previous[0].active_faults if previous else []
+        cable_status = self.cable_test_status()
+        return status.model_copy(
+            update={
+                'incidents': observed,
+                'active_faults': faults,
+                'performance_locked': self.performance_lock.locked,
+                'observed_at': observed_at,
+                'monitoring_error': '; '.join(
+                    error
+                    for error in (
+                        self.performance_lock.error,
+                        self.incidents.storage_error,
+                        self.soundcheck_error,
+                        self.setlist.load_error,
+                        self.lighting.load_error,
+                        self.soundcheck.load_error,
+                        self.recovery.load_error,
+                        self.system.observation_error
+                        if isinstance(self.system, PerformanceMonitor)
+                        else None,
+                        self.system.storage_error
+                        if isinstance(self.system, PerformanceMonitor)
+                        else None,
+                    )
+                    if error
+                )
+                or None,
+                'input_checks': readiness.input_checks(recs.channels),
+                'cable_test': cable_status,
+                'recording_controls_available': not self.action_in_progress
+                and status.music.mode not in {'closing', 'transitioning'}
+                and cable_status.state != 'running',
+            }
+        )
 
     def cable_test_status(self) -> models.CableTestStatus:
         with self.cable_test_lock:
@@ -284,13 +383,12 @@ class ShowcoApp:
 
     def run_action(self, form: dict[str, str]) -> models.ActionResult:
         action = form.get('action', '')
-        acquired = self.action_lock.acquire(blocking=action not in RECORDING_ACTIONS)
+        acquired = self.action_lock.acquire(blocking=False)
         try:
             if not acquired:
                 result = models.ActionResult(
                     ok=False,
-                    message='Another action is in progress; '
-                    'retry recording controls when it finishes',
+                    message='Another action is in progress; retry when it finishes',
                 )
             else:
                 self.action_in_progress = True
@@ -346,10 +444,14 @@ class ShowcoApp:
                 'before changing recording, playback or show mode',
             )
         if action == 'acknowledge-fault':
-            with self.status_lock:
+            if not self.incident_lock.acquire(blocking=False):
+                raise TimeoutError('Incident history is busy; retry acknowledgement')
+            try:
                 self.incidents.acknowledge(
                     form.get('name', ''), form.get('started_at', '')
                 )
+            finally:
+                self.incident_lock.release()
             return models.ActionResult(
                 ok=True, message='Fault acknowledged; it remains active until recovery'
             )
@@ -366,15 +468,14 @@ class ShowcoApp:
         if action.startswith(('setlist-', 'soundcheck-', 'recovery-', 'lighting-')):
             return self._run_workflow(form)
         if action in performance.PROTECTED_ACTIONS:
-            with self.soundcheck_lock:
-                try:
-                    self.soundcheck.invalidate(
-                        'Configuration or output test requested; repeat soundcheck'
-                    )
-                except OSError as error:
-                    self.soundcheck_error = (
-                        f'Soundcheck invalidation not saved: {error}'
-                    )
+            try:
+                self._invalidate_soundcheck(
+                    'Configuration or output test requested; repeat soundcheck'
+                )
+            except TimeoutError:
+                raise
+            except OSError as error:
+                self.soundcheck_error = f'Soundcheck invalidation not saved: {error}'
         if action.startswith('recs-'):
             return recs_actions.run(self.recs, action, form)
         if action == 'streamo-toggle':
@@ -468,8 +569,10 @@ class ShowcoApp:
             return self.streamo.action(STREAMO_ACTIONS[action], **_streamo_fields(form))
         return models.ActionResult(ok=False, message=f'unknown action {action}')
 
-    def workflow_status(self) -> workflows.WorkflowStatus:
-        show = self.status()
+    def workflow_status(
+        self, show: models.ShowStatus | None = None
+    ) -> workflows.WorkflowStatus:
+        show = show or self.status()
         return workflows.WorkflowStatus(
             show=show,
             setlist=self.setlist.state,
@@ -503,12 +606,16 @@ class ShowcoApp:
             if action == 'recovery-restart':
                 self.recs.snapshot_client.invalidate()
             return result
-        with self.soundcheck_lock:
+        if not self.soundcheck_lock.acquire(blocking=False):
+            raise TimeoutError('Soundcheck evidence is busy; retry shortly')
+        try:
             if self.soundcheck_error:
                 raise ValueError(self.soundcheck_error)
             return workflows.run_soundcheck(
                 self.soundcheck, self.recs, self.lyte, form, show
             )
+        finally:
+            self.soundcheck_lock.release()
 
     def _refresh_recovery(self) -> models.ShowStatus:
         self.recs.snapshot_client.invalidate()
@@ -520,12 +627,23 @@ class ShowcoApp:
         )
 
     def _remember_recovery(self, message: str) -> None:
-        with self.status_lock:
+        if not self.incident_lock.acquire(blocking=False):
+            LOGGER.warning('Incident history busy: %s', message)
+            return
+        try:
             self.incidents.record(message)
+        finally:
+            self.incident_lock.release()
 
-    def _invalidate_soundcheck(self) -> None:
-        with self.soundcheck_lock:
-            self.soundcheck.invalidate('Service restart requested; repeat soundcheck')
+    def _invalidate_soundcheck(
+        self, message: str = 'Service restart requested; repeat soundcheck'
+    ) -> None:
+        if not self.soundcheck_lock.acquire(blocking=False):
+            raise TimeoutError('Soundcheck evidence is busy; retry shortly')
+        try:
+            self.soundcheck.invalidate(message)
+        finally:
+            self.soundcheck_lock.release()
 
     def recent_actions(self) -> list[models.ActionLogEntry]:
         with self.action_log_lock:

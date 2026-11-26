@@ -151,7 +151,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 function pollPerformance() {
-  requestStatus().then(status => {renderPerformance(status); statusConnected();})
+  requestStatus().then(status => {renderPerformance(status); statusConnected(status);})
     .catch(error => {
       statusFailed(error);
       const recording = document.getElementById('performance-recording');

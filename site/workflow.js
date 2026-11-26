@@ -125,7 +125,8 @@ async function refreshWorkflows() {
   try {
     const response = await fetch('/workflow-status', {cache: 'no-store', signal: controller.signal});
     if (!response.ok) throw new Error(`Workflow status unavailable: ${response.status}`);
-    renderWorkflows(await response.json()); statusConnected();
+    const data = await response.json();
+    renderWorkflows(data); statusConnected(data.show);
   } catch (error) {
     workflowState = null;
     document.querySelectorAll('[data-workflow-action]').forEach(button => {button.disabled = true;});

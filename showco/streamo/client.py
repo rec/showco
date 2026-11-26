@@ -187,7 +187,10 @@ class StreamoClient:
         )
 
     def _call(self, command: str, **fields: object) -> object:
-        return rpc.Client(self.control_endpoint, role='showco').call(command, **fields)
+        options = {'timeout': 1.0} if command == 'status' else {}
+        return rpc.Client(self.control_endpoint, role='showco', **options).call(
+            command, **fields
+        )
 
 
 def _string(value: object) -> str | None:
