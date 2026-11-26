@@ -832,12 +832,56 @@ class FakeOsc:
 
 def test_x18_main_mix_is_sent_to_usb_without_changing_room_controls() -> None:
     osc = FakeOsc()
+    osc.applied = {
+        '/routing/usb/17/src': 1,
+        '/routing/usb/17/pos': 2,
+        '/routing/usb/18/src': 3,
+        '/routing/usb/18/pos': 4,
+        '/routing/usb/16/src': 5,
+        '/lr/mix/fader': 0.6,
+    }
     routing = x18_music.X18MusicRouting(
         '10.0.0.18', 10_024, [17, 18], osc_factory=lambda host, port: osc
     )
     routing.route_main_to_usb()
     assert osc.values == [
         ('/routing/usb/17/src', 36),
+        ('/routing/usb/17/pos', 10),
+        ('/routing/usb/18/src', 37),
+        ('/routing/usb/18/pos', 10),
+    ]
+    osc.values.clear()
+    routing.route_main_to_usb()
+    assert osc.values == []
+    osc.applied['/routing/usb/18/pos'] = 4
+    routing.route_main_to_usb()
+    assert osc.values == [('/routing/usb/18/pos', 10)]
+    assert osc.applied['/routing/usb/16/src'] == 5
+    assert osc.applied['/lr/mix/fader'] == 0.6
+
+
+def test_x18_repairs_partially_applied_usb_patch_after_missing_reply() -> None:
+    osc = FakeOsc()
+    osc.applied = {
+        '/routing/usb/17/src': 1,
+        '/routing/usb/17/pos': 2,
+        '/routing/usb/18/src': 3,
+        '/routing/usb/18/pos': 4,
+    }
+    routing = x18_music.X18MusicRouting(
+        '10.0.0.18', 10_024, [17, 18], osc_factory=lambda host, port: osc
+    )
+    with mock.patch.object(
+        osc, 'query', side_effect=[1, 36, TimeoutError('mixer disconnected')]
+    ):
+        with pytest.raises(TimeoutError, match='mixer disconnected'):
+            routing.route_main_to_usb()
+    assert osc.applied['/routing/usb/17/src'] == 36
+    osc.values.clear()
+
+    routing.route_main_to_usb()
+
+    assert osc.values == [
         ('/routing/usb/17/pos', 10),
         ('/routing/usb/18/src', 37),
         ('/routing/usb/18/pos', 10),

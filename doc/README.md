@@ -13,8 +13,10 @@ hardware capture. Media and publishing credentials are preserved.
 
 At startup, showCo routes X18 Main L/R post-fader to USB 17–18 for recs, even
 when streamO is disabled. If the mixer is unavailable at launch, showCo
-reports the routing error and tries again when it can reach the mixer.
-showCo also confirms each routing setting before starting or restarting
+reports the routing error in readiness. An independent checker verifies the
+patch and corrects changed settings after a reconnect or scene recall.
+Opening or polling the panel does not change mixer routing. showCo also
+confirms each routing setting before starting or restarting
 the broadcast. An unconfirmed setting prevents the broadcast from starting.
 This applies to the Twitch button, streamO restart and recovery actions, and
 entering Record mode, without changing room faders or the other USB sends.

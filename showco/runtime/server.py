@@ -396,14 +396,8 @@ def make_server(
         setup=setup,
         teardown=teardown,
     )
-    if music_controller is not None:
-        music_controller.configure_main_usb()
-        if streamo_enabled:
-            streamo_restart_action = music_controller.start_stream
-    if external_wifi is not None:
-        external_wifi.connect()
-    if waveforms is not None:
-        waveforms.start()
+    if music_controller is not None and streamo_enabled:
+        streamo_restart_action = music_controller.start_stream
     app = ShowcoApp(
         recs_client,
         streamo_client,
@@ -427,6 +421,12 @@ def make_server(
     server = ShowcoServer((host, port), handler)
     server.app = app
     server.performance = performance
+    if music_controller is not None:
+        music_controller.start_usb_routing()
+    if external_wifi is not None:
+        external_wifi.connect()
+    if waveforms is not None:
+        waveforms.start()
     if performance is not None:
         performance.observe = app.status
         performance.start()

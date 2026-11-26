@@ -21,17 +21,6 @@ browser request already expired can run later. Separate bounded status
 collection from state mutation and return busy promptly for queued actions.
 Test a slow dependency, two clients, and an urgent action in the same scenario.
 
-## P1: Opening or polling the panel can rewrite live X18 routing
-
-`make_server()` and `ShowcoApp.status()` call
-`MusicController.configure_main_usb()`, which writes USB 17/18 routing and taps.
-An OSC failure can leave a partial patch and cause further polls to retry it.
-After confirmation, the process-wide boolean never notices a mixer reboot or
-scene recall. The method holds the music phase lock while doing network I/O.
-Put routing changes under explicit show ownership, or a separately bounded and
-visible startup operation, and verify routing after mixer reconnection. Test
-read-only polling, partial writes and scene changes with a fake mixer.
-
 ## P1: Default media replacement deletes the running show's old package
 
 `media.synchronize()` removes the entire version store before staging a new

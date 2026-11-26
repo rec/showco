@@ -130,10 +130,6 @@ class ShowcoApp:
                 {channel.device for channel in recs.channels},
                 {midi.name: midi.state for midi in recs.midi},
             )
-            if self.music is not None and any(
-                m.name == 'X18' and m.latency_ms is not None for m in mixers
-            ):
-                self.music.configure_main_usb()
             status = models.ShowStatus(
                 recs=recs,
                 streamo=streamo,

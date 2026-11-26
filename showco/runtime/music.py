@@ -24,6 +24,7 @@ from .recs import RecsClient
 DEFAULT_FADE_SECONDS = 2.0
 SHUTDOWN_CLEANUP_SECONDS = 5.0
 POWEROFF_SECONDS = 3.0
+USB_ROUTING_CHECK_SECONDS = 2.0
 LOGGER = logging.get_logger(__name__)
 
 
@@ -97,8 +98,10 @@ class MusicController:
         )
         self.phase_lock = threading.Lock()
         self.cleanup_lock = threading.Lock()
-        self.main_usb_confirmed = False
-        self.main_usb_error: str | None = None
+        self.usb_routing_lock = threading.Lock()
+        self.usb_routing_stopped = threading.Event()
+        self.usb_routing_thread: threading.Thread | None = None
+        self.x18_usb_routing: models.ReadinessCheck | None = None
         self._load_mode()
         self.closing = ClosingController(
             recs,
@@ -117,7 +120,10 @@ class MusicController:
         player = self.player.status()
         with self.phase_lock:
             mode, error = self.mode, self.transition_error
-            main_usb_error = self.main_usb_error
+        usb_routing = self.x18_usb_routing
+        main_usb_error = (
+            usb_routing.message if usb_routing and not usb_routing.ok else None
+        )
         closing = self.closing.status()
         remote = closing.remote
         if remote is None and closing.record is not None:
@@ -147,32 +153,51 @@ class MusicController:
             error='; '.join(e for e in [error, closing.error, main_usb_error] if e)
             or player.error,
             closing=remote,
+            x18_usb_routing=usb_routing,
         )
 
-    def configure_main_usb(self, *, required: bool = False) -> None:
-        with self.phase_lock:
-            if self.main_usb_confirmed and not required:
-                return
+    def start_usb_routing(self) -> None:
+        self._configure_main_usb()
+        self.usb_routing_thread = threading.Thread(
+            target=self._maintain_usb_routing, name='showco-x18-usb', daemon=True
+        )
+        self.usb_routing_thread.start()
+
+    def _maintain_usb_routing(self) -> None:
+        while not self.usb_routing_stopped.wait(USB_ROUTING_CHECK_SECONDS):
+            self._configure_main_usb()
+
+    def _configure_main_usb(self, *, required: bool = False) -> None:
+        with self.usb_routing_lock:
             try:
                 self.routing.route_main_to_usb()
             except (OSError, ValueError) as error:
                 message = f'Cannot route X18 Main L/R to USB 17–18: {error}'
-                if message != self.main_usb_error:
+                if (
+                    self.x18_usb_routing is None
+                    or message != self.x18_usb_routing.message
+                ):
                     LOGGER.warning('%s', message)
-                self.main_usb_confirmed = False
-                self.main_usb_error = message
+                self.x18_usb_routing = models.ReadinessCheck(
+                    name='X18 USB routing', ok=False, message=message
+                )
                 if required:
                     raise
             else:
-                self.main_usb_confirmed = True
-                self.main_usb_error = None
+                if self.x18_usb_routing is not None and not self.x18_usb_routing.ok:
+                    LOGGER.info('X18 Main L/R routing to USB 17–18 verified')
+                self.x18_usb_routing = models.ReadinessCheck(
+                    name='X18 USB routing',
+                    ok=True,
+                    message='Main L/R post-fader on USB 17–18',
+                )
 
     def start_stream(self) -> models.ActionResult:
         if self.streamo is None:
             return models.ActionResult(ok=True, message='streamO is disabled')
         if self.streamo_restart is None:
             raise ValueError('streamO restart is not configured')
-        self.configure_main_usb(required=True)
+        self._configure_main_usb(required=True)
         return self.streamo_restart()
 
     def setup(self) -> models.ActionResult:
@@ -323,6 +348,7 @@ class MusicController:
         )
 
     def close(self, fade_seconds: float = 0.0) -> None:
+        self.usb_routing_stopped.set()
         self._close_with_deadline(fade_seconds, save_stopped=False)
 
     def _close_with_deadline(self, fade_seconds: float, *, save_stopped: bool) -> None:
@@ -334,6 +360,8 @@ class MusicController:
         def cleanup() -> None:
             failure: Exception | None = None
             try:
+                if self.usb_routing_stopped.is_set() and self.usb_routing_thread:
+                    self.usb_routing_thread.join()
                 # The observer owns the player and mixer until finalization exits.
                 self.closing.stop()
                 if not expired.is_set():

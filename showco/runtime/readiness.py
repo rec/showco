@@ -34,6 +34,8 @@ def status(value: models.ShowStatus) -> models.ReadinessStatus:
                 message=value.network.message,
             ),
         )
+    if value.music.x18_usb_routing is not None:
+        checks.append(value.music.x18_usb_routing)
     return models.ReadinessStatus(
         checks=checks,
         ready=all(check.ok for check in checks),

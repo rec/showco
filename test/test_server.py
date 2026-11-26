@@ -6,7 +6,7 @@ import unittest
 from datetime import datetime, timezone
 from http.server import ThreadingHTTPServer
 from io import BytesIO
-from threading import BoundedSemaphore, Event, Lock, Thread
+from threading import BoundedSemaphore, Event, Lock, Thread, current_thread
 from unittest import mock
 
 from showco.runtime import models, music, rehearsal, server
@@ -322,6 +322,7 @@ class ServerTests(unittest.TestCase):
             streamo=stream,
             streamo_restart=restart,
         )
+        self.addCleanup(controller.close)
         calls = mock.Mock()
         calls.attach_mock(routing.route_main_to_usb, 'route')
         calls.attach_mock(restart, 'start')
@@ -356,8 +357,17 @@ class ServerTests(unittest.TestCase):
         player = mock.Mock()
         player.status.return_value = MusicPlayerStatus()
         routing = mock.Mock()
-        routing.route_main_to_usb.side_effect = [TimeoutError('offline'), None]
+        online = Event()
+        calls: list[Thread] = []
+
+        def route() -> None:
+            calls.append(current_thread())
+            if not online.is_set():
+                raise TimeoutError('offline')
+
+        routing.route_main_to_usb.side_effect = route
         controller = music.MusicController(recs, player, routing, music.MusicConfig())
+        self.addCleanup(controller.close)
         mixers = mock.Mock()
         mixers.status.return_value = []
         with (
@@ -365,6 +375,7 @@ class ServerTests(unittest.TestCase):
                 server.music, 'controller_from_specs', return_value=controller
             ),
             mock.patch.object(server, 'ShowcoServer'),
+            mock.patch.object(music, 'USB_ROUTING_CHECK_SECONDS', 0.02),
         ):
             configured = server.make_server(
                 '127.0.0.1',
@@ -373,14 +384,23 @@ class ServerTests(unittest.TestCase):
                 system=rehearsal.RehearsalSystemMonitor(),
                 mixers=mixers,
             )
-        routing.route_main_to_usb.assert_called_once_with()
-        self.assertIn('Cannot route X18 Main L/R', configured.app.status().music.error)
-        mixers.status.return_value = [models.MixerStatus(name='X18', latency_ms=1)]
-        recovered = configured.app.status()
+            status = configured.app.status()
+            self.assertIn('Cannot route X18 Main L/R', status.music.error)
+            self.assertTrue(
+                any(f.name == 'X18 USB routing' for f in status.active_faults)
+            )
+            mixers.status.return_value = [models.MixerStatus(name='X18', latency_ms=1)]
+            configured.app.status()
+            online.set()
+            deadline = time.monotonic() + 2
+            while controller.status().error and time.monotonic() < deadline:
+                time.sleep(0.01)
+            recovered = configured.app.status()
         self.assertIsNone(recovered.music.error)
         self.assertEqual(recovered.streamo.service.state, 'disabled')
-        configured.app.status()
-        self.assertEqual(routing.route_main_to_usb.call_count, 2)
+        self.assertTrue(recovered.music.x18_usb_routing.ok)
+        self.assertGreaterEqual(len(calls), 2)
+        self.assertEqual(calls.count(current_thread()), 1)
 
     def test_twitch_toggle_stops_stream_and_prevents_service_restart(self) -> None:
         stream = mock.Mock()
