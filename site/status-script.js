@@ -93,6 +93,7 @@
       case "snapshot": return value || "connected";
       case "progress": return value;
       case "recording_destination": return value.destination_text;
+      case "recording_coverage": return value.message;
       case "twitch_message": return value;
       case "lyte": return lyteDetail(value);
       case "temperature": return value.temperature_c === null
@@ -148,6 +149,8 @@
       element.textContent = `${label ? `${label}: ` : ""}${statusText(element.dataset.format, value)}`;
       if (element.dataset.format === "progress") {
         element.className = status.recording_progress.ok ? "ok" : "failed";
+      } else if (element.dataset.format === "recording_coverage") {
+        element.className = value.ok ? "ok" : "failed";
       } else if (element.dataset.format === "recording_destination") {
         element.className = value.service.state !== "connected" || !value.snapshot_available
           || !value.disk || value.disk.on_system_disk ? "failed" : "";
@@ -226,6 +229,8 @@
         const row = template.content.firstElementChild.cloneNode(true);
         if (source === "show.readiness.checks" || source === "show.input_checks") {
           row.className = item.ok ? "ok" : "failed";
+        } else if (source === "show.recording_inputs") {
+          row.className = item.fault ? "failed" : item.ok ? "ok" : "";
         }
         for (const field of row.querySelectorAll("[data-value]")) {
           const value = field.dataset.value === "item"

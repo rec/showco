@@ -26,6 +26,7 @@ class SnapshotStatus(BaseModel, frozen=True):
     session_directory: str | None = None
     instance_token: str | None = None
     rows: list[dict[str, object]] = Field(default_factory=list)
+    missing_audio_inputs: list[str] = Field(default_factory=list)
     errors: list[models.ErrorRecord] = Field(default_factory=list)
     disk: models.RecordingDiskStatus | None = None
     playback: models.PlaybackStatus = Field(default_factory=models.PlaybackStatus)
@@ -119,6 +120,9 @@ def snapshot_status(value: object) -> SnapshotStatus | str:
     session = value.get('session_directory')
     instance = value.get('instance')
     token = instance.get('start_token') if object_dict(instance) else None
+    missing = value.get('missing_audio_inputs', [])
+    if not isinstance(missing, list) or not all(isinstance(s, str) for s in missing):
+        return 'recs status snapshot has invalid missing audio inputs'
     return SnapshotStatus(
         service_state='connected',
         has_snapshot=True,
@@ -127,6 +131,7 @@ def snapshot_status(value: object) -> SnapshotStatus | str:
         session_directory=session if isinstance(session, str) else None,
         instance_token=token if isinstance(token, str) else None,
         rows=rows,
+        missing_audio_inputs=missing,
         errors=errors,
         disk=disk,
         playback=playback,

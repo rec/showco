@@ -51,6 +51,7 @@ class RecsClient:
             file_size=recs_channels._float(totals.get('file_size')),
             file_count=_int(totals.get('file_count')),
             channels=recs_channels.channel_levels(rows),
+            missing_audio_inputs=snapshot.missing_audio_inputs,
             offline_sources=list(
                 dict.fromkeys(
                     name

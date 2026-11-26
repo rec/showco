@@ -121,6 +121,7 @@ class ShowcoApp:
             state_directory / 'incidents.json' if state_directory else None
         )
         self.recording_progress = recording_progress.ProgressMonitor()
+        self.recording_inputs = recording_progress.InputMonitor()
         self.setlist = setlist.SetListController(
             state_directory / 'setlist.json' if state_directory else None
         )
@@ -337,7 +338,10 @@ class ShowcoApp:
         )
         status = status.model_copy(update={'readiness': readiness.status(status)})
         status = status.model_copy(
-            update={'recording_progress': self.recording_progress.observe(recs)}
+            update={
+                'recording_progress': self.recording_progress.observe(recs),
+                'recording_inputs': self.recording_inputs.observe(recs),
+            }
         )
         with self.incident_lock:
             observed = self.incidents.observe(status, persist=False)

@@ -3,11 +3,43 @@ from __future__ import annotations
 import unittest
 from unittest import mock
 
+from showco.runtime.recs import RecsClient
 from showco.runtime.recs_control import RecsControlClient
 from showco.runtime.recs_snapshot import RecsSnapshotClient, osc_status
 
 
 class RecsSnapshotTests(unittest.TestCase):
+    def test_receives_capture_and_write_evidence_for_each_input(self) -> None:
+        control = mock.Mock(spec=RecsControlClient)
+        document = snapshot()
+        document['missing_audio_inputs'] = ['Unplugged']
+        document['rows'] = [
+            {
+                'device': 'X18',
+                'source_key': 'x18-usb',
+                'writing_enabled': True,
+                'capture_running': True,
+            },
+            {
+                'channel': 'Instrument',
+                'channels': [17, 18],
+                'recorded': 3.0,
+                'write_requested': False,
+                'capture_age_seconds': 0.3,
+            },
+        ]
+        control.call.return_value = document
+
+        status = RecsClient(control=control).status()
+
+        channel = status.channels[0]
+        assert channel.source_key == 'x18-usb'
+        assert channel.capture_running is True
+        assert channel.writing_enabled is True
+        assert channel.write_requested is False
+        assert channel.capture_age_seconds == 0.3
+        assert status.missing_audio_inputs == ['Unplugged']
+
     def test_reads_complete_status_snapshot(self) -> None:
         control = mock.Mock(spec=RecsControlClient)
         control.call.return_value = snapshot()

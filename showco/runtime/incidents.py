@@ -162,6 +162,25 @@ def fault_details(status: models.ShowStatus) -> list[tuple[str, str, str]]:
                 'Check the affected inputs and storage. Open Health for details.',
             ),
         )
+    failed_inputs = [i for i in status.recording_inputs if i.fault]
+    if failed_inputs:
+        detail = '; '.join(
+            f'{i.name}: {i.message}' for i in failed_inputs[:RECS_FAULT_MESSAGES]
+        )
+        if len(failed_inputs) > RECS_FAULT_MESSAGES:
+            detail += f'; {len(failed_inputs) - RECS_FAULT_MESSAGES} more on Show'
+        if status.recs.session_directory:
+            detail += f'. Session {status.recs.session_directory}'
+        if status.recs.disk is not None:
+            detail += f'. Destination {status.recs.disk.path}'
+        faults.insert(
+            0,
+            (
+                'Incomplete audio recording',
+                detail,
+                'Check capture and writes for the listed inputs on Show.',
+            ),
+        )
     if (
         status.recs.service.state == 'connected'
         and status.recs.snapshot_available

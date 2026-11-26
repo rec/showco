@@ -1,4 +1,11 @@
 function showControlsUnavailable() {
+  const coverage = document.getElementById('recording-coverage');
+  if (coverage) {
+    coverage.textContent = 'Input recording status unavailable';
+    coverage.className = 'failed';
+  }
+  const inputs = document.getElementById('recording-inputs');
+  if (inputs) inputs.textContent = 'No current input evidence.';
   const destination = document.getElementById('recording-destination');
   if (destination) {
     destination.className = 'failed';

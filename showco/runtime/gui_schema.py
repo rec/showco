@@ -507,6 +507,7 @@ DETAIL_KINDS = {
     'workflow_editor',
 }
 REPEAT_VALUES = {
+    'show.recording_inputs': {'item.name', 'item.message'},
     'show.recs.errors': {'item.timestamp', 'item.message'},
     'show.readiness.checks': {'item.name', 'item.message'},
     'show.input_checks': {'item.name', 'item.message'},
@@ -525,6 +526,7 @@ TEXT_VALUES_BY_FORMAT = {
     'osc_detail': {'item'},
 }
 STATUS_FORMATS = {
+    'show.recording_coverage': {'recording_coverage'},
     'show.twitch_message': {'twitch_message'},
     'show.readiness.ready': {'readiness'},
     'show.recs': {'recording_destination', 'shutdown_recs'},

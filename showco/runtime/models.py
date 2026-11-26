@@ -32,6 +32,11 @@ class ChannelLevel(BaseModel, frozen=True):
     signal: float | None = None
     on: bool = False
     recorded_seconds: float | None = None
+    source_key: str = ''
+    capture_running: bool | None = None
+    writing_enabled: bool | None = None
+    capture_age_seconds: float | None = None
+    write_requested: bool | None = None
 
 
 class RecorderStatus(BaseModel, frozen=True):
@@ -93,6 +98,7 @@ class RecsStatus(BaseModel, frozen=True):
     file_count: int | None = None
     channels: list[ChannelLevel] = Field(default_factory=list)
     offline_sources: list[str] = Field(default_factory=list)
+    missing_audio_inputs: list[str] = Field(default_factory=list)
     errors: list[ErrorRecord] = Field(default_factory=list)
     snapshot_error: str | None = None
     disk: RecordingDiskStatus | None = None
@@ -253,6 +259,13 @@ class Incident(BaseModel, frozen=True):
     message: str
 
 
+class InputRecording(BaseModel, frozen=True):
+    name: str
+    message: str
+    ok: bool = False
+    fault: bool = False
+
+
 class RecordingProgress(BaseModel, frozen=True):
     ok: bool = False
     message: str = 'unknown'
@@ -316,6 +329,7 @@ class ShowStatus(BaseModel, frozen=True):
     readiness: ReadinessStatus = Field(default_factory=ReadinessStatus)
     incidents: list[Incident] = Field(default_factory=list)
     recording_progress: RecordingProgress = Field(default_factory=RecordingProgress)
+    recording_inputs: list[InputRecording] = Field(default_factory=list)
     input_checks: list[InputCheck] = Field(default_factory=list)
     music: MusicStatus = Field(default_factory=MusicStatus)
     cable_test: CableTestStatus = Field(default_factory=CableTestStatus)
@@ -326,6 +340,29 @@ class ShowStatus(BaseModel, frozen=True):
     active_faults: list[ActiveFault] = Field(default_factory=list)
     observed_at: datetime | None = None
     monitoring_error: str | None = None
+
+    @computed_field
+    @property
+    def recording_coverage(self) -> RecordingProgress:
+        if self.recs.service.state != 'connected' or not self.recs.snapshot_available:
+            return RecordingProgress(
+                ok=False, message='Input recording status unavailable'
+            )
+        if self.recs.paused:
+            return RecordingProgress(ok=False, message='Recording paused on all inputs')
+        if not self.recording_inputs:
+            return RecordingProgress(ok=False, message='No recording inputs available')
+        failed = sum(i.fault for i in self.recording_inputs)
+        if failed:
+            return RecordingProgress(
+                ok=False,
+                message=f'Incomplete recording on {failed} input'
+                + ('s' if failed > 1 else ''),
+            )
+        if any(not i.ok for i in self.recording_inputs):
+            return RecordingProgress(ok=False, message='Recording coverage unconfirmed')
+        return RecordingProgress(ok=True, message='All configured inputs accounted for')
+
     twitch_blockers: list[str] = Field(default_factory=list)
     twitch_recovery_pending: bool = False
     twitch_recovery_message: str = ''

@@ -48,9 +48,15 @@ Open showCo on the show network at the configured address and port. The Health p
 | Actions | Calibrate, mark, start a session, pause or resume, inspect recs status, test lights or cables, operate streamO, and review the ten most recent results. |
 | Errors | See up to 25 recs errors from the current showCo process. |
 
-The **Show** tab opens by default. Switching Twitch does not start a new recs
-session or pause recording. Enter **Record** first, then confirm the recording
-disk and verify a saved sample for every expected audio input in **Soundcheck**.
+The **Show** tab opens by default. It lists recording evidence for every configured recs audio input.
+An **Incomplete recording** warning identifies the inputs that lost capture,
+cannot write, or stalled while recs was trying to write. A quiet input shows
+the silence filter state and whether any audio has been saved in this session.
+Input failures are saved in the incident history with the session and destination.
+
+Switching Twitch does not start a new recs session or pause recording. Enter
+**Record** first, then confirm the recording disk and verify a saved sample
+for every expected audio input in **Soundcheck**.
 Resume recording after listening back. The Show page lists any remaining
 blockers. **Start Twitch** becomes available when the Pi has synchronized
 within the past hour, recs is writing to the verified disk, and fresh samples

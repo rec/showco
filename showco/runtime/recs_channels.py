@@ -52,12 +52,21 @@ def track_names_response(value: object) -> dict[str, dict[str, int]] | None:
 def channel_levels(rows: list[dict[str, object]]) -> list[models.ChannelLevel]:
     channels = []
     device = ''
+    source_key = ''
+    capture_running = writing_enabled = None
     for row in rows:
         if isinstance(name := row.get('device'), str):
             device = name
+            key = row.get('source_key')
+            source_key = key if isinstance(key, str) else ''
+            capturing = row.get('capture_running')
+            capture_running = capturing if isinstance(capturing, bool) else None
+            writing = row.get('writing_enabled')
+            writing_enabled = writing if isinstance(writing, bool) else None
         if not isinstance(name := row.get('channel'), str):
             continue
         signal = _float(row.get('signal'))
+        requested = row.get('write_requested')
         channels.append(
             models.ChannelLevel(
                 name=name,
@@ -67,6 +76,11 @@ def channel_levels(rows: list[dict[str, object]]) -> list[models.ChannelLevel]:
                 signal=signal,
                 on=row.get('on') is True,
                 recorded_seconds=_float(row.get('recorded')),
+                source_key=source_key,
+                capture_running=capture_running,
+                writing_enabled=writing_enabled,
+                capture_age_seconds=_float(row.get('capture_age_seconds')),
+                write_requested=requested if isinstance(requested, bool) else None,
             )
         )
     return channels

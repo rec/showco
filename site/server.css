@@ -159,6 +159,14 @@ button:active, button[aria-busy="true"] {
 button[aria-busy="true"] { cursor: wait; }
 .ok { color: #14853d; }
 .failed { color: #b3261e; }
+
+#recording-inputs ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  gap: 0.4rem 1.25rem;
+  list-style: none;
+  padding: 0;
+}
 .actions + section p { white-space: pre-line; }
 .readiness .state { text-transform: uppercase; }
 .readiness ul { margin-bottom: 0; }

@@ -47,15 +47,6 @@ destination in the readiness check without silently changing the recording
 destination or splitting a session. Add missing, late-mounted, wrong-volume,
 and full-drive cases, including automount behavior on the Pi.
 
-## P2: The Show page lacks per-input recording evidence
-
-The Show page reports recorder faults and aggregate write progress. It still
-cannot show whether each required input is delivering fresh samples, being
-silence-filtered, or writing to the current session. Expose that evidence
-through recs' public snapshot and retain bounded failure summaries with session
-identity and destination. Test that continued writes on one input cannot hide
-a failure on another.
-
 ## P2: Soundcheck can credit a different recording from the sample it started
 
 `Soundcheck.record_start()` saves an aggregate recorded-seconds baseline but

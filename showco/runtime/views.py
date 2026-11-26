@@ -241,6 +241,8 @@ def _gui_item_text(
 
 
 def _gui_list_class(source: str, item: object | None) -> str:
+    if source == 'show.recording_inputs' and isinstance(item, models.InputRecording):
+        return 'failed' if item.fault else 'ok' if item.ok else ''
     if source in {'show.readiness.checks', 'show.input_checks'} and isinstance(
         item, models.ReadinessCheck | models.InputCheck
     ):
@@ -257,6 +259,8 @@ def _gui_section_class(style: str, status: models.ShowStatus) -> str:
 def _gui_status_text(element: gui_schema.Element, status: models.ShowStatus) -> str:
     value = _gui_value(element.value, status, None)
     match element.format:
+        case 'recording_coverage':
+            return status.recording_coverage.message
         case 'twitch_message':
             return status.twitch_message
         case 'readiness':
@@ -320,6 +324,8 @@ def _gui_status_text(element: gui_schema.Element, status: models.ShowStatus) -> 
 
 
 def _gui_status_class(format: str, status: models.ShowStatus) -> str:
+    if format == 'recording_coverage':
+        return 'ok' if status.recording_coverage.ok else 'failed'
     if format == 'readiness':
         return 'state'
     if format == 'progress':

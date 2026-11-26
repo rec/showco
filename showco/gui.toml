@@ -15,6 +15,12 @@ label = "Recording destination"
 value = "show.recs"
 format = "recording_destination"
 
+[[pages.sections.elements]]
+name = "recording-coverage"
+kind = "status"
+value = "show.recording_coverage"
+format = "recording_coverage"
+
 [[pages.sections]]
 name = "show-controls"
 style = "transport"
@@ -42,6 +48,29 @@ action = "music-teardown"
 [[pages.sections.elements]]
 name = "show-result"
 kind = "action_result"
+
+[[pages.sections]]
+name = "recording-input-coverage"
+title = "Recording inputs"
+
+[[pages.sections.elements]]
+name = "recording-inputs"
+kind = "repeat"
+source = "show.recording_inputs"
+layout = "list"
+empty_text = "No current input evidence."
+separator = " · "
+
+[[pages.sections.elements.children]]
+name = "input-name"
+kind = "text"
+value = "item.name"
+format = "bold"
+
+[[pages.sections.elements.children]]
+name = "input-recording-state"
+kind = "text"
+value = "item.message"
 
 [[pages]]
 name = "channels"
