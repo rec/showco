@@ -104,6 +104,7 @@ class Config(BaseModel, frozen=True):
     argon_one: bool = True
     accept_changed_host_key: bool = True
     verify_media: bool = False
+    safe_media_copy: bool = False
     media: Media = Field(default_factory=Media)
     audio: list[Path] = Field(default_factory=list)
     setup: list[Path] = Field(default_factory=list)
@@ -197,6 +198,7 @@ def config_from_values(
         gui_path=gui_path,
         argon_one=bool_value(values, 'argon_one', default=True),
         verify_media=bool_value(values, 'verify_media', default=False),
+        safe_media_copy=bool_value(values, 'safe_media_copy', default=False),
         accept_changed_host_key=bool_value(
             values, 'accept_changed_host_key', default=True
         ),

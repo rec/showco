@@ -1,5 +1,6 @@
 argon_one = true
 verify_media = false
+safe_media_copy = false
 
 [network]
 host = "t.local"

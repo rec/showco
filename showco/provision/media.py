@@ -120,7 +120,8 @@ def synchronize(provision_config: config.Config) -> None:
         return
     package = provision_config.media_package
     root = Path('/home') / provision_config.network.user / '.local/share/showco/media'
-    destination = root / 'versions' / package.version
+    versions = root / 'versions'
+    destination = versions / package.version
     quoted_destination = shlex.quote(str(destination))
     verify = media_verification_command(package)
     verify_destination = f'cd {quoted_destination} && {verify}'
@@ -151,7 +152,7 @@ def synchronize(provision_config: config.Config) -> None:
     transport = shlex.join(
         ssh.ssh_command(provision_config, provision_config.ssh_target, '')[:-2]
     )
-    staging = root / 'versions' / f'.staging-{uuid4().hex}'
+    staging = versions / f'.staging-{uuid4().hex}'
     try:
         with stage_media(package) as local:
             ssh.run_ssh(
@@ -160,7 +161,14 @@ def synchronize(provision_config: config.Config) -> None:
                 '{ sudo apt-get update && sudo apt-get install -y rsync; }',
                 timeout_seconds=300,
             )
-            ssh.run_ssh(provision_config, f'mkdir -p -- {shlex.quote(str(staging))}')
+            prepare_staging = f'mkdir -p -- {shlex.quote(str(staging))}'
+            if not provision_config.safe_media_copy:
+                print('Removing previous media packages before upload', flush=True)
+                prepare_staging = (
+                    f'rm -rf --one-file-system -- {shlex.quote(str(versions))} && '
+                    + prepare_staging
+                )
+            ssh.run_ssh(provision_config, prepare_staging, timeout_seconds=300)
             interactive = sys.stdout.isatty()
             progress_options: list[str] = []
             if interactive:

@@ -191,6 +191,13 @@ The four directory/audio flags repeat. `--movie` selects one local movie file fo
 
 Each selected source has its own numbered destination within a versioned package under `/home/<user>/.local/share/showco/media/versions/`. Provisioning preserves source file modification and access times. Matching packages are reused. By default, showCo compares file names, sizes, and modification times. Set `verify_media = true` at the top level of the provisioning configuration to compare SHA-256 contents, including changes that leave the size and modification time intact. The modes use separate package identities. streamO's downloaded-image inbox stays outside the package. Missing sources or failed transfers stop provisioning. A copied `score.toml` must use relative file paths within its directory.
 
+When a new package needs to be uploaded, the default `safe_media_copy = false`
+removes previous versioned packages and partial uploads from the Pi before
+transferring the replacement. If the upload fails, rerun provisioning to restore
+the media. Set `safe_media_copy = true` at the top level to retain the old media
+while copying and verifying the new package. That mode needs enough free space
+for the full incoming package alongside the existing files.
+
 Provisioning installs the copied audio paths in showCo's service arguments and updates streamO's photo directories and movie path while preserving its other settings. Existing photo timing and compatible directory weights are retained. If photos were disabled, they are enabled every 30 seconds; incompatible weights reset to the descending defaults. This does not enable the streamO service or supply its streaming credentials. Target-side `showco run` and service-installation flags continue to refer to paths already on the Pi.
 
 Sources run in flag order, then repeat. A directory normally supplies its audio files in alphabetical filename order. If it contains `score.toml`, that file supplies the order and shuffle policy instead:

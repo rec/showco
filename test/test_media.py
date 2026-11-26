@@ -289,22 +289,26 @@ def test_photos_enable_disabled_overlays_and_reset_incompatible_weights() -> Non
 
 
 @pytest.mark.parametrize(
-    ('rsync_probe_status', 'progress_flag'),
-    [(0, '--info=progress2'), (1, '--progress')],
+    ('rsync_probe_status', 'progress_flag', 'config_overrides'),
+    [(0, '--info=progress2', {}), (1, '--progress', {'safe_media_copy': True})],
 )
 def test_media_transfer_keeps_sources_separate_and_preserves_streamo_inbox(
-    tmp_path: Path, rsync_probe_status: int, progress_flag: str
+    tmp_path: Path,
+    rsync_probe_status: int,
+    progress_flag: str,
+    config_overrides: dict[str, object],
 ) -> None:
     photos = tmp_path / "performer's photos"
     photos.mkdir()
     audio = tmp_path / 'song with spaces.flac'
     audio.touch()
-    configuration = make_config(values(), port=2200).model_copy(
+    configuration = make_config(values(**config_overrides), port=2200).model_copy(
         update={
             'media': config.Media(photos=[photos], teardown=[audio]),
             'verify_media': True,
         }
     )
+    operations = mock.Mock()
     with (
         mock.patch('showco.provision.ssh.capture_ssh', return_value=''),
         mock.patch('showco.provision.ssh.run_ssh') as remote,
@@ -313,8 +317,32 @@ def test_media_transfer_keeps_sources_separate_and_preserves_streamo_inbox(
         mock.patch('sys.stdout.isatty', return_value=True),
         mock.patch('showco.provision.media.run') as probe,
     ):
+        operations.attach_mock(remote, 'remote')
+        operations.attach_mock(copy, 'copy')
         probe.return_value.returncode = rsync_probe_status
         media.synchronize(configuration)
+    assert [c[0] for c in operations.mock_calls] == [
+        'remote',
+        'remote',
+        'copy',
+        'remote',
+    ]
+    preparation = shlex.split(remote.call_args_list[1].args[1])
+    if config_overrides:
+        assert preparation[:3] == ['mkdir', '-p', '--']
+    else:
+        assert preparation[:-1] == [
+            'rm',
+            '-rf',
+            '--one-file-system',
+            '--',
+            '/home/tom/.local/share/showco/media/versions',
+            '&&',
+            'mkdir',
+            '-p',
+            '--',
+        ]
+    assert '/media/versions/.staging-' in preparation[-1]
     command = copy.call_args.args[0]
     assert copy.call_count == 1
     assert copy.call_args.kwargs['stream_output'] is True
