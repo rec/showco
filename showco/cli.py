@@ -160,7 +160,10 @@ def main(argv: list[str] | None = None) -> int:
             getLogger().addHandler(handler)
             status = 0
             try:
-                if not arguments or arguments[0].startswith('-'):
+                top_level_help = bool(arguments and arguments[0] in {'-h', '--help'})
+                if not arguments or (
+                    arguments[0].startswith('-') and not top_level_help
+                ):
                     status = deploy.main(arguments)
                 else:
                     status = cli.route_command(
@@ -180,6 +183,9 @@ def main(argv: list[str] | None = None) -> int:
                         arguments,
                         prog='showco',
                     )
+                    if top_level_help:
+                        print('\nBare showco defaults to showco deploy.')
+                        print('Use showco deploy -h for deployment flags.')
             except KeyboardInterrupt:
                 print('Interrupted', file=sys.stderr)
                 status = 130

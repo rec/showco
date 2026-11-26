@@ -4,6 +4,7 @@ import gc
 import signal
 import sys
 import unittest
+from contextlib import redirect_stdout
 from io import BytesIO, StringIO
 from logging import getLogger
 from pathlib import Path
@@ -267,6 +268,25 @@ class CliTests(unittest.TestCase):
             self.assertEqual(cli.main([]), 7)
 
         deploy.assert_called_once_with([])
+
+    def test_top_level_help_lists_subcommands_and_explains_default(self) -> None:
+        for flag in ('-h', '--help'):
+            output = StringIO()
+            with self.subTest(flag=flag), redirect_stdout(output):
+                self.assertEqual(cli.main([flag]), 0)
+            self.assertIn(
+                '{run,bundle,cable-test,prepare-card,deploy,logs,', output.getvalue()
+            )
+            self.assertIn('Bare showco defaults to showco deploy.', output.getvalue())
+            self.assertIn('showco deploy -h for deployment flags', output.getvalue())
+            self.assertNotIn('--stop-streamo', output.getvalue())
+
+    def test_deploy_help_lists_deployment_flags(self) -> None:
+        output = StringIO()
+        with redirect_stdout(output), self.assertRaises(SystemExit) as result:
+            cli.main(['deploy', '-h'])
+        self.assertEqual(result.exception.code, 0)
+        self.assertIn('--stop-streamo', output.getvalue())
 
     def test_dispatches_push_flag_without_deploy_subcommand(self) -> None:
         with patch.object(cli.deploy, 'main', return_value=7) as deploy:
