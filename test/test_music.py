@@ -157,6 +157,10 @@ def test_setup_pauses_recording_starts_music_and_routes_it_to_main_lr() -> None:
 
 def test_setup_stops_streamo() -> None:
     streamo = mock.Mock()
+    streamo.status.return_value = models.StreamoStatus(
+        service=models.ServiceStatus(name='streamo', state='connected'),
+        stream_state='streaming',
+    )
     streamo.action.return_value = result()
     value, _, _, _ = controller(streamo=streamo)
 
@@ -307,6 +311,13 @@ def test_resume_records_even_if_publisher_stop_cannot_be_confirmed() -> None:
         ok=False, message='Socket unavailable'
     )
     value, recs, _, _ = controller(streamo=stream)
+
+    def stop_after_recording(command: str) -> models.ActionResult:
+        assert command == 'stop'
+        recs.action.assert_any_call('resume_recording')
+        return models.ActionResult(ok=False, message='Socket unavailable')
+
+    stream.action.side_effect = stop_after_recording
     resumed = value.record(restart=True)
 
     assert not resumed.ok
@@ -316,6 +327,20 @@ def test_resume_records_even_if_publisher_stop_cannot_be_confirmed() -> None:
         mock.call('new_session'),
         mock.call('resume_recording'),
     ]
+
+
+def test_end_show_skips_credits_when_failed_publisher_is_confirmed_off() -> None:
+    stream = mock.Mock()
+    stream.status.return_value = models.StreamoStatus(
+        service=models.ServiceStatus(name='streamo', state='error'),
+        stream_state='failed',
+    )
+    value, recs, _, _ = controller(streamo=stream)
+
+    assert value.teardown().ok
+    stream.start_closing.assert_not_called()
+    stream.action.assert_not_called()
+    recs.pause_recording.assert_called_once()
 
 
 def test_restart_from_teardown_resumes_recording_and_stops_music() -> None:
