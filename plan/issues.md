@@ -9,18 +9,6 @@ items reduce resilience or make diagnosis harder. Findings below are based on
 source and existing tests. Resource and hardware scenarios still need the
 acceptance evidence identified under each issue.
 
-## P1: A stalled observer or audio device can prevent a requested shutdown
-
-`MusicController.close()` calls `ClosingController.stop()` with an unbounded
-join. The observer may be waiting in streamer RPC, recorder RPC, OSC, storage,
-or PortAudio. `MusicController.stop()` also calls cleanup and saves the stopped
-phase before it calls `poweroff_pi()`; any cleanup or write failure prevents
-the shutdown request despite the documentation calling it immediate.
-`PerformanceMonitor.close()` has another unbounded join, and the poweroff
-subprocess has no deadline. Bound the operator wait and distinguish graceful
-cleanup from a confirmed request to shut the Pi down. Test a stalled observer,
-an unavailable mixer, and full state storage without invoking real poweroff.
-
 ## P1: Shared observation work can make status and recovery unavailable
 
 `ShowcoApp.status()` holds `status_lock` across sequential streamO, recs, lyte,

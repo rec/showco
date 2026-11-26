@@ -14,6 +14,7 @@ from .recs_snapshot import SnapshotStatus
 from .system import SystemMonitor
 
 SAMPLE_SECONDS = 1.0
+CLOSE_SECONDS = 2.0
 RETENTION_DAYS = 7
 MONITORING_DIRECTORY = Path.home() / '.local/state/showco/monitoring'
 LOGGER = logging.get_logger(__name__)
@@ -80,9 +81,12 @@ class PerformanceMonitor:
 
     def close(self) -> None:
         self.stopped.set()
-        if self.thread is not None:
-            self.thread.join()
-        self._flush()
+        if self.thread is None:
+            self._flush()
+        else:
+            self.thread.join(timeout=CLOSE_SECONDS)
+            if self.thread.is_alive():
+                LOGGER.warning('Performance monitor did not stop before its deadline')
 
     def status(self) -> models.SystemStatus:
         if (
@@ -143,24 +147,27 @@ class PerformanceMonitor:
 
     def _run(self) -> None:
         next_sample = time.monotonic()
-        while not self.stopped.is_set():
-            try:
-                self.sample()
-            except (
-                OSError,
-                ConnectionError,
-                TimeoutError,
-                RuntimeError,
-                TypeError,
-                ValidationError,
-                ValueError,
-            ) as error:
-                message = f'Performance sampling failed: {error}'
-                if message != self.observation_error:
-                    LOGGER.warning('%s', message)
-                self.observation_error = message
-            next_sample += self.sample_seconds
-            self.stopped.wait(max(0.0, next_sample - time.monotonic()))
+        try:
+            while not self.stopped.is_set():
+                try:
+                    self.sample()
+                except (
+                    OSError,
+                    ConnectionError,
+                    TimeoutError,
+                    RuntimeError,
+                    TypeError,
+                    ValidationError,
+                    ValueError,
+                ) as error:
+                    message = f'Performance sampling failed: {error}'
+                    if message != self.observation_error:
+                        LOGGER.warning('%s', message)
+                    self.observation_error = message
+                next_sample += self.sample_seconds
+                self.stopped.wait(max(0.0, next_sample - time.monotonic()))
+        finally:
+            self._flush()
 
     def _flush(self) -> None:
         if not self.samples:

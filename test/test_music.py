@@ -730,6 +730,39 @@ def test_stop_fades_music_then_shuts_down_the_pi() -> None:
     assert value.status().mode == 'stopped'
 
 
+@pytest.mark.parametrize('fault', ['mixer', 'storage'])
+def test_shutdown_requests_poweroff_after_cleanup_error(
+    tmp_path: Path, fault: str
+) -> None:
+    value, _, _, routing = controller(path=tmp_path / 'closing.json')
+    value.poweroff = mock.Mock()
+    if fault == 'mixer':
+        routing.disable.side_effect = OSError('mixer unavailable')
+    with mock.patch.object(
+        settings,
+        'write_json_model',
+        side_effect=OSError('disk full') if fault == 'storage' else None,
+    ):
+        outcome = value.stop()
+
+    assert outcome.ok
+    assert 'Pi shutdown requested. Show cleanup incomplete:' in outcome.message
+    assert (
+        'disk full' if fault == 'storage' else 'mixer unavailable'
+    ) in outcome.message
+    value.poweroff.assert_called_once_with()
+
+
+def test_shutdown_reports_unconfirmed_poweroff() -> None:
+    value, _, _, _ = controller()
+    value.poweroff = mock.Mock(side_effect=subprocess.TimeoutExpired('poweroff', 3))
+
+    outcome = value.stop()
+
+    assert not outcome.ok
+    assert 'poweroff is unconfirmed' in outcome.message
+
+
 def test_failed_recording_command_mutes_returns_and_reports_completed_steps() -> None:
     value, recs, player, routing = controller()
     recs.action.return_value = models.ActionResult(ok=False, message='recs offline')
@@ -1257,7 +1290,7 @@ def test_shutdown_waits_for_finalization_before_muting_returns() -> None:
     shutdown = threading.Thread(target=close)
     shutdown.start()
     try:
-        assert not closed.wait(timeout=5.2)
+        assert not closed.wait(timeout=0.1)
         player.stop.assert_not_called()
         routing.disable.assert_not_called()
         player.start.assert_not_called()
@@ -1269,6 +1302,53 @@ def test_shutdown_waits_for_finalization_before_muting_returns() -> None:
     player.stop.assert_called_once_with(0.0)
     routing.disable.assert_called_once_with()
     assert value.closing.stop(timeout=5)
+
+
+def test_shutdown_requests_poweroff_while_closing_status_is_stalled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observing = threading.Event()
+    release = threading.Event()
+
+    def stalled_status() -> models.StreamoStatus:
+        if not stream.start_closing.called:
+            return models.StreamoStatus(
+                service=models.ServiceStatus(name='streamo', state='connected'),
+                stream_state='streaming',
+            )
+        observing.set()
+        assert release.wait(timeout=5)
+        return models.StreamoStatus(
+            service=models.ServiceStatus(name='streamo', state='connected'),
+            closing=models.ClosingStatus(
+                operation_id=stream.start_closing.call_args.args[0], state='completed'
+            ),
+        )
+
+    stream = mock.Mock()
+    stream.status.side_effect = stalled_status
+    value, recs, player, routing = controller(streamo=stream)
+    value.poweroff = mock.Mock()
+    value.mode = 'record'
+    routing.capture_room.return_value = x18_music.RoomScene(
+        master_fader=0.7, input_lr=[1] * 18
+    )
+    monkeypatch.setattr(music, 'SHUTDOWN_CLEANUP_SECONDS', 0.05)
+    assert value.teardown().ok
+    try:
+        assert observing.wait(timeout=2)
+        outcome = value.stop()
+
+        assert outcome.ok
+        assert 'Timed out waiting for music cleanup' in outcome.message
+        value.poweroff.assert_called_once_with()
+        routing.disable.assert_not_called()
+        player.stop.assert_not_called()
+    finally:
+        release.set()
+        assert value.closing.stop(timeout=2)
+    recs.pause_recording.assert_not_called()
+    player.start.assert_not_called()
 
 
 def test_restarted_finalization_fault_survives_unwritable_storage(

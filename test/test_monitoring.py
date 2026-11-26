@@ -150,6 +150,36 @@ class MonitoringTests(unittest.TestCase):
             )
             monitor.close()
 
+    def test_close_leaves_partial_minute_with_stalled_sampler(self) -> None:
+        observing = Event()
+        release = Event()
+
+        def observe() -> None:
+            observing.set()
+            self.assertTrue(release.wait(5))
+
+        with TemporaryDirectory() as directory:
+            history = Path(directory)
+            monitor = PerformanceMonitor(
+                SequenceSystemMonitor([system_status(cpu=20, memory=200)]),
+                lambda: snapshot(free=900),
+                directory=history,
+            )
+            monitor.observe = observe
+            monitor.start()
+            assert monitor.thread is not None
+            try:
+                self.assertTrue(observing.wait(2))
+                with mock.patch('showco.runtime.monitoring.CLOSE_SECONDS', 0.05):
+                    monitor.close()
+                self.assertTrue(monitor.thread.is_alive())
+                self.assertEqual(list(history.iterdir()), [])
+            finally:
+                release.set()
+                monitor.thread.join(timeout=2)
+            self.assertFalse(monitor.thread.is_alive())
+            self.assertEqual(len(list(history.glob('*.jsonl'))), 1)
+
     def test_unexpected_sampler_death_is_visible_and_restarts_on_status(self) -> None:
         recovered = Event()
 

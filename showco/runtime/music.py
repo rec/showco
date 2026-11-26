@@ -3,6 +3,7 @@ from __future__ import annotations
 import subprocess
 import threading
 from collections.abc import Callable
+from concurrent.futures import Future
 from functools import partial
 from pathlib import Path
 from typing import Literal
@@ -21,6 +22,8 @@ from .mixer import MixerSpec
 from .recs import RecsClient
 
 DEFAULT_FADE_SECONDS = 2.0
+SHUTDOWN_CLEANUP_SECONDS = 5.0
+POWEROFF_SECONDS = 3.0
 LOGGER = logging.get_logger(__name__)
 
 
@@ -57,7 +60,9 @@ class MusicConfig(BaseModel, frozen=True):
 
 
 def poweroff_pi() -> None:
-    subprocess.run(['sudo', 'systemctl', 'poweroff'], check=True)
+    subprocess.run(
+        ['sudo', '-n', 'systemctl', 'poweroff'], check=True, timeout=POWEROFF_SECONDS
+    )
 
 
 class MusicController:
@@ -91,6 +96,7 @@ class MusicController:
             else None
         )
         self.phase_lock = threading.Lock()
+        self.cleanup_lock = threading.Lock()
         self.main_usb_confirmed = False
         self.main_usb_error: str | None = None
         self._load_mode()
@@ -292,19 +298,81 @@ class MusicController:
         return self.closing.finish()
 
     def stop(self) -> models.ActionResult:
-        self.close(self.config.fade_seconds)
-        self._save_mode('stopped')
-        self.poweroff()
+        try:
+            self._close_with_deadline(self.config.fade_seconds, save_stopped=True)
+        except (OSError, RuntimeError, ValueError, sounddevice.PortAudioError) as error:
+            warning = f'Show cleanup incomplete: {error}'
+            LOGGER.error('%s', warning)
+        else:
+            warning = None
+        try:
+            self.poweroff()
+        except subprocess.TimeoutExpired:
+            message = 'Pi shutdown request timed out; poweroff is unconfirmed'
+            return models.ActionResult(
+                ok=False, message=f'{message}. {warning}' if warning else message
+            )
+        except (OSError, subprocess.SubprocessError) as error:
+            message = f'Pi shutdown request failed: {error}'
+            return models.ActionResult(
+                ok=False, message=f'{message}. {warning}' if warning else message
+            )
+        message = 'Pi shutdown requested'
         return models.ActionResult(
-            ok=True, message='Music stopped; Pi is shutting down'
+            ok=True, message=f'{message}. {warning}' if warning else message
         )
 
     def close(self, fade_seconds: float = 0.0) -> None:
-        self.closing.stop()
+        self._close_with_deadline(fade_seconds, save_stopped=False)
+
+    def _close_with_deadline(self, fade_seconds: float, *, save_stopped: bool) -> None:
+        if not self.cleanup_lock.acquire(blocking=False):
+            raise TimeoutError('Music cleanup is still running')
+        completed: Future[None] = Future()
+        expired = threading.Event()
+
+        def cleanup() -> None:
+            failure: Exception | None = None
+            try:
+                # The observer owns the player and mixer until finalization exits.
+                self.closing.stop()
+                if not expired.is_set():
+                    try:
+                        self.player.stop(fade_seconds)
+                    finally:
+                        if not expired.is_set():
+                            self.routing.disable()
+                    if save_stopped and not expired.is_set():
+                        self._save_mode('stopped')
+            except (
+                OSError,
+                RuntimeError,
+                ValueError,
+                sounddevice.PortAudioError,
+            ) as error:
+                failure = error
+            finally:
+                self.cleanup_lock.release()
+            if failure is None:
+                completed.set_result(None)
+            else:
+                completed.set_exception(failure)
+
+        worker = threading.Thread(
+            target=cleanup, name='showco-music-close', daemon=True
+        )
         try:
-            self.player.stop(fade_seconds)
-        finally:
-            self.routing.disable()
+            worker.start()
+        except RuntimeError as error:
+            self.cleanup_lock.release()
+            raise OSError('Could not start shutdown cleanup') from error
+        try:
+            completed.result(timeout=SHUTDOWN_CLEANUP_SECONDS)
+        except TimeoutError:
+            if completed.done():
+                return completed.result()
+            expired.set()
+            raise TimeoutError('Timed out waiting for music cleanup') from None
 
     def _restore_room(self) -> None:
         record = self.closing.status().record

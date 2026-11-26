@@ -263,6 +263,8 @@ class ClosingController:
                 return
             assert self.streamo is not None
             remote = self.streamo.status().closing
+            if self._stop.is_set():
+                return
             if remote is None or remote.operation_id != record.operation_id:
                 self._publish(
                     error='Closing status is unavailable or has a different '
