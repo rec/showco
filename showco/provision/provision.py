@@ -43,6 +43,15 @@ class DeployOptions(BaseModel, frozen=True):
         bool,
         tyro.conf.arg(help='Stop a running streamO before replacing its media'),
     ] = False
+    release: bool = Field(
+        default=False, description='Publish needed minor releases, then deploy'
+    )
+    release_only: bool = Field(
+        default=False, description='Publish needed minor releases without deploying'
+    )
+    release_dry: bool = Field(
+        default=False, description='Show current and proposed release versions'
+    )
     repositories: Annotated[list[str] | None, tyro.conf.Positional] = None
     push: bool = False
     sync: bool = False
@@ -123,12 +132,15 @@ def resolved_config(
 
 
 def run(
-    options: DeployOptions, *, provision_config: config.Config | None = None
+    options: DeployOptions,
+    *,
+    provision_config: config.Config | None = None,
+    repositories_prepared: bool = False,
 ) -> int:
     provision_config = provision_config or resolved_config(options)
     from ..deployment import local_update, update
 
-    if not local_update.prepare_local_repositories(
+    if not repositories_prepared and not local_update.prepare_local_repositories(
         update.REPOSITORY_NAMES,
         local_checkout_directory(),
         update.run_command_with_timeout,
@@ -138,7 +150,7 @@ def run(
         sys.exit(
             'ERROR: local repositories are not ready for Raspberry Pi provisioning'
         )
-    if not local_update.refresh_local_dependencies(
+    if not repositories_prepared and not local_update.refresh_local_dependencies(
         update.REPOSITORY_NAMES,
         local_checkout_directory(),
         update.run_command_with_timeout,

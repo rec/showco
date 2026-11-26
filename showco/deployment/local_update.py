@@ -31,12 +31,13 @@ def update_from_provisioning_machine(
     output: TextIO = sys.stdout,
     autosquash: int = 50,
     clear_settings: bool = False,
+    repositories_prepared: bool = False,
 ) -> int:
     run_command = run_command or update.run_command_with_timeout
     provision_config = target_config or update.provisioning_config()
     selected = update.expand_repository_selection(selected)
     local_directory = local_root or provision.local_checkout_directory()
-    if not prepare_local_repositories(
+    if not repositories_prepared and not prepare_local_repositories(
         selected,
         local_directory,
         run_command,
@@ -44,7 +45,9 @@ def update_from_provisioning_machine(
         autosquash=autosquash,
     ):
         return 1
-    if not refresh_local_dependencies(selected, local_directory, run_command, output):
+    if not repositories_prepared and not refresh_local_dependencies(
+        selected, local_directory, run_command, output
+    ):
         return 1
 
     with update.progress_bar(1, output) as progress:

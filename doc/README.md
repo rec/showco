@@ -371,6 +371,22 @@ showco --push recs
 showco --sync recs
 ```
 
+On the development machine, choose at most one release option:
+
+- `showco deploy --release-dry` lists the current and proposed versions in
+  dependency order. It reads the current checkouts and makes no changes.
+- `showco deploy --release-only` prepares and autosquashes the repositories,
+  then publishes the needed releases without deploying to the Pi.
+- `showco deploy --release` publishes the same releases and continues with
+  deployment after they succeed.
+
+A project gets a minor release if its latest commit is outside a release or
+one of its internal dependencies has a newer release than its lockfile pins.
+Dependencies release first. showCo refreshes each dependent project's pins
+before invoking the existing `release.py minor --publish` on the Mac.
+The publisher requires each project being released to have a clean worktree,
+including untracked files.
+
 showCo removes the previous ignored `showco-errors.txt` from its checkout when
 a command starts. If that command fails, it saves the terminal output there as
 well as displaying it. The file may contain operational details, so keep it
