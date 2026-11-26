@@ -48,6 +48,7 @@ class RecsTests(unittest.TestCase):
         self.assertEqual(status.recorded_seconds, 3.0)
         self.assertEqual(status.file_count, 1)
         self.assertEqual(status.channels[0].name, 'Lead')
+        self.assertEqual(status.offline_sources, ['Main instrument'])
         self.assertTrue(status.channels[0].on)
         self.assertEqual(status.errors[0].message, 'disk almost full')
         assert status.disk is not None
@@ -764,6 +765,7 @@ def status_snapshot() -> dict[str, object]:
                 'on': True,
             },
             {'channel': 'Right', 'channels': [2], 'signal': 0.4, 'on': True},
+            {'device': 'Main instrument', 'on': 'offline'},
         ],
         'errors': [
             {

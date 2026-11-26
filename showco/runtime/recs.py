@@ -48,6 +48,15 @@ class RecsClient:
             file_size=recs_channels._float(totals.get('file_size')),
             file_count=_int(totals.get('file_count')),
             channels=recs_channels.channel_levels(rows),
+            offline_sources=list(
+                dict.fromkeys(
+                    name
+                    for row in rows
+                    if row.get('on') == 'offline'
+                    and isinstance(name := row.get('device'), str)
+                    and name
+                )
+            ),
             errors=snapshot.errors,
             snapshot_error=snapshot.error,
             disk=snapshot.disk,

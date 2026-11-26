@@ -94,6 +94,8 @@ class ShowcoApp:
         self.status_lock = threading.Lock()
         self.status_ready = threading.Event()
         self.latest_status: tuple[models.ShowStatus, float] | None = None
+        self.recs_clock_session: float | None = None
+        self.recs_clock_uncertain = False
         self.incident_lock = threading.Lock()
         self.status_storage_lock = threading.Lock()
         self.status_storage_started: float | None = None
@@ -263,14 +265,26 @@ class ShowcoApp:
         else:
             streamo = self.streamo.status()
         recs = self.recs.status()
-        errors_started_at = (
-            recs.session_started_at
-            if recs.session_started_at is not None
-            else self.run_started_at
-        )
-        recs = recs.model_copy(
-            update={'errors': errors_since(recs.errors, errors_started_at)}
-        )
+        session_started_at = recs.session_started_at
+        if session_started_at != self.recs_clock_session:
+            self.recs_clock_session = session_started_at
+            self.recs_clock_uncertain = False
+        previous = self.latest_status
+        previous_at = previous[0].observed_at if previous is not None else None
+        # A session name is a wall-clock label. Once its clock disagrees with
+        # live observations, keep the recorder's warnings for this session.
+        if (
+            session_started_at is not None
+            and session_started_at > observed_at.timestamp()
+        ) or (previous_at is not None and observed_at < previous_at):
+            self.recs_clock_uncertain = True
+        if not self.recs_clock_uncertain:
+            cutoff = (
+                self.run_started_at
+                if session_started_at is None
+                else session_started_at
+            )
+            recs = recs.model_copy(update={'errors': errors_since(recs.errors, cutoff)})
         lyte = (
             self.lyte.status()
             if self.lyte is not None

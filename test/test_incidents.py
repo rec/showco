@@ -160,6 +160,75 @@ def test_changed_recording_fault_requires_a_new_acknowledgement() -> None:
         timeline.acknowledge(acknowledged.name, acknowledged.started_at.isoformat())
 
 
+def test_offline_input_remains_a_live_fault_after_session_rollover() -> None:
+    recs = mock.Mock()
+    session = datetime.fromisoformat('2026-09-07T12:00:00Z').timestamp()
+    recs.status.return_value = status().recs.model_copy(
+        update={
+            'session_started_at': session,
+            'recorded_seconds': 12.0,
+            'offline_sources': ['Main instrument'],
+            'errors': [
+                models.ErrorRecord(
+                    timestamp='2026-09-07T12:01:00Z', message='Device failed'
+                )
+            ],
+        }
+    )
+    app = ShowcoApp(
+        recs,
+        None,
+        rehearsal.RehearsalSystemMonitor(),
+        rehearsal.RehearsalMixersMonitor(),
+    )
+    app.status()
+    recs.status.return_value = recs.status.return_value.model_copy(
+        update={'session_started_at': session + 120, 'recorded_seconds': 13.0}
+    )
+    rolled_over = app.status()
+    assert not rolled_over.recs.errors
+    assert rolled_over.recording_progress.ok
+    assert any(
+        f.name == 'Audio input Main instrument' for f in rolled_over.active_faults
+    )
+    recs.status.return_value = recs.status.return_value.model_copy(
+        update={'offline_sources': []}
+    )
+    assert not any(
+        f.name == 'Audio input Main instrument' for f in app.status().active_faults
+    )
+
+
+def test_backward_clock_step_cannot_hide_new_recorder_warning() -> None:
+    recs = mock.Mock()
+    session = datetime.fromisoformat('2026-09-07T12:00:00Z')
+    recs.status.return_value = status().recs.model_copy(
+        update={'session_started_at': session.timestamp()}
+    )
+    app = ShowcoApp(
+        recs,
+        None,
+        rehearsal.RehearsalSystemMonitor(),
+        rehearsal.RehearsalMixersMonitor(),
+    )
+    with mock.patch('showco.runtime.app.datetime', wraps=datetime) as clock:
+        clock.now.return_value = datetime.fromisoformat('2026-09-07T12:10:00Z')
+        app.status()
+        clock.now.return_value = datetime.fromisoformat('2026-09-07T11:58:00Z')
+        recs.status.return_value = recs.status.return_value.model_copy(
+            update={
+                'errors': [
+                    models.ErrorRecord(
+                        timestamp='2026-09-07T11:57:00Z', message='Capture failed'
+                    )
+                ]
+            }
+        )
+        assert any('Capture failed' in f.message for f in app.status().active_faults)
+        clock.now.return_value = datetime.fromisoformat('2026-09-07T12:11:00Z')
+        assert any('Capture failed' in f.message for f in app.status().active_faults)
+
+
 def test_incident_write_failure_is_logged_once_and_visible_on_show(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:

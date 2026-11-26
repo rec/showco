@@ -89,6 +89,7 @@ class RecsStatus(BaseModel, frozen=True):
     file_size: float | None = None
     file_count: int | None = None
     channels: list[ChannelLevel] = Field(default_factory=list)
+    offline_sources: list[str] = Field(default_factory=list)
     errors: list[ErrorRecord] = Field(default_factory=list)
     snapshot_error: str | None = None
     disk: RecordingDiskStatus | None = None

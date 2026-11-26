@@ -25,6 +25,13 @@ def status(value: models.ShowStatus) -> models.ReadinessStatus:
         _optional_service_check('lyte', value.lyte.service),
         _optional_service_check('streamO', value.streamo.service),
     ]
+    if value.recs.snapshot_available and value.recs.service.state == 'connected':
+        checks.extend(
+            models.ReadinessCheck(
+                name=f'Audio input {s}', ok=False, message='Capture source is offline'
+            )
+            for s in value.recs.offline_sources
+        )
     if value.network is not None:
         checks.insert(
             0,
