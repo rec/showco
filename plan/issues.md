@@ -9,17 +9,6 @@ items reduce resilience or make diagnosis harder. Findings below are based on
 source and existing tests. Resource and hardware scenarios still need the
 acceptance evidence identified under each issue.
 
-## P1: Closing rejection leaves a saved operation with no observer
-
-`ClosingController.request()` persists `credits-requesting` before calling
-`StreamoClient.start_closing()`. A structured `rpc.RemoteError` bypasses both
-its recovery handler and `ShowcoApp.run_action()`'s error handler. The HTTP
-request can end without an action result or normal action log, and the saved
-record can keep the UI in Closing even though no observer was started. Use the
-actual RPC outcome: release a request explicitly rejected before execution,
-and keep observing an uncertain request by its operation ID. Exercise both
-through the action endpoint.
-
 ## P1: A stalled observer or audio device can prevent a requested shutdown
 
 `MusicController.close()` calls `ClosingController.stop()` with an unbounded

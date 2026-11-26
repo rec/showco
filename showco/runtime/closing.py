@@ -9,6 +9,7 @@ from pathlib import Path
 import sounddevice
 from pydantic import BaseModel
 from reccy.configuration import settings
+from reccy.protocol import ipc, rpc
 from reccy.runtime import logging
 
 from ..streamo.client import StreamoClient
@@ -85,7 +86,8 @@ class ClosingController:
 
     def request(self) -> models.ActionResult:
         assert self.streamo is not None
-        previous = self.status().record
+        prior = self.status()
+        previous = prior.record
         if previous is not None and previous.phase != 'teardown-music-playing':
             return models.ActionResult(
                 ok=False,
@@ -107,7 +109,32 @@ class ClosingController:
         self._black_fade_done = False
         try:
             self.streamo.start_closing(record.operation_id)
-        except (ConnectionError, OSError, TimeoutError, ValueError) as error:
+        except (
+            rpc.RemoteError,
+            ConnectionError,
+            OSError,
+            TimeoutError,
+            ValueError,
+        ) as error:
+            outcome = (
+                error.error.outcome
+                if isinstance(error, rpc.RemoteError)
+                else error.outcome
+                if isinstance(error, rpc.TransportError | rpc.RequestTimeout)
+                else None
+            )
+            if outcome == ipc.Outcome.not_started:
+                message = f'Closing request did not start: {error}'
+                try:
+                    if previous is None:
+                        self.clear()
+                    else:
+                        self._save(previous)
+                        self._publish(remote=prior.remote, error=prior.error)
+                except OSError as cleanup_error:
+                    message += f'; cannot restore saved closing state: {cleanup_error}'
+                    self._publish(record=previous, remote=prior.remote, error=message)
+                return models.ActionResult(ok=False, message=message)
             message = (
                 f'Closing request outcome is uncertain: {error}. '
                 'Recording and room mix are unchanged; check the closing status.'

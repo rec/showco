@@ -10,13 +10,36 @@ from unittest import mock
 
 import pytest
 from reccy.configuration import settings
+from reccy.protocol import ipc, rpc
 
-from showco.runtime import closing, models, music
+from showco.runtime import closing, models, music, rehearsal, server
+from showco.runtime.app import ShowcoApp
 from showco.x18 import music as x18_music
 
 
 def result() -> models.ActionResult:
     return models.ActionResult(ok=True, message='ok')
+
+
+def request_closing(app: ShowcoApp) -> models.ActionResult:
+    body = b'action=music-teardown'
+    handler = object.__new__(server.ShowcoHandler)
+    handler.app = app
+    handler.server = mock.Mock(request_slots=threading.BoundedSemaphore(1))
+    handler.path = '/actions'
+    handler.client_address = ('127.0.0.1', 1234)
+    handler.headers = {'Accept': 'application/json', 'Content-Length': str(len(body))}
+    handler.connection = mock.Mock()
+    handler.rfile = io.BytesIO(body)
+    handler.wfile = io.BytesIO()
+    handler.send_response = mock.Mock()
+    handler.send_header = mock.Mock()
+    handler.end_headers = mock.Mock()
+
+    handler.do_POST()
+
+    handler.send_response.assert_called_once_with(200)
+    return models.ActionResult.model_validate_json(handler.wfile.getvalue())
 
 
 def controller(
@@ -458,11 +481,25 @@ def test_credits_keep_recs_running_until_broadcast_completes(
     value.close()
 
 
+@pytest.mark.parametrize(
+    'error',
+    [
+        TimeoutError('reply lost'),
+        rpc.RemoteError(
+            ipc.Error(
+                type='error',
+                message='encoder outcome unknown',
+                outcome=ipc.Outcome.unknown,
+            )
+        ),
+    ],
+)
 def test_uncertain_closing_request_preserves_recording_and_operation(
     tmp_path: Path,
+    error: Exception,
 ) -> None:
     streamo = mock.Mock()
-    streamo.start_closing.side_effect = TimeoutError('reply lost')
+    streamo.start_closing.side_effect = error
     streamo.status.return_value = models.StreamoStatus(
         service=models.ServiceStatus(name='streamo', state='offline')
     )
@@ -474,18 +511,74 @@ def test_uncertain_closing_request_preserves_recording_and_operation(
         master_fader=0.7, input_lr=[1] * 18
     )
 
-    outcome = value.teardown()
+    app = ShowcoApp(
+        recs,
+        streamo,
+        rehearsal.RehearsalSystemMonitor(),
+        rehearsal.RehearsalMixersMonitor(),
+        music_controller=value,
+    )
+    try:
+        outcome = request_closing(app)
 
-    assert not outcome.ok
-    assert 'uncertain' in outcome.message
-    assert value.status().mode == 'closing'
-    assert not value.teardown().ok
-    streamo.start_closing.assert_called_once()
-    assert value.closing.status().record is not None
-    assert value.closing.status().record.operation_id in value.closing.path.read_text()
-    recs.pause_recording.assert_not_called()
-    player.start.assert_not_called()
-    value.close()
+        assert not outcome.ok
+        assert 'uncertain' in outcome.message
+        assert app.recent_actions()[0].result == outcome
+        assert value.status().mode == 'closing'
+        assert not request_closing(app).ok
+        streamo.start_closing.assert_called_once()
+        operation_id = streamo.start_closing.call_args.args[0]
+        assert operation_id in (tmp_path / 'closing.json').read_text()
+        assert value.closing.status().observing
+        recs.pause_recording.assert_not_called()
+        player.start.assert_not_called()
+    finally:
+        value.close()
+
+
+def test_rejected_closing_can_be_retried_without_changing_recording(
+    tmp_path: Path,
+) -> None:
+    streamo = mock.Mock()
+    streamo.start_closing.side_effect = [
+        rpc.RemoteError(
+            ipc.Error(
+                type='error', message='publisher busy', outcome=ipc.Outcome.not_started
+            )
+        ),
+        'accepted',
+    ]
+    streamo.status.return_value = models.StreamoStatus(
+        service=models.ServiceStatus(name='streamo', state='connected'),
+        stream_state='streaming',
+    )
+    path = tmp_path / 'closing.json'
+    value, recs, player, routing = controller(streamo=streamo, path=path)
+    value.mode = 'record'
+    routing.capture_room.return_value = x18_music.RoomScene(
+        master_fader=0.7, input_lr=[1] * 18
+    )
+    app = ShowcoApp(
+        recs,
+        streamo,
+        rehearsal.RehearsalSystemMonitor(),
+        rehearsal.RehearsalMixersMonitor(),
+        music_controller=value,
+    )
+    try:
+        outcome = request_closing(app)
+
+        assert not outcome.ok
+        assert 'did not start: publisher busy' in outcome.message
+        assert app.recent_actions()[0].result == outcome
+        assert value.status().mode == 'record'
+        assert not path.exists()
+        assert request_closing(app).ok
+        assert value.status().mode == 'closing'
+        recs.pause_recording.assert_not_called()
+        player.start.assert_not_called()
+    finally:
+        value.close()
 
 
 def test_failed_credits_leave_recs_recording_and_room_music_off() -> None:
