@@ -915,6 +915,37 @@ class FakeOsc:
         self.applied[path] = value
 
 
+def test_background_usb_drift_repair_is_logged(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    osc = FakeOsc()
+    osc.applied.update(
+        {
+            '/routing/usb/17/src': 36,
+            '/routing/usb/17/pos': 10,
+            '/routing/usb/18/src': 37,
+            '/routing/usb/18/pos': 10,
+        }
+    )
+    value, _, _, _ = controller()
+    value.routing = x18_music.X18MusicRouting(
+        '10.0.0.18', 10_024, [17, 18], osc_factory=lambda host, port: osc
+    )
+    monkeypatch.setattr(music, 'USB_ROUTING_CHECK_SECONDS', 0.02)
+    value.start_usb_routing()
+    try:
+        assert value.status().x18_usb_routing.ok
+        osc.applied['/routing/usb/18/pos'] = 4
+        deadline = time.monotonic() + 2
+        while not caplog.messages and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert value.status().x18_usb_routing.ok
+        assert osc.applied['/routing/usb/18/pos'] == 10
+    finally:
+        value.close()
+    assert sum('Repaired drift in X18 USB 17–18' in m for m in caplog.messages) == 1
+
+
 def test_x18_main_mix_is_sent_to_usb_without_changing_room_controls() -> None:
     osc = FakeOsc()
     osc.applied = {

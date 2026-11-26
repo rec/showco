@@ -174,7 +174,7 @@ class MusicController:
     def _configure_main_usb(self, *, required: bool = False) -> None:
         with self.usb_routing_lock:
             try:
-                self.routing.route_main_to_usb()
+                changed = self.routing.route_main_to_usb()
             except (OSError, ValueError) as error:
                 message = f'Cannot route X18 Main L/R to USB 17–18: {error}'
                 if (
@@ -188,6 +188,11 @@ class MusicController:
                 if required:
                     raise
             else:
+                if changed is True and self.x18_usb_routing is not None:
+                    LOGGER.warning(
+                        'Repaired drift in X18 USB 17–18 capture routing. '
+                        'The recording may contain a different mix before this repair.'
+                    )
                 if self.x18_usb_routing is not None and not self.x18_usb_routing.ok:
                     LOGGER.info('X18 Main L/R routing to USB 17–18 verified')
                 self.x18_usb_routing = models.ReadinessCheck(
