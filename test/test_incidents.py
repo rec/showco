@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import unittest
+from datetime import datetime
 from pathlib import Path
 from unittest import mock
 
 import pytest
+from reccy.configuration import settings
 
-from showco.runtime import incidents, models, rehearsal
+from showco.runtime import gui_schema, incidents, models, rehearsal, views
 from showco.runtime.app import ShowcoApp
 
 
@@ -75,3 +77,111 @@ def test_empty_observed_baseline_survives_restart(tmp_path: Path) -> None:
 
     assert restored.previous == {}
     assert restored.load_error is None
+
+
+def test_current_session_input_failure_survives_panel_restart_while_audio_advances(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    base = status().recs.model_copy(
+        update={
+            'session_started_at': datetime.fromisoformat(
+                '2026-09-07T12:00:00Z'
+            ).timestamp(),
+            'recorded_seconds': 12.0,
+            'errors': [
+                models.ErrorRecord(
+                    timestamp='2026-09-07T11:50:00Z', message='old error'
+                ),
+                models.ErrorRecord(
+                    timestamp='2026-09-07T12:10:00Z',
+                    message='Device Main instrument failed',
+                ),
+            ],
+        }
+    )
+    recs = mock.Mock()
+    recs.status.side_effect = [base, base.model_copy(update={'recorded_seconds': 13.0})]
+    app = ShowcoApp(
+        recs,
+        None,
+        rehearsal.RehearsalSystemMonitor(),
+        rehearsal.RehearsalMixersMonitor(),
+    )
+    app.run_started_at = datetime.fromisoformat('2026-09-07T12:15:00Z').timestamp()
+
+    app.status()
+    show = app.status()
+
+    assert show.recording_progress.ok
+    assert [e.message for e in show.recs.errors] == ['Device Main instrument failed']
+    assert any(f.message == 'Device Main instrument failed' for f in show.active_faults)
+    assert (
+        caplog.messages.count('recs recording errors: Device Main instrument failed')
+        == 1
+    )
+
+
+def test_changed_recording_fault_requires_a_new_acknowledgement() -> None:
+    timeline = incidents.IncidentTimeline()
+    show = status()
+    first = show.model_copy(
+        update={
+            'recs': show.recs.model_copy(
+                update={
+                    'errors': [
+                        models.ErrorRecord(timestamp='', message='Device A failed')
+                    ]
+                }
+            )
+        }
+    )
+    timeline.observe(first)
+    acknowledged = timeline.faults[0]
+    timeline.acknowledge(acknowledged.name, acknowledged.started_at.isoformat())
+    changed = show.model_copy(
+        update={
+            'recs': show.recs.model_copy(
+                update={
+                    'errors': [
+                        *first.recs.errors,
+                        models.ErrorRecord(timestamp='', message='Device B failed'),
+                    ]
+                }
+            )
+        }
+    )
+
+    timeline.observe(changed)
+
+    assert 'Device B failed' in timeline.faults[0].message
+    assert not timeline.faults[0].acknowledged
+    with pytest.raises(ValueError, match='no longer current'):
+        timeline.acknowledge(acknowledged.name, acknowledged.started_at.isoformat())
+
+
+def test_incident_write_failure_is_logged_once_and_visible_on_show(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    app = ShowcoApp(
+        rehearsal.RehearsalRecsClient(),
+        None,
+        rehearsal.RehearsalSystemMonitor(),
+        rehearsal.RehearsalMixersMonitor(),
+        state_directory=tmp_path,
+    )
+    with mock.patch.object(
+        settings, 'write_json_model', side_effect=OSError('full disk')
+    ):
+        app.status()
+        show = app.status()
+
+    page = gui_schema.load_gui(gui_schema.DEFAULT_GUI_PATH).page('show')
+    fragment = views.configured_page(page, show)
+    assert 'Cannot save incident history: full disk' in fragment
+    assert (
+        sum(
+            m.startswith('Show monitoring: Cannot save incident history: full disk')
+            for m in caplog.messages
+        )
+        == 1
+    )

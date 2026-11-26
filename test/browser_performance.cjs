@@ -10,6 +10,7 @@ class Element {
   append(...children) { this.children.push(...children); }
   replaceChildren(...children) { this.children = children; this.textContent = ''; }
   addEventListener(name, callback) { this.listeners[name] = callback; }
+  setAttribute(name, value) { this[name] = value; }
   querySelector() { return confirmation; }
 }
 
@@ -109,13 +110,21 @@ async function test() {
   assert.equal(elements.get('performance-result').textContent, 'marked');
 
   pendingAction = false;
-  status.active_faults = [{name: 'recs', message: 'offline', next_action: 'Inspect Health',
-    started_at: '2026-09-16T10:00:00Z', acknowledged: true}];
+  status.active_faults = [
+    {name: 'recs', message: 'offline', next_action: 'Inspect Health',
+      started_at: '2026-09-16T10:00:00Z', acknowledged: true},
+    {name: 'recs recording errors', message: 'Instrument input failed',
+      next_action: 'Check the input', started_at: '2026-09-16T10:00:01Z', acknowledged: false},
+  ];
+  status.monitoring_error = 'Cannot save incident history: full disk';
   await vm.runInContext('pollPerformance()', context); await flush();
   const banner = elements.get('fault-banner');
   assert.equal(banner.className, 'failed');
-  assert.match(banner.children[1].textContent, /Acknowledged; still unresolved/);
-  assert.equal(banner.children.length, 3);
+  const [recorder, input] = banner.children[0].children;
+  assert.match(recorder.children[1].textContent, /Acknowledged; still unresolved/);
+  assert.match(input.children[0].textContent, /Instrument input failed/);
+  assert.equal(input.children[1].textContent, 'Acknowledge');
+  assert.match(elements.get('monitoring-error').textContent, /full disk/);
 
   context.fetch = async () => {throw new Error('offline');};
   await vm.runInContext('pollPerformance()', context); await flush();

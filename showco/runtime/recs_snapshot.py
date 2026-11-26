@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 import threading
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import TypeIs
 
@@ -21,6 +22,7 @@ class SnapshotStatus(BaseModel, frozen=True):
     error: str | None = None
     has_snapshot: bool = False
     paused: bool = False
+    session_started_at: float | None = None
     rows: list[dict[str, object]] = Field(default_factory=list)
     errors: list[models.ErrorRecord] = Field(default_factory=list)
     disk: models.RecordingDiskStatus | None = None
@@ -116,6 +118,7 @@ def snapshot_status(value: object) -> SnapshotStatus | str:
         service_state='connected',
         has_snapshot=True,
         paused=paused,
+        session_started_at=session_start(value.get('session_directory')),
         rows=rows,
         errors=errors,
         disk=disk,
@@ -127,6 +130,21 @@ def snapshot_status(value: object) -> SnapshotStatus | str:
 
 def object_dict(value: object) -> TypeIs[dict[str, object]]:
     return isinstance(value, dict) and all(isinstance(k, str) for k in value)
+
+
+def session_start(value: object) -> float | None:
+    if not isinstance(value, str):
+        return None
+    # recs names sessions YYYY/MM/DD/HH-MM-SS, with a suffix for collisions.
+    directory = Path(value)
+    date = '/'.join(directory.parts[-4:-1])
+    clock = directory.name.partition('_')[0]
+    try:
+        local = datetime.strptime(f'{date}/{clock}', '%Y/%m/%d/%H-%M-%S')
+        # Keep errors from either occurrence of a repeated local time.
+        return min(local.timestamp(), local.replace(fold=1).timestamp())
+    except (OSError, OverflowError, ValueError):
+        return None
 
 
 def osc_status(value: object) -> list[models.RecorderStatus]:

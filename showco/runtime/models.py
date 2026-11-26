@@ -83,6 +83,7 @@ class RecsStatus(BaseModel, frozen=True):
     service: ServiceStatus
     snapshot_available: bool = False
     paused: bool = False
+    session_started_at: float | None = None
     elapsed_seconds: float | None = None
     recorded_seconds: float | None = None
     file_size: float | None = None

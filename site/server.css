@@ -188,9 +188,11 @@ button[aria-busy="true"] { cursor: wait; }
 .show-controls { border: 1px solid #888; padding: .6rem; margin-bottom: .6rem; }
 .show-controls p { font-size: .85rem; margin: .3rem 0; }
 #performance-lock-form { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
-#fault-banner { height: 9rem; overflow: auto; box-sizing: border-box; padding: .7rem; border: 2px solid currentColor; }
+#fault-banner { max-height: 16rem; overflow: auto; box-sizing: border-box; padding: .7rem; border: 2px solid currentColor; }
+#fault-banner ul { margin: 0 0 .4rem; padding-left: 1.4rem; }
 #fault-banner p { margin: .3rem 0; }
-#fault-banner button { margin-left: 1rem; min-height: 2.75rem; }
+#fault-banner button { margin-right: .4rem; min-height: 2.75rem; }
+#monitoring-error:empty { display: none; }
 .performance-status { height: 10rem; overflow: auto; display: grid; grid-template-columns: 1fr 1fr; gap: .4rem; }
 .performance-status p { margin: .3rem 0; overflow-wrap: anywhere; }
 .performance-buttons { display: grid; grid-template-columns: repeat(2, 1fr); gap: .7rem; }

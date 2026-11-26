@@ -9,20 +9,6 @@ items reduce resilience or make diagnosis harder. Findings below are based on
 source and existing tests. Resource and hardware scenarios still need the
 acceptance evidence identified under each issue.
 
-## P1: Capture failure and operational errors can miss the front page and log
-
-`fault_details()` observes aggregate audio progress and readiness but ignores
-`recs.errors`, including source failures when other inputs still advance.
-`errors_since()` drops recs errors older than the showCo process, including
-evidence from an ongoing session after a panel restart. `views.page()` omits
-the monitoring error element on Show, and `IncidentTimeline.observe()` stores
-fault transitions in JSON without logging them. The browser banner renders
-only one active fault at a time and acknowledgements are keyed by broad names.
-Keep fresh live failures distinct from history, expose source and monitoring
-faults on Show, and log changes with bounded deduplication. Regress one failed
-instrument alongside an advancing second input, a panel restart, and a state
-write failure.
-
 ## P1: Broadcast health can replace Stop with Retry while publishing
 
 `StreamoStatus.toggle_label` and `toggle_starts_stream` give health errors

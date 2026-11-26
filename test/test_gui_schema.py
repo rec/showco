@@ -72,7 +72,7 @@ def test_show_page_has_destination_faults_toggle_and_teardown(
     assert 'Recording destination: unavailable' in html
     assert 'id="performance-lock-form"' not in html
     assert 'id="connection-status"' not in html
-    assert 'id="monitoring-error"' not in html
+    assert 'id="monitoring-error"' in html
     assert 'id="twitch-status"' not in html
     assert 'function updateConfiguredActions(status)' in html
     assert '<button>End show</button>' in html

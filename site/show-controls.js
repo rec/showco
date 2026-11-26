@@ -8,6 +8,7 @@ function showControlsUnavailable() {
   if (lock) lock.textContent = 'Performance lock: unknown (status unavailable)';
   const banner = document.getElementById('fault-banner');
   if (banner) {
+    delete banner.dataset.faults;
     banner.className = 'failed';
     banner.textContent = 'Live state unavailable. Reconnect before relying on these controls.';
   }
@@ -63,34 +64,45 @@ function updateShowControls(status) {
   const banner = document.getElementById('fault-banner');
   if (!banner) return;
   const faults = status.active_faults;
+  const signature = JSON.stringify(faults);
+  if (banner.dataset.faults === signature) return;
+  banner.dataset.faults = signature;
   banner.className = faults.length ? 'failed' : 'ok';
   banner.replaceChildren();
   if (!faults.length) {
     banner.textContent = 'No active observed faults. Physical output still needs confirmation.';
     return;
   }
-  // Server order keeps service and disk failures ahead of audio-write observations.
-  const fault = faults.find(value => !value.acknowledged) || faults[0];
-  const detail = document.createElement('p');
-  detail.textContent = `${fault.name}: ${fault.message}. Since ${new Date(fault.started_at).toLocaleString()}. ${fault.next_action}`;
-  const summary = document.createElement('p');
-  summary.textContent = `${faults.length} active fault(s). ${fault.acknowledged ? 'Acknowledged; still unresolved.' : ''}`;
+  const list = document.createElement('ul');
+  for (const fault of faults) {
+    const item = document.createElement('li');
+    const detail = document.createElement('p');
+    detail.textContent = `${fault.name}: ${fault.message}. Since ${new Date(fault.started_at).toLocaleString()}. ${fault.next_action}`;
+    item.append(detail);
+    if (fault.acknowledged) {
+      const notice = document.createElement('span');
+      notice.textContent = 'Acknowledged; still unresolved.';
+      item.append(notice);
+    } else {
+      const button = document.createElement('button');
+      const result = document.createElement('span');
+      result.setAttribute('role', 'status');
+      button.textContent = 'Acknowledge';
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        try {
+          await showAction({action: 'acknowledge-fault', name: fault.name, started_at: fault.started_at});
+          await requestStatus();
+        } catch (error) {result.textContent = error.message; button.disabled = false;}
+      });
+      item.append(button, result);
+    }
+    list.append(item);
+  }
   const link = document.createElement('a');
   link.href = '/health';
   link.textContent = 'Inspect health and history';
-  banner.append(detail, summary, link);
-  if (!fault.acknowledged) {
-    const button = document.createElement('button');
-    button.textContent = 'Acknowledge';
-    button.addEventListener('click', async () => {
-      button.disabled = true;
-      try {
-        await showAction({action: 'acknowledge-fault', name: fault.name, started_at: fault.started_at});
-        updateShowControls(await requestStatus());
-      } catch (error) {summary.textContent = error.message; button.disabled = false;}
-    });
-    banner.append(button);
-  }
+  banner.append(list, link);
 }
 
 const lockForm = document.getElementById('performance-lock-form');

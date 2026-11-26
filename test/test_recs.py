@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 import unittest
+from datetime import datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from threading import Event
@@ -40,6 +41,9 @@ class RecsTests(unittest.TestCase):
         self.assertTrue(status.snapshot_available)
         self.assertNotIn('recording', status.model_dump())
         self.assertTrue(status.paused)
+        self.assertEqual(
+            status.session_started_at, datetime(2026, 9, 7, 11).timestamp()
+        )
         self.assertEqual(status.elapsed_seconds, 4.0)
         self.assertEqual(status.recorded_seconds, 3.0)
         self.assertEqual(status.file_count, 1)
@@ -749,6 +753,7 @@ class RecsTests(unittest.TestCase):
 def status_snapshot() -> dict[str, object]:
     return {
         'type': 'status_snapshot_result',
+        'session_directory': '/recordings/-default-/2026/09/07/11-00-00_1',
         'rows': [
             {'time': 4.0, 'recorded': 3.0, 'file_count': 1},
             {'device': 'Mic'},

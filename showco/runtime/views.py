@@ -109,6 +109,7 @@ def configured_page(
         page_spec.name,
         body,
         script=script,
+        monitoring_error=status.monitoring_error,
     )
 
 
@@ -422,7 +423,9 @@ def playback_position(playback: models.PlaybackStatus) -> str:
     return f'{position} / {duration}'
 
 
-def page(page_id: str, body: str, *, script: str = '') -> str:
+def page(
+    page_id: str, body: str, *, script: str = '', monitoring_error: str | None = None
+) -> str:
     document = gui_schema.current_gui()
     page_spec = document.page(page_id)
     navigation = ''.join(
@@ -435,7 +438,6 @@ def page(page_id: str, body: str, *, script: str = '') -> str:
         f'<script>{script or "pollShowControls();"}</script>'
     )
     protection = ''
-    monitoring = ''
     if page_id != 'show':
         protection = """<p id="connection-status" role="status">Connecting...</p>
     <section class="show-controls" aria-label="Performance protection">
@@ -451,7 +453,7 @@ def page(page_id: str, body: str, *, script: str = '') -> str:
          and shutdown. Separate CLI and deployment commands are not locked.</p>
       <p id="lock-result" role="status"></p>
     </section>"""
-        monitoring = '<p id="monitoring-error" role="status"></p>'
+    monitoring = html.escape(monitoring_error or '')
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -468,7 +470,7 @@ def page(page_id: str, body: str, *, script: str = '') -> str:
   <main data-page="{html.escape(page_id)}">{protection}
     <section id="fault-banner" class="failed" aria-live="polite">
       Checking for faults...</section>
-    {monitoring}
+    <p id="monitoring-error" class="failed" role="status">{monitoring}</p>
     {body}</main>
   <script>{site_file('shutdown-action.js')}</script>
   {page_script}

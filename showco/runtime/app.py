@@ -93,6 +93,7 @@ class ShowcoApp:
         self.incident_lock = threading.Lock()
         self.soundcheck_lock = threading.Lock()
         self.soundcheck_error: str | None = None
+        self.reported_monitoring_error: str | None = None
         self.performance_lock = performance.PerformanceLock(
             state_directory / 'performance.json' if state_directory else None
         )
@@ -204,8 +205,13 @@ class ShowcoApp:
         else:
             streamo = self.streamo.status()
         recs = self.recs.status()
+        errors_started_at = (
+            recs.session_started_at
+            if recs.session_started_at is not None
+            else self.run_started_at
+        )
         recs = recs.model_copy(
-            update={'errors': errors_since(recs.errors, self.run_started_at)}
+            update={'errors': errors_since(recs.errors, errors_started_at)}
         )
         lyte = (
             self.lyte.status()
@@ -255,32 +261,41 @@ class ShowcoApp:
             observed = previous[0].incidents if previous else []
             faults = previous[0].active_faults if previous else []
         cable_status = self.cable_test_status()
+        monitoring_error = (
+            '; '.join(
+                error
+                for error in (
+                    self.performance_lock.error,
+                    self.incidents.storage_error,
+                    self.soundcheck_error,
+                    self.setlist.load_error,
+                    self.lighting.load_error,
+                    self.soundcheck.load_error,
+                    self.recovery.load_error,
+                    self.system.observation_error
+                    if isinstance(self.system, PerformanceMonitor)
+                    else None,
+                    self.system.storage_error
+                    if isinstance(self.system, PerformanceMonitor)
+                    else None,
+                )
+                if error
+            )
+            or None
+        )
+        if monitoring_error != self.reported_monitoring_error:
+            if monitoring_error:
+                LOGGER.error('Show monitoring: %s', monitoring_error)
+            else:
+                LOGGER.info('Show monitoring recovered')
+            self.reported_monitoring_error = monitoring_error
         return status.model_copy(
             update={
                 'incidents': observed,
                 'active_faults': faults,
                 'performance_locked': self.performance_lock.locked,
                 'observed_at': observed_at,
-                'monitoring_error': '; '.join(
-                    error
-                    for error in (
-                        self.performance_lock.error,
-                        self.incidents.storage_error,
-                        self.soundcheck_error,
-                        self.setlist.load_error,
-                        self.lighting.load_error,
-                        self.soundcheck.load_error,
-                        self.recovery.load_error,
-                        self.system.observation_error
-                        if isinstance(self.system, PerformanceMonitor)
-                        else None,
-                        self.system.storage_error
-                        if isinstance(self.system, PerformanceMonitor)
-                        else None,
-                    )
-                    if error
-                )
-                or None,
+                'monitoring_error': monitoring_error,
                 'input_checks': readiness.input_checks(recs.channels),
                 'cable_test': cable_status,
                 'recording_controls_available': not self.action_in_progress

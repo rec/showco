@@ -42,6 +42,7 @@ class RecsClient:
             ),
             snapshot_available=snapshot.has_snapshot,
             paused=snapshot.paused,
+            session_started_at=snapshot.session_started_at,
             elapsed_seconds=recs_channels._float(totals.get('time')),
             recorded_seconds=recs_channels._float(totals.get('recorded')),
             file_size=recs_channels._float(totals.get('file_size')),

@@ -5,8 +5,12 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 from reccy.configuration import settings
+from reccy.runtime import logging
 
 from . import models
+
+LOGGER = logging.get_logger(__name__)
+RECS_FAULT_MESSAGES = 8
 
 
 class IncidentHistory(BaseModel, frozen=True):
@@ -41,31 +45,29 @@ class IncidentTimeline:
         now = datetime.now().astimezone()
         previous_faults = {f.name: f for f in self.faults}
         faults = fault_details(status)
-        self.faults = [
-            models.ActiveFault(
-                name=n,
-                started_at=previous_faults[n].started_at
-                if n in previous_faults
-                else now,
-                message=m,
-                next_action=a,
-                acknowledged=previous_faults[n].acknowledged
-                if n in previous_faults
-                else False,
-            )
-            for n, m, a in faults[:100]
-        ]
-        for fault in self.faults:
-            if fault.name not in previous_faults:
-                self.incidents.insert(
-                    0,
-                    models.Incident(
-                        timestamp=now, message=f'{fault.name}: {fault.message}'
-                    ),
+        self.faults = []
+        for name, message, next_action in faults[:100]:
+            previous = previous_faults.get(name)
+            if previous is not None and previous.message == message:
+                fault = previous.model_copy(update={'next_action': next_action})
+            else:
+                fault = models.ActiveFault(
+                    name=name, started_at=now, message=message, next_action=next_action
                 )
+                LOGGER.error('%s: %s', name, message)
+                self.incidents.insert(
+                    0, models.Incident(timestamp=now, message=f'{name}: {message}')
+                )
+            self.faults.append(fault)
         for name in previous_faults.keys() - {f.name for f in self.faults}:
+            message = (
+                'no errors in the current session'
+                if name == 'recs recording errors'
+                else 'recovered'
+            )
+            LOGGER.info('%s: %s', name, message)
             self.incidents.insert(
-                0, models.Incident(timestamp=now, message=f'{name}: recovered')
+                0, models.Incident(timestamp=now, message=f'{name}: {message}')
             )
         if self.previous is not None:
             for name, value in current.items():
@@ -139,6 +141,19 @@ def fault_details(status: models.ShowStatus) -> list[tuple[str, str, str]]:
         for c in status.readiness.checks
         if not c.ok
     ]
+    if status.recs.errors:
+        messages = list(dict.fromkeys(e.message for e in reversed(status.recs.errors)))
+        detail = '. '.join(messages[:RECS_FAULT_MESSAGES])
+        if len(messages) > RECS_FAULT_MESSAGES:
+            detail += f'. {len(messages) - RECS_FAULT_MESSAGES} more on Health'
+        faults.insert(
+            0,
+            (
+                'recs recording errors',
+                detail,
+                'Check the affected inputs and storage. Open Health for details.',
+            ),
+        )
     if (
         status.recs.service.state == 'connected'
         and status.recs.snapshot_available
