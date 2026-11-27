@@ -23,9 +23,35 @@ def main(argv: list[str] | None = None) -> int:
 
 def run(options: provision.DeployOptions) -> int:
     selected = update.selected_repositories(options.repositories or [])
+    split = options.no_media or options.media_only
+    if options.no_media and options.media_only:
+        sys.exit('ERROR: choose either --no-media or --media-only')
     release_requested = sum(
         (options.release, options.release_only, options.release_dry)
     )
+    if split and (
+        options.repositories is not None
+        or options.push
+        or options.sync
+        or options.remote
+        or options.target_machine
+        or options.upgrade
+        or release_requested
+        or options.clear_settings
+    ):
+        sys.exit(
+            'ERROR: split provisioning cannot be combined with update, upgrade, '
+            'or release options'
+        )
+    if options.no_media and (
+        options.stop_streamo
+        or options.movie
+        or options.photos
+        or options.audio
+        or options.setup
+        or options.teardown
+    ):
+        sys.exit('ERROR: pass media selections and --stop-streamo to --media-only')
     if release_requested > 1:
         sys.exit('ERROR: choose one of --release, --release-only, and --release-dry')
     if release_requested and (
@@ -52,6 +78,8 @@ def run(options: provision.DeployOptions) -> int:
         options.target_machine
         or machine_role.machine_role() == machine_role.TARGET_ROLE
     ):
+        if split:
+            sys.exit('ERROR: split provisioning must run on the provisioning machine')
         if release_requested:
             sys.exit('ERROR: release options must run on the development machine')
         if (
@@ -80,7 +108,8 @@ def run(options: provision.DeployOptions) -> int:
     update_requested = (
         options.repositories is not None or options.autosquash is not None
     ) and not (
-        options.movie
+        split
+        or options.movie
         or options.photos
         or options.audio
         or options.setup
@@ -146,7 +175,10 @@ def run(options: provision.DeployOptions) -> int:
     selections = provision_config.media
     if provision_config.movie is not None:
         selections = selections.model_copy(update={'movie': None})
-    media.save_sources(options.config_path, selections)
+    if not options.no_media:
+        media.save_sources(options.config_path, selections)
+    if split:
+        return provision.run(options, provision_config=provision_config)
     cards = card.attached_imager_cards()
     if len(cards) > 1:
         sys.exit(

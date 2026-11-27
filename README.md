@@ -46,6 +46,8 @@ Run these on the provisioning machine unless stated otherwise:
 
 ```bash
 showco                         # provision if configuration changed, else update
+showco --no-media              # prepare an existing Pi without media or service restarts
+showco --media-only            # upload media and finish provisioning over local SSH
 showco deploy                      # same as showco
 showco deploy recs showco          # update selected repositories and consumers
 showco deploy --remote             # update the target directly from GitHub
@@ -111,3 +113,12 @@ photos and feed cursors. Old versions and failed staging directories are retaine
 this change does not automatically delete them. Local staging requires space for
 a complete media package, and selected files changing after preflight abort the
 transfer. These guarantees require the normal host-owned deployment directories.
+
+For a split provision, run `showco --no-media` first on a Pi with the required
+system packages already installed. This prepares the target software while
+services keep running. Then run `showco --media-only` with the same configuration
+to transfer media and apply the remaining provisioning steps, including service
+changes and any required reboot. The second pass needs SSH access to the Pi and
+works without internet access. If a movie needs rendering, the provisioning
+machine must have a cached render or the renderer's dependencies available offline.
+Pass explicit media selections to the second command.

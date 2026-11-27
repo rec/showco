@@ -4,6 +4,11 @@ set -euo pipefail
 PHASE_STARTED_SECONDS=0
 UPGRADE_PACKAGES=${UPGRADE_PACKAGES:-false}
 ARGON_ONE=${ARGON_ONE:-true}
+PROVISION_PHASE=${PROVISION_PHASE:-full}
+PROVISION_UV_FLAGS=
+if [[ "$PROVISION_PHASE" == finish ]]; then
+  PROVISION_UV_FLAGS='--offline --no-sync'
+fi
 
 install_base_packages() {
   local state_file="/var/lib/showco/system-packages.sha256"
@@ -28,7 +33,14 @@ install_base_packages() {
     return
   fi
 
-  sudo apt-get update
+  if [[ "$PROVISION_PHASE" == prepare ]]; then
+    if [[ ${#missing[@]} -gt 0 ]]; then
+      printf 'ERROR: split provisioning requires these packages installed: %s\n' "${missing[*]}" >&2
+      return 1
+    fi
+  else
+    sudo apt-get update
+  fi
   if [[ "$UPGRADE_PACKAGES" == true ]]; then
     sudo apt-get upgrade -y
   fi
@@ -44,6 +56,10 @@ install_argon_one() {
     && sudo systemctl is-enabled --quiet argononed.service; then
     printf 'Argon ONE software is already installed.\n'
     return
+  fi
+  if [[ "$PROVISION_PHASE" == prepare ]]; then
+    printf 'ERROR: split provisioning requires the configured Argon ONE software already installed.\n' >&2
+    return 1
   fi
   curl --fail --location --silent --show-error https://download.argon40.com/argon1.sh \
     | bash

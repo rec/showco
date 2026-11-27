@@ -297,10 +297,12 @@ def test_photos_enable_disabled_overlays_and_reset_incompatible_weights() -> Non
     ('rsync_probe_status', 'progress_flag'),
     [(0, '--info=progress2'), (1, '--progress')],
 )
+@pytest.mark.parametrize('offline', [False, True])
 def test_media_transfer_keeps_sources_separate_and_preserves_streamo_inbox(
     tmp_path: Path,
     rsync_probe_status: int,
     progress_flag: str,
+    offline: bool,
 ) -> None:
     photos = tmp_path / "performer's photos"
     photos.mkdir()
@@ -326,7 +328,7 @@ def test_media_transfer_keeps_sources_separate_and_preserves_streamo_inbox(
         operations.attach_mock(remote, 'remote')
         operations.attach_mock(copy, 'copy')
         probe.return_value.returncode = rsync_probe_status
-        media.synchronize(configuration)
+        media.synchronize(configuration, offline=offline)
     assert [c[0] for c in operations.mock_calls] == [
         'remote',
         'remote',
@@ -335,6 +337,7 @@ def test_media_transfer_keeps_sources_separate_and_preserves_streamo_inbox(
         'remote',
     ]
     preparation = shlex.split(remote.call_args_list[1].args[1])
+    assert ('apt-get' not in remote.call_args_list[0].args[1]) is offline
     assert preparation[:-1] == ['mkdir', '--']
     assert '/media/versions/.staging-' in preparation[-1]
     command = copy.call_args.args[0]

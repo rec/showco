@@ -113,7 +113,7 @@ configure_network() {
   set +e
   sudo -H -u "$SHOW_USER" env PATH="/home/$SHOW_USER/.local/bin:$PATH" \
     bash -lc \
-      "cd '$ROOT/showco' && uv run --locked showco run network-config --config '$config_file' --secrets '$secrets_file' --ssh-peer '${SSH_CLIENT%% *}'"
+      "cd '$ROOT/showco' && uv run --locked $PROVISION_UV_FLAGS showco run network-config --config '$config_file' --secrets '$secrets_file' --ssh-peer '${SSH_CLIENT%% *}'"
   status=$?
   set -e
   rm -f "$config_file" "$secrets_file"

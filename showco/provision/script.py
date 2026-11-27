@@ -16,7 +16,11 @@ REMOTE_SCRIPT = '\n'.join(
 
 
 def remote_command(
-    provision_config: config.Config, remote_script: str, *, upgrade: bool = False
+    provision_config: config.Config,
+    remote_script: str,
+    *,
+    upgrade: bool = False,
+    phase: str = 'full',
 ) -> str:
     private = config.internal_wifi(provision_config)
     external = config.networks_at(provision_config, 'external', 'wifi')
@@ -53,6 +57,7 @@ def remote_command(
         ),
         'ARGON_ONE': shell_bool(provision_config.argon_one),
         'UPGRADE_PACKAGES': shell_bool(upgrade),
+        'PROVISION_PHASE': phase,
         'X18': shell_bool(x18_network is not None),
         'SWAP_WIFI': shell_bool(provision_config.network.swap_wifi),
         'NETWORK_TOPOLOGY': provision_config.network.topology,
@@ -85,7 +90,7 @@ def remote_command(
         'SHOWCO_X18_PORT': str(x18_mixer.port) if x18_network and x18_mixer else '',
         'SHOWCO_MIXERS_TOML': mixers_toml(provision_config.mixers),
         'SHOWCO_STREAM_MEDIA_ARGS': shlex.join(
-            media.streamo_arguments(provision_config)
+            media.streamo_arguments(provision_config) if phase != 'prepare' else []
         ),
         'SHOWCO_STREAM_SETTINGS': media.streamo_settings(provision_config),
         'SHOWCO_AUDIO_ARGS': shlex.join(

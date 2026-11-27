@@ -91,7 +91,7 @@ $RECS_OSC_NODES_TOML")
   sudo -H -u "$SHOW_USER" \
     env XDG_RUNTIME_DIR="/run/user/$uid" \
     PATH="$ROOT/recs/.venv/bin:/home/$SHOW_USER/.local/bin:$PATH" \
-    bash -lc "cd '$ROOT/recs' && uv run --locked recs daemon install $quoted_args"
+    bash -lc "cd '$ROOT/recs' && uv run --locked $PROVISION_UV_FLAGS recs daemon install $quoted_args"
   user_systemctl restart recs.service
   record_service_state recs "$input"
 }
@@ -114,7 +114,7 @@ $SHOWCO_MIXERS_TOML")
   sudo -H -u "$SHOW_USER" \
     env XDG_RUNTIME_DIR="/run/user/$uid" \
     PATH="$ROOT/showco/.venv/bin:/home/$SHOW_USER/.local/bin:$PATH" \
-    bash -lc "mkdir -p /home/$SHOW_USER/.config/showco && printf '%s' \"$SHOWCO_MIXERS_TOML\" > /home/$SHOW_USER/.config/showco/mixers.toml && cd '$ROOT/showco' && uv run --locked showco run install-service --root '$ROOT' $(showco_args)"
+    bash -lc "mkdir -p /home/$SHOW_USER/.config/showco && printf '%s' \"$SHOWCO_MIXERS_TOML\" > /home/$SHOW_USER/.config/showco/mixers.toml && cd '$ROOT/showco' && uv run --locked $PROVISION_UV_FLAGS showco run install-service --root '$ROOT' $(showco_args)"
   user_systemctl restart showco.service
   record_service_state showco "$input"
 }
@@ -134,7 +134,7 @@ migrate_streamo_configuration() {
   sudo -H -u "$SHOW_USER" \
     env XDG_RUNTIME_DIR="/run/user/$uid" \
     PATH="$ROOT/showco/.venv/bin:/home/$SHOW_USER/.local/bin:$PATH" \
-    bash -lc "cd '$ROOT/showco' && uv run --locked showco run streamo-config --source $quoted_source --target $quoted_target"
+    bash -lc "cd '$ROOT/showco' && uv run --locked $PROVISION_UV_FLAGS showco run streamo-config --source $quoted_source --target $quoted_target"
   printf 'Converted Twitcho configuration to streamO TOML.\n'
 }
 
@@ -149,7 +149,7 @@ configure_streamo_media() {
   sudo -H -u "$SHOW_USER" \
     env PATH="$ROOT/showco/.venv/bin:/home/$SHOW_USER/.local/bin:$PATH" \
     SHOWCO_STREAM_SETTINGS="$SHOWCO_STREAM_SETTINGS" \
-    bash -lc "cd '$ROOT/showco' && uv run --locked python -m showco.provision.media --config /home/$SHOW_USER/.config/streamo/config.toml $SHOWCO_STREAM_MEDIA_ARGS"
+    bash -lc "cd '$ROOT/showco' && uv run --locked $PROVISION_UV_FLAGS python -m showco.provision.media --config /home/$SHOW_USER/.config/streamo/config.toml $SHOWCO_STREAM_MEDIA_ARGS"
 }
 
 uninstall_twitcho_service() {
@@ -189,12 +189,12 @@ install_streamo_service() {
   uid=$(id -u "$SHOW_USER")
   sudo -H -u "$SHOW_USER" \
     env PATH="$ROOT/streamo/.venv/bin:/home/$SHOW_USER/.local/bin:$PATH" \
-    bash -lc "cd '$ROOT/streamo' && uv run --locked streamo daemon validate --config $quoted_config" || return "$?"
+    bash -lc "cd '$ROOT/streamo' && uv run --locked ${PROVISION_UV_FLAGS:-} streamo daemon validate --config $quoted_config" || return "$?"
   user_systemctl unmask streamo.service
   sudo -H -u "$SHOW_USER" \
     env XDG_RUNTIME_DIR="/run/user/$uid" \
     PATH="$ROOT/streamo/.venv/bin:/home/$SHOW_USER/.local/bin:$PATH" \
-    bash -lc "cd '$ROOT/streamo' && uv run --locked streamo daemon install --manual --config $quoted_config"
+    bash -lc "cd '$ROOT/streamo' && uv run --locked ${PROVISION_UV_FLAGS:-} streamo daemon install --manual --config $quoted_config"
 }
 
 clear_twitch_recovery() {
@@ -274,7 +274,7 @@ $(sha256sum "$config_path" | awk '{print $1}')")
   sudo -H -u "$SHOW_USER" \
     env XDG_RUNTIME_DIR="/run/user/$uid" \
     PATH="$ROOT/lyte/.venv/bin:/home/$SHOW_USER/.local/bin:$PATH" \
-    bash -lc "cd '$ROOT/lyte' && uv run --locked lyte installation install $quoted_config"
+    bash -lc "cd '$ROOT/lyte' && uv run --locked $PROVISION_UV_FLAGS lyte installation install $quoted_config"
   user_systemctl restart lyte.service
   record_service_state lyte "$input"
 }

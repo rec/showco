@@ -51,6 +51,12 @@ class DeployOptions(BaseModel, frozen=True):
         bool,
         tyro.conf.arg(help='Stop a running streamO before replacing its media'),
     ] = False
+    no_media: Annotated[
+        bool, tyro.conf.arg(help='Prepare the Pi without media or service restarts')
+    ] = False
+    media_only: Annotated[
+        bool, tyro.conf.arg(help='Upload media and finish provisioning offline')
+    ] = False
     release: bool = Field(
         default=False, description='Publish needed minor releases, then deploy'
     )
@@ -109,13 +115,16 @@ def render_main(arguments: list[str]) -> int:
     return 0
 
 
-def prepare_movie(recipe: movie.Movie, config_path: Path) -> Path:
+def prepare_movie(
+    recipe: movie.Movie, config_path: Path, *, offline: bool = False
+) -> Path:
     try:
         return movie.cached_movie(
             recipe,
             config_path.expanduser().resolve().parent,
             local_checkout_directory() / 'streamo',
             movie.cache_directory(),
+            offline=offline,
         )
     except (OSError, ValueError, CalledProcessError, ReccyError) as error:
         sys.exit(f'ERROR: cannot prepare the show movie: {error}')
@@ -141,6 +150,8 @@ def resolved_config(
     )
     validate_config(provision_config)
     gui_schema.load_gui(PROVISION_DIR.parent.parent / provision_config.gui_path)
+    if options.no_media:
+        return provision_config
     recipe = provision_config.movie if render_movie else None
     if recipe is not None and options.movie is not None:
         sys.exit('ERROR: --movie cannot be combined with a configured movie recipe')
@@ -151,7 +162,9 @@ def resolved_config(
         use_saved_movie=provision_config.movie is None,
     )
     if recipe is not None:
-        generated = prepare_movie(recipe, options.config_path)
+        generated = prepare_movie(
+            recipe, options.config_path, offline=options.media_only
+        )
         sources = config.Media.model_validate(
             sources.model_dump() | {'movie': generated}
         )
@@ -174,7 +187,8 @@ def run(
     provision_config = provision_config or resolved_config(options)
     from ..deployment import local_update, update
 
-    if not repositories_prepared and not local_update.prepare_local_repositories(
+    prepare_repositories = not (options.media_only or repositories_prepared)
+    if prepare_repositories and not local_update.prepare_local_repositories(
         update.REPOSITORY_NAMES,
         local_checkout_directory(),
         update.run_command_with_timeout,
@@ -186,7 +200,7 @@ def run(
         sys.exit(
             'ERROR: local repositories are not ready for Raspberry Pi provisioning'
         )
-    if not repositories_prepared and not local_update.refresh_local_dependencies(
+    if prepare_repositories and not local_update.refresh_local_dependencies(
         update.REPOSITORY_NAMES,
         local_checkout_directory(),
         update.run_command_with_timeout,
@@ -195,9 +209,9 @@ def run(
         sys.exit(
             'ERROR: local dependencies are not ready for Raspberry Pi provisioning'
         )
-    if options.host is not None:
+    if not options.media_only and options.host is not None:
         persist_network_host(options.config_path, options.host)
-    if options.root is not None:
+    if not options.media_only and options.root is not None:
         persist_paths_root(options.config_path, options.root)
     with tempfile.NamedTemporaryFile(
         'w', delete=False, prefix='showco-provision-pi.', suffix='.sh'
@@ -211,13 +225,26 @@ def run(
             f'/tmp/{local_script.name}',
             upgrade=options.upgrade,
             stop_streamo=options.stop_streamo,
+            phase=(
+                'prepare'
+                if options.no_media
+                else 'finish'
+                if options.media_only
+                else 'full'
+            ),
             fingerprint=state.provisioning_fingerprint(
-                provision_config, script.REMOTE_SCRIPT
+                provision_config, script.REMOTE_SCRIPT, prepared=options.no_media
             ),
         )
     finally:
         local_script.unlink(missing_ok=True)
-    print(f'Provisioned {provision_config.ssh_target}.')
+    if options.no_media:
+        print(
+            f'Prepared {provision_config.ssh_target}. '
+            'Run showco --media-only to finish.'
+        )
+    else:
+        print(f'Provisioned {provision_config.ssh_target}.')
     return 0
 
 

@@ -38,6 +38,7 @@ def test_render_command_prints_the_deploy_cache_path(
         tmp_path,
         Path(__file__).resolve().parents[2] / 'streamo',
         cache,
+        offline=False,
     )
     assert capsys.readouterr().out.strip() == str(output)
 
@@ -75,6 +76,27 @@ def test_provisioning_uses_generated_movie_and_static_photos(tmp_path: Path) -> 
     ]
 
 
+def test_no_media_does_not_read_saved_selections_or_render(tmp_path: Path) -> None:
+    options = provision.DeployOptions(
+        config_path=tmp_path / 'config.toml', no_media=True
+    )
+    public = values(
+        movie={'inputs': ['missing/*.mp4']},
+        networks=networks(
+            internal_wifi={'password': 'test-password'},
+            external_wifi={'name': 'house', 'password': 'test-password'},
+        ),
+    )
+    with (
+        mock.patch.object(config, 'load_values', return_value=public),
+        mock.patch.object(media, 'resolve_sources') as resolve,
+        mock.patch.object(movie, 'cached_movie') as render,
+    ):
+        provision.resolved_config(options)
+    resolve.assert_not_called()
+    render.assert_not_called()
+
+
 def test_movie_cache_reuses_validated_output_and_hashes_source_contents(
     tmp_path: Path,
 ) -> None:
@@ -101,6 +123,8 @@ def test_movie_cache_reuses_validated_output_and_hashes_source_contents(
         title: Path | None,
         renderer: Path,
         output: Path,
+        *,
+        offline: bool,
     ) -> None:
         output.write_bytes(inputs[0].read_bytes())
 
@@ -110,7 +134,8 @@ def test_movie_cache_reuses_validated_output_and_hashes_source_contents(
         ),
         mock.patch.object(movie, 'render_and_validate', side_effect=render) as build,
     ):
-        first = movie.cached_movie(recipe, tmp_path, renderer, cache)
+        first = movie.cached_movie(recipe, tmp_path, renderer, cache, offline=True)
+        assert build.call_args.kwargs['offline'] is True
         assert movie.cached_movie(recipe, tmp_path, renderer, cache) == first
         source.write_bytes(b'new')
         second = movie.cached_movie(recipe, tmp_path, renderer, cache)

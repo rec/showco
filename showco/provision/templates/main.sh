@@ -57,21 +57,20 @@ phase() {
   PHASE_STARTED_SECONDS=$SECONDS
 }
 
-main() {
-  sudo rm -f /run/showco-provision-reboot-required
-
-  phase "checking user"
-  id "$SHOW_USER" >/dev/null
-
+disarm_twitch() {
   phase "disarming Twitch for provisioning"
   clear_twitch_recovery
+}
 
-  phase "configuring locale"
-  configure_locale
-
+journal_setup() {
   phase "configuring persistent journal"
   configure_journal
+}
 
+prepare_system() {
+  if [[ "$PROVISION_PHASE" == full ]]; then
+    journal_setup
+  fi
   phase "installing base packages"
   packages=(
     alsa-utils
@@ -140,6 +139,32 @@ main() {
   sync_repo streamo "$STREAMO_REPO" "$STREAMO_REFNAME"
   sync_repo lyte "$LYTE_REPO" "$LYTE_REFNAME"
   sync_repo showco "$SHOWCO_REPO" "$SHOWCO_REFNAME"
+}
+
+main() {
+  phase "checking user"
+  id "$SHOW_USER" >/dev/null
+
+  if [[ "$PROVISION_PHASE" == full ]]; then
+    sudo rm -f /run/showco-provision-reboot-required
+    disarm_twitch
+  fi
+
+  phase "configuring locale"
+  configure_locale
+
+  if [[ "$PROVISION_PHASE" != finish ]]; then
+    prepare_system
+  fi
+  if [[ "$PROVISION_PHASE" == prepare ]]; then
+    printf 'Preparation completed. Run showco --media-only to finish.\n'
+    return
+  fi
+  if [[ "$PROVISION_PHASE" == finish ]]; then
+    sudo rm -f /run/showco-provision-reboot-required
+    disarm_twitch
+    journal_setup
+  fi
 
   phase "migrating Twitcho service"
   uninstall_twitcho_service

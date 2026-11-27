@@ -34,14 +34,20 @@ def provision_remote(
     upgrade: bool = False,
     fingerprint: str | None = None,
     stop_streamo: bool = False,
+    phase: str = 'full',
 ) -> None:
     uploaded = False
     print(f'Waiting for SSH connection to {provision_config.ssh_target}...')
     ssh.wait_for_ssh(provision_config)
     require_passwordless_sudo(provision_config)
-    validate_remote_worktrees(provision_config)
+    if phase != 'finish':
+        validate_remote_worktrees(provision_config)
     topology = preflight_network(provision_config)
-    media.synchronize(provision_config)
+    if phase == 'finish':
+        ssh.run_ssh(provision_config, prepared_configuration_check(provision_config))
+        media.synchronize(provision_config, offline=True)
+    elif phase == 'full':
+        media.synchronize(provision_config)
     print(f'Checking {provision_config.ssh_target}...')
     ssh.run_ssh(
         provision_config,
@@ -62,10 +68,13 @@ def provision_remote(
                 upgrade=upgrade,
                 fingerprint=fingerprint,
                 stop_streamo=stop_streamo,
+                phase=phase,
             ),
             timeout_seconds=REMOTE_PROVISION_TIMEOUT_SECONDS,
         )
 
+        if phase == 'prepare':
+            return
         if not complete_pending_reboot(provision_config):
             print(f'No reboot is required for {provision_config.ssh_target}.')
 
@@ -107,8 +116,13 @@ def publication_command(
     upgrade: bool,
     fingerprint: str | None,
     stop_streamo: bool,
+    phase: str = 'full',
 ) -> str:
-    command = ''
+    command = (
+        prepared_configuration_check(provision_config) + ' && '
+        if phase == 'finish'
+        else ''
+    )
     if stop_streamo and any(provision_config.media.sources.values()):
         status = verify.user_systemctl_command(
             'show --property=ActiveState --value streamo.service'
@@ -121,10 +135,24 @@ def publication_command(
             '>&2; exit 1 ;; '
             f'*) {stop} || exit $? ;; esac; '
         )
-    command += script.remote_command(provision_config, remote_script, upgrade=upgrade)
+    command += script.remote_command(
+        provision_config, remote_script, upgrade=upgrade, phase=phase
+    )
     if fingerprint is not None:
         command += f' && {fingerprint_command(provision_config, fingerprint)}'
     return state.lock_configuration(provision_config, command)
+
+
+def prepared_configuration_check(provision_config: config.Config) -> str:
+    path = shlex.quote(str(state.provisioning_fingerprint_path(provision_config)))
+    expected = state.provisioning_fingerprint(
+        provision_config, script.REMOTE_SCRIPT, prepared=True
+    )
+    return (
+        f'test "$(cat -- {path} 2>/dev/null)" = {expected} || {{ '
+        "printf '%s\\n' 'ERROR: run showco --no-media with the same configuration "
+        "before showco --media-only.' >&2; exit 1; }"
+    )
 
 
 def preflight_network(

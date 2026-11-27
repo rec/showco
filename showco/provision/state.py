@@ -28,13 +28,18 @@ def lock_configuration(provision_config: config.Config, command: str) -> str:
 
 
 def provisioning_fingerprint(
-    provision_config: config.Config, remote_script: str
+    provision_config: config.Config, remote_script: str, *, prepared: bool = False
 ) -> str:
+    exclude = {'media', 'movie', 'audio', 'setup', 'teardown', 'verify_media'}
     value = {
-        'config': provision_config.model_dump(mode='json'),
+        'config': provision_config.model_dump(
+            mode='json', exclude=exclude if prepared else None
+        ),
         'remote_script': remote_script,
     }
-    if any(provision_config.media.sources.values()):
+    if prepared:
+        value['phase'] = 'prepare'
+    elif any(provision_config.media.sources.values()):
         package = provision_config.media_package
         value['media'] = [package.version, package.metadata_version]
     encoded = json.dumps(value, sort_keys=True, separators=(',', ':')).encode()

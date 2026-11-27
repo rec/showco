@@ -11,8 +11,91 @@ from unittest import mock
 import pytest
 from provision_helpers import make_config, networks, values
 
-from showco.provision import config, remote, script
+from showco.provision import config, remote, script, state
 from showco.provision import network as network_config
+
+
+def test_split_prepare_stops_before_touching_live_services() -> None:
+    source = script.REMOTE_SCRIPT.removesuffix('main "$@"\n')
+    result = subprocess.run(
+        [
+            'bash',
+            '-c',
+            source
+            + """
+id() { return 0; }
+configure_locale() { printf 'locale\\n'; }
+prepare_system() { printf 'prepare\\n'; }
+sudo() { printf 'Unexpected sudo: %s\\n' "$*"; return 1; }
+disarm_twitch() { printf 'Unexpected disarm\\n'; return 1; }
+journal_setup() { printf 'Unexpected journal setup\\n'; return 1; }
+main
+""",
+        ],
+        env={**os.environ, 'PROVISION_PHASE': 'prepare', 'SHOW_USER': 'test'},
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert 'locale\nprepare\nPreparation completed.' in result.stdout
+
+
+def test_finishing_a_split_uses_ordinary_service_arguments(tmp_path: Path) -> None:
+    movie = tmp_path / 'movie.mp4'
+    movie.touch()
+    before = make_config(values())
+    after = before.model_copy(
+        update={
+            'media': config.Media(movie=movie),
+            'setup': [Path("/srv/set up/performer's copy.flac")],
+        }
+    )
+    full = shlex.split(script.remote_command(after, '/tmp/provision.sh'))
+    finish = shlex.split(
+        script.remote_command(after, '/tmp/provision.sh', phase='finish')
+    )
+    assert [a for a in full if a != 'PROVISION_PHASE=full'] == [
+        a for a in finish if a != 'PROVISION_PHASE=finish'
+    ]
+    assert state.provisioning_fingerprint(
+        before, script.REMOTE_SCRIPT, prepared=True
+    ) == state.provisioning_fingerprint(after, script.REMOTE_SCRIPT, prepared=True)
+
+
+@pytest.mark.parametrize('phase', ['prepare', 'finish'])
+def test_split_provisioning_only_uploads_and_verifies_in_second_pass(
+    phase: str,
+) -> None:
+    configuration = make_config(values())
+    with (
+        mock.patch.object(remote.ssh, 'wait_for_ssh'),
+        mock.patch.object(remote.ssh, 'run_ssh') as commands,
+        mock.patch.object(remote.ssh, 'run_scp'),
+        mock.patch.object(remote, 'validate_remote_worktrees') as validate_worktrees,
+        mock.patch.object(remote, 'preflight_network'),
+        mock.patch.object(remote.media, 'synchronize') as synchronize,
+        mock.patch.object(remote, 'complete_pending_reboot') as reboot,
+        mock.patch.object(remote.verify, 'wait_for_provisioning_ready') as verify,
+        mock.patch.object(remote.verify, 'report_verification_results'),
+    ):
+        remote.provision_remote(
+            configuration, Path('/tmp/local.sh'), '/tmp/remote.sh', phase=phase
+        )
+    command = next(
+        c.args[1] for c in commands.call_args_list if 'bash /tmp/remote.sh' in c.args[1]
+    )
+    assert f'PROVISION_PHASE={phase}' in command
+    if phase == 'prepare':
+        synchronize.assert_not_called()
+        reboot.assert_not_called()
+        verify.assert_not_called()
+        validate_worktrees.assert_called_once_with(configuration)
+    else:
+        synchronize.assert_called_once_with(configuration, offline=True)
+        reboot.assert_called_once_with(configuration)
+        verify.assert_called_once()
+        validate_worktrees.assert_not_called()
+        assert command.index('flock -n 9') < command.index('run showco --no-media')
 
 
 class ProvisionScriptTests(unittest.TestCase):
@@ -76,7 +159,7 @@ class ProvisionScriptTests(unittest.TestCase):
         self.assertIn('phase "installing Python 3.13"', script.REMOTE_SCRIPT)
         self.assertIn('bash -lc "uv python install 3.13"', script.REMOTE_SCRIPT)
         self.assertIn('\n    python3-dev\n', script.REMOTE_SCRIPT)
-        main = script.REMOTE_SCRIPT.rindex('main() {')
+        main = script.REMOTE_SCRIPT.index('prepare_system() {')
         self.assertLess(
             script.REMOTE_SCRIPT.index('install_base_packages "${packages[@]}"', main),
             script.REMOTE_SCRIPT.index('phase "syncing repositories"', main),
@@ -197,13 +280,19 @@ storage_hotplug_rules /dev/stdin
         self.assertIn('completed in %ss', script.REMOTE_SCRIPT)
 
     def test_remote_script_uses_locked_uv_run(self) -> None:
-        self.assertIn('uv run --locked showco run network-config', script.REMOTE_SCRIPT)
         self.assertIn("--ssh-peer '${SSH_CLIENT%% *}'", script.REMOTE_SCRIPT)
-        self.assertIn('uv run --locked recs daemon install', script.REMOTE_SCRIPT)
-        self.assertIn('uv run --locked streamo daemon install', script.REMOTE_SCRIPT)
-        self.assertIn('uv run --locked lyte installation install', script.REMOTE_SCRIPT)
+        for command in (
+            'showco run network-config',
+            'recs daemon install',
+            'lyte installation install',
+            'showco run install-service',
+        ):
+            self.assertIn(
+                f'uv run --locked $PROVISION_UV_FLAGS {command}', script.REMOTE_SCRIPT
+            )
         self.assertIn(
-            'uv run --locked showco run install-service', script.REMOTE_SCRIPT
+            'uv run --locked ${PROVISION_UV_FLAGS:-} streamo daemon install',
+            script.REMOTE_SCRIPT,
         )
 
     def test_remote_script_writes_provisioning_report(self) -> None:
@@ -228,7 +317,6 @@ storage_hotplug_rules /dev/stdin
     def test_remote_script_configures_network(self) -> None:
         self.assertIn('phase "configuring network"', script.REMOTE_SCRIPT)
         self.assertIn('configure_network()', script.REMOTE_SCRIPT)
-        self.assertIn('uv run --locked showco run network-config', script.REMOTE_SCRIPT)
         self.assertIn('write_toml_string host "$SHOWCO_HOST"', script.REMOTE_SCRIPT)
         self.assertIn("printf '\\n[git.reccy]\\n'", script.REMOTE_SCRIPT)
         self.assertIn("printf '\\n[git.lyte]\\n'", script.REMOTE_SCRIPT)
@@ -246,7 +334,8 @@ storage_hotplug_rules /dev/stdin
 
     def test_remote_script_installs_showco_service_through_showco(self) -> None:
         self.assertIn(
-            'uv run --locked showco run install-service', script.REMOTE_SCRIPT
+            'uv run --locked $PROVISION_UV_FLAGS showco run install-service',
+            script.REMOTE_SCRIPT,
         )
         self.assertNotIn('tee "$service_file"', script.REMOTE_SCRIPT)
         self.assertNotIn('ExecStart=$command', script.REMOTE_SCRIPT)
@@ -285,14 +374,13 @@ storage_hotplug_rules /dev/stdin
     def test_remote_script_configures_locale_before_package_updates(self) -> None:
         main = script.REMOTE_SCRIPT.rindex('main() {')
         locale = script.REMOTE_SCRIPT.index('phase "configuring locale"', main)
+        prepare = script.REMOTE_SCRIPT.index('prepare_system\n', main)
         journal = script.REMOTE_SCRIPT.index(
-            'phase "configuring persistent journal"', main
+            'journal_setup\n', script.REMOTE_SCRIPT.index('prepare_system() {')
         )
-        install = script.REMOTE_SCRIPT.index(
-            'install_base_packages "${packages[@]}"', main
-        )
+        install = script.REMOTE_SCRIPT.index('install_base_packages "${packages[@]}"')
 
-        self.assertLess(locale, journal)
+        self.assertLess(locale, prepare)
         self.assertIn('sudo apt-get update', script.REMOTE_SCRIPT)
         self.assertIn('sudo apt-get upgrade -y', script.REMOTE_SCRIPT)
         self.assertIn(
@@ -308,10 +396,10 @@ storage_hotplug_rules /dev/stdin
 
     def test_provision_disarms_twitch_before_changing_live_services(self) -> None:
         main = script.REMOTE_SCRIPT.rindex('main() {')
-        disarm = script.REMOTE_SCRIPT.index('clear_twitch_recovery', main)
+        disarm = script.REMOTE_SCRIPT.index('disarm_twitch\n', main)
 
         for step in (
-            'sync_repo reccy',
+            'prepare_system\n',
             'install_recs_service',
             'configure_streamo_media',
         ):
@@ -320,9 +408,7 @@ storage_hotplug_rules /dev/stdin
     def test_remote_script_exports_locale_before_package_updates(self) -> None:
         main = script.REMOTE_SCRIPT.rindex('main() {')
         locale = script.REMOTE_SCRIPT.index('configure_locale', main)
-        install = script.REMOTE_SCRIPT.index(
-            'install_base_packages "${packages[@]}"', main
-        )
+        install = script.REMOTE_SCRIPT.index('prepare_system\n', main)
         self.assertIn('unset LC_ALL', script.REMOTE_SCRIPT)
         self.assertLess(locale, install)
 

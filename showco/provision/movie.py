@@ -37,7 +37,9 @@ class Movie(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
-def cached_movie(recipe: Movie, base: Path, renderer: Path, cache: Path) -> Path:
+def cached_movie(
+    recipe: Movie, base: Path, renderer: Path, cache: Path, *, offline: bool = False
+) -> Path:
     inputs: list[Path] = []
     for pattern in recipe.inputs:
         matches = sorted(glob(str(base / Path(pattern).expanduser())))
@@ -80,7 +82,7 @@ def cached_movie(recipe: Movie, base: Path, renderer: Path, cache: Path) -> Path
     output.parent.mkdir(parents=True, exist_ok=True)
     with TemporaryDirectory(dir=output.parent) as directory:
         temporary = Path(directory) / output.name
-        render_and_validate(recipe, inputs, title, renderer, temporary)
+        render_and_validate(recipe, inputs, title, renderer, temporary, offline=offline)
         if [file_hash(p) for p in sources] != identities:
             raise ValueError('Movie inputs or renderer changed during the render')
         try:
@@ -93,9 +95,15 @@ def cached_movie(recipe: Movie, base: Path, renderer: Path, cache: Path) -> Path
 
 
 def render_and_validate(
-    recipe: Movie, inputs: list[Path], title: Path | None, renderer: Path, output: Path
+    recipe: Movie,
+    inputs: list[Path],
+    title: Path | None,
+    renderer: Path,
+    output: Path,
+    *,
+    offline: bool = False,
 ) -> None:
-    command = ['uv', 'run', '--locked']
+    command = ['uv', 'run', '--locked', *(['--offline'] if offline else [])]
     arguments = [
         flag
         for key, value in recipe.model_dump(exclude={'inputs', 'title_card'}).items()

@@ -194,6 +194,23 @@ class DeployTests(unittest.TestCase):
             **kwargs,
         )
 
+    def test_split_flags_are_parsed_without_entering_the_other_mode(self) -> None:
+        for flag, field in (('--no-media', 'no_media'), ('--media-only', 'media_only')):
+            with (
+                self.subTest(flag=flag),
+                mock.patch.object(deploy, 'run', return_value=0) as run,
+            ):
+                self.assertEqual(deploy.main([flag]), 0)
+                options = run.call_args.args[0]
+                self.assertTrue(getattr(options, field))
+                self.assertNotEqual(options.no_media, options.media_only)
+
+    def test_split_modes_cannot_be_combined(self) -> None:
+        with self.assertRaisesRegex(
+            SystemExit, 'choose either --no-media or --media-only'
+        ):
+            deploy.main(['--no-media', '--media-only'])
+
     def test_main_prints_completion_after_success(self) -> None:
         options = self.options()
         with (

@@ -126,7 +126,7 @@ def target_paths(provision_config: config.Config, kind: str) -> list[Path]:
     return [root / p for p in package.targets[kind]]
 
 
-def synchronize(provision_config: config.Config) -> None:
+def synchronize(provision_config: config.Config, *, offline: bool = False) -> None:
     sources = provision_config.media
     if not any(sources.sources.values()):
         return
@@ -165,7 +165,11 @@ def synchronize(provision_config: config.Config) -> None:
         ssh.run_ssh(
             provision_config,
             'command -v rsync >/dev/null || '
-            '{ sudo apt-get update && sudo apt-get install -y rsync; }',
+            + (
+                "{ echo 'ERROR: rsync is missing on the Pi.' >&2; exit 1; }"
+                if offline
+                else '{ sudo apt-get update && sudo apt-get install -y rsync; }'
+            ),
             timeout_seconds=300,
         )
         stage_attempted = True
