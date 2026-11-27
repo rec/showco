@@ -18,9 +18,9 @@ class Movie(BaseModel, frozen=True):
     duration: units.Seconds = 3600
     title_card: Path | None = None
     seed: int = 0
-    width: units.Pixels = Field(default=1280, gt=0, le=3840, multiple_of=2)
-    height: units.Pixels = Field(default=720, gt=0, le=2160, multiple_of=2)
-    fps: units.WholeFramesPerSecond = Field(default=30, gt=0, le=60)
+    width: units.Pixels = Field(default=640, gt=0, le=3840, multiple_of=2)
+    height: units.Pixels = Field(default=360, gt=0, le=2160, multiple_of=2)
+    fps: units.WholeFramesPerSecond = Field(default=24, gt=0, le=60)
     work_scale: int = 2
     work_fps: units.WholeFramesPerSecond = 30
     still_duration: units.Seconds = 30

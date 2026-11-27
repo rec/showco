@@ -70,9 +70,9 @@ def test_provisioning_uses_generated_movie_and_static_photos(tmp_path: Path) -> 
     assert resolved.media.movie == generated
     assert media.streamo_arguments(resolved)[-4:] == [
         '--movie-resolution',
-        '1280x720',
+        '640x360',
         '--movie-frame-rate',
-        '30',
+        '24',
     ]
 
 
