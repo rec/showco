@@ -1,17 +1,6 @@
 argon_one = true
 verify_media = false
 
-[movie]
-inputs = ["../../../streamo/videos/*.mp4"]
-title_card = "../../../streamo/open-loop.md"
-duration = "4h"
-start_black_duration = "2s"
-title_interval = "1min"
-width = 640
-height = 360
-fps = 24
-seed = 0
-
 [media]
 photos = ["../../rouen-images"]
 
