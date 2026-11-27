@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 
 from pydantic import BaseModel
 
 from . import models
+from .mixer import MixerSpec
 
 STALL_SECONDS = 15.0
 INPUT_STALL_SECONDS = 5.0
@@ -63,8 +64,14 @@ class InputSample(BaseModel):
 
 
 class InputMonitor:
-    def __init__(self, clock: Callable[[], float] = time.monotonic) -> None:
+    def __init__(
+        self,
+        clock: Callable[[], float] = time.monotonic,
+        *,
+        mixer_specs: Sequence[MixerSpec] = (),
+    ) -> None:
         self.clock = clock
+        self.mixer_specs = mixer_specs
         self.session: tuple[str | None, str | None] | None = None
         self.tracks: dict[tuple[str, tuple[int, ...]], InputSample] = {}
 
@@ -102,14 +109,43 @@ class InputMonitor:
             inputs.append(input_recording(name, channel, sample, now, offline=offline))
             observed[key] = sample
         self.tracks = observed
-        inputs.extend(
-            models.InputRecording(
-                name=s, message='Configured input unavailable', fault=True
+        if not recs.paused:
+            inputs.extend(
+                models.InputRecording(
+                    name=s, message='Configured input unavailable', fault=True
+                )
+                for s in missing_recording_inputs(recs, self.mixer_specs)
             )
-            for s in dict.fromkeys(recs.missing_audio_inputs)
-            if not recs.paused
-        )
         return inputs
+
+
+def missing_recording_inputs(
+    recs: models.RecsStatus, mixer_specs: Sequence[MixerSpec]
+) -> list[str]:
+    if not recs.missing_audio_inputs:
+        return []
+    missing = dict.fromkeys(recs.missing_audio_inputs)
+    capturing = {
+        c.device
+        for c in recs.channels
+        if c.capture_running is True
+        and c.capture_age_seconds is not None
+        and c.capture_age_seconds <= CAPTURE_STALE_SECONDS
+    }
+    missing_mixers = []
+    for spec in mixer_specs:
+        names = tuple(spec.audio_device_names)
+        if not names:
+            continue
+        # One mixer may report any of its configured device names. On some
+        # backends, an open input can disappear from discovery during capture.
+        if all(n in missing for n in names) and not any(
+            d.startswith(names) for d in capturing
+        ):
+            missing_mixers.append(spec.name)
+        for name in names:
+            missing.pop(name, None)
+    return [*missing_mixers, *missing]
 
 
 def input_recording(

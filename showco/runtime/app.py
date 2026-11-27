@@ -3,7 +3,7 @@ from __future__ import annotations
 import subprocess
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import datetime
 from pathlib import Path
 
@@ -37,7 +37,7 @@ from . import (
     workflows,
 )
 from .lyte import LyteClient
-from .mixer import MixersMonitor
+from .mixer import MixersMonitor, MixerSpec
 from .monitoring import PerformanceMonitor
 from .network import ExternalWifi
 from .recs import RecsClient
@@ -69,6 +69,7 @@ class ShowcoApp:
         streamo_stop: Callable[[], models.ActionResult] | None = None,
         twitch_readiness: twitch.TwitchReadiness | None = None,
         twitch_state: Path | None = None,
+        mixer_specs: Sequence[MixerSpec] = (),
     ) -> None:
         self.recs = recs
         self.streamo = streamo
@@ -119,7 +120,7 @@ class ShowcoApp:
             state_directory / 'incidents.json' if state_directory else None
         )
         self.recording_progress = recording_progress.ProgressMonitor()
-        self.recording_inputs = recording_progress.InputMonitor()
+        self.recording_inputs = recording_progress.InputMonitor(mixer_specs=mixer_specs)
         self.setlist = setlist.SetListController(
             state_directory / 'setlist.json' if state_directory else None
         )

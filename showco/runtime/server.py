@@ -436,6 +436,7 @@ def make_server(
         twitch_state=twitch.runtime_state_path()
         if performance_enabled and streamo_enabled
         else None,
+        mixer_specs=mixer_specs or (),
     )
     handler.app = app
     server = ShowcoServer((host, port), handler)

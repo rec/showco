@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 
 from showco.runtime import gui_schema, incidents, models, recording_progress, views
+from showco.runtime.mixer import MixerSpec
 
 
 class RecordingProgressTests(unittest.TestCase):
@@ -144,3 +145,45 @@ def test_new_session_pause_and_lost_status_do_not_reuse_recording_evidence() -> 
     )
     inputs = monitor.observe(new.model_copy(update={'channels': [stale]}))
     assert inputs[0].fault and inputs[0].message == 'No fresh samples'
+
+
+def test_fresh_mixer_capture_takes_precedence_over_missing_device_scan() -> None:
+    monitor = recording_progress.InputMonitor(
+        mixer_specs=[
+            MixerSpec(name='X18', audio_device_names=['X18', 'XR18']),
+            MixerSpec(name='Flow 8', audio_device_names=['FLOW 8']),
+        ]
+    )
+    status = recs(1).model_copy(
+        update={
+            'channels': [
+                input_channel('Main L/R', 17, 1).model_copy(
+                    update={'device': 'X18: USB Audio (hw:0,0)'}
+                ),
+                input_channel('Main L/R', 9, 1).model_copy(
+                    update={
+                        'device': 'FLOW 8: USB Audio (hw:3,0)',
+                        'source_key': 'flow8',
+                    }
+                ),
+            ],
+            'missing_audio_inputs': ['X18', 'XR18', 'FLOW 8', 'Other input'],
+        }
+    )
+
+    assert [i.name for i in monitor.observe(status) if i.fault] == ['Other input']
+
+
+def test_reports_one_missing_mixer_only_when_all_its_names_are_missing() -> None:
+    monitor = recording_progress.InputMonitor(
+        mixer_specs=[MixerSpec(name='Mixer', audio_device_names=['X18', 'XR18'])]
+    )
+    status = recs(1).model_copy(update={'missing_audio_inputs': ['X18']})
+
+    assert monitor.observe(status) == []
+    missing = status.model_copy(update={'missing_audio_inputs': ['X18', 'XR18']})
+    assert monitor.observe(missing) == [
+        models.InputRecording(
+            name='Mixer', message='Configured input unavailable', fault=True
+        )
+    ]
