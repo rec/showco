@@ -6,7 +6,7 @@ from unittest import mock
 import pytest
 from streamo import managed
 
-from showco.runtime import models, rehearsal, soundcheck, twitch, workflows
+from showco.runtime import models, rehearsal, twitch
 from showco.runtime.app import ShowcoApp
 
 
@@ -33,7 +33,7 @@ def ready() -> models.ShowStatus:
     )
 
 
-def test_readiness_reports_recording_disk_clock_and_sample_blockers(
+def test_recovery_readiness_reports_recording_disk_and_clock_blockers(
     ready: models.ShowStatus,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -50,14 +50,11 @@ def test_readiness_reports_recording_disk_clock_and_sample_blockers(
             )
         }
     )
-    blockers = twitch.TwitchReadiness(tmp_path / 'streamo.toml').check(
-        status, soundcheck.Soundcheck(), None
-    )
+    blockers = twitch.TwitchReadiness(tmp_path / 'streamo.toml').check(status)
     assert blockers == [
         'Resume recs recording',
         'Mount and check the intended recording disk',
         'Waiting for recent Pi clock synchronization',
-        'Verify the recording disk and a saved sample in Soundcheck',
     ]
 
 
@@ -77,32 +74,17 @@ def test_clock_requires_a_recent_successful_sync(
     assert not twitch.clock_is_synchronized()
 
 
-def test_twitch_checks_current_capture_and_selected_subscription(
+def test_twitch_recovery_checks_live_capture_without_soundcheck(
     ready: models.ShowStatus, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     config_path = tmp_path / 'streamo.toml'
     config_path.touch()
-    sample = soundcheck.Soundcheck(identity=lambda path: 'mount')
     track = models.ChannelLevel(
         name='Main', device='X18', channels=[17, 18], state='silent', recorded_seconds=0
     )
     show = ready.model_copy(
         update={'recs': ready.recs.model_copy(update={'channels': [track]})}
     )
-    sample.observe(show, workflows.soundcheck_configuration(None))
-    sample.begin(['X18: 17,18'])
-    assert sample.check('disk', show, confirmation=True).ok
-    sample.record_start(show, {'X18': 'capture'})
-    show = show.model_copy(
-        update={
-            'recs': show.recs.model_copy(
-                update={'channels': [track.model_copy(update={'recorded_seconds': 2})]}
-            )
-        }
-    )
-    assert sample.check('recording', show, capture_clocks={'X18': 'capture'}).ok
-    assert sample.check('playback', show, confirmation=True, note='Listened to Main').ok
-
     monkeypatch.setattr(twitch, 'clock_is_synchronized', lambda: True)
     monkeypatch.setattr(
         twitch.settings,
@@ -155,20 +137,17 @@ def test_twitch_checks_current_capture_and_selected_subscription(
     monkeypatch.setattr(twitch, 'AudioClient', mock.Mock(return_value=receiver))
 
     gate = twitch.TwitchReadiness(config_path)
-    assert gate.check(show, sample, None) == []
+    assert gate.check(show) == []
     connect.assert_called_once_with(configured_pair)
     connection.subscribe.assert_called_once_with(inspection)
     connection.cancel.assert_called_once_with(
         connection.subscribe.return_value.subscription.subscription_id
     )
 
-    source['clock_id'] = 'different-capture'
-    assert gate.check(show, sample, None) == [
-        'A recs capture changed; verify a new sample in Soundcheck'
-    ]
+    source['recording_enabled'] = False
+    assert gate.check(show) == ['recs is unable to write every required audio source']
     assert connection.subscribe.call_count == 1
 
-    sample.allow_playback_pause(show, {'X18': 'capture'})
     paused = show.model_copy(
         update={
             'recs': show.recs.model_copy(
@@ -176,10 +155,7 @@ def test_twitch_checks_current_capture_and_selected_subscription(
             ),
         }
     )
-    sample.observe(paused, workflows.soundcheck_configuration(None))
-    assert gate.check(paused, sample, None) == ['Resume recs recording']
-    assert gate.check(show, sample, None) == []
-    assert gate.capture_clocks == {'X18': 'different-capture'}
+    assert gate.check(paused) == ['Resume recs recording']
 
 
 @pytest.fixture
@@ -213,10 +189,6 @@ def make_app(
         twitch_readiness=gate,
         twitch_state=state if os.name != 'nt' else None,
     )
-    application.soundcheck.identity = lambda path: 'mount'
-    application.soundcheck.observe(
-        ready, workflows.soundcheck_configuration(application.revision)
-    )
     return application
 
 
@@ -236,6 +208,7 @@ def test_twitch_only_starts_after_a_fresh_explicit_request_and_recovers_three_ti
 
     observe()
     launch.assert_not_called()
+    gate.check.assert_not_called()
     gate.check.return_value = ['Selected recs audio stalled']
     observe()
     assert application.status().twitch_toggle_available
@@ -268,6 +241,7 @@ def test_twitch_only_starts_after_a_fresh_explicit_request_and_recovers_three_ti
     observe(failed)
     observe(failed)
     assert launch.call_count == 4
+    application.recs.action.assert_not_called()
     assert 'recovery exhausted' in application.status().twitch_message
     assert application.run_action(request).ok
     assert launch.call_count == 5
@@ -331,7 +305,7 @@ def test_operator_can_retry_while_automatic_recovery_is_blocked(
     ready: models.ShowStatus, tmp_path: Path, clock: list[float]
 ) -> None:
     gate = mock.Mock()
-    gate.check.return_value = ['Soundcheck required for recovery']
+    gate.check.return_value = ['Waiting for recent Pi clock synchronization']
     launch = mock.Mock(return_value=models.ActionResult(ok=True, message='Started'))
     application = make_app(ready, tmp_path / 'broadcast.json', gate, launch)
     assert application.run_action({'action': 'streamo-start'}).ok

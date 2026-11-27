@@ -82,9 +82,7 @@ class ShowcoApp:
         self.twitch = twitch.TwitchRecovery(twitch_state)
         self.twitch_probe_lock = threading.Lock()
         self.twitch_probe_after = 0.0
-        self.twitch_blockers = (
-            ['Checking Twitch readiness'] if twitch_readiness is not None else []
-        )
+        self.twitch_blockers: list[str] = []
         self.recovery_restart: Callable[[str], models.ActionResult] = (
             services.restart_service
         )
@@ -803,6 +801,7 @@ class ShowcoApp:
         )
         if not authorized:
             return models.ActionResult(ok=False, message='Twitch start canceled')
+        self.twitch_blockers = []
         return self._launch_twitch(generation)
 
     def _fresh_twitch_status(self, streamo: models.StreamoStatus) -> models.ShowStatus:
@@ -814,17 +813,6 @@ class ShowcoApp:
             if self.music is not None
             else models.MusicStatus(),
         )
-
-    def _check_twitch(self, show: models.ShowStatus) -> list[str]:
-        if self.twitch_readiness is None:
-            return []
-        if (
-            self.soundcheck_dirty.is_set()
-            or self.soundcheck_error
-            or self.soundcheck.pending_save
-        ):
-            return ['Waiting for current Soundcheck evidence']
-        return self.twitch_readiness.check(show, self.soundcheck, self.revision)
 
     def _launch_twitch(self, generation: int) -> models.ActionResult:
         if generation != self.twitch.generation:
@@ -871,22 +859,25 @@ class ShowcoApp:
                         self.twitch.cancel(generation=generation)
                 finally:
                     self.action_lock.release()
-            show = self._fresh_twitch_status(status.streamo)
-            evidence = self.soundcheck.state
-            self.twitch_blockers = self._check_twitch(show)
             if (
-                self.twitch_blockers
+                self.twitch.run is not run
                 or run is None
                 or run.attempts >= twitch.MAX_RECOVERIES
                 or not run.needs_recovery(status.streamo)
                 or time.monotonic() < run.retry_after
-                or not self.action_lock.acquire(False)
             ):
+                return
+            show = self._fresh_twitch_status(status.streamo)
+            blockers = self.twitch_readiness.check(show)
+            if self.twitch.run is not run:
+                return
+            self.twitch_blockers = blockers
+            if blockers or not self.action_lock.acquire(False):
                 return
             try:
                 if self.twitch.run is not run:
                     return
-                if not self._twitch_check_still_current(show, evidence):
+                if not self._twitch_check_still_current(show):
                     return
                 failure = (
                     status.streamo.service.last_error
@@ -916,44 +907,16 @@ class ShowcoApp:
             self.twitch_probe_after = time.monotonic() + twitch.RETRY_DELAY_SECONDS
             self.twitch_probe_lock.release()
 
-    def _twitch_check_still_current(
-        self, checked: models.ShowStatus, evidence: soundcheck.SoundcheckState
-    ) -> bool:
+    def _twitch_check_still_current(self, checked: models.ShowStatus) -> bool:
         assert self.streamo is not None
         fresh = self._fresh_twitch_status(self.streamo.status())
-        current = (
+        return (
             fresh.streamo.toggle_starts_stream
             and fresh.streamo.stream_state == checked.streamo.stream_state
             and twitch.same_recording(fresh.recs, checked.recs)
             and fresh.music.mode
             not in {'closing', 'teardown', 'transitioning', 'fault'}
-            and not self.soundcheck_dirty.is_set()
-            and self.soundcheck.state is evidence
-            and self.soundcheck.scope(
-                fresh, workflows.soundcheck_configuration(self.revision)
-            )
-            == evidence.scope
         )
-        if not current or not evidence.playback_pause:
-            return current
-        assert self.twitch_readiness is not None
-        if not self.soundcheck_lock.acquire(blocking=False):
-            return False
-        try:
-            if self.soundcheck.state is not evidence:
-                return False
-            capture_clocks = self.twitch_readiness.capture_clocks
-            self.soundcheck.save(
-                evidence.model_copy(
-                    update={
-                        'recording_clocks': capture_clocks,
-                        'playback_pause': False,
-                    }
-                )
-            )
-            return True
-        finally:
-            self.soundcheck_lock.release()
 
     def _remember_recovery(self, message: str) -> None:
         with self.incident_lock:

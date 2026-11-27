@@ -18,8 +18,7 @@ from streamo.managed import LaunchPermit, launch_permit_path
 from streamo.preflight import check_encoders, check_media
 from streamo.recs_input import RecsConnection
 
-from . import models, recs_snapshot, soundcheck, workflows
-from .recs import audio_capture_clocks
+from . import models
 
 MAX_RECOVERIES = 3
 RETRY_DELAY_SECONDS = 5
@@ -130,21 +129,19 @@ class TwitchReadiness:
     def __init__(self, config: Path) -> None:
         self.config = config
         self.config_sha256: str | None = None
-        self.capture_clocks: dict[str, str] = {}
 
     def config_digest(self) -> str:
         return hashlib.sha256(self.config.read_bytes()).hexdigest()
 
-    def check(
-        self,
-        show: models.ShowStatus,
-        sample: soundcheck.Soundcheck,
-        revision: str | None,
-    ) -> list[str]:
+    def check(self, show: models.ShowStatus) -> list[str]:
         recs = show.recs
         self.config_sha256 = None
-        self.capture_clocks = {}
-        if not recs.snapshot_available or recs.service.state != 'connected':
+        if (
+            not recs.snapshot_available
+            or recs.service.state != 'connected'
+            or not recs.instance_token
+            or not recs.session_directory
+        ):
             return ['Fresh recs status is unavailable']
         blockers = []
         if recs.paused:
@@ -162,35 +159,6 @@ class TwitchReadiness:
             blockers.append(routing.message)
         if not clock_is_synchronized():
             blockers.append('Waiting for recent Pi clock synchronization')
-        try:
-            scope = sample.scope(show, workflows.soundcheck_configuration(revision))
-        except OSError:
-            scope = ''
-        evidence = sample.state
-        passes = {
-            step
-            for step, result in evidence.results.items()
-            if result.state == 'passed'
-        }
-        if (
-            not scope
-            or scope != evidence.scope
-            or not recs.instance_token
-            or not recs.session_directory
-            or evidence.recording_session != recs.session_directory
-            or not evidence.recording_clocks
-            or not {'disk', 'recording', 'playback'} <= passes
-        ):
-            blockers.append(
-                'Verify the recording disk and a saved sample in Soundcheck'
-            )
-        elif recs_snapshot.errors_since(
-            recs.errors, evidence.results['recording'].checked_at.timestamp()
-        ):
-            blockers.append(
-                'recs reported an error after the sample. '
-                'Review Health and repeat Soundcheck'
-            )
         if blockers:
             return blockers
         try:
@@ -222,7 +190,7 @@ class TwitchReadiness:
                 return failures
             inspection = connection.inspect()
             if inspection.instance.start_token != recs.instance_token:
-                return ['The recs daemon changed; repeat Soundcheck']
+                return ['The recs daemon changed during the recovery check']
             if not connection.private_endpoint():
                 return ['The recs control endpoint is writable by other users']
             if (
@@ -242,18 +210,9 @@ class TwitchReadiness:
                 if isinstance(s.get('source'), str)
                 and s.get('recording_enabled') is True
             }
-            expected_sources = evidence.recording_clocks.keys()
-            clocks = audio_capture_clocks(audio)
-            if not expected_sources <= clocks.keys() or (
-                not evidence.playback_pause
-                and any(
-                    clocks.get(k) != v for k, v in evidence.recording_clocks.items()
-                )
-            ):
-                return ['A recs capture changed; verify a new sample in Soundcheck']
+            expected_sources = {c.device for c in recs.channels if c.device}
             if (
-                not expected_sources
-                or not expected_sources <= recording_sources
+                not expected_sources <= recording_sources
                 or config.recs_input.source not in recording_sources
                 or recs.offline_sources
             ):
@@ -272,7 +231,6 @@ class TwitchReadiness:
                 f'({type(error).__name__})'
             ]
         self.config_sha256 = digest
-        self.capture_clocks = {k: v for k, v in clocks.items() if k in expected_sources}
         return []
 
 

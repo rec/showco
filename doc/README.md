@@ -56,10 +56,12 @@ Input failures are saved in the incident history with the session and destinatio
 
 Press **Start Twitch** on the Show page to make an explicit start request.
 The action leaves the current recs session running and works without a completed
-Soundcheck. Automatic recovery still requires a verified disk, a saved sample
-and playback confirmation in Soundcheck, recent clock synchronization, and fresh
-audio from the configured stereo pair. Use **Stop Stream** on Actions to cancel
-automatic recovery while Twitch is off.
+Soundcheck. On the Pi, streamO watches the encoder's Twitch connection even
+while local preview is active. If the connection drops, showCo can restart
+streamO up to three times after checking the recording disk, recent clock
+synchronization, and fresh audio from the configured stereo pair. Recovery does
+not restart or pause recs. Use **Stop Stream** on Actions to cancel automatic
+recovery while Twitch is off.
 
 After a publisher failure, showCo checks readiness before each automatic
 recovery. One broadcast gets three recovery attempts. A successful recovery
@@ -159,7 +161,7 @@ page. This tests cue operation only, not laser output or physical readiness.
 
 Open **Soundcheck**, select the expected recording inputs, and begin. This clears earlier results without starting output. Confirm the intended disk, then make sound on all selected inputs and check their measured signal/clipping state. Disk confirmation requires fresh recs status, available space without an active disk alert, and a readable Linux mount identity. On systems without that identity, disk verification remains unsuccessful.
 
-Start the sample in the current session. If recs is paused, the first press resumes recording. Start the sample once the inputs are online. Make sound on every expected input and check that each input gained at least one second of recorded audio. Use **Pause recording** on the Soundcheck page before opening **Playback**. Select and listen to that sample, then enter its session/file description and confirm you heard it. Resume recording after playback. showCo checks fresh capture after this intentional pause before allowing automatic Twitch recovery. Starting another sample clears the previous sample's recording and playback results.
+Start the sample in the current session. If recs is paused, the first press resumes recording. Start the sample once the inputs are online. Make sound on every expected input and check that each input gained at least one second of recorded audio. Use **Pause recording** on the Soundcheck page before opening **Playback**. Select and listen to that sample, then enter its session/file description and confirm you heard it. Resume recording after playback. Starting another sample clears the previous sample's recording and playback results.
 
 Lighting tests require an explicit output confirmation and button press; they leave the lights off. Confirm lighting by watching it and streaming by receiving the stream externally. Optional steps can be skipped with a reason and remain visibly skipped, never passed. Opening or refreshing the page starts no test.
 
