@@ -196,6 +196,7 @@ def make_app(
     launch: mock.Mock,
 ) -> ShowcoApp:
     gate.config_sha256 = '0' * 64
+    gate.config_digest.return_value = '0' * 64
     recs = mock.Mock()
     recs.status.return_value = ready.recs
     streamo = mock.Mock()
@@ -236,9 +237,8 @@ def test_twitch_only_starts_after_a_fresh_explicit_request_and_recovers_three_ti
     observe()
     launch.assert_not_called()
     gate.check.return_value = ['Selected recs audio stalled']
-    assert application.run_action(request).message == 'Selected recs audio stalled'
-    assert not path.exists()
-    gate.check.return_value = []
+    observe()
+    assert application.status().twitch_toggle_available
     assert application.run_action(request).ok
     assert not application.run_action(request).ok
     launch.assert_called_once()
@@ -303,24 +303,49 @@ def test_stop_cancels_recovery_during_readiness_probe(
     launch.assert_called_once()
 
 
-def test_changed_session_between_probe_and_start_refuses_to_launch(
+def test_changed_session_between_probe_and_recovery_refuses_to_launch(
     ready: models.ShowStatus,
     tmp_path: Path,
+    clock: list[float],
 ) -> None:
     gate = mock.Mock()
     gate.check.return_value = []
-    launch = mock.Mock()
+    launch = mock.Mock(return_value=models.ActionResult(ok=True, message='Started'))
     application = make_app(ready, tmp_path / 'broadcast.json', gate, launch)
+    assert application.run_action({'action': 'streamo-start'}).ok
+    failed = ready.streamo.model_copy(update={'stream_state': 'failed'})
+    assert application.streamo is not None
+    application.streamo.status.return_value = failed
     application.recs.status = mock.Mock(
         side_effect=[
             ready.recs,
             ready.recs.model_copy(update={'session_directory': '/new-session'}),
         ]
     )
-    result = application.run_action({'action': 'streamo-start'})
-    assert not result.ok
-    assert 'readiness changed' in result.message
-    launch.assert_not_called()
+    clock[0] += 10
+    application.observe_twitch(ready.model_copy(update={'streamo': failed}))
+    launch.assert_called_once()
+
+
+def test_operator_can_retry_while_automatic_recovery_is_blocked(
+    ready: models.ShowStatus, tmp_path: Path, clock: list[float]
+) -> None:
+    gate = mock.Mock()
+    gate.check.return_value = ['Soundcheck required for recovery']
+    launch = mock.Mock(return_value=models.ActionResult(ok=True, message='Started'))
+    application = make_app(ready, tmp_path / 'broadcast.json', gate, launch)
+    assert application.run_action({'action': 'streamo-start'}).ok
+    failed = ready.streamo.model_copy(update={'stream_state': 'failed'})
+    assert application.streamo is not None
+    application.streamo.status.return_value = failed
+    clock[0] += 10
+    application.observe_twitch(ready.model_copy(update={'streamo': failed}))
+    status = application.status()
+    assert status.twitch_toggle_available
+    assert status.twitch_action == 'streamo-start'
+    assert 'Automatic recovery waiting' in status.twitch_message
+    assert application.run_action({'action': status.twitch_action}).ok
+    assert launch.call_count == 2
 
 
 def test_clean_service_stop_does_not_authorize_an_automatic_restart(

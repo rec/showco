@@ -132,6 +132,9 @@ class TwitchReadiness:
         self.config_sha256: str | None = None
         self.capture_clocks: dict[str, str] = {}
 
+    def config_digest(self) -> str:
+        return hashlib.sha256(self.config.read_bytes()).hexdigest()
+
     def check(
         self,
         show: models.ShowStatus,
@@ -205,7 +208,7 @@ class TwitchReadiness:
         ]:
             return ['Update the managed streamO service before starting Twitch']
         try:
-            digest = hashlib.sha256(self.config.read_bytes()).hexdigest()
+            digest = self.config_digest()
             config = load_config(self.config, expected_sha256=digest)
         except (OSError, ValueError) as error:
             return [f'Cannot load streamO configuration ({type(error).__name__})']

@@ -375,26 +375,21 @@ class ShowStatus(BaseModel, frozen=True):
         parts = ['Twitch off'] if self.streamo.toggle_starts_stream else []
         if self.twitch_recovery_message:
             parts.append(self.twitch_recovery_message)
-        parts.extend(self.twitch_blockers)
+        if self.twitch_recovery_pending and self.twitch_blockers:
+            parts.append(
+                'Automatic recovery waiting: ' + '. '.join(self.twitch_blockers)
+            )
         return '. '.join(parts)
 
     @computed_field
     @property
     def twitch_action(self) -> str:
-        return (
-            'streamo-start'
-            if self.streamo.toggle_starts_stream and not self.twitch_recovery_pending
-            else 'streamo-stop'
-        )
+        return 'streamo-start' if self.streamo.toggle_starts_stream else 'streamo-stop'
 
     @computed_field
     @property
     def twitch_label(self) -> str:
-        return (
-            'Cancel Twitch recovery'
-            if self.twitch_recovery_pending
-            else self.streamo.toggle_label
-        )
+        return self.streamo.toggle_label
 
     @computed_field
     @property
@@ -409,11 +404,9 @@ class ShowStatus(BaseModel, frozen=True):
     def twitch_toggle_available(self) -> bool:
         return self.twitch_stop_available and (
             not self.streamo.toggle_starts_stream
-            or self.twitch_recovery_pending
             or (
                 not self.performance_locked
                 and self.music.mode not in {'fault', 'teardown'}
-                and not self.twitch_blockers
             )
         )
 

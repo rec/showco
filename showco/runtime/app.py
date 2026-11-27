@@ -783,36 +783,17 @@ class ShowcoApp:
         if (
             self.twitch_readiness is not None
             and self.twitch.run
-            and self.twitch.run.attempts < twitch.MAX_RECOVERIES
-            and (
-                self.twitch.run.needs_recovery(status)
-                or time.monotonic() < self.twitch.run.retry_after
-            )
+            and not self.twitch.run.needs_recovery(status)
+            and time.monotonic() < self.twitch.run.retry_after
         ):
             return models.ActionResult(
-                ok=False, message='Automatic Twitch recovery is pending'
+                ok=False, message='A Twitch start is already in progress'
             )
-        config_sha256 = None
-        if self.twitch_readiness is not None:
-            if not self.twitch_probe_lock.acquire(blocking=False):
-                return models.ActionResult(
-                    ok=False, message='Checking Twitch readiness; retry shortly'
-                )
-            try:
-                show = self._fresh_twitch_status(status)
-                evidence = self.soundcheck.state
-                self.twitch_blockers = self._check_twitch(show)
-                if self.twitch_blockers:
-                    return models.ActionResult(
-                        ok=False, message='. '.join(self.twitch_blockers)
-                    )
-                if not self._twitch_check_still_current(show, evidence):
-                    return models.ActionResult(
-                        ok=False, message='Twitch readiness changed; retry when ready'
-                    )
-                config_sha256 = self.twitch_readiness.config_sha256
-            finally:
-                self.twitch_probe_lock.release()
+        config_sha256 = (
+            self.twitch_readiness.config_digest()
+            if self.twitch_readiness is not None
+            else None
+        )
         authorized = self.twitch.authorize(
             twitch.BroadcastRun(
                 retry_after=time.monotonic() + twitch.RETRY_DELAY_SECONDS
