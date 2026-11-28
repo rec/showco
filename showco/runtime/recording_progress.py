@@ -203,7 +203,7 @@ def input_recording(
             message='Quiet · silence filtered'
             if saved
             else 'Quiet · no audio saved yet',
-            ok=saved,
+            ok=True,
         )
     if sample.write_requested_at is None:
         sample.write_requested_at = now

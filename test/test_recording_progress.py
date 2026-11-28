@@ -113,7 +113,7 @@ def test_new_session_pause_and_lost_status_do_not_reuse_recording_evidence() -> 
         }
     )
     track, missing = monitor.observe(status)
-    assert not track.ok and not track.fault and 'no audio saved' in track.message
+    assert track.ok and not track.fault and 'no audio saved' in track.message
     assert missing.fault
     assert (
         monitor.observe(status.model_copy(update={'paused': True}))[0].message
@@ -141,10 +141,34 @@ def test_new_session_pause_and_lost_status_do_not_reuse_recording_evidence() -> 
     stale = new.channels[0].model_copy(
         update={
             'capture_age_seconds': recording_progress.CAPTURE_STALE_SECONDS + 1,
+            'write_requested': False,
         }
     )
     inputs = monitor.observe(new.model_copy(update={'channels': [stale]}))
     assert inputs[0].fault and inputs[0].message == 'No fresh samples'
+
+
+def test_show_accounts_for_quiet_inputs_before_they_save_audio() -> None:
+    status = recs(0).model_copy(
+        update={'channels': [input_channel('Room', 1, 0, requested=False)]}
+    )
+    show = models.ShowStatus(
+        recs=status,
+        streamo=models.StreamoStatus(
+            service=models.ServiceStatus(name='streamo', state='disabled')
+        ),
+        recording_inputs=recording_progress.InputMonitor().observe(status),
+    )
+    page = gui_schema.load_gui(gui_schema.DEFAULT_GUI_PATH).page('show')
+    html = views.configured_page(page, show)
+
+    assert show.recording_coverage.ok
+    assert 'All configured inputs accounted for' in html
+    assert 'Quiet · no audio saved yet' in html
+    assert all(
+        name != 'Incomplete audio recording'
+        for name, _, _ in incidents.fault_details(show)
+    )
 
 
 def test_fresh_mixer_capture_takes_precedence_over_missing_device_scan() -> None:
