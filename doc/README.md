@@ -289,6 +289,8 @@ Under `[stream]`, use `access_token` instead of the former `oath_token` spelling
 Provisioning and normal `showco` updates copy non-empty `stream_key`, `client_id`,
 and `access_token` values into streamO's `streaming_service.ingest.stream_key`,
 `streaming_service.client_id`, and `streaming_service.access_token`, respectively.
+Set `[stream].id` to the Twitch channel's numeric user ID. showCo copies it to
+`streaming_service.broadcaster_id` for live status verification.
 Existing encoding, media, and other streamO settings are preserved. Omitted
 credentials leave existing target values unchanged. The target configuration is
 written with owner-only permissions. `client_secret` stays local for obtaining

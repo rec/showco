@@ -156,7 +156,7 @@ class StreamoStatus(BaseModel, frozen=True):
         if self.closing_in_progress or self.stream_state == 'stopping':
             return 'Stopping...'
         if self.stream_state == 'publishing':
-            return 'Stop Twitch (unconfirmed)'
+            return 'Stop Twitch attempt'
         if self.service.state == 'offline' or self.stream_state == 'unknown':
             return 'Stop Twitch (status unavailable)'
         if self.stream_state == 'starting':
@@ -373,6 +373,8 @@ class ShowStatus(BaseModel, frozen=True):
         if self.streamo.service.state == 'disabled':
             return ''
         parts = ['Twitch off'] if self.streamo.toggle_starts_stream else []
+        if self.streamo.stream_state == 'publishing':
+            parts.append('Twitch live status is unverified')
         if self.twitch_recovery_message:
             parts.append(self.twitch_recovery_message)
         if self.twitch_recovery_pending and self.twitch_blockers:

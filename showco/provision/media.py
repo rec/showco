@@ -451,7 +451,7 @@ def streamo_settings(provision_config: config.Config) -> str:
     settings = {
         k: v
         for k, v in provision_config.stream.model_dump(
-            include={'stream_key', 'client_id', 'access_token'}
+            include={'stream_key', 'client_id', 'access_token', 'id'}
         ).items()
         if v
     }
@@ -647,16 +647,13 @@ def main() -> None:
             settings.write_text_atomically(path, updated)
         if stream_settings := os.environ.get('SHOWCO_STREAM_SETTINGS'):
             stream = config.Stream.model_validate_json(stream_settings)
-            configure_stream_settings(
-                path,
-                {
-                    k: v
-                    for k, v in stream.model_dump(
-                        include={'stream_key', 'client_id', 'access_token'}
-                    ).items()
-                    if v
-                },
-            )
+            credentials = {
+                'stream_key': stream.stream_key,
+                'client_id': stream.client_id,
+                'access_token': stream.access_token,
+                'broadcaster_id': stream.id,
+            }
+            configure_stream_settings(path, {k: v for k, v in credentials.items() if v})
     except (OSError, ValueError, ReccyError) as error:
         sys.exit(f'ERROR: cannot configure streamO in {path}: {error}')
 

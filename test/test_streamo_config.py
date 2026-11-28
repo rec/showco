@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import json
+import os
 import tomllib
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest import mock
 
+from provision_helpers import make_config, values
 from streamo.config import Streamo
 
+from showco.provision import media
 from showco.streamo.config import configure_stream_settings, convert_twitcho_config
 
 
@@ -25,12 +29,19 @@ class StreamoConfigTests(unittest.TestCase):
                 'server_url = "rtmps://live.twitch.tv/app"\nstream_key = "old-key"\n'
                 '[streaming_service.encoding.audio]\nbitrate = "192kbps"\n'
             )
-            settings = {
+            stream = {
+                'enabled': True,
+                'id': '1234',
                 'stream_key': 'new-key',
                 'client_id': 'client-id',
                 'access_token': 'new-token',
             }
-            configure_stream_settings(target, settings)
+            settings = media.streamo_settings(make_config(values(stream=stream)))
+            with (
+                mock.patch.dict(os.environ, {'SHOWCO_STREAM_SETTINGS': settings}),
+                mock.patch('sys.argv', ['streamo-media', '--config', str(target)]),
+            ):
+                media.main()
             text = target.read_text()
             value = tomllib.loads(text)
             configure_stream_settings(target, {'stream_key': 'new-key'})
@@ -42,6 +53,7 @@ class StreamoConfigTests(unittest.TestCase):
         service = value['streaming_service']
         self.assertEqual(service['access_token'], 'new-token')
         self.assertEqual(service['client_id'], 'client-id')
+        self.assertEqual(service['broadcaster_id'], '1234')
         self.assertEqual(service['ingest']['stream_key'], 'new-key')
         self.assertEqual(service['ingest']['server_url'], 'rtmps://live.twitch.tv/app')
         self.assertEqual(service['encoding']['audio']['bitrate'], '192kbps')

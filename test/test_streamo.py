@@ -7,6 +7,7 @@ from unittest import mock
 
 from reccy.configuration import settings
 
+from showco.runtime.models import RecsStatus, ServiceStatus, ShowStatus
 from showco.streamo.client import StreamoClient
 
 
@@ -233,7 +234,11 @@ def test_unconfirmed_twitch_is_visible_as_a_fault_and_can_still_be_stopped() -> 
     assert status.service.last_error == 'Twitch reports the channel offline'
     assert status.toggle_available
     assert not status.toggle_starts_stream
-    assert status.toggle_label == 'Stop Twitch (unconfirmed)'
+    assert status.toggle_label == 'Stop Twitch attempt'
+    recs = RecsStatus(service=ServiceStatus(name='recs', state='connected'))
+    show = ShowStatus(recs=recs, streamo=status)
+    assert show.twitch_message == 'Twitch live status is unverified'
+    assert show.twitch_action == 'streamo-stop'
 
 
 def test_twitch_confirmation_errors_and_staleness_are_not_healthy() -> None:
