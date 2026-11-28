@@ -40,6 +40,14 @@ main
     assert 'locale\nprepare\nPreparation completed.' in result.stdout
 
 
+def test_provisioning_passes_the_requested_recs_capture_latency() -> None:
+    configured = make_config(values(recs_capture_latency='100ms'))
+    command = shlex.split(script.remote_command(configured, '/tmp/provision.sh'))
+
+    assert 'RECS_CAPTURE_LATENCY=0.1s' in command
+    assert 'args+=(--capture-latency "$RECS_CAPTURE_LATENCY")' in script.REMOTE_SCRIPT
+
+
 def test_finishing_a_split_uses_ordinary_service_arguments(tmp_path: Path) -> None:
     movie = tmp_path / 'movie.mp4'
     movie.touch()

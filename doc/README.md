@@ -302,6 +302,7 @@ The important configuration is near the top of `config.toml`:
 | --- | --- |
 | `[network]` | Target host, SSH user and port, web port, Wi-Fi ordering, and topology. The user defaults to the provisioning machine's `USER`. |
 | `[paths].root` | Absolute target directory containing the five sibling repositories. |
+| `recs_capture_latency` | Requested PortAudio hardware capture latency for recs, for example `"100ms"`. The driver negotiates the actual buffer size. `0` uses the driver default. |
 | `[networks.internal]` | Required IPv4 mixer subnet. Wi-Fi and mixer `ip_address` values are host offsets in this subnet. |
 | `[[mixers]]` | Mixer name plus the audio/MIDI name prefixes expected from recs. Networked mixers provide both `ip_address` and `port`. |
 | `[stream]` | Enable streamO and provide its non-secret metadata. |

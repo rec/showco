@@ -65,6 +65,11 @@ def remote_command(
         'RECS_FORWARD_AUDIO': shell_bool(
             provision_config.stream.enabled and x18_mixer is not None
         ),
+        'RECS_CAPTURE_LATENCY': (
+            f'{provision_config.recs_capture_latency}s'
+            if provision_config.recs_capture_latency
+            else ''
+        ),
         'LYTE_ENABLED': shell_bool(provision_config.lyte.enabled),
         'LYTE_INSTALLATION_CONFIG': str(provision_config.lyte.installation_config),
         'PRIVATE_WIFI_SSID': config.string_or_default(private.name, 'showbox'),

@@ -56,6 +56,9 @@ install_recs_service() {
   if [[ "$RECS_FORWARD_AUDIO" == true ]]; then
     args+=(--forward-audio)
   fi
+  if [[ -n "$RECS_CAPTURE_LATENCY" ]]; then
+    args+=(--capture-latency "$RECS_CAPTURE_LATENCY")
+  fi
   uid=$(id -u "$SHOW_USER")
   if [[ "$RECS_FORWARD_AUDIO" == true ]]; then
     local dropin="/home/$SHOW_USER/.config/systemd/user/recs.service.d"
@@ -83,6 +86,7 @@ install_recs_service() {
 $RECS_AUDIO_DEVICE_NAMES
 $RECS_MIDI_INPUT_NAMES
 $RECS_FORWARD_AUDIO
+$RECS_CAPTURE_LATENCY
 $RECS_OSC_NODES_TOML")
   if service_is_current recs "$input"; then
     printf 'recs service is already installed.\n'

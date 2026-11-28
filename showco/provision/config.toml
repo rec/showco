@@ -1,5 +1,6 @@
 argon_one = true
 verify_media = false
+recs_capture_latency = "100ms"
 
 [media]
 photos = ["../../rouen-images"]

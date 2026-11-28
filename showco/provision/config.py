@@ -8,8 +8,8 @@ from ipaddress import IPv4Address, IPv4Network, ip_network
 from pathlib import Path
 from typing import TypeIs, cast
 
-from pydantic import BaseModel, Field
-from reccy.configuration import settings
+from pydantic import BaseModel, Field, TypeAdapter
+from reccy.configuration import settings, units
 
 from ..runtime.mixer import MixerSpec, MixerSpecs
 from .media_package import MediaInventory, inventory
@@ -105,6 +105,7 @@ class Config(BaseModel, frozen=True):
     argon_one: bool = True
     accept_changed_host_key: bool = True
     verify_media: bool = False
+    recs_capture_latency: units.Seconds = Field(default=0, ge=0, allow_inf_nan=False)
     movie: Movie | None = None
     media: Media = Field(default_factory=Media)
     audio: list[Path] = Field(default_factory=list)
@@ -199,6 +200,9 @@ def config_from_values(
         gui_path=gui_path,
         argon_one=bool_value(values, 'argon_one', default=True),
         verify_media=bool_value(values, 'verify_media', default=False),
+        recs_capture_latency=TypeAdapter(units.Seconds).validate_python(
+            values.get('recs_capture_latency', 0)
+        ),
         movie=Movie.model_validate(values['movie']) if 'movie' in values else None,
         media=Media.model_validate(table_value(values, 'media')),
         accept_changed_host_key=bool_value(
