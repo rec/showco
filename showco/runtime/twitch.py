@@ -213,7 +213,7 @@ class TwitchReadiness:
             expected_sources = {c.device for c in recs.channels if c.device}
             if (
                 not expected_sources <= recording_sources
-                or config.recs_input.source not in recording_sources
+                or inspection.source not in recording_sources
                 or recs.offline_sources
             ):
                 return ['recs is unable to write every required audio source']
@@ -224,7 +224,7 @@ class TwitchReadiness:
                 if header.input_status:
                     return ['The selected recs input reported a capture fault']
             finally:
-                connection.cancel(offer.subscription_id)
+                connection.cancel(offer.subscription_id, source=inspection.source)
         except (OSError, EOFError, ValueError, rpc.RemoteError) as error:
             return [
                 'Cannot verify fresh samples from the selected recs pair '

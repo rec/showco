@@ -79,8 +79,13 @@ def test_twitch_recovery_checks_live_capture_without_soundcheck(
 ) -> None:
     config_path = tmp_path / 'streamo.toml'
     config_path.touch()
+    current_source = 'X18: USB Audio (hw:1,0)'
     track = models.ChannelLevel(
-        name='Main', device='X18', channels=[17, 18], state='silent', recorded_seconds=0
+        name='Main',
+        device=current_source,
+        channels=[17, 18],
+        state='silent',
+        recorded_seconds=0,
     )
     show = ready.model_copy(
         update={'recs': ready.recs.model_copy(update={'channels': [track]})}
@@ -102,10 +107,15 @@ def test_twitch_recovery_checks_live_capture_without_soundcheck(
             'control_endpoint': '/run/control',
         },
     )
-    source = {'source': 'X18', 'clock_id': 'capture', 'recording_enabled': True}
+    source = {
+        'source': current_source,
+        'clock_id': 'capture',
+        'recording_enabled': True,
+    }
     connection = mock.Mock()
     inspection = mock.Mock(
         instance=mock.Mock(start_token='daemon'),
+        source=current_source,
         state='idle',
         enabled=True,
         paused=False,
@@ -117,7 +127,9 @@ def test_twitch_recovery_checks_live_capture_without_soundcheck(
         'paused': False,
         'sources': [source],
     }
-    configured_pair = mock.Mock(daemon=True, source='X18', channels=[17, 18])
+    configured_pair = mock.Mock(
+        daemon=True, source='X18: USB Audio (hw:0,0)', channels=[17, 18]
+    )
     monkeypatch.setattr(
         twitch,
         'load_config',
@@ -141,7 +153,8 @@ def test_twitch_recovery_checks_live_capture_without_soundcheck(
     connect.assert_called_once_with(configured_pair)
     connection.subscribe.assert_called_once_with(inspection)
     connection.cancel.assert_called_once_with(
-        connection.subscribe.return_value.subscription.subscription_id
+        connection.subscribe.return_value.subscription.subscription_id,
+        source=current_source,
     )
 
     source['recording_enabled'] = False
